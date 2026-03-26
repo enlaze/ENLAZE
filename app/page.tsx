@@ -80,7 +80,7 @@ function Hero() {
           <strong className="text-navy-800">cerrar ventas.</strong>
         </p>
         <div className="mt-10 flex gap-4 justify-center flex-wrap">
-          <a href="#cta" className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-brand-green text-white text-base font-semibold shadow-lg shadow-brand-green/30 hover:bg-brand-green-dark transition-colors">
+          <a href="/register" className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-brand-green text-white text-base font-semibold shadow-lg shadow-brand-green/30 hover:bg-brand-green-dark transition-colors">
             Empieza ahora <ArrowRight />
           </a>
           <a href="#como-funciona" className="inline-flex items-center px-8 py-4 rounded-2xl border border-navy-200 bg-white text-navy-800 text-base font-semibold hover:bg-navy-50 transition-colors">
@@ -190,7 +190,7 @@ function FinalCTA() {
             Unete a las empresas que ya automatizan su WhatsApp, emails y calendario con Enlaze. Configura en minutos, sin codigo.
           </p>
           <div className="mt-10">
-            <a href="#" className="inline-flex items-center gap-2 px-10 py-4 rounded-2xl bg-brand-green text-white text-base font-semibold shadow-lg shadow-brand-green/30 hover:bg-brand-green-dark transition-colors">
+            <a href="/register" className="inline-flex items-center gap-2 px-10 py-4 rounded-2xl bg-brand-green text-white text-base font-semibold shadow-lg shadow-brand-green/30 hover:bg-brand-green-dark transition-colors">
               Empieza ahora — es gratis <ArrowRight />
             </a>
           </div>
