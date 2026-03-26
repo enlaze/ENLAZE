@@ -41,7 +41,7 @@ function Navbar() {
         <div className="hidden md:flex items-center gap-8">
           <a href="#beneficios" className="text-sm font-medium text-navy-700 hover:text-navy-900 transition-colors">Beneficios</a>
           <a href="#como-funciona" className="text-sm font-medium text-navy-700 hover:text-navy-900 transition-colors">Como funciona</a>
-          <a href="#cta" className="px-5 py-2.5 rounded-xl bg-brand-green text-white text-sm font-semibold shadow-lg shadow-brand-green/25 hover:bg-brand-green-dark transition-colors">Empieza ahora</a>
+          <a href="/login" className="text-sm font-medium text-navy-700 hover:text-navy-900 transition-colors">Iniciar sesion</a><a href="/register" className="px-5 py-2.5 rounded-xl bg-brand-green text-white text-sm font-semibold shadow-lg shadow-brand-green/25 hover:bg-brand-green-dark transition-colors">Empieza ahora</a>
         </div>
         <button onClick={() => setOpen(!open)} className="md:hidden text-navy-700">
           {open ? <CloseIcon /> : <MenuIcon />}
@@ -51,7 +51,7 @@ function Navbar() {
         <div className="md:hidden bg-white border-b border-navy-100 px-6 py-4 flex flex-col gap-4">
           <a href="#beneficios" onClick={() => setOpen(false)} className="text-sm font-medium text-navy-700">Beneficios</a>
           <a href="#como-funciona" onClick={() => setOpen(false)} className="text-sm font-medium text-navy-700">Como funciona</a>
-          <a href="#cta" onClick={() => setOpen(false)} className="px-5 py-2.5 rounded-xl bg-brand-green text-white text-sm font-semibold text-center">Empieza ahora</a>
+          <a href="/login" onClick={() => setOpen(false)} className="text-sm font-medium text-navy-700">Iniciar sesion</a><a href="/register" onClick={() => setOpen(false)} className="px-5 py-2.5 rounded-xl bg-brand-green text-white text-sm font-semibold text-center">Empieza ahora</a>
         </div>
       )}
     </header>
