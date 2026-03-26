@@ -16,46 +16,50 @@ const Check = () => (
 
 const plans = [
   {
-    name: "Free",
-    price: "0",
-    desc: "Para probar Enlaze y empezar a organizar tus contactos.",
+    name: "Basico",
+    price: "19",
+    desc: "Para emprendedores y negocios que empiezan a profesionalizar su comunicacion.",
     features: [
-      "Hasta 50 clientes",
-      "Dashboard basico",
+      "Hasta 100 clientes",
+      "WhatsApp basico (100 msg/mes)",
+      "Emails automaticos (500/mes)",
       "1 usuario",
+      "Dashboard con analiticas",
       "Soporte por email",
     ],
-    cta: "Empieza gratis",
+    cta: "Empezar prueba gratis",
     popular: false,
   },
   {
-    name: "Pro",
-    price: "29",
-    desc: "Para equipos que quieren automatizar toda su comunicacion.",
+    name: "Profesional",
+    price: "49",
+    desc: "Para equipos que necesitan automatizar toda su comunicacion y crecer.",
     features: [
       "Clientes ilimitados",
-      "WhatsApp automatizado",
-      "Emails automaticos",
+      "WhatsApp ilimitado",
+      "Emails ilimitados",
       "Calendario y recordatorios",
       "Hasta 5 usuarios",
-      "Soporte prioritario",
-      "Reportes y analiticas",
+      "Soporte prioritario 24h",
+      "Reportes avanzados",
+      "Integraciones CRM",
     ],
-    cta: "Empezar con Pro",
+    cta: "Empezar prueba gratis",
     popular: true,
   },
   {
-    name: "Enterprise",
-    price: "99",
-    desc: "Para empresas grandes con necesidades a medida.",
+    name: "Empresa",
+    price: "200",
+    desc: "Para empresas grandes con necesidades a medida y soporte dedicado.",
     features: [
-      "Todo lo de Pro",
+      "Todo lo de Profesional",
       "Usuarios ilimitados",
       "API personalizada",
       "Integraciones a medida",
       "Manager dedicado",
       "SLA garantizado",
       "Onboarding personalizado",
+      "Facturacion personalizada",
     ],
     cta: "Contactar ventas",
     popular: false,
@@ -63,10 +67,12 @@ const plans = [
 ];
 
 const faqs = [
+  { q: "Como funciona la prueba gratuita de 10 dias?", a: "Al registrarte tienes acceso completo a todas las funcionalidades de tu plan elegido durante 10 dias sin coste. No te cobramos nada hasta que termine la prueba, y puedes cancelar en cualquier momento." },
   { q: "Puedo cambiar de plan en cualquier momento?", a: "Si, puedes subir o bajar de plan cuando quieras. Los cambios se aplican inmediatamente y ajustamos la facturacion de forma proporcional." },
-  { q: "Hay compromiso de permanencia?", a: "No, todos los planes son mensuales sin compromiso. Puedes cancelar cuando quieras." },
-  { q: "Que metodos de pago aceptan?", a: "Aceptamos tarjetas de credito y debito (Visa, Mastercard, American Express). Tambien transferencia bancaria para planes Enterprise." },
-  { q: "Ofrecen descuento por pago anual?", a: "Si, con el pago anual ahorras un 20%. Contactanos para mas informacion." },
+  { q: "Hay compromiso de permanencia?", a: "No, todos los planes son mensuales sin compromiso. Puedes cancelar cuando quieras sin penalizacion." },
+  { q: "Que metodos de pago aceptan?", a: "Aceptamos tarjetas de credito y debito (Visa, Mastercard, American Express). Tambien transferencia bancaria para el plan Empresa." },
+  { q: "Ofrecen descuento por pago anual?", a: "Si, con el pago anual ahorras un 20% en cualquier plan. Contactanos para mas informacion." },
+  { q: "Que pasa cuando termina mi prueba gratuita?", a: "Te avisamos antes de que termine. Si decides continuar, se activa la suscripcion mensual. Si no, tu cuenta pasa a modo lectura sin perder tus datos." },
 ];
 
 export default function PricingPage() {
@@ -88,15 +94,21 @@ export default function PricingPage() {
 
       <main className="pt-36 pb-24">
         <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center max-w-2xl mx-auto mb-16">
+          <div className="text-center max-w-2xl mx-auto mb-6">
             <p className="text-xs font-semibold uppercase tracking-widest text-brand-green">Precios</p>
             <h1 className="mt-3 text-4xl md:text-6xl font-extrabold tracking-tight text-navy-900">Un plan para cada etapa de tu negocio</h1>
-            <p className="mt-4 text-lg text-navy-600">Sin sorpresas, sin costes ocultos. Empieza gratis y escala cuando lo necesites.</p>
+            <p className="mt-4 text-lg text-navy-600">Sin sorpresas, sin costes ocultos. Empieza con 10 dias gratis y escala cuando lo necesites.</p>
+          </div>
+
+          <div className="flex justify-center mb-12">
+            <div className="inline-flex items-center gap-2 rounded-full bg-brand-green/10 px-5 py-2.5 text-sm font-semibold text-brand-green">
+              🎁 10 dias de prueba gratis en todos los planes — sin tarjeta de credito
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
             {plans.map((plan, i) => (
-              <div key={i} className={`rounded-2xl border p-8 relative ${plan.popular ? "border-brand-green bg-white shadow-xl shadow-brand-green/10 scale-105" : "border-navy-100 bg-white shadow-sm"}`}>
+              <div key={i} className={`rounded-2xl border p-8 relative ${plan.popular ? "border-brand-green bg-white shadow-xl shadow-brand-green/10 md:scale-105" : "border-navy-100 bg-white shadow-sm"}`}>
                 {plan.popular && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-brand-green text-white text-xs font-semibold">
                     Mas popular
@@ -104,17 +116,18 @@ export default function PricingPage() {
                 )}
                 <h3 className="text-lg font-bold text-navy-900">{plan.name}</h3>
                 <div className="mt-4 flex items-baseline gap-1">
-                  <span className="text-5xl font-extrabold text-navy-900">${plan.price}</span>
+                  <span className="text-5xl font-extrabold text-navy-900">{plan.price}€</span>
                   <span className="text-navy-500">/mes</span>
                 </div>
+                <p className="mt-1 text-xs text-brand-green font-medium">10 dias gratis</p>
                 <p className="mt-3 text-sm text-navy-600">{plan.desc}</p>
                 <Link href="/register" className={`mt-6 block text-center py-3 rounded-xl font-semibold text-sm transition-colors ${plan.popular ? "bg-brand-green text-white shadow-lg shadow-brand-green/25 hover:bg-brand-green-dark" : "border border-navy-200 text-navy-800 hover:bg-navy-50"}`}>
                   {plan.cta}
                 </Link>
                 <div className="mt-8 space-y-3">
                   {plan.features.map((f, j) => (
-                    <div key={j} className="flex items-center gap-3">
-                      <Check />
+                    <div key={j} className="flex items-start gap-3">
+                      <div className="mt-0.5"><Check /></div>
                       <span className="text-sm text-navy-700">{f}</span>
                     </div>
                   ))}
