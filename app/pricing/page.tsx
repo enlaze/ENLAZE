@@ -49,7 +49,7 @@ const plans = [
   },
   {
     name: "Empresa",
-    price: "200",
+    price: "199",
     desc: "Para empresas grandes con necesidades a medida y soporte dedicado.",
     features: [
       "Todo lo de Profesional",
