@@ -39,7 +39,7 @@ function Navbar() {
           <span className="text-xl font-bold text-navy-900">Enlaze</span>
         </div>
         <div className="hidden md:flex items-center gap-8">
-          <a href="#beneficios" className="text-sm font-medium text-navy-700 hover:text-navy-900 transition-colors">Beneficios</a>
+          <a href="#beneficios" className="text-sm font-medium text-navy-700 hover:text-navy-900 transition-colors">Beneficios</a><a href="/pricing" className="text-sm font-medium text-navy-700 hover:text-navy-900 transition-colors">Precios</a>
           <a href="#como-funciona" className="text-sm font-medium text-navy-700 hover:text-navy-900 transition-colors">Como funciona</a>
           <a href="/login" className="text-sm font-medium text-navy-700 hover:text-navy-900 transition-colors">Iniciar sesion</a><a href="/register" className="px-5 py-2.5 rounded-xl bg-brand-green text-white text-sm font-semibold shadow-lg shadow-brand-green/25 hover:bg-brand-green-dark transition-colors">Empieza ahora</a>
         </div>
