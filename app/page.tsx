@@ -50,7 +50,7 @@ function Navbar() {
       {open && (
         <div className="md:hidden bg-white border-b border-navy-100 px-6 py-4 flex flex-col gap-4">
           <a href="#beneficios" onClick={() => setOpen(false)} className="text-sm font-medium text-navy-700">Beneficios</a>
-          <a href="#como-funciona" onClick={() => setOpen(false)} className="text-sm font-medium text-navy-700">Como funciona</a>
+          <a href="#como-funciona" onClick={() => setOpen(false)} className="text-sm font-medium text-navy-700">Como funciona</a><a href="/pricing" onClick={() => setOpen(false)} className="text-sm font-medium text-navy-700">Precios</a>
           <a href="/login" onClick={() => setOpen(false)} className="text-sm font-medium text-navy-700">Iniciar sesion</a><a href="/register" onClick={() => setOpen(false)} className="px-5 py-2.5 rounded-xl bg-brand-green text-white text-sm font-semibold text-center">Empieza ahora</a>
         </div>
       )}
