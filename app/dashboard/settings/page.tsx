@@ -20,10 +20,7 @@ export default function SettingsPage() {
         setEmail(user.email || "");
         setFullName(user.user_metadata?.full_name || "");
         const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-        if (data) {
-          setFullName(data.full_name || "");
-          setCompanyName(data.company_name || "");
-        }
+        if (data) { setFullName(data.full_name || ""); setCompanyName(data.company_name || ""); }
       }
     };
     load();
@@ -48,12 +45,7 @@ export default function SettingsPage() {
     setSavingPassword(true);
     setPasswordResult({ type: "", text: "" });
     const { error } = await supabase.auth.updateUser({ password: newPassword });
-    if (error) {
-      setPasswordResult({ type: "error", text: error.message });
-    } else {
-      setPasswordResult({ type: "success", text: "Contrasena actualizada correctamente" });
-      setNewPassword("");
-    }
+    if (error) { setPasswordResult({ type: "error", text: error.message }); } else { setPasswordResult({ type: "success", text: "Contrasena actualizada correctamente" }); setNewPassword(""); }
     setSavingPassword(false);
     setTimeout(() => setPasswordResult({ type: "", text: "" }), 4000);
   };
@@ -64,44 +56,25 @@ export default function SettingsPage() {
         <h1 className="text-3xl font-bold text-navy-900">Ajustes</h1>
         <p className="mt-1 text-navy-600">Configura tu perfil y cuenta</p>
       </div>
-
       <div className="max-w-2xl space-y-6">
         <div className="rounded-2xl border border-navy-100 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-bold text-navy-900 mb-4">Perfil</h2>
           <form onSubmit={handleSaveProfile} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-navy-700 mb-1">Email</label>
-              <input type="email" value={email} disabled className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-100 text-navy-500 cursor-not-allowed" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-navy-700 mb-1">Nombre completo</label>
-              <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50" placeholder="Tu nombre" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-navy-700 mb-1">Nombre de la empresa</label>
-              <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50" placeholder="Tu empresa" />
-            </div>
+            <div><label className="block text-sm font-medium text-navy-700 mb-1">Email</label><input type="email" value={email} disabled className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-100 text-navy-500 cursor-not-allowed" /></div>
+            <div><label className="block text-sm font-medium text-navy-700 mb-1">Nombre completo</label><input type="text" value={fullName} onChange={e => setFullName(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50" placeholder="Tu nombre" /></div>
+            <div><label className="block text-sm font-medium text-navy-700 mb-1">Nombre de la empresa</label><input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50" placeholder="Tu empresa" /></div>
             {result.text && <p className={`text-sm ${result.type === "success" ? "text-brand-green" : "text-red-500"}`}>{result.text}</p>}
-            <button type="submit" disabled={saving} className="px-5 py-2.5 rounded-xl bg-brand-green text-white text-sm font-semibold hover:bg-brand-green-dark transition-colors disabled:opacity-50">
-              {saving ? "Guardando..." : "Guardar cambios"}
-            </button>
+            <button type="submit" disabled={saving} className="px-5 py-2.5 rounded-xl bg-brand-green text-white text-sm font-semibold hover:bg-brand-green-dark transition-colors disabled:opacity-50">{saving ? "Guardando..." : "Guardar cambios"}</button>
           </form>
         </div>
-
         <div className="rounded-2xl border border-navy-100 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-bold text-navy-900 mb-4">Cambiar contrasena</h2>
           <form onSubmit={handleChangePassword} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-navy-700 mb-1">Nueva contrasena</label>
-              <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required minLength={6} className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50" placeholder="Minimo 6 caracteres" />
-            </div>
+            <div><label className="block text-sm font-medium text-navy-700 mb-1">Nueva contrasena</label><input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required minLength={6} className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50" placeholder="Minimo 6 caracteres" /></div>
             {passwordResult.text && <p className={`text-sm ${passwordResult.type === "success" ? "text-brand-green" : "text-red-500"}`}>{passwordResult.text}</p>}
-            <button type="submit" disabled={savingPassword} className="px-5 py-2.5 rounded-xl bg-navy-800 text-white text-sm font-semibold hover:bg-navy-900 transition-colors disabled:opacity-50">
-              {savingPassword ? "Actualizando..." : "Cambiar contrasena"}
-            </button>
+            <button type="submit" disabled={savingPassword} className="px-5 py-2.5 rounded-xl bg-navy-800 text-white text-sm font-semibold hover:bg-navy-900 transition-colors disabled:opacity-50">{savingPassword ? "Actualizando..." : "Cambiar contrasena"}</button>
           </form>
         </div>
-
         <div className="rounded-2xl border border-red-100 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-bold text-red-600 mb-2">Zona peligrosa</h2>
           <p className="text-sm text-navy-600 mb-4">Estas acciones son irreversibles. Procede con cuidado.</p>
