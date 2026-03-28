@@ -15,6 +15,7 @@ const navItems = [
   { href: "/dashboard", label: "Clientes", icon: "👥" },
   { href: "/dashboard/messages", label: "WhatsApp", icon: "💬" },
   { href: "/dashboard/emails", label: "Emails", icon: "📧" },
+  { href: "/dashboard/budgets", label: "Presupuestos", icon: "📋" },
   { href: "/dashboard/calendar", label: "Calendario", icon: "📅" },
   { href: "/dashboard/settings", label: "Ajustes", icon: "⚙️" },
 ];
