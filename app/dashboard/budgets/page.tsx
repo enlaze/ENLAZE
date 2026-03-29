@@ -74,7 +74,8 @@ export default function BudgetsPage() {
           <h1 className="text-3xl font-bold text-navy-900">Presupuestos</h1>
           <p className="mt-1 text-navy-600">{budgets.length} presupuesto{budgets.length !== 1 ? "s" : ""} en total</p>
         </div>
-        <Link href="/dashboard/budgets/new" className="px-5 py-2.5 rounded-xl bg-brand-green text-white font-semibold shadow-lg shadow-brand-green/25 hover:bg-brand-green-dark transition-colors text-center">+ Nuevo presupuesto</Link>
+        <Link href="/dashboard/budgets/generate" className="px-4 py-2 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-lg text-sm font-medium hover:opacity-90 transition">⚡ Generar con IA</Link>
+          <Link href="/dashboard/budgets/new" className="px-5 py-2.5 rounded-xl bg-brand-green text-white font-semibold shadow-lg shadow-brand-green/25 hover:bg-brand-green-dark transition-colors text-center">+ Nuevo presupuesto</Link>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">

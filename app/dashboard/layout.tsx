@@ -16,6 +16,8 @@ const navItems = [
   { href: "/dashboard/messages", label: "WhatsApp", icon: "💬" },
   { href: "/dashboard/emails", label: "Emails", icon: "📧" },
   { href: "/dashboard/budgets", label: "Presupuestos", icon: "📋" },
+  { href: "/dashboard/prices", label: "Banco precios", icon: "💰" },
+  { href: "/dashboard/margins", label: "Márgenes", icon: "📊" },
   { href: "/dashboard/calendar", label: "Calendario", icon: "📅" },
   { href: "/dashboard/settings", label: "Ajustes", icon: "⚙️" },
 ];
