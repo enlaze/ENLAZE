@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { getSectorConfig } from "@/lib/agent-prompts";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -16,8 +17,19 @@ export async function POST(request: Request) {
     const { description, serviceType, userId } = await request.json();
 
     if (!description) {
-      return NextResponse.json({ error: "Descripción requerida" }, { status: 400 });
+      return NextResponse.json({ error: "Descripcion requerida" }, { status: 400 });
     }
+
+    // Cargar perfil del usuario para saber su sector
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("business_sector, business_name")
+      .eq("id", userId)
+      .single();
+
+    const sector = profile?.business_sector || "otro";
+    const businessName = profile?.business_name || "";
+    const sectorConfig = getSectorConfig(sector);
 
     // Cargar banco de precios del usuario
     const { data: priceItems } = await supabase
@@ -26,7 +38,7 @@ export async function POST(request: Request) {
       .eq("user_id", userId)
       .order("category");
 
-    // Cargar márgenes del usuario
+    // Cargar margenes del usuario
     const { data: margins } = await supabase
       .from("margin_config")
       .select("*")
@@ -36,51 +48,58 @@ export async function POST(request: Request) {
     const specificMargin = margins?.find((m) => m.service_type === serviceType)?.margin_percent;
     const marginPercent = specificMargin ?? generalMargin;
 
-    // Construir contexto de precios para el agente
+    // Cargar datos del sector (normativas, precios de referencia via n8n)
+    const { data: sectorData } = await supabase
+      .from("sector_data")
+      .select("*")
+      .eq("sector", sector);
+
+    const regulations = sectorData?.filter((d) => d.data_type === "regulation") || [];
+    const refPrices = sectorData?.filter((d) => d.data_type === "price") || [];
+
+    // Contexto de precios del usuario
     const priceContext = priceItems && priceItems.length > 0
-      ? priceItems.map((p) => `- ${p.name} | ${p.category} | ${p.subcategory} | ${p.unit_price}€/${p.unit}`).join("\n")
-      : "No hay banco de precios configurado. Usa precios de mercado estándar en España.";
+      ? priceItems.map((p) => "- " + p.name + " | " + p.category + " | " + p.subcategory + " | " + p.unit_price + " EUR/" + p.unit).join("\n")
+      : "No hay banco de precios configurado. Usa precios de mercado estandar en Espana para " + sectorConfig.name + ".";
 
-    const systemPrompt = `Eres un experto presupuestador profesional del sector de reformas, fontanería, electricidad, climatización y multiservicios en España. 
+    // Contexto de normativas
+    const regulationContext = regulations.length > 0
+      ? regulations.map((r) => "- " + r.title + ": " + r.description).join("\n")
+      : "Aplica las normativas vigentes estandar del sector.";
 
-Tu trabajo es interpretar la descripción de un trabajo y generar un presupuesto desglosado con partidas detalladas.
+    // Contexto de precios de referencia (actualizados via n8n)
+    const refPriceContext = refPrices.length > 0
+      ? refPrices.map((p) => "- " + p.title + ": " + p.value + " EUR/" + p.unit + " (" + p.source + ", actualizado: " + new Date(p.last_updated).toLocaleDateString("es-ES") + ")").join("\n")
+      : "";
 
-REGLAS IMPORTANTES:
-1. Genera partidas REALISTAS con cantidades y precios de mercado en España
-2. Usa el banco de precios del usuario cuando haya coincidencias. Si no hay coincidencia exacta, usa precios de mercado
-3. Incluye TODAS las partidas necesarias: demolición, materiales, mano de obra, acabados, limpieza
-4. Las cantidades deben ser coherentes con las dimensiones indicadas
-5. Cada partida debe tener: concept, description, quantity, unit, category, unit_price
-6. Las categorías son: "material", "mano_obra", "otros"
-7. Las unidades son: "ud", "m2", "ml", "h", "kg", "global", "m3", "l"
-8. Los precios son SIN margen comercial (coste real)
+    const categoriesStr = sectorConfig.categories.map((c) => '"' + c.value + '"').join(", ");
+    const unitsStr = sectorConfig.default_units.map((u) => '"' + u + '"').join(", ");
 
-BANCO DE PRECIOS DEL USUARIO:
-${priceContext}
-
-RESPONDE ÚNICAMENTE con un JSON válido con esta estructura exacta (sin markdown, sin explicaciones, solo el JSON):
-{
-  "title": "Título descriptivo del presupuesto",
-  "partidas": [
-    {
-      "concept": "Nombre de la partida",
-      "description": "Descripción detallada del trabajo",
-      "quantity": 1,
-      "unit": "ud",
-      "category": "material",
-      "unit_price": 0.00
-    }
-  ],
-  "notes": "Notas relevantes sobre plazos, garantías o condiciones"
-}`;
+    const systemPrompt = sectorConfig.prompt + "\n\n" +
+      "EMPRESA DEL USUARIO: " + (businessName || "No especificada") + "\n" +
+      "SECTOR: " + sectorConfig.name + "\n\n" +
+      "NORMATIVAS APLICABLES:\n" + regulationContext + "\n\n" +
+      (refPriceContext ? "PRECIOS DE REFERENCIA DEL MERCADO (actualizados):\n" + refPriceContext + "\n\n" : "") +
+      "BANCO DE PRECIOS DEL USUARIO:\n" + priceContext + "\n\n" +
+      "REGLAS DE FORMATO:\n" +
+      "1. Los precios son SIN margen comercial (coste real para el profesional)\n" +
+      "2. Las categorias permitidas son: " + categoriesStr + "\n" +
+      "3. Las unidades permitidas son: " + unitsStr + "\n" +
+      "4. Genera el MAXIMO nivel de detalle posible en cada partida\n" +
+      "5. Las cantidades deben ser COHERENTES con las dimensiones o alcance descrito\n" +
+      "6. Cada partida debe tener una descripcion tecnica detallada\n" +
+      "7. NO agrupes conceptos. Cada accion, material o servicio es una partida separada\n" +
+      "8. Incluye TODOS los costes: principales, auxiliares, preparacion, limpieza\n\n" +
+      "RESPONDE UNICAMENTE con un JSON valido con esta estructura exacta (sin markdown, sin explicaciones, solo el JSON):\n" +
+      '{\n  "title": "Titulo descriptivo del presupuesto",\n  "partidas": [\n    {\n      "concept": "Nombre especifico de la partida",\n      "description": "Descripcion tecnica detallada: que se hace, como, con que materiales, medidas exactas",\n      "quantity": 1,\n      "unit": "ud",\n      "category": "' + sectorConfig.categories[0]?.value + '",\n      "unit_price": 0.00\n    }\n  ],\n  "notes": "Notas sobre plazos, garantias, condiciones, normativa aplicable"\n}';
 
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
+      max_tokens: 8192,
       messages: [
         {
           role: "user",
-          content: `Genera un presupuesto profesional detallado para el siguiente trabajo:\n\n"${description}"\n\nTipo de servicio: ${serviceType}\n\nRecuerda: responde SOLO con el JSON, sin texto adicional.`,
+          content: "Genera un presupuesto profesional ULTRA-DETALLADO para el siguiente trabajo:\n\n\"" + description + "\"\n\nTipo de servicio: " + serviceType + "\nSector: " + sectorConfig.name + "\n\nRecuerda: responde SOLO con el JSON, sin texto adicional. Genera el MAXIMO numero de partidas necesarias con el MAXIMO detalle tecnico.",
         },
       ],
       system: systemPrompt,
@@ -92,7 +111,7 @@ RESPONDE ÚNICAMENTE con un JSON válido con esta estructura exacta (sin markdow
       .map((block) => block.text)
       .join("");
 
-    // Parsear JSON (limpiar posible markdown)
+    // Parsear JSON
     let cleaned = responseText.trim();
     if (cleaned.startsWith("```json")) cleaned = cleaned.slice(7);
     if (cleaned.startsWith("```")) cleaned = cleaned.slice(3);
@@ -120,6 +139,8 @@ RESPONDE ÚNICAMENTE con un JSON válido con esta estructura exacta (sin markdow
       total_cost: Math.round(totalCost * 100) / 100,
       total_client: Math.round(totalClient * 100) / 100,
       profit: Math.round((totalClient - totalCost) * 100) / 100,
+      sector: sector,
+      agent_name: sectorConfig.agent_name,
     });
   } catch (e: any) {
     console.error("Error generating budget:", e);

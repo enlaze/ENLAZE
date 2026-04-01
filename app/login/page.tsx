@@ -16,12 +16,18 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       setError(error.message);
       setLoading(false);
     } else {
-      router.push("/dashboard");
+      // Comprobar si hizo onboarding
+        const { data: profile } = await supabase.from("profiles").select("onboarding_completed").eq("id", data.user.id).single();
+        if (profile && profile.onboarding_completed) {
+          router.push("/dashboard");
+        } else {
+          router.push("/onboarding");
+        }
     }
   };
 
