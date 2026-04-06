@@ -41,6 +41,7 @@ export default function PricesPage() {
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("all");
   const [lastSync, setLastSync] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -49,7 +50,14 @@ export default function PricesPage() {
   const [unit, setUnit] = useState("ud");
   const [unitPrice, setUnitPrice] = useState(0);
 
-  useEffect(() => { loadItems(); }, []);
+  useEffect(() => {
+    async function init() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) setUserId(user.id);
+      loadItems();
+    }
+    init();
+  }, []);
 
   async function loadItems() {
     const { data } = await supabase
@@ -77,9 +85,9 @@ export default function PricesPage() {
 
   async function handleSave() {
     if (!name || unitPrice <= 0) { alert("Completa nombre y precio válido."); return; }
-    const payload = { name, description, category, subcategory, unit, unit_price: unitPrice };
+    const payload = { name, description, category, subcategory, unit, unit_price: unitPrice, user_id: userId };
     if (editingId) {
-      await supabase.from("price_items").update(payload).eq("id", editingId);
+      await supabase.from("price_items").update({ name, description, category, subcategory, unit, unit_price: unitPrice }).eq("id", editingId);
     } else {
       await supabase.from("price_items").insert(payload);
     }
@@ -95,11 +103,11 @@ export default function PricesPage() {
 
   // Importar precios REALES desde sector_data (datos de n8n)
   async function syncFromMarket() {
+    if (!userId) { alert("Error: no se pudo obtener tu usuario. Recarga la página."); return; }
     if (!confirm("¿Importar precios actualizados del mercado (n8n)? Se añadirán los nuevos y se actualizarán los existentes.")) return;
     setSyncing(true);
 
     try {
-      // Obtener precios de mercado de sector_data
       const { data: marketPrices } = await supabase
         .from("sector_data")
         .select("*")
@@ -112,7 +120,6 @@ export default function PricesPage() {
         return;
       }
 
-      // Obtener items actuales del usuario
       const { data: currentItems } = await supabase
         .from("price_items")
         .select("name");
@@ -125,31 +132,34 @@ export default function PricesPage() {
         const itemName = mp.title || "";
         if (!itemName) continue;
 
-        // Mapear subcategoría de sector_data a las del banco de precios
         let subcat = mp.subcategory || "Otros";
         if (subcat === "Fontaneria") subcat = "Fontanería";
         if (subcat === "Albanileria") subcat = "Albañilería";
 
-        const payload = {
-          name: itemName,
-          description: mp.description || `Precio de mercado · ${mp.source || "n8n"} · ${new Date(mp.last_updated).toLocaleDateString("es-ES")}`,
-          category: mp.category || "material",
-          subcategory: subcat,
-          unit: mp.unit || "ud",
-          unit_price: parseFloat(mp.value) || 0,
-        };
+        const priceValue = parseFloat(mp.value) || 0;
+        if (priceValue <= 0) continue;
 
         if (existingNames.has(itemName.toLowerCase())) {
-          // Actualizar precio existente
           await supabase
             .from("price_items")
-            .update({ unit_price: payload.unit_price, description: payload.description })
+            .update({
+              unit_price: priceValue,
+              description: `Precio de mercado · ${mp.source || "n8n"} · ${new Date(mp.last_updated).toLocaleDateString("es-ES")}`,
+            })
             .ilike("name", itemName);
           updated++;
         } else {
-          // Insertar nuevo
-          await supabase.from("price_items").insert(payload);
-          added++;
+          const { error } = await supabase.from("price_items").insert({
+            user_id: userId,
+            name: itemName,
+            description: `Precio de mercado · ${mp.source || "n8n"} · ${new Date(mp.last_updated).toLocaleDateString("es-ES")}`,
+            category: mp.category || "material",
+            subcategory: subcat,
+            unit: mp.unit || "ud",
+            unit_price: priceValue,
+          });
+          if (error) console.error("Error insertando:", itemName, error);
+          else added++;
         }
       }
 
@@ -164,8 +174,8 @@ export default function PricesPage() {
     loadItems();
   }
 
-  // Importar precios por defecto (hardcoded como fallback)
   async function importDefaults() {
+    if (!userId) { alert("Error: no se pudo obtener tu usuario. Recarga la página."); return; }
     if (!confirm("¿Importar precios por defecto del sector? Se añadirán a tu banco de precios actual.")) return;
 
     const defaults = [
@@ -200,7 +210,7 @@ export default function PricesPage() {
     ];
 
     for (const item of defaults) {
-      await supabase.from("price_items").insert({ ...item, description: "" });
+      await supabase.from("price_items").insert({ ...item, description: "", user_id: userId });
     }
     loadItems();
   }
@@ -244,7 +254,6 @@ export default function PricesPage() {
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
           <p className="text-2xl font-bold text-blue-400">{materialCount}</p>
@@ -260,7 +269,6 @@ export default function PricesPage() {
         </div>
       </div>
 
-      {/* Search + Filter */}
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
         <input type="text" placeholder="Buscar por nombre o subcategoría..." value={search} onChange={(e) => setSearch(e.target.value)} className="flex-1 bg-[var(--color-navy-800)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-700)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm" />
         <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className="bg-[var(--color-navy-800)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-700)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm">
@@ -269,7 +277,6 @@ export default function PricesPage() {
         </select>
       </div>
 
-      {/* Form */}
       {showForm && (
         <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-6 border border-[var(--color-navy-600)]">
           <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-4">
@@ -319,7 +326,6 @@ export default function PricesPage() {
         </div>
       )}
 
-      {/* Items Table */}
       {filtered.length === 0 ? (
         <div className="bg-[var(--color-navy-800)] rounded-xl p-10 text-center">
           <p className="text-[var(--color-navy-400)]">No hay precios configurados.</p>
