@@ -35,10 +35,12 @@ export default function PricesPage() {
 
   const [items, setItems] = useState<PriceItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("all");
+  const [lastSync, setLastSync] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -75,9 +77,7 @@ export default function PricesPage() {
 
   async function handleSave() {
     if (!name || unitPrice <= 0) { alert("Completa nombre y precio válido."); return; }
-
     const payload = { name, description, category, subcategory, unit, unit_price: unitPrice };
-
     if (editingId) {
       await supabase.from("price_items").update(payload).eq("id", editingId);
     } else {
@@ -93,6 +93,78 @@ export default function PricesPage() {
     loadItems();
   }
 
+  // Importar precios REALES desde sector_data (datos de n8n)
+  async function syncFromMarket() {
+    if (!confirm("¿Importar precios actualizados del mercado (n8n)? Se añadirán los nuevos y se actualizarán los existentes.")) return;
+    setSyncing(true);
+
+    try {
+      // Obtener precios de mercado de sector_data
+      const { data: marketPrices } = await supabase
+        .from("sector_data")
+        .select("*")
+        .eq("data_type", "price")
+        .order("last_updated", { ascending: false });
+
+      if (!marketPrices || marketPrices.length === 0) {
+        alert("No hay precios de mercado disponibles todavía. Ejecuta el workflow de n8n primero.");
+        setSyncing(false);
+        return;
+      }
+
+      // Obtener items actuales del usuario
+      const { data: currentItems } = await supabase
+        .from("price_items")
+        .select("name");
+      const existingNames = new Set((currentItems || []).map(i => i.name.toLowerCase()));
+
+      let added = 0;
+      let updated = 0;
+
+      for (const mp of marketPrices) {
+        const itemName = mp.title || "";
+        if (!itemName) continue;
+
+        // Mapear subcategoría de sector_data a las del banco de precios
+        let subcat = mp.subcategory || "Otros";
+        if (subcat === "Fontaneria") subcat = "Fontanería";
+        if (subcat === "Albanileria") subcat = "Albañilería";
+
+        const payload = {
+          name: itemName,
+          description: mp.description || `Precio de mercado · ${mp.source || "n8n"} · ${new Date(mp.last_updated).toLocaleDateString("es-ES")}`,
+          category: mp.category || "material",
+          subcategory: subcat,
+          unit: mp.unit || "ud",
+          unit_price: parseFloat(mp.value) || 0,
+        };
+
+        if (existingNames.has(itemName.toLowerCase())) {
+          // Actualizar precio existente
+          await supabase
+            .from("price_items")
+            .update({ unit_price: payload.unit_price, description: payload.description })
+            .ilike("name", itemName);
+          updated++;
+        } else {
+          // Insertar nuevo
+          await supabase.from("price_items").insert(payload);
+          added++;
+        }
+      }
+
+      setLastSync(new Date().toLocaleTimeString("es-ES"));
+      alert(`Sincronización completada: ${added} nuevos, ${updated} actualizados.`);
+    } catch (err) {
+      console.error("Error sincronizando:", err);
+      alert("Error al sincronizar. Revisa la consola.");
+    }
+
+    setSyncing(false);
+    loadItems();
+  }
+
+  // Importar precios por defecto (hardcoded como fallback)
   async function importDefaults() {
     if (!confirm("¿Importar precios por defecto del sector? Se añadirán a tu banco de precios actual.")) return;
 
@@ -128,10 +200,7 @@ export default function PricesPage() {
     ];
 
     for (const item of defaults) {
-      await supabase.from("price_items").insert({
-        ...item,
-        description: "",
-      });
+      await supabase.from("price_items").insert({ ...item, description: "" });
     }
     loadItems();
   }
@@ -157,9 +226,15 @@ export default function PricesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">Banco de precios</h1>
-          <p className="text-[var(--color-navy-400)] text-sm mt-1">Configura tus precios base para materiales, mano de obra y otros gastos</p>
+          <p className="text-[var(--color-navy-400)] text-sm mt-1">
+            Configura tus precios base para materiales, mano de obra y otros gastos
+            {lastSync && <span className="ml-2 text-[var(--color-brand-green)]">· Sincronizado: {lastSync}</span>}
+          </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={syncFromMarket} disabled={syncing} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-500 transition disabled:opacity-50 disabled:cursor-not-allowed">
+            {syncing ? "⏳ Sincronizando..." : "🔄 Sync mercado (n8n)"}
+          </button>
           <button onClick={importDefaults} className="px-4 py-2 bg-[var(--color-navy-700)] text-[var(--color-navy-200)] rounded-lg text-sm font-medium hover:bg-[var(--color-navy-600)] transition">
             📥 Importar por defecto
           </button>
@@ -248,7 +323,7 @@ export default function PricesPage() {
       {filtered.length === 0 ? (
         <div className="bg-[var(--color-navy-800)] rounded-xl p-10 text-center">
           <p className="text-[var(--color-navy-400)]">No hay precios configurados.</p>
-          <p className="text-sm text-[var(--color-navy-500)] mt-1">Pulsa "Importar por defecto" para cargar precios del sector o añade los tuyos manualmente.</p>
+          <p className="text-sm text-[var(--color-navy-500)] mt-1">Pulsa "Sync mercado" para importar precios reales de n8n o "Importar por defecto" para cargar precios base.</p>
         </div>
       ) : (
         <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden">
