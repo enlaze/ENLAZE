@@ -62,7 +62,7 @@ async function prepareImageForClaude(file: File) {
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
 export async function POST(request: Request) {
@@ -154,6 +154,9 @@ Responde SOLO con el JSON, sin texto adicional:
       .upload(fileName, file, { contentType: file.type });
 
     let imageUrl = "";
+    if (uploadError) {
+      console.error("Storage upload error:", uploadError);
+    }
     if (!uploadError && uploadData) {
       const { data: urlData } = supabase.storage.from("invoices").getPublicUrl(fileName);
       imageUrl = urlData.publicUrl;
@@ -195,7 +198,13 @@ Responde SOLO con el JSON, sin texto adicional:
       .single();
 
     if (insertError) {
-      return NextResponse.json({ error: "Error guardando factura", details: insertError.message }, { status: 500 });
+      console.error("Insert invoice error:", insertError);
+      return NextResponse.json({
+        error: "Error guardando factura",
+        details: insertError.message,
+        code: insertError.code || "",
+        hint: insertError.hint || ""
+      }, { status: 500 });
     }
 
     // Guardar líneas de factura
@@ -209,7 +218,16 @@ Responde SOLO con el JSON, sin texto adicional:
         subtotal: item.subtotal || 0,
         sort_order: idx,
       }));
-      await supabase.from("invoice_items").insert(items);
+      const { error: itemsError } = await supabase.from("invoice_items").insert(items);
+      if (itemsError) {
+        console.error("Insert invoice items error:", itemsError);
+        return NextResponse.json({
+          error: "Error guardando líneas de factura",
+          details: itemsError.message,
+          code: itemsError.code || "",
+          hint: itemsError.hint || ""
+        }, { status: 500 });
+      }
     }
 
     return NextResponse.json({
