@@ -93,7 +93,7 @@ export async function POST(request: Request) {
           content: [
             {
               type: "image",
-              source: { type: "base64", media_type: preparedImage.mediaType, data: preparedImage.base64 },
+              source: { type: "base64", media_type: "image/jpeg", data: preparedImage.base64 },
             },
             {
               type: "text",
