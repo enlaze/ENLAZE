@@ -1,8 +1,64 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import sharp from "sharp";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+
+async function prepareImageForClaude(file: File) {
+  const inputBuffer = Buffer.from(await file.arrayBuffer());
+
+  const base = sharp(inputBuffer, { failOn: "none" }).rotate();
+  const meta = await base.metadata();
+
+  const width = meta.width || 1600;
+  const height = meta.height || 1600;
+
+  const maxEdge = 1568;
+  const scale = Math.min(1, maxEdge / Math.max(width, height));
+
+  const resizedWidth = Math.max(1, Math.round(width * scale));
+  const resizedHeight = Math.max(1, Math.round(height * scale));
+
+  let quality = 80;
+
+  let output = await base
+    .resize(resizedWidth, resizedHeight, {
+      fit: "inside",
+      withoutEnlargement: true,
+    })
+    .flatten({ background: "#ffffff" })
+    .jpeg({ quality, mozjpeg: true })
+    .toBuffer();
+
+  while (output.length > 4_500_000 && quality > 40) {
+    quality -= 10;
+    output = await sharp(output)
+      .jpeg({ quality, mozjpeg: true })
+      .toBuffer();
+  }
+
+  if (output.length > 5_000_000) {
+    output = await sharp(output)
+      .resize(1200, 1200, {
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: 60, mozjpeg: true })
+      .toBuffer();
+  }
+
+  if (output.length > 5_000_000) {
+    throw new Error("La imagen sigue superando el límite de 5 MB tras comprimirla");
+  }
+
+  return {
+    mediaType: "image/jpeg",
+    base64: output.toString("base64"),
+    bytes: output.length,
+  };
+}
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,11 +75,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Archivo y userId requeridos" }, { status: 400 });
     }
 
-    // Convertir archivo a base64
-    const bytes = await file.arrayBuffer();
-    const base64 = Buffer.from(bytes).toString("base64");
-    const mediaType = file.type as "image/jpeg" | "image/png" | "image/webp";
+    if (file.size > 12_000_000) {
+      return NextResponse.json(
+        { error: "La imagen original es demasiado grande. Sube una foto más ligera o un PDF." },
+        { status: 400 }
+      );
+    }
 
+    const preparedImage = await prepareImageForClaude(file);
     // Enviar a Claude para OCR
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
@@ -34,7 +93,7 @@ export async function POST(request: Request) {
           content: [
             {
               type: "image",
-              source: { type: "base64", media_type: mediaType, data: base64 },
+              source: { type: "base64", media_type: preparedImage.mediaType, data: preparedImage.base64 },
             },
             {
               type: "text",
