@@ -150,11 +150,61 @@ export default function FacturasPage() {
     loadInvoices();
   }
 
+
+  async function compressImageForUpload(file: File): Promise<File> {
+    if (file.size <= 1_500_000 && file.type === "image/jpeg") return file;
+
+    const objectUrl = URL.createObjectURL(file);
+
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error("No se pudo cargar la imagen"));
+        image.src = objectUrl;
+      });
+
+      const maxSide = 1400;
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const width = Math.max(1, Math.round(img.width * scale));
+      const height = Math.max(1, Math.round(img.height * scale));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("No se pudo preparar la imagen");
+
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(img, 0, 0, width, height);
+
+      const toBlob = (quality: number) =>
+        new Promise<Blob | null>((resolve) => {
+          canvas.toBlob(resolve, "image/jpeg", quality);
+        });
+
+      let blob = await toBlob(0.72);
+      if (!blob) throw new Error("No se pudo comprimir la imagen");
+
+      if (blob.size > 2_500_000) {
+        blob = await toBlob(0.6);
+      }
+
+      if (!blob) throw new Error("No se pudo comprimir la imagen");
+
+      const baseName = file.name.replace(/\.[^.]+$/, "");
+      return new File([blob], `${baseName}.jpg`, { type: "image/jpeg" });
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  }
+
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !userId) return;
 
-    // Validar que es imagen
     if (!file.type.startsWith("image/")) {
       alert("Por favor sube una imagen (JPG, PNG, WEBP). Los PDF no están soportados aún.");
       e.target.value = "";
@@ -162,11 +212,15 @@ export default function FacturasPage() {
     }
 
     setUploading(true);
-    setUploadProgress("Analizando factura con IA...");
+    setUploadProgress("Preparando imagen...");
 
     try {
+      const optimizedFile = await compressImageForUpload(file);
+
+      setUploadProgress("Analizando factura con IA...");
+
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", optimizedFile);
       formData.append("userId", userId);
 
       const res = await fetch("/api/invoices/ocr", { method: "POST", body: formData });
@@ -177,13 +231,14 @@ export default function FacturasPage() {
         await loadInvoices();
         setTimeout(() => { setUploading(false); setUploadProgress(""); }, 2000);
       } else {
-        setUploadProgress("Error: " + (result.error || "No se pudo procesar"));
-        setTimeout(() => { setUploading(false); setUploadProgress(""); }, 4000);
+        setUploadProgress("Error: " + (result.error || result.details || "No se pudo procesar"));
+        setTimeout(() => { setUploading(false); setUploadProgress(""); }, 5000);
       }
     } catch (err: any) {
       setUploadProgress("Error: " + err.message);
-      setTimeout(() => { setUploading(false); setUploadProgress(""); }, 4000);
+      setTimeout(() => { setUploading(false); setUploadProgress(""); }, 5000);
     }
+
     e.target.value = "";
   }
 
