@@ -71,6 +71,7 @@ export async function POST(request: Request) {
     const file = formData.get("file") as File;
     const userId = formData.get("userId") as string;
     const clientId = formData.get("clientId") as string;
+    const projectId = formData.get("projectId") as string;
 
     if (!file || !userId) {
       return NextResponse.json({ error: "Archivo y userId requeridos" }, { status: 400 });
@@ -175,6 +176,7 @@ Responde SOLO con el JSON, sin texto adicional:
       .insert({
         user_id: userId,
         client_id: clientId || null,
+        project_id: projectId || null,
         supplier_name: invoiceData.supplier_name || "",
         supplier_nif: invoiceData.supplier_nif || "",
         supplier_address: invoiceData.supplier_address || "",

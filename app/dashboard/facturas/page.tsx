@@ -34,6 +34,12 @@ interface ClientOption {
   name: string;
 }
 
+interface ProjectOption {
+  id: string;
+  name: string;
+  client_id: string | null;
+}
+
 
 const categoryLabels: Record<string, string> = {
   material: "Material", servicio: "Servicio", suministro: "Suministro",
@@ -64,7 +70,9 @@ export default function FacturasPage() {
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [clients, setClients] = useState<ClientOption[]>([]);
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [selectedClientId, setSelectedClientId] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState("");
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
@@ -87,12 +95,31 @@ export default function FacturasPage() {
     init();
   }, []);
 
+  useEffect(() => {
+    if (
+      selectedClientId &&
+      selectedProjectId &&
+      !projects.some((project) => project.id === selectedProjectId && project.client_id === selectedClientId)
+    ) {
+      setSelectedProjectId("");
+    }
+  }, [selectedClientId, selectedProjectId, projects]);
+
+
   async function loadClients() {
     const { data } = await supabase
       .from("clients")
       .select("id, name")
       .order("name");
     setClients(data || []);
+  }
+
+  async function loadProjects() {
+    const { data } = await supabase
+      .from("projects")
+      .select("id, name, client_id")
+      .order("name");
+    setProjects(data || []);
   }
 
   async function loadInvoices() {
@@ -150,6 +177,7 @@ export default function FacturasPage() {
     const payload = {
       ...form,
       client_id: selectedClientId || null,
+      project_id: selectedProjectId || null,
       base_amount: form.base_amount || 0,
       iva_amount: form.iva_amount || 0,
       irpf_amount: form.irpf_amount || 0,
@@ -276,6 +304,10 @@ export default function FacturasPage() {
     loadInvoices();
   }
 
+  const visibleProjects = selectedClientId
+    ? projects.filter((project) => project.client_id === selectedClientId)
+    : projects;
+
   const filtered = invoices.filter((inv) => {
     const matchSearch = inv.supplier_name.toLowerCase().includes(search.toLowerCase()) ||
       (inv.invoice_number || "").toLowerCase().includes(search.toLowerCase());
@@ -312,6 +344,18 @@ export default function FacturasPage() {
             {clients.map((client) => (
               <option key={client.id} value={client.id}>
                 {client.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+            className="px-4 py-2 rounded-lg text-sm bg-[var(--color-navy-800)] text-[var(--color-navy-50)] border border-[var(--color-navy-700)]"
+          >
+            <option value="">Sin asignar / seleccionar obra...</option>
+            {visibleProjects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
               </option>
             ))}
           </select>
