@@ -86,11 +86,9 @@ export default function FacturasPage() {
   }, []);
 
   async function loadClients() {
-    if (!userId) return;
     const { data } = await supabase
       .from("clients")
       .select("id, name")
-      .eq("user_id", userId)
       .order("name");
     setClients(data || []);
   }
@@ -224,12 +222,6 @@ export default function FacturasPage() {
     const file = e.target.files?.[0];
     if (!file || !userId) return;
 
-    if (!selectedClientId) {
-      alert("Selecciona primero el cliente al que pertenece la factura.");
-      e.target.value = "";
-      return;
-    }
-
     if (!file.type.startsWith("image/")) {
       alert("Por favor sube una imagen (JPG, PNG, WEBP). Los PDF no están soportados aún.");
       e.target.value = "";
@@ -311,7 +303,7 @@ export default function FacturasPage() {
             onChange={(e) => setSelectedClientId(e.target.value)}
             className="px-4 py-2 rounded-lg text-sm bg-[var(--color-navy-800)] text-[var(--color-navy-50)] border border-[var(--color-navy-700)]"
           >
-            <option value="">Seleccionar cliente...</option>
+            <option value="">Sin asignar / seleccionar cliente...</option>
             {clients.map((client) => (
               <option key={client.id} value={client.id}>
                 {client.name}
