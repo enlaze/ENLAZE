@@ -12,6 +12,52 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+function stripCodeFences(text: string) {
+  let cleaned = text.trim();
+  if (cleaned.startsWith("```json")) cleaned = cleaned.slice(7);
+  if (cleaned.startsWith("```")) cleaned = cleaned.slice(3);
+  if (cleaned.endsWith("```")) cleaned = cleaned.slice(0, -3);
+  return cleaned.trim();
+}
+
+function extractLikelyJson(text: string) {
+  const cleaned = stripCodeFences(text);
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    return cleaned.slice(firstBrace, lastBrace + 1).trim();
+  }
+
+  return cleaned;
+}
+
+async function repairBudgetJson(rawText: string) {
+  const repairMessage = await anthropic.messages.create({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 4096,
+    messages: [
+      {
+        role: "user",
+        content:
+          "Convierte el siguiente contenido en un JSON VALIDO. " +
+          "Debe mantener esta estructura: { title, partidas, notes }. " +
+          "Cada partida debe tener: concept, description, quantity, unit, category, unit_price. " +
+          "Si la ultima partida esta incompleta o corrupta, elimínala. " +
+          "Responde SOLO con JSON valido, sin markdown ni explicaciones.\n\nCONTENIDO:\n" +
+          rawText,
+      },
+    ],
+  });
+
+  const repairText = repairMessage.content
+    .filter((block): block is Anthropic.TextBlock => block.type === "text")
+    .map((block) => block.text)
+    .join("");
+
+  return extractLikelyJson(repairText);
+}
+
 export async function POST(request: Request) {
   try {
     const { description, serviceType, userId } = await request.json();
@@ -20,7 +66,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Descripcion requerida" }, { status: 400 });
     }
 
-    // Cargar perfil del usuario para saber su sector
     const { data: profile } = await supabase
       .from("profiles")
       .select("business_sector, business_name")
@@ -31,24 +76,22 @@ export async function POST(request: Request) {
     const businessName = profile?.business_name || "";
     const sectorConfig = getSectorConfig(sector);
 
-    // Cargar banco de precios del usuario
     const { data: priceItems } = await supabase
       .from("price_items")
       .select("*")
       .eq("user_id", userId)
       .order("category");
 
-    // Cargar margenes del usuario
     const { data: margins } = await supabase
       .from("margin_config")
       .select("*")
       .eq("user_id", userId);
 
-    const generalMargin = margins?.find((m) => m.service_type === "general")?.margin_percent || 20;
+    const generalMargin =
+      margins?.find((m) => m.service_type === "general")?.margin_percent || 20;
     const specificMargin = margins?.find((m) => m.service_type === serviceType)?.margin_percent;
     const marginPercent = specificMargin ?? generalMargin;
 
-    // Cargar datos del sector (normativas, precios de referencia via n8n)
     const { data: sectorData } = await supabase
       .from("sector_data")
       .select("*")
@@ -57,79 +100,155 @@ export async function POST(request: Request) {
     const regulations = sectorData?.filter((d) => d.data_type === "regulation") || [];
     const refPrices = sectorData?.filter((d) => d.data_type === "price") || [];
 
-    // Contexto de precios del usuario
-    const priceContext = priceItems && priceItems.length > 0
-      ? priceItems.map((p) => "- " + p.name + " | " + p.category + " | " + p.subcategory + " | " + p.unit_price + " EUR/" + p.unit).join("\n")
-      : "No hay banco de precios configurado. Usa precios de mercado estandar en Espana para " + sectorConfig.name + ".";
+    const priceContext =
+      priceItems && priceItems.length > 0
+        ? priceItems
+            .map(
+              (p) =>
+                "- " +
+                p.name +
+                " | " +
+                p.category +
+                " | " +
+                p.subcategory +
+                " | " +
+                p.unit_price +
+                " EUR/" +
+                p.unit
+            )
+            .join("\n")
+        : "No hay banco de precios configurado. Usa precios de mercado estandar en Espana para " +
+          sectorConfig.name +
+          ".";
 
-    // Contexto de normativas
-    const regulationContext = regulations.length > 0
-      ? regulations.map((r) => "- " + r.title + ": " + r.description).join("\n")
-      : "Aplica las normativas vigentes estandar del sector.";
+    const regulationContext =
+      regulations.length > 0
+        ? regulations.map((r) => "- " + r.title + ": " + r.description).join("\n")
+        : "Aplica las normativas vigentes estandar del sector.";
 
-    // Contexto de precios de referencia (actualizados via n8n)
-    const refPriceContext = refPrices.length > 0
-      ? refPrices.map((p) => "- " + p.title + ": " + p.value + " EUR/" + p.unit + " (" + p.source + ", actualizado: " + new Date(p.last_updated).toLocaleDateString("es-ES") + ")").join("\n")
-      : "";
+    const refPriceContext =
+      refPrices.length > 0
+        ? refPrices
+            .map(
+              (p) =>
+                "- " +
+                p.title +
+                ": " +
+                p.value +
+                " EUR/" +
+                p.unit +
+                " (" +
+                p.source +
+                ", actualizado: " +
+                new Date(p.last_updated).toLocaleDateString("es-ES") +
+                ")"
+            )
+            .join("\n")
+        : "";
 
     const categoriesStr = sectorConfig.categories.map((c) => '"' + c.value + '"').join(", ");
     const unitsStr = sectorConfig.default_units.map((u) => '"' + u + '"').join(", ");
 
-    const systemPrompt = sectorConfig.prompt + "\n\n" +
-      "EMPRESA DEL USUARIO: " + (businessName || "No especificada") + "\n" +
-      "SECTOR: " + sectorConfig.name + "\n\n" +
-      "NORMATIVAS APLICABLES:\n" + regulationContext + "\n\n" +
-      (refPriceContext ? "PRECIOS DE REFERENCIA DEL MERCADO (actualizados):\n" + refPriceContext + "\n\n" : "") +
-      "BANCO DE PRECIOS DEL USUARIO:\n" + priceContext + "\n\n" +
+    const systemPrompt =
+      sectorConfig.prompt +
+      "\n\n" +
+      "EMPRESA DEL USUARIO: " +
+      (businessName || "No especificada") +
+      "\n" +
+      "SECTOR: " +
+      sectorConfig.name +
+      "\n\n" +
+      "NORMATIVAS APLICABLES:\n" +
+      regulationContext +
+      "\n\n" +
+      (refPriceContext
+        ? "PRECIOS DE REFERENCIA DEL MERCADO (actualizados):\n" + refPriceContext + "\n\n"
+        : "") +
+      "BANCO DE PRECIOS DEL USUARIO:\n" +
+      priceContext +
+      "\n\n" +
       "REGLAS DE FORMATO:\n" +
       "1. Los precios son SIN margen comercial (coste real para el profesional)\n" +
-      "2. Las categorias permitidas son: " + categoriesStr + "\n" +
-      "3. Las unidades permitidas son: " + unitsStr + "\n" +
-      "4. Genera el MAXIMO nivel de detalle posible en cada partida\n" +
-      "5. Las cantidades deben ser COHERENTES con las dimensiones o alcance descrito\n" +
-      "6. Cada partida debe tener una descripcion tecnica detallada\n" +
-      "7. NO agrupes conceptos. Cada accion, material o servicio es una partida separada\n" +
-      "8. Incluye TODOS los costes: principales, auxiliares, preparacion, limpieza\n\n" +
+      "2. Las categorias permitidas son: " +
+      categoriesStr +
+      "\n" +
+      "3. Las unidades permitidas son: " +
+      unitsStr +
+      "\n" +
+      "4. Genera detalle profesional y util, sin redundancias excesivas\n" +
+      "5. Las cantidades deben ser coherentes con las dimensiones o alcance descrito\n" +
+      "6. Cada partida debe tener una descripcion tecnica clara y concisa\n" +
+      "7. Separa las partidas principales y auxiliares necesarias, evitando duplicidades innecesarias\n" +
+      "8. Incluye costes principales, auxiliares, preparacion y limpieza cuando apliquen\n\n" +
       "RESPONDE UNICAMENTE con un JSON valido con esta estructura exacta (sin markdown, sin explicaciones, solo el JSON):\n" +
-      '{\n  "title": "Titulo descriptivo del presupuesto",\n  "partidas": [\n    {\n      "concept": "Nombre especifico de la partida",\n      "description": "Descripcion tecnica detallada: que se hace, como, con que materiales, medidas exactas",\n      "quantity": 1,\n      "unit": "ud",\n      "category": "' + sectorConfig.categories[0]?.value + '",\n      "unit_price": 0.00\n    }\n  ],\n  "notes": "Notas sobre plazos, garantias, condiciones, normativa aplicable"\n}';
+      '{\n  "title": "Titulo descriptivo del presupuesto",\n  "partidas": [\n    {\n      "concept": "Nombre especifico de la partida",\n      "description": "Descripcion tecnica clara y concisa",\n      "quantity": 1,\n      "unit": "ud",\n      "category": "' +
+      sectorConfig.categories[0]?.value +
+      '",\n      "unit_price": 0.00\n    }\n  ],\n  "notes": "Notas sobre plazos, garantias, condiciones y normativa aplicable"\n}';
 
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 8192,
+      max_tokens: 6000,
       messages: [
         {
           role: "user",
-          content: "Genera un presupuesto profesional ULTRA-DETALLADO para el siguiente trabajo:\n\n\"" + description + "\"\n\nTipo de servicio: " + serviceType + "\nSector: " + sectorConfig.name + "\n\nRecuerda: responde SOLO con el JSON, sin texto adicional. Genera el MAXIMO numero de partidas necesarias con el MAXIMO detalle tecnico.",
+          content:
+            'Genera un presupuesto profesional detallado para el siguiente trabajo:\n\n"' +
+            description +
+            '"\n\nTipo de servicio: ' +
+            serviceType +
+            "\nSector: " +
+            sectorConfig.name +
+            "\n\nRecuerda: responde SOLO con el JSON, sin texto adicional. Genera las partidas necesarias con detalle tecnico claro y descripciones concisas.",
         },
       ],
       system: systemPrompt,
     });
 
-    // Extraer texto de la respuesta
     const responseText = message.content
       .filter((block): block is Anthropic.TextBlock => block.type === "text")
       .map((block) => block.text)
       .join("");
 
-    // Parsear JSON
-    let cleaned = responseText.trim();
-    if (cleaned.startsWith("```json")) cleaned = cleaned.slice(7);
-    if (cleaned.startsWith("```")) cleaned = cleaned.slice(3);
-    if (cleaned.endsWith("```")) cleaned = cleaned.slice(0, -3);
-    cleaned = cleaned.trim();
+    let result: any;
+    const cleaned = extractLikelyJson(responseText);
 
-    const result = JSON.parse(cleaned);
+    try {
+      result = JSON.parse(cleaned);
+    } catch (parseError) {
+      console.error("Primary budget JSON parse failed:", parseError);
+      console.error("Raw budget response length:", responseText.length);
+      console.error("Anthropic stop reason:", message.stop_reason);
 
-    // Calcular subtotales y aplicar margen
-    const partidasWithCalcs = result.partidas.map((p: any) => ({
-      ...p,
-      subtotal_cost: Math.round(p.quantity * p.unit_price * 100) / 100,
-      unit_price_client: Math.round(p.unit_price * (1 + marginPercent / 100) * 100) / 100,
-      subtotal_client: Math.round(p.quantity * p.unit_price * (1 + marginPercent / 100) * 100) / 100,
-    }));
+      const repaired = await repairBudgetJson(responseText);
+      result = JSON.parse(repaired);
+    }
+
+    if (!result?.partidas || !Array.isArray(result.partidas)) {
+      throw new Error("La respuesta de la IA no contiene una lista valida de partidas");
+    }
+
+    const partidasWithCalcs = result.partidas.map((p: any) => {
+      const quantity = Number(p.quantity || 0);
+      const unitPrice = Number(p.unit_price || 0);
+      const subtotalCost = Math.round(quantity * unitPrice * 100) / 100;
+      const unitPriceClient = Math.round(unitPrice * (1 + marginPercent / 100) * 100) / 100;
+      const subtotalClient = Math.round(quantity * unitPriceClient * 100) / 100;
+
+      return {
+        ...p,
+        quantity,
+        unit_price: unitPrice,
+        subtotal_cost: subtotalCost,
+        unit_price_client: unitPriceClient,
+        subtotal_client: subtotalClient,
+      };
+    });
 
     const totalCost = partidasWithCalcs.reduce((sum: number, p: any) => sum + p.subtotal_cost, 0);
-    const totalClient = partidasWithCalcs.reduce((sum: number, p: any) => sum + p.subtotal_client, 0);
+    const totalClient = partidasWithCalcs.reduce(
+      (sum: number, p: any) => sum + p.subtotal_client,
+      0
+    );
 
     return NextResponse.json({
       title: result.title,
