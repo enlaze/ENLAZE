@@ -281,7 +281,8 @@ export default function FacturasPage() {
       (inv.invoice_number || "").toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === "all" || inv.payment_status === filterStatus;
     const matchQuarter = filterQuarter === "all" || `${inv.fiscal_year}-${inv.quarter}` === filterQuarter;
-    return matchSearch && matchStatus && matchQuarter;
+    const matchClient = !selectedClientId || inv.client_id === selectedClientId;
+    return matchSearch && matchStatus && matchQuarter && matchClient;
   });
 
   const totalBase = filtered.reduce((s, i) => s + Number(i.base_amount), 0);
