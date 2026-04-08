@@ -28,6 +28,12 @@ interface Invoice {
   created_at: string;
 }
 
+interface ClientOption {
+  id: string;
+  name: string;
+}
+
+
 const categoryLabels: Record<string, string> = {
   material: "Material", servicio: "Servicio", suministro: "Suministro",
   alquiler: "Alquiler", subcontrata: "Subcontrata", profesional: "Profesional",
@@ -56,6 +62,8 @@ export default function FacturasPage() {
   );
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState("");
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
@@ -76,6 +84,16 @@ export default function FacturasPage() {
     }
     init();
   }, []);
+
+  async function loadClients() {
+    if (!userId) return;
+    const { data } = await supabase
+      .from("clients")
+      .select("id, name")
+      .eq("user_id", userId)
+      .order("name");
+    setClients(data || []);
+  }
 
   async function loadInvoices() {
     const { data } = await supabase.from("invoices").select("*").order("invoice_date", { ascending: false });
@@ -129,6 +147,7 @@ export default function FacturasPage() {
 
     const payload = {
       ...form,
+      client_id: selectedClientId || null,
       base_amount: form.base_amount || 0,
       iva_amount: form.iva_amount || 0,
       irpf_amount: form.irpf_amount || 0,
@@ -205,6 +224,12 @@ export default function FacturasPage() {
     const file = e.target.files?.[0];
     if (!file || !userId) return;
 
+    if (!selectedClientId) {
+      alert("Selecciona primero el cliente al que pertenece la factura.");
+      e.target.value = "";
+      return;
+    }
+
     if (!file.type.startsWith("image/")) {
       alert("Por favor sube una imagen (JPG, PNG, WEBP). Los PDF no están soportados aún.");
       e.target.value = "";
@@ -222,6 +247,7 @@ export default function FacturasPage() {
       const formData = new FormData();
       formData.append("file", optimizedFile);
       formData.append("userId", userId);
+      formData.append("clientId", selectedClientId);
 
       const res = await fetch("/api/invoices/ocr", { method: "POST", body: formData });
       const result = await res.json();
@@ -280,6 +306,18 @@ export default function FacturasPage() {
           <p className="text-[var(--color-navy-400)] text-sm mt-1">Sube fotos de facturas y la IA extrae los datos automáticamente</p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <select
+            value={selectedClientId}
+            onChange={(e) => setSelectedClientId(e.target.value)}
+            className="px-4 py-2 rounded-lg text-sm bg-[var(--color-navy-800)] text-[var(--color-navy-50)] border border-[var(--color-navy-700)]"
+          >
+            <option value="">Seleccionar cliente...</option>
+            {clients.map((client) => (
+              <option key={client.id} value={client.id}>
+                {client.name}
+              </option>
+            ))}
+          </select>
           <label className={`px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition ${uploading ? "bg-gray-600 text-gray-300 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-500"}`}>
             {uploading ? uploadProgress : "📷 Escanear factura"}
             <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleUpload} disabled={uploading} className="hidden" />
