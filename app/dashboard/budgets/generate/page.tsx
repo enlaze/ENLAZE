@@ -26,6 +26,17 @@ interface GeneratedBudget {
   profit: number;
 }
 
+interface ClientOption {
+  id: string;
+  name: string;
+}
+
+interface ProjectOption {
+  id: string;
+  name: string;
+  client_id: string | null;
+}
+
 const serviceTypes = [
   { value: "reforma", label: "Reforma integral" },
   { value: "fontaneria", label: "Fontaneria" },
@@ -45,6 +56,10 @@ export default function GenerateBudgetPage() {
   );
 
   const [userId, setUserId] = useState("");
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState("");
   const [description, setDescription] = useState("");
   const [serviceType, setServiceType] = useState("reforma");
   const [clientName, setClientName] = useState("");
@@ -58,11 +73,47 @@ export default function GenerateBudgetPage() {
   const [result, setResult] = useState<GeneratedBudget | null>(null);
   const [error, setError] = useState("");
 
+  const visibleProjects = selectedClientId
+    ? projects.filter((project) => project.client_id === selectedClientId)
+    : projects;
+
+  async function loadClients(uid: string) {
+    const { data } = await supabase
+      .from("clients")
+      .select("id, name")
+      .eq("user_id", uid)
+      .order("name");
+    setClients(data || []);
+  }
+
+  async function loadProjects(uid: string) {
+    const { data } = await supabase
+      .from("projects")
+      .select("id, name, client_id")
+      .eq("user_id", uid)
+      .order("name");
+    setProjects(data || []);
+  }
+
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setUserId(user.id);
-    });
+    async function init() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      setUserId(user.id);
+      await Promise.all([loadClients(user.id), loadProjects(user.id)]);
+    }
+    init();
   }, []);
+
+  useEffect(() => {
+    if (
+      selectedClientId &&
+      selectedProjectId &&
+      !projects.some((project) => project.id === selectedProjectId && project.client_id === selectedClientId)
+    ) {
+      setSelectedProjectId("");
+    }
+  }, [selectedClientId, selectedProjectId, projects]);
 
   async function handleGenerate() {
     if (!description.trim()) { setError("Escribe una descripcion del trabajo."); return; }
@@ -88,7 +139,13 @@ export default function GenerateBudgetPage() {
 
   async function handleSave() {
     if (!result) return;
+    if (!userId) {
+      setError("No se pudo identificar el usuario.");
+      return;
+    }
     setSaving(true);
+
+    const selectedClient = clients.find((client) => client.id === selectedClientId);
 
     const year = new Date().getFullYear();
     const rand = Math.floor(10000 + Math.random() * 90000);
@@ -100,9 +157,12 @@ export default function GenerateBudgetPage() {
     const { data: budget, error: budgetErr } = await supabase
       .from("budgets")
       .insert({
+        user_id: userId,
+        client_id: selectedClientId || null,
+        project_id: selectedProjectId || null,
         budget_number: budgetNumber,
         title: result.title,
-        client_name: clientName,
+        client_name: clientName || selectedClient?.name || "",
         client_email: clientEmail,
         client_phone: clientPhone,
         client_address: clientAddress,
@@ -199,6 +259,24 @@ export default function GenerateBudgetPage() {
             <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm" />
           </div>
         </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+          <div>
+            <label className="block text-xs text-[var(--color-navy-400)] mb-1">Cliente asociado (opcional)</label>
+            <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm">
+              <option value="">Sin asignar</option>
+              {clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-navy-400)] mb-1">Obra asociada (opcional)</label>
+            <select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm">
+              <option value="">Sin asignar</option>
+              {visibleProjects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+            </select>
+          </div>
+        </div>
+
         <button onClick={handleGenerate} disabled={generating} className="mt-4 w-full bg-[var(--color-brand-green)] text-[var(--color-navy-900)] font-bold py-3 rounded-xl hover:opacity-90 transition disabled:opacity-50 text-sm">
           {generating ? "El agente IA esta generando el presupuesto..." : "Generar presupuesto con IA"}
         </button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
@@ -32,6 +32,17 @@ interface Partida {
   subtotal: number;
 }
 
+interface ClientOption {
+  id: string;
+  name: string;
+}
+
+interface ProjectOption {
+  id: string;
+  name: string;
+  client_id: string | null;
+}
+
 function emptyPartida(): Partida {
   return { concept: "", description: "", quantity: 1, unit: "ud", category: "material", unit_price: 0, subtotal: 0 };
 }
@@ -44,6 +55,11 @@ export default function NewBudgetPage() {
   );
 
   const [saving, setSaving] = useState(false);
+  const [userId, setUserId] = useState("");
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState("");
   const [title, setTitle] = useState("");
   const [clientName, setClientName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
@@ -54,6 +70,48 @@ export default function NewBudgetPage() {
   const [ivaPercent, setIvaPercent] = useState(21);
   const [notes, setNotes] = useState("");
   const [partidas, setPartidas] = useState<Partida[]>([emptyPartida()]);
+
+  async function loadClients(uid: string) {
+    const { data } = await supabase
+      .from("clients")
+      .select("id, name")
+      .eq("user_id", uid)
+      .order("name");
+    setClients(data || []);
+  }
+
+  async function loadProjects(uid: string) {
+    const { data } = await supabase
+      .from("projects")
+      .select("id, name, client_id")
+      .eq("user_id", uid)
+      .order("name");
+    setProjects(data || []);
+  }
+
+  useEffect(() => {
+    async function init() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      setUserId(user.id);
+      await Promise.all([loadClients(user.id), loadProjects(user.id)]);
+    }
+    init();
+  }, []);
+
+  useEffect(() => {
+    if (
+      selectedClientId &&
+      selectedProjectId &&
+      !projects.some((project) => project.id === selectedProjectId && project.client_id === selectedClientId)
+    ) {
+      setSelectedProjectId("");
+    }
+  }, [selectedClientId, selectedProjectId, projects]);
+
+  const visibleProjects = selectedClientId
+    ? projects.filter((project) => project.client_id === selectedClientId)
+    : projects;
 
   function updatePartida(index: number, field: keyof Partida, value: any) {
     const updated = [...partidas];
@@ -79,12 +137,17 @@ export default function NewBudgetPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!userId) {
+      alert("No se pudo identificar el usuario.");
+      return;
+    }
     if (!title || partidas.some((p) => !p.concept || p.unit_price <= 0)) {
       alert("Completa el título y todas las partidas con precio válido.");
       return;
     }
 
     setSaving(true);
+    const selectedClient = clients.find((client) => client.id === selectedClientId);
     const year = new Date().getFullYear();
     const rand = Math.floor(10000 + Math.random() * 90000);
     const budgetNumber = "PRE-" + year + "-" + rand;
@@ -92,9 +155,12 @@ export default function NewBudgetPage() {
     const { data: budget, error } = await supabase
       .from("budgets")
       .insert({
+        user_id: userId,
+        client_id: selectedClientId || null,
+        project_id: selectedProjectId || null,
         budget_number: budgetNumber,
         title,
-        client_name: clientName,
+        client_name: clientName || selectedClient?.name || "",
         client_email: clientEmail,
         client_phone: clientPhone,
         client_address: clientAddress,
@@ -149,6 +215,20 @@ export default function NewBudgetPage() {
             <div className="md:col-span-2">
               <label className="block text-sm text-[var(--color-navy-300)] mb-1">Título del presupuesto *</label>
               <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Ej: Reforma baño completo" className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none" />
+            </div>
+            <div>
+              <label className="block text-sm text-[var(--color-navy-300)] mb-1">Cliente asociado</label>
+              <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none">
+                <option value="">Sin asignar</option>
+                {clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm text-[var(--color-navy-300)] mb-1">Obra asociada</label>
+              <select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none">
+                <option value="">Sin asignar</option>
+                {visibleProjects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+              </select>
             </div>
             <div>
               <label className="block text-sm text-[var(--color-navy-300)] mb-1">Tipo de servicio</label>
