@@ -5,6 +5,7 @@ import { createBrowserClient } from "@supabase/ssr";
 
 interface Invoice {
   id: string;
+  client_id?: string | null;
   supplier_name: string;
   supplier_nif: string;
   invoice_number: string;
@@ -80,7 +81,8 @@ export default function FacturasPage() {
     async function init() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) setUserId(user.id);
-      loadInvoices();
+      await loadClients();
+      await loadInvoices();
     }
     init();
   }, []);
@@ -103,6 +105,7 @@ export default function FacturasPage() {
     setForm(emptyForm);
     setEditingId(null);
     setShowForm(false);
+    setSelectedClientId("");
   }
 
   function updateField(field: string, value: any) {
@@ -120,6 +123,7 @@ export default function FacturasPage() {
   }
 
   function startEdit(inv: Invoice) {
+    setSelectedClientId(inv.client_id || "");
     setForm({
       supplier_name: inv.supplier_name, supplier_nif: inv.supplier_nif,
       invoice_number: inv.invoice_number, invoice_date: inv.invoice_date || "",
