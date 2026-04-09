@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Logo from '@/components/Logo';
 
 const LinkIcon = () => (
   <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#00c896" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">

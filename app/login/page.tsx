@@ -3,6 +3,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Logo from "@/components/Logo";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -35,15 +36,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-navy-50 px-6">
       <div className="max-w-md w-full bg-white rounded-2xl border border-navy-100 p-10 shadow-lg">
         <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 mb-6">
-            <div className="w-9 h-9 rounded-xl bg-navy-800 flex items-center justify-center">
-              <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#00c896" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-              </svg>
-            </div>
-            <span className="text-xl font-bold text-navy-900">Enlaze</span>
-          </Link>
+          <Logo size={40} />
           <h1 className="text-2xl font-bold text-navy-900">Bienvenido de nuevo</h1>
           <p className="mt-2 text-navy-600">Inicia sesion en tu cuenta</p>
         </div>

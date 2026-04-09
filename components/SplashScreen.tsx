@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 
+
 /* Coreografía — ajusta todo aquí */
 const TIMINGS = {
   focusDuration: 1200,
@@ -84,14 +85,15 @@ export default function SplashScreen() {
           `,
         }}
       >
-        <Image
-          src={LOGO_SRC}
-          alt="Logo"
-          width={LOGO_SIZE}
-          height={LOGO_SIZE}
-          priority
-          className="select-none"
-        />
+     <Image
+  src={LOGO_SRC}
+  alt="Logo"
+  width={LOGO_SIZE}
+  height={LOGO_SIZE}
+  priority
+  className="select-none"
+/>
+
 
         {/* Light sweep ultra sutil recortado a la silueta del logo */}
         <div
