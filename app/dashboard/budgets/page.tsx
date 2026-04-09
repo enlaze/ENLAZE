@@ -22,7 +22,7 @@ export default function BudgetsPage() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const supabase = createClient();
-  const { label } = useSector();
+  const { label, serviceTypes } = useSector();
 
   useEffect(() => { fetchBudgets(); }, []);
 
@@ -62,7 +62,8 @@ export default function BudgetsPage() {
     return "Rechazado";
   };
   const serviceLabel = (s: string) => {
-    const map: Record<string, string> = { reforma: "Reforma", fontaneria: "Fontaneria", electricidad: "Electricidad", climatizacion: "Climatizacion", multiservicios: "Multiservicios", general: "General" };
+    const sTypes = serviceTypes();
+    const map: Record<string, string> = Object.fromEntries(sTypes.map(st => [st.value, st.label]));
     return map[s] || s;
   };
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
+import { useSector } from "@/lib/sector-context";
 
 interface BudgetItem {
   id: string;
@@ -42,7 +43,7 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
   rechazado: { label: "Rechazado", color: "text-red-700", bg: "bg-red-100" },
 };
 
-const serviceLabels: Record<string, string> = {
+const fallbackServiceLabels: Record<string, string> = {
   reforma: "Reforma integral",
   fontaneria: "Fontanería",
   electricidad: "Electricidad",
@@ -51,7 +52,7 @@ const serviceLabels: Record<string, string> = {
   general: "General",
 };
 
-const categoryLabels: Record<string, string> = {
+const fallbackCategoryLabels: Record<string, string> = {
   material: "Material",
   mano_obra: "Mano de obra",
   otros: "Otros",
@@ -70,6 +71,7 @@ export default function BudgetDetailPage() {
   const params = useParams();
   const router = useRouter();
   const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+  const { serviceTypes, budgetCategories } = useSector();
   const [budget, setBudget] = useState<Budget | null>(null);
   const [items, setItems] = useState<BudgetItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -184,13 +186,18 @@ export default function BudgetDetailPage() {
       <tr style="border-bottom:1px solid #e5e7eb;">
         <td style="padding:8px 6px;font-size:13px;">${i + 1}</td>
         <td style="padding:8px 6px;font-size:13px;"><strong>${item.concept}</strong>${item.description ? `<br/><span style="color:#6b7280;font-size:12px;">${item.description}</span>` : ""}</td>
-        <td style="padding:8px 6px;font-size:13px;text-align:center;">${categoryLabels[item.category] || item.category}</td>
+        <td style="padding:8px 6px;font-size:13px;text-align:center;">${categoryLabels[item.category] || fallbackCategoryLabels[item.category] || item.category}</td>
         <td style="padding:8px 6px;font-size:13px;text-align:center;">${item.quantity} ${unitLabels[item.unit] || item.unit}</td>
         <td style="padding:8px 6px;font-size:13px;text-align:right;">${item.unit_price.toFixed(2)} €</td>
         <td style="padding:8px 6px;font-size:13px;text-align:right;font-weight:600;">${item.subtotal.toFixed(2)} €</td>
       </tr>`
       )
       .join("");
+
+    const sTypes = serviceTypes();
+    const serviceLabels: Record<string, string> = Object.fromEntries(sTypes.map(s => [s.value, s.label]));
+    const cats = budgetCategories();
+    const categoryLabels: Record<string, string> = Object.fromEntries(cats.map(c => [c.value, c.label]));
 
     const materialItems = items.filter((i) => i.category === "material");
     const laborItems = items.filter((i) => i.category === "mano_obra");
@@ -261,7 +268,7 @@ export default function BudgetDetailPage() {
       </div>
 
       <div class="section">
-        <div class="section-title">${budget.title} — ${serviceLabels[budget.service_type] || budget.service_type}</div>
+        <div class="section-title">${budget.title} — ${serviceLabels[budget.service_type] || fallbackServiceLabels[budget.service_type] || budget.service_type}</div>
         <table>
           <thead>
             <tr>
@@ -388,7 +395,7 @@ export default function BudgetDetailPage() {
         <div className="bg-[var(--color-navy-800)] rounded-xl p-5">
           <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-3">Información del presupuesto</h3>
           <div className="space-y-2 text-sm">
-            <p className="text-[var(--color-navy-300)]">Tipo de servicio: <span className="text-[var(--color-navy-100)] font-medium">{serviceLabels[budget.service_type] || budget.service_type}</span></p>
+            <p className="text-[var(--color-navy-300)]">Tipo de servicio: <span className="text-[var(--color-navy-100)] font-medium">{(() => { const sTypes = serviceTypes(); const serviceLabels = Object.fromEntries(sTypes.map(s => [s.value, s.label])); return serviceLabels[budget.service_type] || fallbackServiceLabels[budget.service_type] || budget.service_type; })()}</span></p>
             <p className="text-[var(--color-navy-300)]">Fecha creación: <span className="text-[var(--color-navy-100)]">{new Date(budget.created_at).toLocaleDateString("es-ES")}</span></p>
             <p className="text-[var(--color-navy-300)]">Válido hasta: <span className="text-[var(--color-navy-100)]">{budget.valid_until ? new Date(budget.valid_until).toLocaleDateString("es-ES") : "Sin fecha"}</span></p>
           </div>
@@ -426,7 +433,7 @@ export default function BudgetDetailPage() {
                       item.category === "mano_obra" ? "bg-orange-900/30 text-orange-300" :
                       "bg-gray-700 text-gray-300"
                     }`}>
-                      {categoryLabels[item.category] || item.category}
+                      {(() => { const cats = budgetCategories(); const categoryLabels = Object.fromEntries(cats.map(c => [c.value, c.label])); return categoryLabels[item.category] || fallbackCategoryLabels[item.category] || item.category; })()}
                     </span>
                   </td>
                   <td className="px-5 py-3 text-center text-sm text-[var(--color-navy-200)]">

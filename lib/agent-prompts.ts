@@ -399,3 +399,20 @@ Cada partida debe ser específica y cuantificable.`,
 export function getSectorConfig(sector: string): SectorConfig {
   return sectorConfigs[sector] || sectorConfigs["otro"];
 }
+
+/**
+ * Maps sector_config.sector_key to agent-prompts sector keys.
+ * The DB sector_config is the source of truth for UI; this maps
+ * to the detailed agent prompts for AI budget generation.
+ */
+export const sectorKeyToAgentKey: Record<string, string> = {
+  construccion: "construccion",
+  servicios: "tecnologia", // services = closest to tech/general
+  comercio: "comercio",
+  instalaciones: "construccion", // installations use construction-like prompts
+};
+
+export function getAgentConfigForSectorKey(sectorKey: string): SectorConfig {
+  const agentKey = sectorKeyToAgentKey[sectorKey] || "otro";
+  return sectorConfigs[agentKey] || sectorConfigs["otro"];
+}

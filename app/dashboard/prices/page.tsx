@@ -2,16 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
+import { useSector } from "@/lib/sector-context";
 
-const categories = [
+/* Fallback constants (only used if sector config hasn't loaded) */
+const fallbackCategories = [
   { value: "material", label: "Material" },
   { value: "mano_obra", label: "Mano de obra" },
   { value: "otros", label: "Otros" },
 ];
 
-const units = ["ud", "m2", "ml", "h", "kg", "global", "m3", "l"];
+const fallbackUnits = ["ud", "m2", "ml", "h", "kg", "global", "m3", "l"];
 
-const subcategories: Record<string, string[]> = {
+const fallbackSubcategories: Record<string, string[]> = {
   material: ["Fontanería", "Electricidad", "Albañilería", "Pintura", "Carpintería", "Climatización", "Cristalería", "Cerrajería", "Otros"],
   mano_obra: ["Oficial 1ª", "Oficial 2ª", "Peón", "Especialista", "Subcontrata", "Otros"],
   otros: ["Transporte", "Alquiler maquinaria", "Gestión residuos", "Permisos", "Otros"],
@@ -32,6 +34,20 @@ export default function PricesPage() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
+  const { budgetCategories, subcategories: getSectorSubcats, options, defaultPrices, label } = useSector();
+
+  // Dynamic categories, subcategories and units from sector config
+  const sectorCats = budgetCategories();
+  const categories = sectorCats.length > 0 ? sectorCats : fallbackCategories;
+  const sectorUnits = options("units");
+  const units = sectorUnits.length > 0 ? sectorUnits : fallbackUnits;
+
+  // Dynamic subcategories: try sector config, fallback to hardcoded
+  function getSubcats(cat: string): string[] {
+    const fromSector = getSectorSubcats(cat);
+    if (fromSector.length > 0) return fromSector;
+    return fallbackSubcategories[cat] || [];
+  }
 
   const [items, setItems] = useState<PriceItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,7 +61,7 @@ export default function PricesPage() {
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("material");
+  const [category, setCategory] = useState(categories[0]?.value || "material");
   const [subcategory, setSubcategory] = useState("");
   const [unit, setUnit] = useState("ud");
   const [unitPrice, setUnitPrice] = useState(0);
@@ -178,39 +194,23 @@ export default function PricesPage() {
     if (!userId) { alert("Error: no se pudo obtener tu usuario. Recarga la página."); return; }
     if (!confirm("¿Importar precios por defecto del sector? Se añadirán a tu banco de precios actual.")) return;
 
-    const defaults = [
-      { name: "Azulejo porcelánico 30x60", category: "material", subcategory: "Albañilería", unit: "m2", unit_price: 18.50 },
-      { name: "Azulejo cerámico básico", category: "material", subcategory: "Albañilería", unit: "m2", unit_price: 12.00 },
-      { name: "Cemento cola flexible", category: "material", subcategory: "Albañilería", unit: "kg", unit_price: 0.45 },
-      { name: "Lechada junta color", category: "material", subcategory: "Albañilería", unit: "kg", unit_price: 2.80 },
-      { name: "Plato de ducha resina 80x120", category: "material", subcategory: "Fontanería", unit: "ud", unit_price: 185.00 },
-      { name: "Mampara ducha fija 80cm", category: "material", subcategory: "Fontanería", unit: "ud", unit_price: 220.00 },
-      { name: "Grifo monomando ducha termostático", category: "material", subcategory: "Fontanería", unit: "ud", unit_price: 145.00 },
-      { name: "Inodoro suspendido completo", category: "material", subcategory: "Fontanería", unit: "ud", unit_price: 280.00 },
-      { name: "Mueble lavabo 80cm + espejo", category: "material", subcategory: "Fontanería", unit: "ud", unit_price: 320.00 },
-      { name: "Tubo PVC evacuación 110mm", category: "material", subcategory: "Fontanería", unit: "ml", unit_price: 8.50 },
-      { name: "Tubo multicapa agua 20mm", category: "material", subcategory: "Fontanería", unit: "ml", unit_price: 4.20 },
-      { name: "Llave de paso 1/2\"", category: "material", subcategory: "Fontanería", unit: "ud", unit_price: 12.00 },
-      { name: "Cable eléctrico 2.5mm", category: "material", subcategory: "Electricidad", unit: "ml", unit_price: 1.20 },
-      { name: "Mecanismo enchufe Schuko", category: "material", subcategory: "Electricidad", unit: "ud", unit_price: 8.50 },
-      { name: "Punto de luz LED empotrable", category: "material", subcategory: "Electricidad", unit: "ud", unit_price: 15.00 },
-      { name: "Diferencial 40A/30mA", category: "material", subcategory: "Electricidad", unit: "ud", unit_price: 45.00 },
-      { name: "Pintura plástica blanca mate", category: "material", subcategory: "Pintura", unit: "l", unit_price: 4.50 },
-      { name: "Impermeabilizante líquido", category: "material", subcategory: "Albañilería", unit: "kg", unit_price: 8.90 },
-      { name: "Saco mortero M-5", category: "material", subcategory: "Albañilería", unit: "kg", unit_price: 0.12 },
-      { name: "Oficial 1ª albañilería", category: "mano_obra", subcategory: "Oficial 1ª", unit: "h", unit_price: 25.00 },
-      { name: "Oficial 1ª fontanería", category: "mano_obra", subcategory: "Oficial 1ª", unit: "h", unit_price: 28.00 },
-      { name: "Oficial 1ª electricidad", category: "mano_obra", subcategory: "Oficial 1ª", unit: "h", unit_price: 27.00 },
-      { name: "Oficial 1ª pintura", category: "mano_obra", subcategory: "Oficial 1ª", unit: "h", unit_price: 23.00 },
-      { name: "Peón especializado", category: "mano_obra", subcategory: "Peón", unit: "h", unit_price: 18.00 },
-      { name: "Peón ordinario", category: "mano_obra", subcategory: "Peón", unit: "h", unit_price: 15.00 },
-      { name: "Contenedor escombros 3m3", category: "otros", subcategory: "Gestión residuos", unit: "ud", unit_price: 120.00 },
-      { name: "Transporte materiales", category: "otros", subcategory: "Transporte", unit: "ud", unit_price: 60.00 },
-      { name: "Alquiler andamio día", category: "otros", subcategory: "Alquiler maquinaria", unit: "ud", unit_price: 35.00 },
-    ];
+    const sectorDefaults = defaultPrices();
 
-    for (const item of defaults) {
-      await supabase.from("price_items").insert({ ...item, description: "", user_id: userId });
+    if (sectorDefaults.length === 0) {
+      alert("No hay precios por defecto configurados para tu sector.");
+      return;
+    }
+
+    for (const item of sectorDefaults) {
+      await supabase.from("price_items").insert({
+        name: item.name,
+        category: item.category,
+        subcategory: item.subcategory,
+        unit: item.unit,
+        unit_price: item.price,
+        description: "",
+        user_id: userId,
+      });
     }
     loadItems();
   }
@@ -222,12 +222,13 @@ export default function PricesPage() {
     return matchSearch && matchCat;
   });
 
-  const materialCount = items.filter((i) => i.category === "material").length;
-  const laborCount = items.filter((i) => i.category === "mano_obra").length;
-  const otherCount = items.filter((i) => i.category === "otros").length;
+  // Build category label map dynamically
+  const catLabel: Record<string, string> = Object.fromEntries(categories.map(c => [c.value, c.label]));
+  const unitLabel: Record<string, string> = { ud: "ud", m2: "m²", ml: "ml", h: "h", kg: "kg", global: "global", m3: "m³", l: "l", "m²": "m²", "m³": "m³", mes: "mes", sesión: "sesión", palet: "palet", caja: "caja", pack: "pack", proyecto: "proyecto" };
 
-  const catLabel: Record<string, string> = { material: "Material", mano_obra: "Mano de obra", otros: "Otros" };
-  const unitLabel: Record<string, string> = { ud: "ud", m2: "m²", ml: "ml", h: "h", kg: "kg", global: "global", m3: "m³", l: "l" };
+  // KPIs: show first 3 categories dynamically
+  const kpiCats = categories.slice(0, 3);
+  const kpiColors = ["text-blue-400", "text-orange-400", "text-gray-400"];
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-brand-green)]"></div></div>;
 
@@ -254,19 +255,13 @@ export default function PricesPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-blue-400">{materialCount}</p>
-          <p className="text-xs text-[var(--color-navy-400)]">Materiales</p>
-        </div>
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-orange-400">{laborCount}</p>
-          <p className="text-xs text-[var(--color-navy-400)]">Mano de obra</p>
-        </div>
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-gray-400">{otherCount}</p>
-          <p className="text-xs text-[var(--color-navy-400)]">Otros</p>
-        </div>
+      <div className={`grid grid-cols-${Math.min(kpiCats.length, 4)} gap-4 mb-6`}>
+        {kpiCats.map((cat, i) => (
+          <div key={cat.value} className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
+            <p className={`text-2xl font-bold ${kpiColors[i] || "text-gray-400"}`}>{items.filter(it => it.category === cat.value).length}</p>
+            <p className="text-xs text-[var(--color-navy-400)]">{cat.label}</p>
+          </div>
+        ))}
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
@@ -301,7 +296,7 @@ export default function PricesPage() {
               <label className="block text-xs text-[var(--color-navy-400)] mb-1">Subcategoría</label>
               <select value={subcategory} onChange={(e) => setSubcategory(e.target.value)} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm">
                 <option value="">Seleccionar...</option>
-                {(subcategories[category] || []).map((s) => <option key={s} value={s}>{s}</option>)}
+                {getSubcats(category).map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div>

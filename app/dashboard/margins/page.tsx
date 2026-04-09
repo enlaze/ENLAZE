@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
+import { useSector } from "@/lib/sector-context";
 
-const serviceTypes = [
+const fallbackServiceTypes = [
   { value: "general", label: "General (todos los servicios)" },
   { value: "reforma", label: "Reforma integral" },
   { value: "fontaneria", label: "Fontanería" },
@@ -23,6 +24,8 @@ export default function MarginsPage() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
+
+  const { serviceTypes } = useSector();
 
   const [margins, setMargins] = useState<MarginEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -108,7 +111,10 @@ export default function MarginsPage() {
 
       {/* Margin Config */}
       <div className="space-y-4">
-        {serviceTypes.map((service) => {
+        {(() => {
+          const sTypes = serviceTypes();
+          const activeServiceTypes = sTypes.length > 0 ? sTypes : fallbackServiceTypes;
+          return activeServiceTypes.map((service) => {
           const currentMargin = getMargin(service.value);
           const hasCustom = margins.some((m) => m.service_type === service.value);
           const isGeneral = service.value === "general";
@@ -173,7 +179,8 @@ export default function MarginsPage() {
               </div>
             </div>
           );
-        })}
+          });
+        })()}
       </div>
 
       {/* Info */}

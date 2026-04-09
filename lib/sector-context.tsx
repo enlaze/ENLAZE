@@ -13,6 +13,24 @@ export interface SidebarModule {
   href: string;
 }
 
+export interface ServiceType {
+  value: string;
+  label: string;
+}
+
+export interface BudgetCategory {
+  value: string;
+  label: string;
+}
+
+export interface DefaultPrice {
+  name: string;
+  category: string;
+  subcategory: string;
+  unit: string;
+  price: number;
+}
+
 export interface SectorConfig {
   id: string;
   sector_key: string;
@@ -25,6 +43,11 @@ export interface SectorConfig {
   default_iva_percent: number;
   default_irpf_percent: number;
   is_active: boolean;
+  service_types: ServiceType[];
+  budget_categories: BudgetCategory[];
+  subcategories: Record<string, string[]>;
+  agent_prompt: string;
+  default_prices: DefaultPrice[];
 }
 
 interface SectorContextValue {
@@ -39,6 +62,16 @@ interface SectorContextValue {
   fieldVisible: (entity: string, field: string) => boolean;
   /** Get visible sidebar modules */
   visibleModules: () => SidebarModule[];
+  /** Get service types for budgets */
+  serviceTypes: () => ServiceType[];
+  /** Get budget categories */
+  budgetCategories: () => BudgetCategory[];
+  /** Get subcategories for a given category */
+  subcategories: (category: string) => string[];
+  /** Get the agent prompt for AI generation */
+  agentPrompt: () => string;
+  /** Get default prices for the sector */
+  defaultPrices: () => DefaultPrice[];
   /** Reload config (e.g. after sector change) */
   reload: () => Promise<void>;
 }
@@ -72,6 +105,11 @@ const SectorContext = createContext<SectorContextValue>({
   options: () => [],
   fieldVisible: () => true,
   visibleModules: () => [],
+  serviceTypes: () => [],
+  budgetCategories: () => [],
+  subcategories: () => [],
+  agentPrompt: () => "",
+  defaultPrices: () => [],
   reload: async () => {},
 });
 
@@ -145,6 +183,26 @@ export function SectorProvider({ children }: { children: ReactNode }) {
     return config.sidebar_modules.filter((m) => m.visible);
   };
 
+  const serviceTypes = (): ServiceType[] => {
+    return config?.service_types || [];
+  };
+
+  const budgetCategories = (): BudgetCategory[] => {
+    return config?.budget_categories || [];
+  };
+
+  const getSubcategories = (category: string): string[] => {
+    return config?.subcategories?.[category] || [];
+  };
+
+  const agentPrompt = (): string => {
+    return config?.agent_prompt || "";
+  };
+
+  const defaultPrices = (): DefaultPrice[] => {
+    return config?.default_prices || [];
+  };
+
   return (
     <SectorContext.Provider
       value={{
@@ -155,6 +213,11 @@ export function SectorProvider({ children }: { children: ReactNode }) {
         options,
         fieldVisible,
         visibleModules,
+        serviceTypes,
+        budgetCategories,
+        subcategories: getSubcategories,
+        agentPrompt,
+        defaultPrices,
         reload: loadConfig,
       }}
     >

@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
+import { useSector } from "@/lib/sector-context";
 
-const serviceTypes = [
+const fallbackServiceTypes = [
   { value: "reforma", label: "Reforma integral" },
   { value: "fontaneria", label: "Fontanería" },
   { value: "electricidad", label: "Electricidad" },
@@ -53,6 +54,7 @@ export default function NewBudgetPage() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
+  const { serviceTypes, budgetCategories, subcategories: getSectorSubcats, options } = useSector();
 
   const [saving, setSaving] = useState(false);
   const [userId, setUserId] = useState("");
@@ -233,7 +235,7 @@ export default function NewBudgetPage() {
             <div>
               <label className="block text-sm text-[var(--color-navy-300)] mb-1">Tipo de servicio</label>
               <select value={serviceType} onChange={(e) => setServiceType(e.target.value)} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none">
-                {serviceTypes.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                {(() => { const sTypes = serviceTypes(); const activeServiceTypes = sTypes.length > 0 ? sTypes : fallbackServiceTypes; return activeServiceTypes.map((s) => <option key={s.value} value={s.value}>{s.label}</option>); })()}
               </select>
             </div>
             <div>
@@ -304,13 +306,13 @@ export default function NewBudgetPage() {
                   <div>
                     <label className="block text-xs text-[var(--color-navy-400)] mb-1">Unidad</label>
                     <select value={p.unit} onChange={(e) => updatePartida(i, "unit", e.target.value)} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-3 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm">
-                      {unitOptions.map((u) => <option key={u} value={u}>{u}</option>)}
+                      {(() => { const unitOpts = options("units") || unitOptions; return unitOpts.map((u) => <option key={u} value={u}>{u}</option>); })()}
                     </select>
                   </div>
                   <div>
                     <label className="block text-xs text-[var(--color-navy-400)] mb-1">Categoría</label>
                     <select value={p.category} onChange={(e) => updatePartida(i, "category", e.target.value)} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-3 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm">
-                      {categoryOptions.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                      {(() => { const cats = budgetCategories(); const activeCats = cats.length > 0 ? cats : categoryOptions; return activeCats.map((c) => <option key={c.value} value={c.value}>{c.label}</option>); })()}
                     </select>
                   </div>
                   <div>

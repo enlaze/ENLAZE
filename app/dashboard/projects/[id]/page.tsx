@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
+import { useSector } from "@/lib/sector-context";
 
 /* ═══════════════════════════ Types ═══════════════════════════ */
 
@@ -195,7 +196,7 @@ const dnStatusMap: Record<string, { label: string; color: string }> = {
   verified: { label: "Verificado", color: "bg-green-900/30 text-green-300" },
   disputed: { label: "Incidencia", color: "bg-red-900/30 text-red-300" },
 };
-const serviceLabels: Record<string, string> = {
+const fallbackServiceLabels: Record<string, string> = {
   reforma: "Reforma", fontaneria: "Fontanería", electricidad: "Electricidad",
   climatizacion: "Climatización", multiservicios: "Multiservicios", general: "General",
 };
@@ -247,6 +248,8 @@ export default function ProjectDetailPage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
+  const { label, serviceTypes, options } = useSector();
+
   const [userId, setUserId] = useState<string | null>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [client, setClient] = useState<Client | null>(null);
@@ -283,6 +286,12 @@ export default function ProjectDetailPage() {
   const [savingSupplierAssign, setSavingSupplierAssign] = useState(false);
 
   const [linkCopied, setLinkCopied] = useState(false);
+
+  // Dynamic service labels from sector config
+  const sTypes = serviceTypes();
+  const serviceLabels: Record<string, string> = sTypes.length > 0
+    ? Object.fromEntries(sTypes.map(s => [s.value, s.label]))
+    : fallbackServiceLabels;
 
   /* ── Load all data ── */
 
@@ -509,7 +518,7 @@ export default function ProjectDetailPage() {
   }
 
   async function handleRemoveSupplier(id: string) {
-    if (!confirm("¿Quitar este proveedor de la obra?")) return;
+    if (!confirm(`¿Quitar este proveedor de la ${label("project")}?`)) return;
     await supabase.from("project_suppliers").delete().eq("id", id);
     setProjectSuppliers((prev) => prev.filter((ps) => ps.id !== id));
   }
@@ -692,7 +701,7 @@ export default function ProjectDetailPage() {
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
         <div>
           <Link href="/dashboard/projects" className="text-sm text-[var(--color-navy-400)] hover:text-[var(--color-brand-green)] mb-2 inline-block">
-            ← Volver a obras
+            ← Volver a {label("project")}s
           </Link>
           <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">{project.name}</h1>
           {project.address && <p className="text-[var(--color-navy-400)] text-sm mt-0.5">📍 {project.address}</p>}
@@ -725,7 +734,7 @@ export default function ProjectDetailPage() {
       {/* ── Info cards ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <div className="bg-[var(--color-navy-800)] rounded-xl p-5">
-          <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-3">Datos de la obra</h3>
+          <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-3">Datos de la {label("project")}</h3>
           <div className="space-y-2 text-sm">
             <InfoRow label="Estado" value={statusLabelMap[project.status] || project.status} />
             <InfoRow label="Fecha inicio" value={fmtDate(project.start_date)} />
@@ -830,7 +839,7 @@ export default function ProjectDetailPage() {
         <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-10">
           <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-3">Últimos movimientos</h3>
           {budgets.length === 0 && invoices.length === 0 && payments.length === 0 && changes.length === 0 ? (
-            <p className="text-[var(--color-navy-500)] text-sm">No hay movimientos todavía en esta obra.</p>
+            <p className="text-[var(--color-navy-500)] text-sm">No hay movimientos todavía en esta {label("project")}.</p>
           ) : (
             <div className="space-y-2">
               {[
@@ -1051,7 +1060,7 @@ export default function ProjectDetailPage() {
 
           <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden">
             {changes.length === 0 ? (
-              <div className="p-8 text-center"><p className="text-[var(--color-navy-500)]">No hay cambios registrados en esta obra.</p></div>
+              <div className="p-8 text-center"><p className="text-[var(--color-navy-500)]">No hay cambios registrados en esta {label("project")}.</p></div>
             ) : (
               <div className="divide-y divide-[var(--color-navy-700)]">
                 {changes.map((c) => {
@@ -1143,7 +1152,7 @@ export default function ProjectDetailPage() {
 
           <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden">
             {milestones.length === 0 ? (
-              <div className="p-8 text-center"><p className="text-[var(--color-navy-500)]">No hay hitos definidos para esta obra.</p></div>
+              <div className="p-8 text-center"><p className="text-[var(--color-navy-500)]">No hay hitos definidos para esta {label("project")}.</p></div>
             ) : (
               <div className="divide-y divide-[var(--color-navy-700)]">
                 {milestones.map((m, idx) => {
@@ -1207,7 +1216,7 @@ export default function ProjectDetailPage() {
 
           {showSupplierAssign && (
             <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-4 border border-[var(--color-navy-600)]">
-              <h4 className="text-sm font-semibold text-[var(--color-navy-100)] mb-4">Asignar proveedor a esta obra</h4>
+              <h4 className="text-sm font-semibold text-[var(--color-navy-100)] mb-4">Asignar proveedor a esta {label("project")}</h4>
               {availableSuppliers.length === 0 ? (
                 <p className="text-sm text-[var(--color-navy-400)]">No hay proveedores disponibles para asignar. <Link href="/dashboard/suppliers" className="text-[var(--color-brand-green)] hover:underline">Crear nuevo proveedor</Link></p>
               ) : (
@@ -1221,7 +1230,7 @@ export default function ProjectDetailPage() {
                         ))}
                       </select>
                     </FormField>
-                    <FormField label="Rol en obra">
+                    <FormField label={`Rol en ${label("project")}`}>
                       <input type="text" value={supplierAssignForm.role} onChange={(e) => setSupplierAssignForm({ ...supplierAssignForm, role: e.target.value })} className={inputCls} placeholder="Ej: Fontanería planta baja" />
                     </FormField>
                     <FormField label="Notas">
@@ -1236,7 +1245,7 @@ export default function ProjectDetailPage() {
 
           <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden">
             {projectSuppliers.length === 0 ? (
-              <div className="p-8 text-center"><p className="text-[var(--color-navy-500)]">No hay proveedores asignados a esta obra.</p></div>
+              <div className="p-8 text-center"><p className="text-[var(--color-navy-500)]">No hay proveedores asignados a esta {label("project")}.</p></div>
             ) : (
               <div className="divide-y divide-[var(--color-navy-700)]">
                 {projectSuppliers.map((ps) => {
@@ -1287,7 +1296,7 @@ export default function ProjectDetailPage() {
             </div>
             <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden">
               {projectOrders.length === 0 ? (
-                <div className="p-6 text-center"><p className="text-[var(--color-navy-500)]">No hay pedidos vinculados a esta obra.</p></div>
+                <div className="p-6 text-center"><p className="text-[var(--color-navy-500)]">No hay pedidos vinculados a esta {label("project")}.</p></div>
               ) : (
                 <table className="w-full text-sm">
                   <thead>
@@ -1326,7 +1335,7 @@ export default function ProjectDetailPage() {
             </div>
             <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden">
               {projectDeliveryNotes.length === 0 ? (
-                <div className="p-6 text-center"><p className="text-[var(--color-navy-500)]">No hay albaranes vinculados a esta obra.</p></div>
+                <div className="p-6 text-center"><p className="text-[var(--color-navy-500)]">No hay albaranes vinculados a esta {label("project")}.</p></div>
               ) : (
                 <table className="w-full text-sm">
                   <thead>

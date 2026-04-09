@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
+import { useSector } from "@/lib/sector-context";
 
 interface Partida {
   concept: string;
@@ -37,7 +38,7 @@ interface ProjectOption {
   client_id: string | null;
 }
 
-const serviceTypes = [
+const fallbackServiceTypes = [
   { value: "reforma", label: "Reforma integral" },
   { value: "fontaneria", label: "Fontaneria" },
   { value: "electricidad", label: "Electricidad" },
@@ -46,7 +47,8 @@ const serviceTypes = [
   { value: "general", label: "General" },
 ];
 
-const catLabel: Record<string, string> = { material: "Material", mano_obra: "Mano de obra", otros: "Otros" };
+const fallbackCategoryLabels: Record<string, string> = { material: "Material", mano_obra: "Mano de obra", otros: "Otros" };
+
 const unitLabel: Record<string, string> = { ud: "ud", m2: "m2", ml: "ml", h: "h", kg: "kg", global: "global", m3: "m3", l: "l" };
 
 export default function GenerateBudgetPage() {
@@ -54,6 +56,7 @@ export default function GenerateBudgetPage() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
+  const { serviceTypes, budgetCategories } = useSector();
 
   const [userId, setUserId] = useState("");
   const [clients, setClients] = useState<ClientOption[]>([]);
@@ -209,10 +212,12 @@ export default function GenerateBudgetPage() {
     const iva = subtotal * (ivaPercent / 100);
     const total = subtotal + iva;
 
+    const cats = budgetCategories();
+    const catMap = Object.fromEntries(cats.map(c => [c.value, c.label]));
     const rows = partidas.map((p, i) => {
       const price = isClient ? p.unit_price_client : p.unit_price;
       const sub = isClient ? p.subtotal_client : p.subtotal_cost;
-      return '<tr style="border-bottom:1px solid #e5e7eb;"><td style="padding:8px 6px;font-size:13px;">' + (i + 1) + '</td><td style="padding:8px 6px;font-size:13px;"><strong>' + p.concept + '</strong>' + (p.description ? '<br/><span style="color:#6b7280;font-size:12px;">' + p.description + '</span>' : '') + '</td><td style="padding:8px 6px;font-size:13px;text-align:center;">' + (catLabel[p.category] || p.category) + '</td><td style="padding:8px 6px;font-size:13px;text-align:center;">' + p.quantity + ' ' + (unitLabel[p.unit] || p.unit) + '</td><td style="padding:8px 6px;font-size:13px;text-align:right;">' + price.toFixed(2) + ' EUR</td><td style="padding:8px 6px;font-size:13px;text-align:right;font-weight:600;">' + sub.toFixed(2) + ' EUR</td></tr>';
+      return '<tr style="border-bottom:1px solid #e5e7eb;"><td style="padding:8px 6px;font-size:13px;">' + (i + 1) + '</td><td style="padding:8px 6px;font-size:13px;"><strong>' + p.concept + '</strong>' + (p.description ? '<br/><span style="color:#6b7280;font-size:12px;">' + p.description + '</span>' : '') + '</td><td style="padding:8px 6px;font-size:13px;text-align:center;">' + (catMap[p.category] || fallbackCategoryLabels[p.category] || p.category) + '</td><td style="padding:8px 6px;font-size:13px;text-align:center;">' + p.quantity + ' ' + (unitLabel[p.unit] || p.unit) + '</td><td style="padding:8px 6px;font-size:13px;text-align:right;">' + price.toFixed(2) + ' EUR</td><td style="padding:8px 6px;font-size:13px;text-align:right;font-weight:600;">' + sub.toFixed(2) + ' EUR</td></tr>';
     }).join("");
 
     const html = '<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Presupuesto</title><style>@page{size:A4;margin:20mm;}body{font-family:Helvetica Neue,Arial,sans-serif;color:#1e293b;margin:0;padding:0;}.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:30px;border-bottom:3px solid #00c896;padding-bottom:20px;}.logo{font-size:28px;font-weight:800;color:#0a1628;}.logo span{color:#00c896;}table{width:100%;border-collapse:collapse;}th{background:#0a1628;color:white;padding:10px 6px;font-size:12px;text-transform:uppercase;}.totals-box{background:#f8fafc;border-radius:8px;padding:16px 24px;float:right;min-width:280px;margin-top:20px;}.total-row{display:flex;justify-content:space-between;padding:4px 0;font-size:14px;}.total-final{font-size:20px;font-weight:800;color:#00c896;border-top:2px solid #e2e8f0;margin-top:8px;padding-top:8px;}.badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;}.footer{margin-top:40px;text-align:center;font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:16px;clear:both;}</style></head><body><div class="header"><div><div class="logo">enl<span>a</span>ze</div><div style="font-size:12px;color:#64748b;margin-top:4px;">' + (isClient ? 'Presupuesto' : 'Presupuesto INTERNO (coste real)') + '</div></div><div style="text-align:right;font-size:13px;color:#64748b;"><div style="font-size:16px;font-weight:700;color:#0a1628;">Fecha: ' + new Date().toLocaleDateString("es-ES") + '</div>' + (validUntil ? '<div>Valido hasta: ' + new Date(validUntil).toLocaleDateString("es-ES") + '</div>' : '') + (!isClient ? '<div style="margin-top:6px;"><span class="badge" style="background:#fef3c7;color:#92400e;">DOCUMENTO INTERNO - NO ENVIAR AL CLIENTE</span></div>' : '') + '</div></div>' + (clientName ? '<div style="margin-bottom:20px;background:#f8fafc;border-radius:8px;padding:16px;font-size:13px;"><strong>' + clientName + '</strong>' + (clientEmail ? '<br/>Email: ' + clientEmail : '') + (clientPhone ? '<br/>Tel: ' + clientPhone : '') + (clientAddress ? '<br/>Dir: ' + clientAddress : '') + '</div>' : '') + '<div style="font-size:14px;font-weight:700;color:#00c896;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">' + result.title + '</div><table><thead><tr><th style="text-align:left;">#</th><th style="text-align:left;">Concepto</th><th style="text-align:center;">Cat.</th><th style="text-align:center;">Cant.</th><th style="text-align:right;">Precio ud.</th><th style="text-align:right;">Importe</th></tr></thead><tbody>' + rows + '</tbody></table><div class="totals-box"><div class="total-row"><span>Subtotal</span><span>' + subtotal.toFixed(2) + ' EUR</span></div><div class="total-row"><span>IVA (' + ivaPercent + '%)</span><span>' + iva.toFixed(2) + ' EUR</span></div><div class="total-row total-final"><span>TOTAL</span><span>' + total.toFixed(2) + ' EUR</span></div>' + (!isClient ? '<div style="margin-top:12px;padding-top:8px;border-top:1px solid #e2e8f0;"><div class="total-row" style="color:#10b981;"><span>Margen (' + result.margin_percent + '%)</span><span>+' + result.profit.toFixed(2) + ' EUR</span></div><div class="total-row" style="font-weight:700;"><span>Precio cliente</span><span>' + (result.total_client + result.total_client * ivaPercent / 100).toFixed(2) + ' EUR</span></div></div>' : '') + '</div>' + (result.notes ? '<div style="clear:both;padding-top:24px;"><div style="font-size:14px;font-weight:700;color:#00c896;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Notas</div><div style="background:#fffbeb;border-left:4px solid #f59e0b;padding:12px 16px;border-radius:0 8px 8px 0;font-size:13px;color:#92400e;">' + result.notes + '</div></div>' : '') + '<div class="footer">Presupuesto generado con <strong>Enlaze</strong> &middot; enlaze.es' + (!isClient ? '<br/><strong style="color:#ef4444;">COPIA INTERNA - CONFIDENCIAL</strong>' : '<br/>Este presupuesto tiene validez contractual una vez aceptado por ambas partes.') + '</div></body></html>';
@@ -245,7 +250,7 @@ export default function GenerateBudgetPage() {
           <div>
             <label className="block text-xs text-[var(--color-navy-400)] mb-1">Tipo de servicio</label>
             <select value={serviceType} onChange={(e) => setServiceType(e.target.value)} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm">
-              {serviceTypes.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              {(() => { const sTypes = serviceTypes(); const activeServiceTypes = sTypes.length > 0 ? sTypes : fallbackServiceTypes; return activeServiceTypes.map((s) => <option key={s.value} value={s.value}>{s.label}</option>); })()}
             </select>
           </div>
           <div>
@@ -357,7 +362,7 @@ export default function GenerateBudgetPage() {
                         <p className="text-sm font-medium text-[var(--color-navy-100)]">{p.concept}</p>
                         {p.description && <p className="text-xs text-[var(--color-navy-400)]">{p.description}</p>}
                       </td>
-                      <td className="px-3 py-3 text-center"><span className={"text-xs px-2 py-1 rounded-full " + (p.category === "material" ? "bg-blue-900/30 text-blue-300" : p.category === "mano_obra" ? "bg-orange-900/30 text-orange-300" : "bg-gray-700 text-gray-300")}>{catLabel[p.category] || p.category}</span></td>
+                      <td className="px-3 py-3 text-center"><span className={"text-xs px-2 py-1 rounded-full " + (p.category === "material" ? "bg-blue-900/30 text-blue-300" : p.category === "mano_obra" ? "bg-orange-900/30 text-orange-300" : "bg-gray-700 text-gray-300")}>{(() => { const cats = budgetCategories(); const catMap = Object.fromEntries(cats.map(c => [c.value, c.label])); return (catMap[p.category] || fallbackCategoryLabels[p.category] || p.category); })()}</span></td>
                       <td className="px-3 py-3 text-center text-sm text-[var(--color-navy-200)]">{p.quantity} {unitLabel[p.unit] || p.unit}</td>
                       <td className="px-3 py-3 text-right text-sm text-[var(--color-navy-400)]">{p.unit_price.toFixed(2)}</td>
                       <td className="px-3 py-3 text-right text-sm text-[var(--color-navy-200)]">{p.unit_price_client.toFixed(2)}</td>
