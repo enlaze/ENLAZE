@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
+import { useSector } from "@/lib/sector-context";
 
 interface ClientOption {
   id: string;
@@ -53,6 +54,11 @@ export default function ProjectsPage() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
+  const { label, options } = useSector();
+
+  // Dynamic units from sector config
+  const sectorUnits = options("units");
+  const unitOptions = sectorUnits.length > 0 ? sectorUnits : ["ud","m","m²","m³","kg","l","h","ml","global"];
 
   const [userId, setUserId] = useState<string | null>(null);
   const [clients, setClients] = useState<ClientOption[]>([]);
@@ -206,23 +212,23 @@ export default function ProjectsPage() {
     <div className="max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">Obras</h1>
+          <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">{label("projects")}</h1>
           <p className="text-[var(--color-navy-400)] text-sm mt-1">
-            Gestiona tus proyectos, cliente asociado y control económico básico
+            Gestiona tus {label("projects").toLowerCase()}, cliente asociado y control económico básico
           </p>
         </div>
         <button
           onClick={() => { resetForm(); setShowForm(true); }}
           className="px-4 py-2 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-lg text-sm font-medium hover:opacity-90 transition"
         >
-          + Nueva obra
+          + {label("project") === "Obra" ? "Nueva obra" : `Nuevo/a ${label("project").toLowerCase()}`}
         </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
           <p className="text-2xl font-bold text-blue-400">{filtered.length}</p>
-          <p className="text-xs text-[var(--color-navy-400)]">Obras</p>
+          <p className="text-xs text-[var(--color-navy-400)]">{label("projects")}</p>
         </div>
         <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
           <p className="text-2xl font-bold text-[var(--color-brand-green)]">{totalBudget.toFixed(2)}€</p>

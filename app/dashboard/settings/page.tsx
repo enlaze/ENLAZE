@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
+import { useSector } from "@/lib/sector-context";
+import Link from "next/link";
 
 export default function SettingsPage() {
   const [fullName, setFullName] = useState("");
@@ -57,6 +59,27 @@ export default function SettingsPage() {
         <p className="mt-1 text-navy-600">Configura tu perfil y cuenta</p>
       </div>
       <div className="max-w-2xl space-y-6">
+        {/* Quick links */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Link href="/dashboard/settings/sector" className="rounded-2xl border border-navy-100 bg-white p-5 shadow-sm hover:shadow-md transition-shadow group">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🏢</span>
+              <div>
+                <h3 className="font-semibold text-navy-900 group-hover:text-brand-green transition-colors">Sector de actividad</h3>
+                <p className="text-xs text-navy-500">Adapta Enlaze a tu sector</p>
+              </div>
+            </div>
+          </Link>
+          <Link href="/dashboard/settings/fiscal" className="rounded-2xl border border-navy-100 bg-white p-5 shadow-sm hover:shadow-md transition-shadow group">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🧾</span>
+              <div>
+                <h3 className="font-semibold text-navy-900 group-hover:text-brand-green transition-colors">Ajustes fiscales</h3>
+                <p className="text-xs text-navy-500">NIF, IVA, series, Verifactu</p>
+              </div>
+            </div>
+          </Link>
+        </div>
         <div className="rounded-2xl border border-navy-100 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-bold text-navy-900 mb-4">Perfil</h2>
           <form onSubmit={handleSaveProfile} className="space-y-4">

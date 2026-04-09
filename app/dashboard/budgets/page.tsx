@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import Link from "next/link";
+import { useSector } from "@/lib/sector-context";
 
 type Budget = {
   id: string;
@@ -21,6 +22,7 @@ export default function BudgetsPage() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const supabase = createClient();
+  const { label } = useSector();
 
   useEffect(() => { fetchBudgets(); }, []);
 
@@ -71,7 +73,7 @@ export default function BudgetsPage() {
     <>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-navy-900">Presupuestos</h1>
+          <h1 className="text-3xl font-bold text-navy-900">{label("budgets")}</h1>
           <p className="mt-1 text-navy-600">{budgets.length} presupuesto{budgets.length !== 1 ? "s" : ""} en total</p>
         </div>
         <Link href="/dashboard/budgets/generate" className="px-4 py-2 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-lg text-sm font-medium hover:opacity-90 transition">⚡ Generar con IA</Link>

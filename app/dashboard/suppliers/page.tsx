@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
+import { useSector } from "@/lib/sector-context";
 
 interface Supplier {
   id: string;
@@ -22,30 +23,14 @@ interface Supplier {
   created_at: string;
 }
 
-const tradeOptions = [
-  { value: "albanileria", label: "Albañilería" },
-  { value: "fontaneria", label: "Fontanería" },
-  { value: "electricidad", label: "Electricidad" },
-  { value: "pintura", label: "Pintura" },
-  { value: "carpinteria", label: "Carpintería" },
-  { value: "climatizacion", label: "Climatización" },
-  { value: "cerrajeria", label: "Cerrajería" },
-  { value: "cristaleria", label: "Cristalería" },
-  { value: "impermeabilizacion", label: "Impermeabilización" },
-  { value: "demolicion", label: "Demolición" },
-  { value: "estructuras", label: "Estructuras" },
-  { value: "escayola", label: "Escayola / Pladur" },
-  { value: "solados", label: "Solados y alicatados" },
-  { value: "material", label: "Material de construcción" },
-  { value: "ferreteria", label: "Ferretería" },
-  { value: "contenedores", label: "Contenedores / residuos" },
-  { value: "transporte", label: "Transporte" },
-  { value: "maquinaria", label: "Maquinaria" },
-  { value: "seguridad", label: "Seguridad y PRL" },
-  { value: "general", label: "General" },
+/* Default trade options (used as fallback when sector config not loaded) */
+const defaultTradeOptions = [
+  "Albañilería","Fontanería","Electricidad","Pintura","Carpintería",
+  "Climatización","Cerrajería","Cristalería","Impermeabilización",
+  "Demolición","Estructuras","Escayola / Pladur","Solados y alicatados",
+  "Material de construcción","Ferretería","Contenedores / residuos",
+  "Transporte","Maquinaria","Seguridad y PRL","General",
 ];
-
-const tradeMap = Object.fromEntries(tradeOptions.map((t) => [t.value, t.label]));
 
 const typeOptions = [
   { value: "proveedor", label: "Proveedor" },
@@ -64,6 +49,7 @@ export default function SuppliersPage() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
+  const { label, options } = useSector();
 
   const [userId, setUserId] = useState<string | null>(null);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -74,6 +60,14 @@ export default function SuppliersPage() {
   const [search, setSearch] = useState("");
   const [filterTrade, setFilterTrade] = useState("all");
   const [filterType, setFilterType] = useState("all");
+
+  // Dynamic trade/specialty options from sector config
+  const sectorTrades = options("trades");
+  const sectorSpecialties = options("specialties");
+  const sectorCategories = options("categories");
+  const dynamicOptions = sectorTrades.length > 0 ? sectorTrades : sectorSpecialties.length > 0 ? sectorSpecialties : sectorCategories.length > 0 ? sectorCategories : defaultTradeOptions;
+  const tradeOptions = dynamicOptions.map(t => ({ value: t.toLowerCase().replace(/[\s/]+/g, "_"), label: t }));
+  const tradeMap = Object.fromEntries(tradeOptions.map(t => [t.value, t.label]));
 
   useEffect(() => {
     async function init() {
@@ -163,7 +157,7 @@ export default function SuppliersPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">Proveedores y Subcontratas</h1>
+          <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">{label("suppliers")}</h1>
           <p className="text-[var(--color-navy-400)] text-sm mt-1">Gestiona tu red de proveedores, subcontratas y oficios</p>
         </div>
         <button onClick={() => { resetForm(); setShowForm(true); }}
@@ -180,7 +174,7 @@ export default function SuppliersPage() {
         </div>
         <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
           <p className="text-2xl font-bold text-[var(--color-brand-green)]">{totalProveedores}</p>
-          <p className="text-xs text-[var(--color-navy-400)]">Proveedores</p>
+          <p className="text-xs text-[var(--color-navy-400)]">{label("suppliers")}</p>
         </div>
         <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
           <p className="text-2xl font-bold text-orange-400">{totalSubcontratas}</p>

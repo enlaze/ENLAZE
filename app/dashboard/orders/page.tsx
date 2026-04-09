@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
+import { useSector } from "@/lib/sector-context";
 
 /* ═══════════════ Types ═══════════════ */
 
@@ -50,6 +51,7 @@ const inputCls = "w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] 
 export default function OrdersPage() {
   const router = useRouter();
   const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+  const { label } = useSector();
 
   const [userId, setUserId] = useState<string | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -154,7 +156,7 @@ export default function OrdersPage() {
     <div className="max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">Pedidos</h1>
+          <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">{label("orders")}</h1>
           <p className="text-sm text-[var(--color-navy-400)]">Gestión de pedidos a proveedores y subcontratas</p>
         </div>
         <button onClick={() => setShowForm(!showForm)}

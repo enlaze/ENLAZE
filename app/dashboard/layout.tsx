@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import { SectorProvider, useSector } from "@/lib/sector-context";
 
 const LinkIcon = () => (
   <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#00c896" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
@@ -11,7 +12,8 @@ const LinkIcon = () => (
   </svg>
 );
 
-const navItems = [
+/* Fallback nav items used while sector config loads */
+const fallbackNavItems = [
   { href: "/dashboard", label: "Clientes", icon: "👥" },
   { href: "/dashboard/messages", label: "WhatsApp", icon: "💬" },
   { href: "/dashboard/emails", label: "Emails", icon: "📧" },
@@ -29,12 +31,21 @@ const navItems = [
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <SectorProvider>
+      <DashboardInner>{children}</DashboardInner>
+    </SectorProvider>
+  );
+}
+
+function DashboardInner({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const supabase = createClient();
   const router = useRouter();
   const pathname = usePathname();
+  const { visibleModules } = useSector();
 
   useEffect(() => {
     const getUser = async () => {
@@ -50,6 +61,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     await supabase.auth.signOut();
     router.push("/");
   };
+
+  // Build nav items from sector config or fallback
+  const sectorModules = visibleModules();
+  const navItems = sectorModules.length > 0
+    ? sectorModules.map(m => ({ href: m.href, label: m.label, icon: m.icon }))
+    : fallbackNavItems;
 
   if (loading) {
     return (
