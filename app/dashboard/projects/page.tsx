@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
+import Link from "next/link";
 
 interface ClientOption {
   id: string;
@@ -419,7 +420,9 @@ export default function ProjectsPage() {
                 {filtered.map((project) => (
                   <tr key={project.id} className="border-t border-[var(--color-navy-700)] hover:bg-[var(--color-navy-750)] transition">
                     <td className="px-5 py-3">
-                      <p className="text-sm font-medium text-[var(--color-navy-100)]">{project.name}</p>
+                      <Link href={`/dashboard/projects/${project.id}`} className="text-sm font-medium text-[var(--color-navy-100)] hover:text-[var(--color-brand-green)] transition">
+                        {project.name}
+                      </Link>
                       {project.address && <p className="text-xs text-[var(--color-navy-400)]">{project.address}</p>}
                     </td>
                     <td className="px-3 py-3 text-sm text-[var(--color-navy-200)]">
@@ -441,6 +444,9 @@ export default function ProjectsPage() {
                       {Number(project.actual_cost || 0).toFixed(2)}€
                     </td>
                     <td className="px-5 py-3 text-right">
+                      <Link href={`/dashboard/projects/${project.id}`} className="text-xs text-blue-400 hover:underline mr-3">
+                        Ver detalle
+                      </Link>
                       <button onClick={() => startEdit(project)} className="text-xs text-[var(--color-brand-green)] hover:underline mr-3">
                         Editar
                       </button>
