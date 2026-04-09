@@ -36,7 +36,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-navy-50 px-6">
       <div className="max-w-md w-full bg-white rounded-2xl border border-navy-100 p-10 shadow-lg">
         <div className="text-center mb-8">
-          <Logo size={40} />
+         <Logo />
           <h1 className="text-2xl font-bold text-navy-900">Bienvenido de nuevo</h1>
           <p className="mt-2 text-navy-600">Inicia sesion en tu cuenta</p>
         </div>
