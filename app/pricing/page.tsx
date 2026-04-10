@@ -1,12 +1,6 @@
 "use client";
 import Link from "next/link";
-
-const LinkIcon = () => (
-  <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#00c896" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-  </svg>
-);
+import Logo from "@/components/Logo";
 
 const Check = () => (
   <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#00c896" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
@@ -80,10 +74,7 @@ export default function PricingPage() {
     <div className="min-h-screen bg-white">
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/85 backdrop-blur-xl border-b border-navy-100">
         <nav className="max-w-6xl mx-auto flex items-center justify-between px-6 py-4">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-navy-800 flex items-center justify-center"><LinkIcon /></div>
-            <span className="text-xl font-bold text-navy-900">Enlaze</span>
-          </Link>
+          <Logo href="/" size={36} />
           <div className="flex items-center gap-6">
             <Link href="/" className="text-sm font-medium text-navy-700 hover:text-navy-900 transition-colors hidden sm:block">Inicio</Link>
             <Link href="/login" className="text-sm font-medium text-navy-700 hover:text-navy-900 transition-colors">Iniciar sesion</Link>
