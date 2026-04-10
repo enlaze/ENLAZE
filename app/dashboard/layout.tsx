@@ -3,14 +3,8 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import Logo from "@/components/Logo";
 import { SectorProvider, useSector } from "@/lib/sector-context";
-
-const LinkIcon = () => (
-  <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#00c896" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-  </svg>
-);
 
 /* Fallback nav items used while sector config loads */
 const fallbackNavItems = [
@@ -84,10 +78,7 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden text-navy-700 mr-1">
               <svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
             </button>
-            <Link href="/dashboard" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-navy-800 flex items-center justify-center"><LinkIcon /></div>
-              <span className="text-lg font-bold text-navy-900">Enlaze</span>
-            </Link>
+            <Logo href="/dashboard" size={32} />
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-navy-600 hidden sm:block">{user?.email}</span>
