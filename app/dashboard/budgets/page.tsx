@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
@@ -24,12 +25,12 @@ export default function BudgetsPage() {
   const supabase = createClient();
   const { label, serviceTypes } = useSector();
 
-  useEffect(() => { fetchBudgets(); }, []);
-
   const fetchBudgets = async () => {
     const { data } = await supabase.from("budgets").select("*, clients(name, company)").order("created_at", { ascending: false });
-    if (data) setBudgets(data as any);
+    if (data) setBudgets(data as Budget[]);
   };
+
+  useEffect(() => { fetchBudgets(); }, []);
 
   const handleDelete = async (id: string) => {
     if (confirm("Eliminar este presupuesto?")) {

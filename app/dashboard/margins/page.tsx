@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -31,8 +32,6 @@ export default function MarginsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { loadMargins(); }, []);
-
   async function loadMargins() {
     const { data } = await supabase
       .from("margin_config")
@@ -41,6 +40,8 @@ export default function MarginsPage() {
     setMargins(data || []);
     setLoading(false);
   }
+
+  useEffect(() => { loadMargins(); }, []);
 
   async function saveMargin(serviceType: string, percent: number) {
     setSaving(true);

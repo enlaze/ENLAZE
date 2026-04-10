@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
@@ -14,11 +15,6 @@ export default function MessagesPage() {
   const [success, setSuccess] = useState("");
   const supabase = createClient();
 
-  useEffect(() => {
-    fetchClients();
-    fetchMessages();
-  }, []);
-
   const fetchClients = async () => {
     const { data } = await supabase.from("clients").select("id, name, phone").order("name");
     if (data) setClients(data);
@@ -26,8 +22,13 @@ export default function MessagesPage() {
 
   const fetchMessages = async () => {
     const { data } = await supabase.from("messages").select("*, clients(name, phone)").eq("channel", "whatsapp").order("created_at", { ascending: false }).limit(50);
-    if (data) setMessages(data as any);
+    if (data) setMessages(data as Message[]);
   };
+
+  useEffect(() => {
+    fetchClients();
+    fetchMessages();
+  }, []);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();

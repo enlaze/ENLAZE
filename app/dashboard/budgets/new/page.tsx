@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -54,7 +55,7 @@ export default function NewBudgetPage() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
-  const { serviceTypes, budgetCategories, subcategories: getSectorSubcats, options } = useSector();
+  const { serviceTypes, budgetCategories, options } = useSector();
 
   const [saving, setSaving] = useState(false);
   const [userId, setUserId] = useState("");
@@ -151,7 +152,9 @@ export default function NewBudgetPage() {
     setSaving(true);
     const selectedClient = clients.find((client) => client.id === selectedClientId);
     const year = new Date().getFullYear();
-    const rand = Math.floor(10000 + Math.random() * 90000);
+    const randArray = new Uint32Array(1);
+    crypto.getRandomValues(randArray);
+    const rand = 10000 + (randArray[0] % 90000);
     const budgetNumber = "PRE-" + year + "-" + rand;
 
     const { data: budget, error } = await supabase

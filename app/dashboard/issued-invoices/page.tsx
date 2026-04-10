@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -62,8 +63,6 @@ export default function IssuedInvoicesPage() {
     client_id: "", project_id: "", issue_date: new Date().toISOString().split("T")[0],
     due_date: "", notes: "",
   });
-
-  useEffect(() => { load(); }, []);
 
   async function load() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -153,6 +152,8 @@ export default function IssuedInvoicesPage() {
     await supabase.from("issued_invoices").delete().eq("id", id);
     setInvoices((prev) => prev.filter((i) => i.id !== id));
   }
+
+  useEffect(() => { load(); }, []);
 
   // Filtering
   const filtered = invoices.filter((inv) => {

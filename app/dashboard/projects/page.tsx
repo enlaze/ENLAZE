@@ -54,11 +54,7 @@ export default function ProjectsPage() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
-  const { label, options } = useSector();
-
-  // Dynamic units from sector config
-  const sectorUnits = options("units");
-  const unitOptions = sectorUnits.length > 0 ? sectorUnits : ["ud","m","m²","m³","kg","l","h","ml","global"];
+  const { label } = useSector();
 
   const [userId, setUserId] = useState<string | null>(null);
   const [clients, setClients] = useState<ClientOption[]>([]);
@@ -69,25 +65,6 @@ export default function ProjectsPage() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [form, setForm] = useState(emptyForm);
-
-  useEffect(() => {
-    async function init() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-
-      setUserId(user.id);
-      await Promise.all([
-        loadClients(),
-        loadProjects(user.id),
-      ]);
-      setLoading(false);
-    }
-
-    init();
-  }, []);
 
   async function loadClients() {
     const { data } = await supabase
@@ -110,6 +87,25 @@ export default function ProjectsPage() {
 
     setProjects(data || []);
   }
+
+  useEffect(() => {
+    async function init() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      setUserId(user.id);
+      await Promise.all([
+        loadClients(),
+        loadProjects(user.id),
+      ]);
+      setLoading(false);
+    }
+
+    init();
+  }, []);
 
   function resetForm() {
     setForm(emptyForm);

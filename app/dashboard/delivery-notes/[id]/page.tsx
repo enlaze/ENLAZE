@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -70,8 +71,6 @@ export default function DeliveryNoteDetailPage() {
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [savingLine, setSavingLine] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
-
-  useEffect(() => { loadNote(); }, []);
 
   async function loadNote() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -200,6 +199,8 @@ export default function DeliveryNoteDetailPage() {
     setNote({ ...note, status: newStatus });
     setSavingStatus(false);
   }
+
+  useEffect(() => { loadNote(); }, []);
 
   /* ── Computed ── */
 

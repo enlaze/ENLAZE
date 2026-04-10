@@ -69,6 +69,11 @@ export default function SuppliersPage() {
   const tradeOptions = dynamicOptions.map(t => ({ value: t.toLowerCase().replace(/[\s/]+/g, "_"), label: t }));
   const tradeMap = Object.fromEntries(tradeOptions.map(t => [t.value, t.label]));
 
+  async function loadSuppliers() {
+    const { data } = await supabase.from("suppliers").select("*").order("name");
+    setSuppliers(data || []);
+  }
+
   useEffect(() => {
     async function init() {
       const { data: { user } } = await supabase.auth.getUser();
@@ -79,11 +84,6 @@ export default function SuppliersPage() {
     }
     init();
   }, []);
-
-  async function loadSuppliers() {
-    const { data } = await supabase.from("suppliers").select("*").order("name");
-    setSuppliers(data || []);
-  }
 
   function resetForm() {
     setForm(emptyForm); setEditingId(null); setShowForm(false);

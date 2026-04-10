@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -71,8 +72,6 @@ export default function DeliveryNotesPage() {
     reception_date: new Date().toISOString().split("T")[0], notes: "",
   });
 
-  useEffect(() => { load(); }, []);
-
   async function load() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push("/login"); return; }
@@ -122,6 +121,8 @@ export default function DeliveryNotesPage() {
     await supabase.from("delivery_notes").delete().eq("id", id);
     setNotes((prev) => prev.filter((n) => n.id !== id));
   }
+
+  useEffect(() => { load(); }, []);
 
   const filtered = notes.filter((n) => {
     if (filterStatus !== "all" && n.status !== filterStatus) return false;

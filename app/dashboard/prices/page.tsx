@@ -34,7 +34,7 @@ export default function PricesPage() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
-  const { budgetCategories, subcategories: getSectorSubcats, options, defaultPrices, label } = useSector();
+  const { budgetCategories, subcategories: getSectorSubcats, options, defaultPrices } = useSector();
 
   // Dynamic categories, subcategories and units from sector config
   const sectorCats = budgetCategories();
@@ -66,15 +66,6 @@ export default function PricesPage() {
   const [unit, setUnit] = useState("ud");
   const [unitPrice, setUnitPrice] = useState(0);
 
-  useEffect(() => {
-    async function init() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) setUserId(user.id);
-      loadItems();
-    }
-    init();
-  }, []);
-
   async function loadItems() {
     const { data } = await supabase
       .from("price_items")
@@ -85,6 +76,15 @@ export default function PricesPage() {
     setItems(data || []);
     setLoading(false);
   }
+
+  useEffect(() => {
+    async function init() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) setUserId(user.id);
+      loadItems();
+    }
+    init();
+  }, []);
 
   function resetForm() {
     setName(""); setDescription(""); setCategory("material");
@@ -324,7 +324,7 @@ export default function PricesPage() {
       {filtered.length === 0 ? (
         <div className="bg-[var(--color-navy-800)] rounded-xl p-10 text-center">
           <p className="text-[var(--color-navy-400)]">No hay precios configurados.</p>
-          <p className="text-sm text-[var(--color-navy-500)] mt-1">Pulsa "Sync mercado" para importar precios reales de n8n o "Importar por defecto" para cargar precios base.</p>
+          <p className="text-sm text-[var(--color-navy-500)] mt-1">Pulsa &quot;Sync mercado&quot; para importar precios reales de n8n o &quot;Importar por defecto&quot; para cargar precios base.</p>
         </div>
       ) : (
         <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden">

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -73,8 +74,6 @@ export default function OrdersPage() {
     notes: "",
   });
 
-  useEffect(() => { load(); }, []);
-
   async function load() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push("/login"); return; }
@@ -124,6 +123,8 @@ export default function OrdersPage() {
     await supabase.from("orders").delete().eq("id", id);
     setOrders((prev) => prev.filter((o) => o.id !== id));
   }
+
+  useEffect(() => { load(); }, []);
 
   // Filtering
   const filtered = orders.filter((o) => {

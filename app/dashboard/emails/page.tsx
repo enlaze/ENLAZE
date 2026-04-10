@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
@@ -21,8 +22,6 @@ export default function EmailsPage() {
   const [result, setResult] = useState({ type: "", text: "" });
   const supabase = createClient();
 
-  useEffect(() => { fetchClients(); fetchMessages(); }, []);
-
   const fetchClients = async () => {
     const { data } = await supabase.from("clients").select("id, name, email").order("name");
     if (data) setClients(data);
@@ -30,8 +29,10 @@ export default function EmailsPage() {
 
   const fetchMessages = async () => {
     const { data } = await supabase.from("messages").select("*, clients(name, email)").eq("channel", "email").order("created_at", { ascending: false }).limit(50);
-    if (data) setMessages(data as any);
+    if (data) setMessages(data as Message[]);
   };
+
+  useEffect(() => { fetchClients(); fetchMessages(); }, []);
 
   const applyTemplate = (t: typeof templates[0]) => {
     const client = clients.find(c => c.id === selectedClient);

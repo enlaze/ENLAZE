@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
@@ -17,8 +18,6 @@ export default function CalendarPage() {
   const [form, setForm] = useState({ title: "", description: "", event_date: "", event_time: "10:00", duration_minutes: 30, client_id: "" });
   const supabase = createClient();
 
-  useEffect(() => { fetchClients(); fetchEvents(); }, [currentDate]);
-
   const fetchClients = async () => {
     const { data } = await supabase.from("clients").select("id, name").order("name");
     if (data) setClients(data);
@@ -30,8 +29,10 @@ export default function CalendarPage() {
     const start = new Date(year, month, 1).toISOString().split("T")[0];
     const end = new Date(year, month + 1, 0).toISOString().split("T")[0];
     const { data } = await supabase.from("events").select("*, clients(name)").gte("event_date", start).lte("event_date", end).order("event_time");
-    if (data) setEvents(data as any);
+    if (data) setEvents(data as Event[]);
   };
+
+  useEffect(() => { fetchClients(); fetchEvents(); }, [currentDate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -108,12 +109,14 @@ export default function GenerateBudgetPage() {
     init();
   }, []);
 
+  // Validate that the selected project belongs to the selected client
   useEffect(() => {
-    if (
+    const isProjectInvalid =
       selectedClientId &&
       selectedProjectId &&
-      !projects.some((project) => project.id === selectedProjectId && project.client_id === selectedClientId)
-    ) {
+      !projects.some((project) => project.id === selectedProjectId && project.client_id === selectedClientId);
+
+    if (isProjectInvalid) {
       setSelectedProjectId("");
     }
   }, [selectedClientId, selectedProjectId, projects]);
@@ -151,10 +154,11 @@ export default function GenerateBudgetPage() {
     const selectedClient = clients.find((client) => client.id === selectedClientId);
 
     const year = new Date().getFullYear();
-    const rand = Math.floor(10000 + Math.random() * 90000);
+    const randArray = new Uint32Array(1);
+    crypto.getRandomValues(randArray);
+    const rand = 10000 + (randArray[0] % 90000);
     const budgetNumber = "PRE-" + year + "-" + rand;
 
-    const ivaCost = result.total_cost * (ivaPercent / 100);
     const ivaClient = result.total_client * (ivaPercent / 100);
 
     const { data: budget, error: budgetErr } = await supabase

@@ -537,7 +537,7 @@ export default function FacturasPage() {
         <div className="bg-[var(--color-navy-800)] rounded-xl p-10 text-center">
           <p className="text-4xl mb-3">🧾</p>
           <p className="text-[var(--color-navy-400)]">No hay facturas todavía.</p>
-          <p className="text-sm text-[var(--color-navy-500)] mt-1">Sube una foto con "Escanear factura" o añade una manualmente con "+ Nueva factura".</p>
+          <p className="text-sm text-[var(--color-navy-500)] mt-1">Sube una foto con &quot;Escanear factura&quot; o añade una manualmente con &quot;+ Nueva factura&quot;.</p>
         </div>
       ) : (
         <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden">

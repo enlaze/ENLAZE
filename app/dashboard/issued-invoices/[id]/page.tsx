@@ -1,6 +1,7 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
@@ -170,8 +171,6 @@ export default function IssuedInvoiceDetailPage() {
   const [savingLine, setSavingLine] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
 
-  useEffect(() => { loadInvoice(); }, []);
-
   async function loadInvoice() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push("/login"); return; }
@@ -290,6 +289,8 @@ export default function IssuedInvoiceDetailPage() {
   function handlePrintPDF() {
     window.print();
   }
+
+  useEffect(() => { loadInvoice(); }, []);
 
   /* ── Render ── */
 

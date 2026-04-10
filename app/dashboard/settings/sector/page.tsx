@@ -23,14 +23,6 @@ export default function SectorSettingsPage() {
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadSectors();
-  }, []);
-
-  useEffect(() => {
-    setSelected(sectorKey);
-  }, [sectorKey]);
-
   async function loadSectors() {
     const { data } = await supabase
       .from("sector_config")
@@ -71,6 +63,14 @@ export default function SectorSettingsPage() {
     setSaving(false);
     setTimeout(() => setSaved(false), 3000);
   }
+
+  useEffect(() => {
+    loadSectors();
+  }, []);
+
+  useEffect(() => {
+    setSelected(sectorKey);
+  }, [sectorKey]);
 
   if (loading) {
     return (
