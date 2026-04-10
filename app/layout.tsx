@@ -3,9 +3,9 @@ import "./globals.css";
 import SplashScreen from "@/components/SplashScreen";
 
 export const metadata: Metadata = {
-  title: "Enlaze – Automatiza la comunicación de tu empresa",
+  title: "Enlaze — Crea presupuestos que venden, en segundos",
   description:
-    "WhatsApp, emails, recordatorios y calendario en un solo lugar.",
+    "Enlaze es el CRM con IA para empresas de reformas, instalaciones y servicios técnicos. Gestiona clientes, genera presupuestos profesionales y cierra más obras, sin pelearte con hojas de cálculo.",
 };
 
 export default function RootLayout({

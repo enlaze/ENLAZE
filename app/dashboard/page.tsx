@@ -1,164 +1,376 @@
 "use client";
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase-browser";
 
-type Client = {
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase-browser";
+import KpiCard from "@/components/dashboard/KpiCard";
+import BudgetsTable, { BudgetRow } from "@/components/dashboard/BudgetsTable";
+import { BudgetStatus } from "@/components/dashboard/StatusBadge";
+
+/* ── Icons (inline, sin dependencias) ───────────────────────────────── */
+
+function IconUsers() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function IconSend() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m22 2-7 20-4-9-9-4Z" />
+      <path d="M22 2 11 13" />
+    </svg>
+  );
+}
+
+function IconEuro() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 10h12" />
+      <path d="M4 14h9" />
+      <path d="M19 6a7.5 7.5 0 1 0 0 12" />
+    </svg>
+  );
+}
+
+function IconTrend() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 17 9 11l4 4 8-8" />
+      <path d="M14 7h7v7" />
+    </svg>
+  );
+}
+
+function IconPlus() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+/* ── Helpers ────────────────────────────────────────────────────────── */
+
+const euro = new Intl.NumberFormat("es-ES", {
+  style: "currency",
+  currency: "EUR",
+  maximumFractionDigits: 0,
+});
+
+const euroFull = new Intl.NumberFormat("es-ES", {
+  style: "currency",
+  currency: "EUR",
+});
+
+const dateFmt = new Intl.DateTimeFormat("es-ES", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+
+function greeting(date = new Date()) {
+  const h = date.getHours();
+  if (h < 6) return "Buenas noches";
+  if (h < 13) return "Buenos días";
+  if (h < 21) return "Buenas tardes";
+  return "Buenas noches";
+}
+
+function firstName(user: { user_metadata?: { full_name?: string; name?: string }; email?: string } | null) {
+  if (!user) return "";
+  const full = user.user_metadata?.full_name || user.user_metadata?.name;
+  if (full) return full.split(" ")[0];
+  if (user.email) return user.email.split("@")[0].split(".")[0];
+  return "";
+}
+
+/* ── Types ──────────────────────────────────────────────────────────── */
+
+type Budget = {
   id: string;
-  name: string;
-  email: string;
-  phone: string;
-  company: string;
-  notes: string;
-  status: string;
+  client_name: string | null;
+  reference: string | null;
+  total: number | null;
+  status: string | null;
   created_at: string;
 };
 
-export default function ClientsPage() {
-  const [clients, setClients] = useState<Client[]>([]);
-  const [showForm, setShowForm] = useState(false);
-  const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const [search, setSearch] = useState("");
-  const [form, setForm] = useState({ name: "", email: "", phone: "", company: "", notes: "", status: "lead" });
+type Client = { id: string; status: string | null; created_at: string };
+
+/* ── Page ───────────────────────────────────────────────────────────── */
+
+export default function DashboardHomePage() {
   const supabase = createClient();
+  const [user, setUser] = useState<any>(null);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => { fetchClients(); }, []);
-
-  const fetchClients = async () => {
-    const { data } = await supabase.from("clients").select("*").order("created_at", { ascending: false });
-    if (data) setClients(data);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingClient) {
-      await supabase.from("clients").update(form).eq("id", editingClient.id);
-    } else {
+  useEffect(() => {
+    (async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from("clients").insert({ ...form, user_id: user?.id });
-    }
-    setForm({ name: "", email: "", phone: "", company: "", notes: "", status: "lead" });
-    setShowForm(false);
-    setEditingClient(null);
-    await fetchClients();
-  };
+      setUser(user);
 
-  const handleEdit = (client: Client) => {
-    setForm({ name: client.name, email: client.email || "", phone: client.phone || "", company: client.company || "", notes: client.notes || "", status: client.status });
-    setEditingClient(client);
-    setShowForm(true);
-  };
+      const [clientsRes, budgetsRes] = await Promise.all([
+        supabase.from("clients").select("id, status, created_at"),
+        supabase
+          .from("budgets")
+          .select("id, client_name, reference, total, status, created_at")
+          .order("created_at", { ascending: false })
+          .limit(50),
+      ]);
 
-  const handleDelete = async (id: string) => {
-    if (confirm("Estas seguro de eliminar este cliente?")) {
-      await supabase.from("clients").delete().eq("id", id);
-      await fetchClients();
-    }
-  };
+      if (clientsRes.data) setClients(clientsRes.data as Client[]);
+      if (budgetsRes.data) setBudgets(budgetsRes.data as Budget[]);
+      setLoading(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const filtered = clients.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    (c.email && c.email.toLowerCase().includes(search.toLowerCase())) ||
-    (c.company && c.company.toLowerCase().includes(search.toLowerCase()))
-  );
+  /* ── KPIs ─────────────────────────────────────────────────────────── */
 
-  const statusColor = (s: string) => s === "active" ? "bg-brand-green/10 text-brand-green" : s === "lead" ? "bg-blue-50 text-blue-600" : "bg-navy-100 text-navy-500";
-  const statusLabel = (s: string) => s === "active" ? "Activo" : s === "lead" ? "Lead" : "Inactivo";
+  const stats = useMemo(() => {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+
+    const activeClients = clients.filter(
+      (c) => (c.status ?? "active") !== "inactive"
+    ).length;
+
+    const sentThisMonth = budgets.filter(
+      (b) => new Date(b.created_at) >= monthStart
+    ).length;
+    const sentPrevMonth = budgets.filter((b) => {
+      const d = new Date(b.created_at);
+      return d >= prevMonthStart && d <= prevMonthEnd;
+    }).length;
+
+    const incomeThisMonth = budgets
+      .filter(
+        (b) =>
+          (b.status === "accepted" || b.status === "aceptado") &&
+          new Date(b.created_at) >= monthStart
+      )
+      .reduce((sum, b) => sum + (b.total ?? 0), 0);
+    const incomePrevMonth = budgets
+      .filter((b) => {
+        const d = new Date(b.created_at);
+        return (
+          (b.status === "accepted" || b.status === "aceptado") &&
+          d >= prevMonthStart &&
+          d <= prevMonthEnd
+        );
+      })
+      .reduce((sum, b) => sum + (b.total ?? 0), 0);
+
+    const decided = budgets.filter((b) =>
+      ["accepted", "aceptado", "rejected", "rechazado"].includes(b.status ?? "")
+    );
+    const accepted = decided.filter((b) =>
+      ["accepted", "aceptado"].includes(b.status ?? "")
+    );
+    const conversion = decided.length === 0 ? 0 : (accepted.length / decided.length) * 100;
+
+    const sentTrend =
+      sentPrevMonth === 0
+        ? sentThisMonth > 0
+          ? 100
+          : 0
+        : ((sentThisMonth - sentPrevMonth) / sentPrevMonth) * 100;
+
+    const incomeTrend =
+      incomePrevMonth === 0
+        ? incomeThisMonth > 0
+          ? 100
+          : 0
+        : ((incomeThisMonth - incomePrevMonth) / incomePrevMonth) * 100;
+
+    return {
+      activeClients,
+      sentThisMonth,
+      sentTrend,
+      incomeThisMonth,
+      incomeTrend,
+      conversion,
+    };
+  }, [clients, budgets]);
+
+  /* ── Recent budgets rows ──────────────────────────────────────────── */
+
+  const rows: BudgetRow[] = useMemo(() => {
+    const normalize = (s: string | null): BudgetStatus => {
+      if (!s) return "pending";
+      if (["accepted", "aceptado"].includes(s)) return "accepted";
+      if (["rejected", "rechazado"].includes(s)) return "rejected";
+      return "pending";
+    };
+    return budgets.slice(0, 5).map((b) => ({
+      id: b.id,
+      client: b.client_name || "Sin cliente",
+      reference: b.reference ?? undefined,
+      date: dateFmt.format(new Date(b.created_at)),
+      amount: euroFull.format(b.total ?? 0),
+      status: normalize(b.status),
+    }));
+  }, [budgets]);
+
+  /* ── Fallback de ejemplo si la cuenta está vacía ──────────────────── */
+
+  const sampleRows: BudgetRow[] = [
+    {
+      id: "sample-1",
+      client: "Construcciones López SL",
+      reference: "PRE-2026-0042",
+      date: "8 abr 2026",
+      amount: euroFull.format(3240),
+      status: "accepted",
+    },
+    {
+      id: "sample-2",
+      client: "Inmobiliaria Duero",
+      reference: "PRE-2026-0041",
+      date: "7 abr 2026",
+      amount: euroFull.format(1180),
+      status: "pending",
+    },
+    {
+      id: "sample-3",
+      client: "Taller Mecánico Ruiz",
+      reference: "PRE-2026-0040",
+      date: "5 abr 2026",
+      amount: euroFull.format(870),
+      status: "rejected",
+    },
+    {
+      id: "sample-4",
+      client: "Café del Puerto",
+      reference: "PRE-2026-0039",
+      date: "4 abr 2026",
+      amount: euroFull.format(2560),
+      status: "accepted",
+    },
+    {
+      id: "sample-5",
+      client: "Clínica Vida",
+      reference: "PRE-2026-0038",
+      date: "2 abr 2026",
+      amount: euroFull.format(1925),
+      status: "pending",
+    },
+  ];
+
+  const tableRows = rows.length > 0 ? rows : sampleRows;
+  const name = firstName(user) || "Dani";
+
+  /* ── Render ───────────────────────────────────────────────────────── */
 
   return (
-    <>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-navy-900">Clientes</h1>
-          <p className="mt-1 text-navy-600">{clients.length} contacto{clients.length !== 1 ? "s" : ""} en total</p>
-        </div>
-        <button onClick={() => { setShowForm(true); setEditingClient(null); setForm({ name: "", email: "", phone: "", company: "", notes: "", status: "lead" }); }} className="px-5 py-2.5 rounded-xl bg-brand-green text-white font-semibold shadow-lg shadow-brand-green/25 hover:bg-brand-green-dark transition-colors">
-          + Nuevo cliente
-        </button>
-      </div>
+    <div className="relative mx-auto max-w-7xl">
+      {/* Atmósfera detrás del header — crea profundidad sin ruido */}
+      <div
+        aria-hidden
+        className="
+          pointer-events-none absolute inset-x-0 -top-12 h-[360px]
+          bg-[radial-gradient(ellipse_at_top_left,rgba(0,200,150,0.08),transparent_55%),radial-gradient(ellipse_at_top_right,rgba(10,25,41,0.06),transparent_60%)]
+        "
+      />
 
-      {showForm && (
-        <div className="mb-8 rounded-2xl border border-navy-100 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-navy-900 mb-4">{editingClient ? "Editar cliente" : "Nuevo cliente"}</h2>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-navy-700 mb-1">Nombre *</label>
-              <input type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50" placeholder="Nombre del cliente" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-navy-700 mb-1">Email</label>
-              <input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50" placeholder="email@ejemplo.com" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-navy-700 mb-1">Telefono</label>
-              <input type="tel" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50" placeholder="+34 600 000 000" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-navy-700 mb-1">Empresa</label>
-              <input type="text" value={form.company} onChange={e => setForm({...form, company: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50" placeholder="Nombre de la empresa" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-navy-700 mb-1">Estado</label>
-              <select value={form.status} onChange={e => setForm({...form, status: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50">
-                <option value="lead">Lead</option>
-                <option value="active">Activo</option>
-                <option value="inactive">Inactivo</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-navy-700 mb-1">Notas</label>
-              <input type="text" value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50" placeholder="Notas adicionales" />
-            </div>
-            <div className="md:col-span-2 flex gap-3 justify-end">
-              <button type="button" onClick={() => { setShowForm(false); setEditingClient(null); }} className="px-5 py-2.5 rounded-xl border border-navy-200 text-sm font-medium text-navy-700 hover:bg-navy-50">Cancelar</button>
-              <button type="submit" className="px-5 py-2.5 rounded-xl bg-brand-green text-white text-sm font-semibold hover:bg-brand-green-dark transition-colors">{editingClient ? "Guardar cambios" : "Agregar cliente"}</button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      <div className="mb-6">
-        <input type="text" value={search} onChange={e => setSearch(e.target.value)} className="w-full max-w-md px-4 py-3 rounded-xl border border-navy-200 bg-white text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50" placeholder="Buscar por nombre, email o empresa..." />
-      </div>
-
-      {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-navy-100 bg-white p-12 text-center">
-          <p className="text-4xl mb-4">👥</p>
-          <h3 className="text-lg font-bold text-navy-900">{search ? "Sin resultados" : "Sin clientes todavia"}</h3>
-          <p className="mt-2 text-navy-600">{search ? "Prueba con otro termino" : "Agrega tu primer cliente para empezar"}</p>
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-navy-100 bg-white shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-navy-100 bg-navy-50">
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 uppercase tracking-wider">Nombre</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 uppercase tracking-wider hidden md:table-cell">Email</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 uppercase tracking-wider hidden lg:table-cell">Telefono</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 uppercase tracking-wider hidden md:table-cell">Empresa</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 uppercase tracking-wider">Estado</th>
-                  <th className="text-right px-6 py-3 text-xs font-semibold text-navy-500 uppercase tracking-wider">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(client => (
-                  <tr key={client.id} className="border-b border-navy-50 hover:bg-navy-50/50 transition-colors">
-                    <td className="px-6 py-4 text-sm font-medium text-navy-900">{client.name}</td>
-                    <td className="px-6 py-4 text-sm text-navy-600 hidden md:table-cell">{client.email || "—"}</td>
-                    <td className="px-6 py-4 text-sm text-navy-600 hidden lg:table-cell">{client.phone || "—"}</td>
-                    <td className="px-6 py-4 text-sm text-navy-600 hidden md:table-cell">{client.company || "—"}</td>
-                    <td className="px-6 py-4"><span className={`inline-block px-2.5 py-1 rounded-lg text-xs font-semibold ${statusColor(client.status)}`}>{statusLabel(client.status)}</span></td>
-                    <td className="px-6 py-4 text-right">
-                      <button onClick={() => handleEdit(client)} className="text-sm text-brand-green hover:underline mr-3">Editar</button>
-                      <button onClick={() => handleDelete(client.id)} className="text-sm text-red-500 hover:underline">Eliminar</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* ── Header ─────────────────────────────────────────────────── */}
+      <header className="relative flex flex-col gap-8 pt-2 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+        <div className="min-w-0">
+          <div className="inline-flex items-center gap-2 rounded-full border border-navy-100 bg-white/70 px-3 py-1 backdrop-blur">
+            <span className="h-1.5 w-1.5 rounded-full bg-brand-green shadow-[0_0_0_3px_rgba(0,200,150,0.15)]" />
+            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-600">
+              Panel principal
+            </span>
           </div>
+          <h1 className="mt-5 text-[2.25rem] font-semibold leading-[1.1] tracking-[-0.02em] text-navy-900 sm:text-[2.75rem]">
+            {greeting()}, {name}{" "}
+            <span aria-hidden className="inline-block">👋</span>
+          </h1>
+          <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-navy-500">
+            Este es el resumen de tu actividad en Enlaze. Ánimo con los presupuestos de hoy.
+          </p>
         </div>
-      )}
-    </>
+
+        <Link
+          href="/dashboard/budgets/new"
+          className="
+            group inline-flex shrink-0 items-center justify-center gap-2
+            rounded-xl bg-brand-green px-6 py-3.5 text-[14px] font-semibold text-white
+            shadow-[0_8px_24px_-8px_rgba(0,200,150,0.5),0_2px_4px_-2px_rgba(0,200,150,0.4),inset_0_1px_0_rgba(255,255,255,0.15)]
+            ring-1 ring-inset ring-white/10
+            transition-all duration-200 ease-out
+            hover:-translate-y-[1.5px] hover:bg-brand-green-dark
+            hover:shadow-[0_14px_32px_-10px_rgba(0,200,150,0.6),0_2px_4px_-2px_rgba(0,200,150,0.4),inset_0_1px_0_rgba(255,255,255,0.2)]
+            focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:ring-offset-2
+            focus:ring-offset-navy-50
+            active:translate-y-0
+          "
+        >
+          <IconPlus />
+          <span>Nuevo presupuesto</span>
+          <span
+            aria-hidden
+            className="
+              -mr-1 ml-0.5 inline-flex opacity-80
+              transition-transform duration-200 group-hover:translate-x-0.5
+            "
+          >
+            →
+          </span>
+        </Link>
+      </header>
+
+      {/* ── KPI Cards ──────────────────────────────────────────────── */}
+      <section
+        aria-label="Indicadores clave"
+        className="relative mt-14 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4"
+      >
+        <KpiCard
+          label="Clientes activos"
+          value={loading ? "—" : String(stats.activeClients)}
+          icon={<IconUsers />}
+          hint="Total de contactos activos"
+        />
+        <KpiCard
+          label="Presupuestos enviados"
+          value={loading ? "—" : String(stats.sentThisMonth)}
+          icon={<IconSend />}
+          trend={{ value: stats.sentTrend, label: "vs. mes anterior" }}
+        />
+        <KpiCard
+          variant="featured"
+          label="Ingresos del mes"
+          value={loading ? "—" : euro.format(stats.incomeThisMonth)}
+          icon={<IconEuro />}
+          trend={{ value: stats.incomeTrend, label: "vs. mes anterior" }}
+        />
+        <KpiCard
+          label="Tasa de conversión"
+          value={loading ? "—" : `${stats.conversion.toFixed(1)}%`}
+          icon={<IconTrend />}
+          hint="Aceptados / decididos"
+        />
+      </section>
+
+      {/* ── Tabla presupuestos recientes ───────────────────────────── */}
+      <section className="relative mt-16">
+        <BudgetsTable
+          rows={tableRows}
+          footerHref="/dashboard/budgets"
+          footerLabel="Ver todos los presupuestos"
+        />
+      </section>
+    </div>
   );
 }
