@@ -5,6 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
 import { useSector } from "@/lib/sector-context";
+import AcceptanceTimeline from "@/components/AcceptanceTimeline";
+import { saveDocumentVersion, getNextVersion } from "@/lib/document-versions";
+import { logActivity } from "@/lib/activity-log";
 
 /* ═══════════════════════════ Types ═══════════════════════════ */
 
@@ -88,6 +91,10 @@ interface ProjectChange {
   image_urls: string[];
   created_at: string;
   updated_at: string;
+  // Compliance Phase 2
+  version: number;
+  sent_to_client_at: string | null;
+  approved_by_name: string | null;
 }
 
 interface Milestone {
@@ -415,8 +422,39 @@ export default function ProjectDetailPage() {
 
     if (editingChangeId) {
       await supabase.from("project_changes").update(payload).eq("id", editingChangeId);
+
+      // Fire-and-forget: save version + log
+      const nextVer = await getNextVersion(supabase, "project_change", editingChangeId);
+      saveDocumentVersion(supabase, {
+        entity_type: "project_change",
+        entity_id: editingChangeId,
+        version: nextVer,
+        snapshot: payload as unknown as Record<string, unknown>,
+        change_summary: `Cambio editado: "${changeForm.title}"`,
+      });
+      logActivity(supabase, {
+        action: "project_change.updated",
+        entity_type: "project_change",
+        entity_id: editingChangeId,
+        metadata: { title: changeForm.title, status: changeForm.status },
+      });
     } else {
-      await supabase.from("project_changes").insert(payload);
+      const { data: newChange } = await supabase.from("project_changes").insert(payload).select("id").single();
+      if (newChange) {
+        logActivity(supabase, {
+          action: "project_change.created",
+          entity_type: "project_change",
+          entity_id: newChange.id,
+          metadata: { title: changeForm.title, economic_impact: changeForm.economic_impact },
+        });
+        saveDocumentVersion(supabase, {
+          entity_type: "project_change",
+          entity_id: newChange.id,
+          version: 1,
+          snapshot: payload as unknown as Record<string, unknown>,
+          change_summary: "Cambio creado",
+        });
+      }
     }
 
     setChangeForm(emptyChangeForm); setShowChangeForm(false); setEditingChangeId(null);
@@ -719,9 +757,18 @@ export default function ProjectDetailPage() {
             </span>
           )}
           <button
-            onClick={() => {
-              const url = `${window.location.origin}/portal/${project.access_token}`;
-              navigator.clipboard.writeText(url);
+            onClick={async () => {
+              // Try to get portal_token, fall back to access_token
+              let portalUrl = `${window.location.origin}/portal/${project.access_token}`;
+              const { data: pt } = await supabase
+                .from("portal_tokens")
+                .select("token")
+                .eq("project_id", project.id)
+                .eq("is_active", true)
+                .limit(1)
+                .single();
+              if (pt) portalUrl = `${window.location.origin}/portal/${pt.token}`;
+              navigator.clipboard.writeText(portalUrl);
               setLinkCopied(true);
               setTimeout(() => setLinkCopied(false), 3000);
             }}
@@ -1082,6 +1129,19 @@ export default function ProjectDetailPage() {
                             {c.approved_date && <span>Aprobado: {fmtDate(c.approved_date)}</span>}
                           </div>
                           {c.notes && <p className="text-xs text-[var(--color-navy-500)] mt-1 italic">{c.notes}</p>}
+                          {/* Acceptance timeline for change */}
+                          <div className="mt-2">
+                            <AcceptanceTimeline
+                              mode="inline"
+                              events={[
+                                { label: "Creado", date: c.created_at, status: "positive" },
+                                { label: "Enviado", date: c.sent_to_client_at, status: "positive" },
+                                c.status === "rejected"
+                                  ? { label: "Rechazado", date: c.approved_date, status: "negative", detail: c.approved_by_name ? `por ${c.approved_by_name}` : undefined }
+                                  : { label: "Aprobado", date: c.client_approved ? c.approved_date : null, status: "positive", detail: c.approved_by_name ? `por ${c.approved_by_name}` : undefined },
+                              ]}
+                            />
+                          </div>
                         </div>
                         <div className="flex gap-2">
                           <button onClick={() => startEditChange(c)} className="text-xs text-[var(--color-brand-green)] hover:underline">Editar</button>

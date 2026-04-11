@@ -5,6 +5,9 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
+import { recordFiscalEvent, getFiscalTimeline } from "@/lib/fiscal-events";
+import type { FiscalEventType } from "@/lib/fiscal-events";
+import { logActivity } from "@/lib/activity-log";
 
 /* ═══════════════ Types ═══════════════ */
 
@@ -170,6 +173,7 @@ export default function IssuedInvoiceDetailPage() {
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [savingLine, setSavingLine] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
+  const [fiscalTimeline, setFiscalTimeline] = useState<{ id: string; event_type: string; event_data: Record<string, unknown>; created_at: string; label: string; icon: string }[]>([]);
 
   async function loadInvoice() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -181,6 +185,11 @@ export default function IssuedInvoiceDetailPage() {
 
     const { data: linesData } = await supabase.from("issued_invoice_lines").select("*").eq("invoice_id", invoiceId).order("sort_order");
     setLines((linesData as InvoiceLine[]) || []);
+
+    // Load fiscal timeline
+    const timeline = await getFiscalTimeline(supabase, invoiceId);
+    setFiscalTimeline(timeline);
+
     setLoading(false);
   }
 
@@ -268,8 +277,35 @@ export default function IssuedInvoiceDetailPage() {
       updates.payment_status = "paid";
       updates.payment_date = new Date().toISOString().split("T")[0];
     }
+    if (newStatus === "cancelled") {
+      updates.cancelled_at = new Date().toISOString();
+    }
     await supabase.from("issued_invoices").update(updates).eq("id", invoice.id);
     setInvoice({ ...invoice, ...updates } as IssuedInvoice);
+
+    // Record fiscal event (fire-and-forget)
+    const eventMap: Record<string, FiscalEventType> = {
+      issued: "issued", sent: "sent", paid: "paid",
+      cancelled: "cancelled", rectified: "corrected",
+    };
+    const eventType = eventMap[newStatus];
+    if (eventType) {
+      recordFiscalEvent(supabase, {
+        invoice_id: invoice.id,
+        event_type: eventType,
+        event_data: { previous_status: invoice.status, new_status: newStatus },
+      });
+      // Refresh timeline
+      getFiscalTimeline(supabase, invoice.id).then(setFiscalTimeline);
+    }
+
+    logActivity(supabase, {
+      action: "issued_invoice.status_changed",
+      entity_type: "issued_invoice",
+      entity_id: invoice.id,
+      metadata: { from: invoice.status, to: newStatus, invoice_number: invoice.invoice_number },
+    });
+
     setSavingStatus(false);
   }
 
@@ -277,7 +313,26 @@ export default function IssuedInvoiceDetailPage() {
     if (!invoice) return;
     const xml = generateFacturaeXML(invoice, lines);
     // Save XML to DB
-    await supabase.from("issued_invoices").update({ facturae_xml: xml }).eq("id", invoice.id);
+    await supabase.from("issued_invoices").update({
+      facturae_xml: xml,
+      xml_version: "3.2.2",
+    }).eq("id", invoice.id);
+
+    // Record fiscal events (fire-and-forget)
+    recordFiscalEvent(supabase, {
+      invoice_id: invoice.id,
+      event_type: "xml_generated",
+      event_data: { facturae_version: "3.2.2", lines_count: lines.length },
+    });
+    if (invoice.verifactu_hash) {
+      recordFiscalEvent(supabase, {
+        invoice_id: invoice.id,
+        event_type: "hash_generated",
+        event_data: { hash: invoice.verifactu_hash, prev_hash: invoice.verifactu_prev_hash },
+      });
+    }
+    getFiscalTimeline(supabase, invoice.id).then(setFiscalTimeline);
+
     // Download
     const blob = new Blob([xml], { type: "application/xml" });
     const url = URL.createObjectURL(blob);
@@ -467,6 +522,42 @@ export default function IssuedInvoiceDetailPage() {
               <p className="text-xs text-[var(--color-navy-400)] mb-1">URL verificación QR</p>
               <p className="text-xs text-[var(--color-navy-300)] font-mono break-all bg-[var(--color-navy-700)] rounded p-2">{invoice.verifactu_qr_data || "—"}</p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fiscal Traceability Timeline */}
+      {fiscalTimeline.length > 0 && (
+        <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-6">
+          <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-4">Trazabilidad fiscal</h3>
+          <div className="space-y-0">
+            {fiscalTimeline.map((ev, idx) => {
+              const isLast = idx === fiscalTimeline.length - 1;
+              return (
+                <div key={ev.id} className="flex gap-3">
+                  <div className="flex flex-col items-center">
+                    <div className="w-8 h-8 rounded-full bg-[var(--color-navy-700)] flex items-center justify-center text-sm flex-shrink-0">
+                      {ev.icon}
+                    </div>
+                    {!isLast && <div className="w-0.5 flex-1 min-h-[16px] bg-[var(--color-navy-700)]" />}
+                  </div>
+                  <div className="pb-4 min-w-0">
+                    <p className="text-sm font-medium text-[var(--color-navy-100)]">{ev.label}</p>
+                    <p className="text-xs text-[var(--color-navy-500)]">
+                      {new Date(ev.created_at).toLocaleDateString("es-ES", {
+                        day: "2-digit", month: "short", year: "numeric",
+                        hour: "2-digit", minute: "2-digit",
+                      })}
+                    </p>
+                    {ev.event_data && Object.keys(ev.event_data).length > 0 && ev.event_type === "hash_generated" && (
+                      <p className="text-xs text-[var(--color-navy-600)] font-mono mt-0.5 truncate max-w-md">
+                        {(ev.event_data as Record<string, string>).hash?.substring(0, 32)}...
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

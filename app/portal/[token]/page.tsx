@@ -160,10 +160,39 @@ export default function ClientPortalPage() {
 
   async function loadPortal() {
     try {
-      // Find project by access_token
-      const { data: proj, error } = await supabase
-        .from("projects").select("*").eq("access_token", token).single();
-      if (error || !proj) { setNotFound(true); setLoading(false); return; }
+      // Try portal_tokens first, then fall back to projects.access_token (legacy)
+      let proj = null;
+
+      const { data: portalToken } = await supabase
+        .from("portal_tokens")
+        .select("project_id, id")
+        .eq("token", token)
+        .eq("is_active", true)
+        .single();
+
+      if (portalToken) {
+        // Record access on portal_token (fire-and-forget)
+        supabase.from("portal_tokens").update({
+          last_accessed_at: new Date().toISOString(),
+          access_count: (portalToken as unknown as Record<string, number>).access_count
+            ? (portalToken as unknown as Record<string, number>).access_count + 1
+            : 1,
+        }).eq("id", portalToken.id).then(() => {});
+
+        const { data: p } = await supabase
+          .from("projects").select("*").eq("id", portalToken.project_id).single();
+        if (p) proj = p;
+      }
+
+      // Fallback: legacy access_token on projects
+      if (!proj) {
+        const { data: p, error: pErr } = await supabase
+          .from("projects").select("*").eq("access_token", token).single();
+        if (pErr || !p) { setNotFound(true); setLoading(false); return; }
+        proj = p;
+      }
+
+      if (!proj) { setNotFound(true); setLoading(false); return; }
       setProject(proj);
 
       const pid = proj.id;
@@ -199,11 +228,24 @@ export default function ClientPortalPage() {
         ]);
 
       if (clientRes.data) setClient(clientRes.data as Client);
-      setBudgets((budgetsRes.data as Budget[]) || []);
+      const budgetsList = (budgetsRes.data as Budget[]) || [];
+      setBudgets(budgetsList);
       setInvoices((invoicesRes.data as Invoice[]) || []);
       setPayments((paymentsRes.data as Payment[]) || []);
       setChanges((changesRes.data as ProjectChange[]) || []);
       setMilestones((milestonesRes.data as Milestone[]) || []);
+
+      // Fire-and-forget: mark un-viewed budgets as viewed_at
+      const now = new Date().toISOString();
+      const unviewedIds = budgetsList
+        .filter((b) => !(b as unknown as Record<string, unknown>).viewed_at)
+        .map((b) => b.id);
+      if (unviewedIds.length > 0) {
+        supabase.from("budgets")
+          .update({ viewed_at: now })
+          .in("id", unviewedIds)
+          .then(() => {});
+      }
     } catch {
       setNotFound(true);
     } finally {
@@ -215,7 +257,15 @@ export default function ClientPortalPage() {
 
   async function handleBudgetAction(id: string, newStatus: "accepted" | "rejected") {
     setActionLoading(id);
-    const { error } = await supabase.from("budgets").update({ status: newStatus }).eq("id", id);
+    const now = new Date().toISOString();
+    const timestampFields: Record<string, string | null> = newStatus === "accepted"
+      ? { accepted_at: now, rejected_at: null }
+      : { rejected_at: now, accepted_at: null };
+
+    const { error } = await supabase.from("budgets").update({
+      status: newStatus,
+      ...timestampFields,
+    }).eq("id", id);
     if (error) alert("Error: " + error.message);
     else setBudgets((prev) => prev.map((b) => b.id === id ? { ...b, status: newStatus } : b));
     setActionLoading(null);
@@ -588,8 +638,16 @@ export default function ClientPortalPage() {
       )}
 
       {/* Footer */}
-      <div className="mt-12 text-center text-xs text-[var(--color-navy-600)]">
-        Powered by <span className="text-[var(--color-brand-green)] font-medium">Enlaze</span> · Portal de acceso exclusivo para clientes
+      <div className="mt-12 text-center space-y-2">
+        <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-[var(--color-navy-600)]">
+          <a href="/legal/aviso-legal" target="_blank" rel="noopener noreferrer" className="hover:text-[var(--color-navy-400)] transition-colors">Aviso Legal</a>
+          <a href="/legal/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-[var(--color-navy-400)] transition-colors">Privacidad</a>
+          <a href="/legal/terms" target="_blank" rel="noopener noreferrer" className="hover:text-[var(--color-navy-400)] transition-colors">Términos</a>
+          <a href="/legal/cookies" target="_blank" rel="noopener noreferrer" className="hover:text-[var(--color-navy-400)] transition-colors">Cookies</a>
+        </div>
+        <p className="text-xs text-[var(--color-navy-600)]">
+          Powered by <span className="text-[var(--color-brand-green)] font-medium">Enlaze</span> · Portal de acceso exclusivo para clientes
+        </p>
       </div>
     </div>
   );

@@ -5,6 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
 import { useSector } from "@/lib/sector-context";
+import AcceptanceTimeline from "@/components/AcceptanceTimeline";
+import { saveDocumentVersion, getNextVersion } from "@/lib/document-versions";
+import { logActivity } from "@/lib/activity-log";
 
 interface BudgetItem {
   id: string;
@@ -34,6 +37,14 @@ interface Budget {
   notes: string;
   valid_until: string;
   created_at: string;
+  // Compliance Phase 2
+  version: number;
+  sent_at: string | null;
+  viewed_at: string | null;
+  accepted_at: string | null;
+  rejected_at: string | null;
+  accepted_by_name: string | null;
+  accepted_ip: string | null;
 }
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
@@ -112,13 +123,39 @@ export default function BudgetDetailPage() {
   async function updateStatus(newStatus: string) {
     if (!budget) return;
     setUpdating(true);
+
+    // Build timestamp fields based on new status
+    const now = new Date().toISOString();
+    const timestampUpdates: Record<string, string | null> = {};
+    if (newStatus === "enviado" && !budget.sent_at) timestampUpdates.sent_at = now;
+    if (newStatus === "aceptado" && !budget.accepted_at) timestampUpdates.accepted_at = now;
+    if (newStatus === "rechazado" && !budget.rejected_at) timestampUpdates.rejected_at = now;
+
     const { error } = await supabase
       .from("budgets")
-      .update({ status: newStatus })
+      .update({ status: newStatus, ...timestampUpdates })
       .eq("id", budget.id);
 
     if (!error) {
-      setBudget({ ...budget, status: newStatus });
+      const updated = { ...budget, status: newStatus, ...timestampUpdates };
+      setBudget(updated);
+
+      // Fire-and-forget: log activity + save version snapshot
+      logActivity(supabase, {
+        action: `budget.status_changed`,
+        entity_type: "budget",
+        entity_id: budget.id,
+        metadata: { from: budget.status, to: newStatus },
+      });
+
+      const nextVer = await getNextVersion(supabase, "budget", budget.id);
+      saveDocumentVersion(supabase, {
+        entity_type: "budget",
+        entity_id: budget.id,
+        version: nextVer,
+        snapshot: updated as unknown as Record<string, unknown>,
+        change_summary: `Estado cambiado de "${budget.status}" a "${newStatus}"`,
+      });
     }
     setUpdating(false);
   }
@@ -376,6 +413,29 @@ export default function BudgetDetailPage() {
             {val.label}
           </button>
         ))}
+      </div>
+
+      {/* Acceptance Timeline */}
+      <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider">Timeline de aceptación</h3>
+          {budget.version > 1 && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-navy-700)] text-[var(--color-navy-400)]">
+              v{budget.version}
+            </span>
+          )}
+        </div>
+        <AcceptanceTimeline
+          mode="inline"
+          events={[
+            { label: "Creado", date: budget.created_at, status: "positive" },
+            { label: "Enviado", date: budget.sent_at, status: "positive" },
+            { label: "Visualizado", date: budget.viewed_at, status: "neutral" },
+            budget.rejected_at
+              ? { label: "Rechazado", date: budget.rejected_at, status: "negative", detail: budget.accepted_by_name ? `por ${budget.accepted_by_name}` : undefined }
+              : { label: "Aceptado", date: budget.accepted_at, status: "positive", detail: budget.accepted_by_name ? `por ${budget.accepted_by_name}` : undefined },
+          ]}
+        />
       </div>
 
       {/* Info Grid */}
