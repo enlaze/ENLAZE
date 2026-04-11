@@ -239,16 +239,16 @@ function Hero() {
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-brand-green" />
             </span>
             <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-600">
-              CRM + IA para empresas de servicios
+              El sistema operativo de tu empresa de servicios
             </span>
           </div>
         </div>
 
         {/* Headline */}
         <h1 className="mx-auto mt-8 max-w-4xl text-center text-[2.5rem] font-semibold leading-[1.05] tracking-[-0.025em] text-navy-900 md:text-[4rem] lg:text-[4.5rem]">
-          Crea presupuestos que venden,{" "}
+          Gana más clientes.{" "}
           <span className="relative inline-block whitespace-nowrap">
-            <span className="relative z-10 text-brand-green">en segundos</span>
+            <span className="relative z-10 text-brand-green">Automatiza el resto</span>
             <svg
               aria-hidden
               viewBox="0 0 300 12"
@@ -269,7 +269,7 @@ function Hero() {
 
         {/* Subtitle */}
         <p className="mx-auto mt-7 max-w-2xl text-center text-[17px] leading-relaxed text-navy-500 md:text-[18px]">
-          Enlaze es el CRM con IA que usan empresas de reformas, instalaciones y servicios técnicos para gestionar clientes, generar presupuestos profesionales y cerrar más obras — sin pelearse con hojas de cálculo.
+          Enlaze reúne tu CRM, la automatización de WhatsApp y email, los presupuestos con IA y el seguimiento comercial en un mismo panel. Para que las empresas de reformas, instalaciones y servicios técnicos cierren más trabajos con menos horas de oficina.
         </p>
 
         {/* CTAs */}
@@ -287,7 +287,7 @@ function Hero() {
               focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:ring-offset-2
             "
           >
-            Crear presupuesto en segundos
+            Probar Enlaze gratis
             <IconArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
           </Link>
           <a
@@ -300,7 +300,7 @@ function Hero() {
             "
           >
             <IconPlay size={14} />
-            Ver demo
+            Ver cómo funciona
           </a>
         </div>
 
@@ -473,24 +473,24 @@ function MockLine({
 
 const benefits = [
   {
-    Icon: IconSparkles,
-    title: "Presupuestos con IA",
-    desc: "Describe el trabajo en lenguaje natural y Enlaze te devuelve un presupuesto con partidas, medidas y precios listo para enviar.",
-  },
-  {
     Icon: IconUsers,
     title: "CRM centralizado",
-    desc: "Todos tus clientes, obras y seguimientos en un único sitio. Se acabaron las hojas de cálculo y las notas sueltas en el móvil.",
+    desc: "Todos tus clientes, obras y conversaciones en un único sitio. Cada ficha guarda el historial completo: mensajes, presupuestos, visitas y estado del trabajo. Se acabaron las hojas de cálculo y las notas sueltas en el móvil.",
+  },
+  {
+    Icon: IconSparkles,
+    title: "Mensajes automáticos por WhatsApp y email",
+    desc: "Enlaze se encarga de confirmar visitas, enviar recordatorios, avisar al cliente cuando su trabajo avanza de fase y responder a lo más repetitivo. Tú escribes la plantilla una vez y el sistema se ocupa del resto.",
+  },
+  {
+    Icon: IconFileText,
+    title: "Presupuestos generados con IA",
+    desc: "Describe el trabajo en lenguaje natural y Enlaze genera un presupuesto profesional con partidas, medidas y precios, listo para enviar por WhatsApp o email desde el mismo panel.",
   },
   {
     Icon: IconBell,
-    title: "Seguimiento automático",
-    desc: "Enlaze te avisa cuando un presupuesto lleva días sin respuesta para que no pierdas ninguna oportunidad por descuido.",
-  },
-  {
-    Icon: IconWrench,
-    title: "Hecho para tu sector",
-    desc: "Plantillas, unidades de obra y flujos pensados para reformas, instalaciones y mantenimiento. No un CRM genérico adaptado a la fuerza.",
+    title: "Seguimiento comercial que no se olvida",
+    desc: "Enlaze vigila tus presupuestos abiertos y te avisa cuando uno lleva días sin respuesta, sugiriendo el mensaje de seguimiento. Ningún cliente se queda en el olvido por descuido.",
   },
 ];
 
@@ -504,10 +504,10 @@ function Benefits() {
             Producto
           </p>
           <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 md:text-[2.75rem]">
-            Todo lo que necesitas para pasar de la visita a la obra firmada
+            Un sistema completo para gestionar tu negocio de servicios
           </h2>
           <p className="mt-4 text-[16px] leading-relaxed text-navy-500">
-            Diseñado desde cero para cómo trabajan las empresas de servicios técnicos.
+            CRM, automatización, presupuestos y seguimiento. Todo conectado, pensado para cómo trabajan de verdad las empresas de servicios técnicos.
           </p>
         </div>
 
@@ -556,20 +556,26 @@ const steps = [
   {
     n: "01",
     Icon: IconPlus,
-    title: "Da de alta al cliente",
-    desc: "Crea la ficha del cliente y los datos de la obra en menos de un minuto. Sin formularios infinitos.",
+    title: "Capta al cliente",
+    desc: "Un nuevo contacto llega por tu web, WhatsApp o una llamada. Enlaze lo registra al instante en tu CRM con todos sus datos y los del trabajo a realizar.",
   },
   {
     n: "02",
-    Icon: IconSparkles,
-    title: "Genera el presupuesto con IA",
-    desc: "Cuéntale a Enlaze qué trabajo vas a hacer y obtienes un presupuesto completo con partidas, medidas y totales.",
+    Icon: IconBell,
+    title: "Automatiza la comunicación",
+    desc: "WhatsApp y email funcionan solos: confirmaciones de visita, recordatorios, avisos de estado. Deja de abrir quince chats distintos para contar lo mismo.",
   },
   {
     n: "03",
+    Icon: IconSparkles,
+    title: "Genera el presupuesto",
+    desc: "Describe el trabajo y la IA lo convierte en un presupuesto profesional con partidas, medidas y totales. Listo para enviar desde el mismo panel.",
+  },
+  {
+    n: "04",
     Icon: IconCheck,
-    title: "Envía, firma y cobra",
-    desc: "Comparte el presupuesto con un enlace, recibe la aceptación y pasa a facturar. Todo desde el mismo panel.",
+    title: "Cierra el trabajo",
+    desc: "Enlaze hace el seguimiento por ti, te avisa cuando el cliente acepta y te deja todo listo para facturar. Tú solo te ocupas de ejecutar la obra.",
   },
 ];
 
@@ -604,14 +610,14 @@ function HowItWorks() {
             Cómo funciona
           </p>
           <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-white md:text-[2.75rem]">
-            Del primer cliente al primer cobro, en tres pasos
+            Del primer contacto al trabajo cerrado, en cuatro pasos
           </h2>
           <p className="mt-4 text-[16px] leading-relaxed text-navy-300">
-            Tan simple que vas a tener tu primer presupuesto listo antes de acabar el café.
+            Un flujo simple que cubre todo el ciclo comercial: captación, comunicación, presupuesto y cierre.
           </p>
         </div>
 
-        <div className="mt-16 grid grid-cols-1 gap-6 md:grid-cols-3">
+        <div className="mt-16 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {steps.map(({ n, Icon, title, desc }, i) => (
             <article
               key={i}
@@ -662,7 +668,7 @@ const metrics = [
   },
   {
     value: "3×",
-    label: "Más presupuestos enviados cada mes",
+    label: "Más trabajos cerrados cada mes",
     Icon: IconFileText,
   },
   {
@@ -735,7 +741,7 @@ function SocialProof() {
           />
           <IconQuote size={28} className="text-brand-green/70" />
           <blockquote className="mt-5 text-[18px] leading-relaxed text-navy-800 md:text-[20px]">
-            Antes tardaba dos tardes en cerrar un presupuesto decente. Con Enlaze lo envío el mismo día de la visita, y el cliente lo firma sin tener que insistirle. Hemos pasado de 12 a 34 obras al mes sin contratar a nadie.
+            Antes perdíamos trabajos simplemente por no contestar a tiempo. Ahora Enlaze responde por nosotros, envía los presupuestos el mismo día de la visita y hace el seguimiento sin que nadie del equipo tenga que recordarlo. Hemos pasado de 12 a 34 obras al mes sin contratar a nadie.
           </blockquote>
           <figcaption className="mt-7 flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-navy-900 text-[13px] font-semibold text-white">
@@ -798,10 +804,10 @@ function FinalCTA() {
               Empieza hoy
             </p>
             <h2 className="mx-auto mt-4 max-w-2xl text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 md:text-[2.75rem]">
-              Deja de perder horas en papeleo.
+              Pon tu negocio en automático.
             </h2>
             <p className="mx-auto mt-5 max-w-xl text-[16px] leading-relaxed text-navy-500">
-              Crea tu cuenta gratis y genera tu primer presupuesto profesional en menos de dos minutos. Sin tarjeta, sin compromiso.
+              Crea tu cuenta gratis y empieza a gestionar clientes, automatizar mensajes y enviar presupuestos en menos de dos minutos. Sin tarjeta, sin compromiso.
             </p>
 
             <div className="mt-10 flex flex-wrap justify-center gap-3">
@@ -816,7 +822,7 @@ function FinalCTA() {
                   hover:-translate-y-[1.5px] hover:bg-brand-green-dark
                 "
               >
-                Crear presupuesto en segundos
+                Probar Enlaze gratis
                 <IconArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
               </Link>
               <Link
@@ -865,7 +871,7 @@ function Footer() {
           <div className="col-span-2 md:col-span-1">
             <Logo href="/" size={30} />
             <p className="mt-4 max-w-xs text-[13px] leading-relaxed text-navy-500">
-              El CRM con IA para empresas de reformas, instalaciones y servicios técnicos.
+              El sistema todo-en-uno para empresas de reformas, instalaciones y servicios técnicos: CRM, automatización, presupuestos y seguimiento.
             </p>
           </div>
 

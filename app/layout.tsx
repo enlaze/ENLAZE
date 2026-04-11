@@ -3,9 +3,9 @@ import "./globals.css";
 import SplashScreen from "@/components/SplashScreen";
 
 export const metadata: Metadata = {
-  title: "Enlaze — Crea presupuestos que venden, en segundos",
+  title: "Enlaze — El sistema completo para tu empresa de servicios",
   description:
-    "Enlaze es el CRM con IA para empresas de reformas, instalaciones y servicios técnicos. Gestiona clientes, genera presupuestos profesionales y cierra más obras, sin pelearte con hojas de cálculo.",
+    "CRM, automatización de WhatsApp y email, presupuestos con IA y seguimiento comercial en un mismo panel. Pensado para empresas de reformas, instalaciones y servicios técnicos que quieren ganar más clientes sin añadir más horas.",
 };
 
 export default function RootLayout({
