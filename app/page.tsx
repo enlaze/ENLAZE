@@ -66,14 +66,19 @@ const IconBell = (p: IconProps) => (
     <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
   </Icon>
 );
-const IconWrench = (p: IconProps) => (
+const IconMessage = (p: IconProps) => (
   <Icon {...p}>
-    <path d="M14.7 6.3a4.5 4.5 0 0 0 6 6L17 16l3.3 3.3a1.7 1.7 0 1 1-2.4 2.4L14.6 18.4l-3.7 3.7a4.5 4.5 0 0 1-6-6L8.6 12.4 5.3 9.1a1.7 1.7 0 1 1 2.4-2.4l3.3 3.3z" />
+    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
   </Icon>
 );
 const IconCheck = (p: IconProps) => (
   <Icon {...p}>
     <path d="m5 12 4.5 4.5L20 6" />
+  </Icon>
+);
+const IconX = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M18 6 6 18M6 6l12 12" />
   </Icon>
 );
 const IconFileText = (p: IconProps) => (
@@ -114,6 +119,33 @@ const IconQuote = (p: IconProps) => (
   <Icon {...p}>
     <path d="M7 7h4v4a4 4 0 0 1-4 4" />
     <path d="M15 7h4v4a4 4 0 0 1-4 4" />
+  </Icon>
+);
+const IconAlert = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 8v4" />
+    <path d="M12 16h.01" />
+  </Icon>
+);
+const IconZap = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
+  </Icon>
+);
+const IconTarget = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <circle cx="12" cy="12" r="5" />
+    <circle cx="12" cy="12" r="1.5" />
+  </Icon>
+);
+const IconRefresh = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+    <path d="M21 3v5h-5" />
+    <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+    <path d="M3 21v-5h5" />
   </Icon>
 );
 
@@ -205,7 +237,7 @@ function Navbar() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────
- *  Hero
+ *  Hero  (Variant A applied — "Miedo a perder clientes")
  * ──────────────────────────────────────────────────────────────────── */
 
 function Hero() {
@@ -239,16 +271,16 @@ function Hero() {
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-brand-green" />
             </span>
             <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-600">
-              El sistema operativo de tu empresa de servicios
+              Automatización para empresas de servicios
             </span>
           </div>
         </div>
 
-        {/* Headline */}
+        {/* Headline — Variant A */}
         <h1 className="mx-auto mt-8 max-w-4xl text-center text-[2.5rem] font-semibold leading-[1.05] tracking-[-0.025em] text-navy-900 md:text-[4rem] lg:text-[4.5rem]">
-          Gana más clientes.{" "}
+          Cada presupuesto que no envías a tiempo es un{" "}
           <span className="relative inline-block whitespace-nowrap">
-            <span className="relative z-10 text-brand-green">Automatiza el resto</span>
+            <span className="relative z-10 text-brand-green">cliente perdido</span>
             <svg
               aria-hidden
               viewBox="0 0 300 12"
@@ -267,9 +299,9 @@ function Hero() {
           .
         </h1>
 
-        {/* Subtitle */}
+        {/* Subheadline */}
         <p className="mx-auto mt-7 max-w-2xl text-center text-[17px] leading-relaxed text-navy-500 md:text-[18px]">
-          Enlaze reúne tu CRM, la automatización de WhatsApp y email, los presupuestos con IA y el seguimiento comercial en un mismo panel. Para que las empresas de reformas, instalaciones y servicios técnicos cierren más trabajos con menos horas de oficina.
+          Enlaze contesta a tus clientes, genera presupuestos con IA y hace el seguimiento por ti. Tú te dedicas a la obra. El sistema se dedica a cerrarla.
         </p>
 
         {/* CTAs */}
@@ -291,7 +323,7 @@ function Hero() {
             <IconArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
           </Link>
           <a
-            href="#producto"
+            href="#como-funciona"
             className="
               group inline-flex items-center gap-2
               rounded-xl border border-navy-200 bg-white px-6 py-3.5 text-[14px] font-semibold text-navy-800
@@ -306,7 +338,7 @@ function Hero() {
 
         {/* Trust note */}
         <p className="mt-6 text-center text-[13px] text-navy-500">
-          Sin tarjeta de crédito · Configuración en 2 minutos · Cancela cuando quieras
+          Sin tarjeta · Configuración en 2 minutos · Cancela cuando quieras
         </p>
 
         {/* Product preview mockup */}
@@ -468,29 +500,110 @@ function MockLine({
 }
 
 /* ─────────────────────────────────────────────────────────────────────
- *  Benefits (4)
+ *  Pain section — el dolor del cliente
+ * ──────────────────────────────────────────────────────────────────── */
+
+const pains = [
+  {
+    title: "Contestas cuando puedes, no cuando el cliente quiere",
+    desc: "Entre visita y visita, los mensajes se acumulan. Y el cliente que no espera, ya está hablando con otro.",
+  },
+  {
+    title: "Haces presupuestos el domingo por la noche",
+    desc: "Te toca sacrificar el fin de semana para enviar lo que deberías haber mandado el martes. Otra vez.",
+  },
+  {
+    title: "Los presupuestos se quedan sin respuesta",
+    desc: "No tienes tiempo de hacer seguimiento. 6 de cada 10 trabajos se pierden solo por silencio.",
+  },
+  {
+    title: "Tu información vive en cinco sitios distintos",
+    desc: "Una libreta, el WhatsApp del encargado, un Excel, la memoria de alguien y un cajón. Nadie sabe dónde está qué.",
+  },
+  {
+    title: "Cada visita son dos horas de papeleo después",
+    desc: "Apuntar, preparar presupuesto, enviarlo, recordar quién dijo qué. Y mañana vuelta a empezar.",
+  },
+  {
+    title: "Trabajas más, facturas lo mismo",
+    desc: "Tus horas ya no dan para más. Contratar a alguien no te compensa. Y el techo se hace cada mes más bajo.",
+  },
+];
+
+function PainSection() {
+  return (
+    <section className="relative border-y border-navy-100 bg-navy-50/40 py-28">
+      <div className="mx-auto max-w-6xl px-6">
+        <div className="mx-auto max-w-2xl text-center">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
+            El problema
+          </p>
+          <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 md:text-[2.75rem]">
+            Tu problema no es que falten clientes. Es lo que pasa después.
+          </h2>
+          <p className="mt-4 text-[16px] leading-relaxed text-navy-500">
+            Si alguna de estas frases te suena, no eres tú. Es el sistema con el que estás trabajando.
+          </p>
+        </div>
+
+        <div className="mt-16 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {pains.map((p, i) => (
+            <article
+              key={i}
+              className="
+                group relative rounded-2xl border border-navy-100 bg-white p-7
+                shadow-[0_1px_2px_rgba(10,25,41,0.04)]
+                transition-all duration-300
+                hover:-translate-y-[2px] hover:border-navy-200
+                hover:shadow-[0_12px_32px_-16px_rgba(10,25,41,0.18)]
+              "
+            >
+              <div
+                className="
+                  flex h-10 w-10 items-center justify-center rounded-xl
+                  bg-red-50 text-red-500 ring-1 ring-inset ring-red-100
+                "
+              >
+                <IconAlert size={18} />
+              </div>
+              <h3 className="mt-5 text-[15.5px] font-semibold tracking-tight text-navy-900">
+                {p.title}
+              </h3>
+              <p className="mt-2 text-[14px] leading-relaxed text-navy-500">
+                {p.desc}
+              </p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ *  Benefits — "qué hace el producto" (outcomes, no features)
  * ──────────────────────────────────────────────────────────────────── */
 
 const benefits = [
   {
-    Icon: IconUsers,
-    title: "CRM centralizado",
-    desc: "Todos tus clientes, obras y conversaciones en un único sitio. Cada ficha guarda el historial completo: mensajes, presupuestos, visitas y estado del trabajo. Se acabaron las hojas de cálculo y las notas sueltas en el móvil.",
+    Icon: IconMessage,
+    title: "Contestas a todos tus clientes en minutos, aunque estés en la obra",
+    desc: "WhatsApp y email automáticos. Las preguntas repetidas se responden solas. Las visitas quedan confirmadas. Tú ni abres el móvil y el cliente ya sabe que estás al otro lado.",
   },
   {
-    Icon: IconSparkles,
-    title: "Mensajes automáticos por WhatsApp y email",
-    desc: "Enlaze se encarga de confirmar visitas, enviar recordatorios, avisar al cliente cuando su trabajo avanza de fase y responder a lo más repetitivo. Tú escribes la plantilla una vez y el sistema se ocupa del resto.",
+    Icon: IconZap,
+    title: "Envías el presupuesto el mismo día de la visita",
+    desc: "Describes el trabajo en lenguaje natural y la IA genera un presupuesto profesional con partidas, medidas y precios en 30 segundos. Cero plantillas de Word. Cero cálculos a mano.",
   },
   {
-    Icon: IconFileText,
-    title: "Presupuestos generados con IA",
-    desc: "Describe el trabajo en lenguaje natural y Enlaze genera un presupuesto profesional con partidas, medidas y precios, listo para enviar por WhatsApp o email desde el mismo panel.",
+    Icon: IconRefresh,
+    title: "Ningún cliente se queda en el olvido",
+    desc: "Enlaze hace el seguimiento por ti. Recordatorios automáticos a los 3 días, mensajes de cierre si la cosa se enfría, avisos cuando alguien contesta. Los presupuestos dejan de morir en silencio.",
   },
   {
-    Icon: IconBell,
-    title: "Seguimiento comercial que no se olvida",
-    desc: "Enlaze vigila tus presupuestos abiertos y te avisa cuando uno lleva días sin respuesta, sugiriendo el mensaje de seguimiento. Ningún cliente se queda en el olvido por descuido.",
+    Icon: IconTarget,
+    title: "Todo tu negocio cabe en un solo panel",
+    desc: "Clientes, obras, mensajes, presupuestos, facturas, pedidos a proveedor. Un único sitio, todo conectado. Se acabaron las libretas sueltas y los \"¿dónde lo tenía apuntado?\".",
   },
 ];
 
@@ -498,20 +611,18 @@ function Benefits() {
   return (
     <section id="producto" className="relative py-28">
       <div className="mx-auto max-w-6xl px-6">
-        {/* Section header */}
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
-            Producto
+            La solución
           </p>
           <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 md:text-[2.75rem]">
-            Un sistema completo para gestionar tu negocio de servicios
+            Esto es lo que deja de pasar cuando usas Enlaze
           </h2>
           <p className="mt-4 text-[16px] leading-relaxed text-navy-500">
-            CRM, automatización, presupuestos y seguimiento. Todo conectado, pensado para cómo trabajan de verdad las empresas de servicios técnicos.
+            No es otra herramienta más para tu carpeta. Es el sistema que hace el trabajo que hoy haces tú por la noche.
           </p>
         </div>
 
-        {/* Grid */}
         <div className="mt-16 grid grid-cols-1 gap-5 md:grid-cols-2">
           {benefits.map(({ Icon, title, desc }, i) => (
             <article
@@ -549,33 +660,27 @@ function Benefits() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────
- *  How it works (3 steps)
+ *  How it works (3 pasos, fondo navy)
  * ──────────────────────────────────────────────────────────────────── */
 
 const steps = [
   {
     n: "01",
     Icon: IconPlus,
-    title: "Capta al cliente",
-    desc: "Un nuevo contacto llega por tu web, WhatsApp o una llamada. Enlaze lo registra al instante en tu CRM con todos sus datos y los del trabajo a realizar.",
+    title: "Conecta tu WhatsApp y tu email",
+    desc: "Dos minutos, sin instalar nada. Enlaze entra como un miembro más del equipo, con tu número y tu dirección de siempre.",
   },
   {
     n: "02",
-    Icon: IconBell,
-    title: "Automatiza la comunicación",
-    desc: "WhatsApp y email funcionan solos: confirmaciones de visita, recordatorios, avisos de estado. Deja de abrir quince chats distintos para contar lo mismo.",
+    Icon: IconUsers,
+    title: "Importa tus clientes y tus precios",
+    desc: "Sube tu lista en un Excel o pégala directamente. Enlaze aprende cómo presupuestas para que cada documento salga como lo harías tú.",
   },
   {
     n: "03",
     Icon: IconSparkles,
-    title: "Genera el presupuesto",
-    desc: "Describe el trabajo y la IA lo convierte en un presupuesto profesional con partidas, medidas y totales. Listo para enviar desde el mismo panel.",
-  },
-  {
-    n: "04",
-    Icon: IconCheck,
-    title: "Cierra el trabajo",
-    desc: "Enlaze hace el seguimiento por ti, te avisa cuando el cliente acepta y te deja todo listo para facturar. Tú solo te ocupas de ejecutar la obra.",
+    title: "Respira. A partir de aquí, el sistema trabaja",
+    desc: "Contesta a tus clientes, manda presupuestos el mismo día y hace el seguimiento solo. Tú te dedicas a la obra. Enlaze cierra la venta.",
   },
 ];
 
@@ -610,14 +715,14 @@ function HowItWorks() {
             Cómo funciona
           </p>
           <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-white md:text-[2.75rem]">
-            Del primer contacto al trabajo cerrado, en cuatro pasos
+            Empezar es más fácil que lo que haces ahora
           </h2>
           <p className="mt-4 text-[16px] leading-relaxed text-navy-300">
-            Un flujo simple que cubre todo el ciclo comercial: captación, comunicación, presupuesto y cierre.
+            Tres pasos. Ni formaciones de dos días, ni consultores, ni manuales de 80 páginas.
           </p>
         </div>
 
-        <div className="mt-16 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-16 grid grid-cols-1 gap-6 md:grid-cols-3">
           {steps.map(({ n, Icon, title, desc }, i) => (
             <article
               key={i}
@@ -657,13 +762,133 @@ function HowItWorks() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────
- *  Social proof — metrics + testimonial
+ *  Before vs After — contraste crudo
+ * ──────────────────────────────────────────────────────────────────── */
+
+const beforeItems = [
+  "Domingo haciendo presupuestos para entregar el lunes",
+  "Clientes que no contestan porque tardas 4 días en enviar",
+  "\"Se me había olvidado ese cliente, lo llamo el lunes\"",
+  "Tres libretas, dos Excel y un WhatsApp del encargado",
+  "Pierdes el 60 % de los presupuestos por no hacer seguimiento",
+  "Trabajas 60 horas y facturas lo mismo que el mes pasado",
+];
+
+const afterItems = [
+  "Fin de semana libre. Los presupuestos salen en 30 segundos",
+  "Presupuesto enviado el mismo día de la visita",
+  "Seguimiento automático. Ningún cliente se queda sin respuesta",
+  "Un único panel con todo: clientes, obras, mensajes, presupuestos",
+  "Cierras más trabajos sin mover un dedo de más",
+  "Trabajas 40 horas y facturas un 30 % más",
+];
+
+function BeforeAfter() {
+  return (
+    <section className="relative py-28">
+      <div className="mx-auto max-w-6xl px-6">
+        <div className="mx-auto max-w-2xl text-center">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
+            Antes vs. después
+          </p>
+          <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 md:text-[2.75rem]">
+            Así cambia tu semana
+          </h2>
+          <p className="mt-4 text-[16px] leading-relaxed text-navy-500">
+            La misma empresa, los mismos clientes, los mismos trabajos. Solo cambia quién hace la parte aburrida.
+          </p>
+        </div>
+
+        <div className="mt-16 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* Antes */}
+          <div
+            className="
+              relative overflow-hidden rounded-2xl
+              border border-navy-100 bg-white p-8 md:p-10
+              shadow-[0_1px_2px_rgba(10,25,41,0.04)]
+            "
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-500 ring-1 ring-inset ring-red-100">
+                <IconX size={18} />
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-400">
+                  Antes
+                </p>
+                <p className="text-[17px] font-semibold text-navy-900">
+                  Sin Enlaze
+                </p>
+              </div>
+            </div>
+
+            <ul className="mt-7 space-y-4">
+              {beforeItems.map((t, i) => (
+                <li key={i} className="flex items-start gap-3">
+                  <span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-500">
+                    <IconX size={10} />
+                  </span>
+                  <span className="text-[14.5px] leading-relaxed text-navy-600">
+                    {t}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Después */}
+          <div
+            className="
+              relative overflow-hidden rounded-2xl
+              border border-brand-green/20 bg-white p-8 md:p-10
+              shadow-[0_1px_2px_rgba(10,25,41,0.04),0_24px_56px_-28px_rgba(0,200,150,0.25)]
+            "
+          >
+            <div
+              aria-hidden
+              className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-green/60 to-transparent"
+            />
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-green/10 text-brand-green ring-1 ring-inset ring-brand-green/20">
+                <IconCheck size={18} />
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
+                  Después
+                </p>
+                <p className="text-[17px] font-semibold text-navy-900">
+                  Con Enlaze
+                </p>
+              </div>
+            </div>
+
+            <ul className="mt-7 space-y-4">
+              {afterItems.map((t, i) => (
+                <li key={i} className="flex items-start gap-3">
+                  <span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-green/15 text-brand-green">
+                    <IconCheck size={10} />
+                  </span>
+                  <span className="text-[14.5px] leading-relaxed text-navy-700">
+                    {t}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ *  Social proof — metrics + 3 testimonials
  * ──────────────────────────────────────────────────────────────────── */
 
 const metrics = [
   {
     value: "8 h",
-    label: "Ahorradas a la semana por empresa",
+    label: "Ahorradas cada semana por empresa",
     Icon: IconClock,
   },
   {
@@ -683,9 +908,36 @@ const metrics = [
   },
 ];
 
+const testimonials = [
+  {
+    initials: "MR",
+    name: "Marcos Robles",
+    role: "Fundador, Reformas Robles",
+    city: "Madrid",
+    quote:
+      "Antes perdíamos clientes simplemente por no contestar a tiempo. Ahora Enlaze responde por nosotros y envía los presupuestos el mismo día de la visita. Hemos pasado de 12 a 34 obras al mes sin contratar a nadie.",
+  },
+  {
+    initials: "LG",
+    name: "Laura Giménez",
+    role: "Gerente, Giménez Instalaciones Eléctricas",
+    city: "Valencia",
+    quote:
+      "El seguimiento automático nos ha cambiado el mes. Antes cerrábamos 3 de cada 10 presupuestos. Ahora cerramos 7. Lo único que cambió fue que Enlaze no se olvida de ninguno.",
+  },
+  {
+    initials: "JO",
+    name: "Javier Ortiz",
+    role: "Director, Ortiz Mantenimiento",
+    city: "Sevilla",
+    quote:
+      "Lo más valioso no es el tiempo que ahorramos. Es que los domingos ya no trabajo. Los presupuestos que antes me llevaban dos horas, ahora salen en treinta segundos y llegan al cliente antes de que yo vuelva a la oficina.",
+  },
+];
+
 function SocialProof() {
   return (
-    <section className="relative py-28">
+    <section className="relative border-y border-navy-100 bg-navy-50/40 py-28">
       <div className="mx-auto max-w-6xl px-6">
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
@@ -727,37 +979,166 @@ function SocialProof() {
           ))}
         </div>
 
-        {/* Testimonial */}
-        <figure
-          className="
-            relative mx-auto mt-14 max-w-3xl overflow-hidden
-            rounded-2xl border border-navy-100 bg-white p-8 md:p-10
-            shadow-[0_1px_2px_rgba(10,25,41,0.04)]
-          "
-        >
+        {/* Testimonials grid */}
+        <div className="mt-14 grid grid-cols-1 gap-5 md:grid-cols-3">
+          {testimonials.map((t, i) => (
+            <figure
+              key={i}
+              className="
+                relative overflow-hidden rounded-2xl
+                border border-navy-100 bg-white p-7
+                shadow-[0_1px_2px_rgba(10,25,41,0.04)]
+                transition-all duration-300
+                hover:-translate-y-[2px] hover:border-navy-200
+                hover:shadow-[0_12px_32px_-16px_rgba(10,25,41,0.18)]
+              "
+            >
+              <div
+                aria-hidden
+                className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-green/40 to-transparent"
+              />
+              <div className="flex items-center gap-1 text-brand-green">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <IconStar key={i} size={13} className="fill-current" />
+                ))}
+              </div>
+              <blockquote className="mt-5 text-[15px] leading-relaxed text-navy-700">
+                “{t.quote}”
+              </blockquote>
+              <figcaption className="mt-6 flex items-center gap-3 border-t border-navy-100 pt-5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-navy-900 text-[12px] font-semibold text-white">
+                  {t.initials}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-[13.5px] font-semibold text-navy-900">
+                    {t.name}
+                  </p>
+                  <p className="truncate text-[12px] text-navy-500">
+                    {t.role} · {t.city}
+                  </p>
+                </div>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ *  For whom — "Enlaze es para ti si…"
+ * ──────────────────────────────────────────────────────────────────── */
+
+const fitYes = [
+  "Tienes una empresa de reformas, instalaciones, mantenimiento o servicios técnicos",
+  "Te tiras horas cada semana haciendo presupuestos a mano",
+  "Has perdido clientes por no llegar a contestar a tiempo",
+  "Tu información está repartida entre libretas, Excel y WhatsApp",
+  "Haces seguimiento «cuando me acuerdo» (es decir, casi nunca)",
+  "Facturas entre 50.000 € y 2 M € al año y quieres crecer sin doblar la oficina",
+];
+
+const fitNo = [
+  "Tienes menos de 3 clientes al mes (todavía no lo necesitas)",
+  "Buscas solo un programa para emitir facturas (hay opciones más simples)",
+  "No usas WhatsApp ni email para hablar con tus clientes",
+];
+
+function ForWhom() {
+  return (
+    <section className="relative py-28">
+      <div className="mx-auto max-w-6xl px-6">
+        <div className="mx-auto max-w-2xl text-center">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
+            Para quién es
+          </p>
+          <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 md:text-[2.75rem]">
+            ¿Es Enlaze para ti?
+          </h2>
+          <p className="mt-4 text-[16px] leading-relaxed text-navy-500">
+            No queremos vender a todo el mundo. Queremos vender a quien le va a funcionar.
+          </p>
+        </div>
+
+        <div className="mt-16 grid grid-cols-1 gap-6 lg:grid-cols-5">
+          {/* YES */}
           <div
-            aria-hidden
-            className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-green/60 to-transparent"
-          />
-          <IconQuote size={28} className="text-brand-green/70" />
-          <blockquote className="mt-5 text-[18px] leading-relaxed text-navy-800 md:text-[20px]">
-            Antes perdíamos trabajos simplemente por no contestar a tiempo. Ahora Enlaze responde por nosotros, envía los presupuestos el mismo día de la visita y hace el seguimiento sin que nadie del equipo tenga que recordarlo. Hemos pasado de 12 a 34 obras al mes sin contratar a nadie.
-          </blockquote>
-          <figcaption className="mt-7 flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-navy-900 text-[13px] font-semibold text-white">
-              MR
+            className="
+              relative overflow-hidden rounded-2xl
+              border border-brand-green/20 bg-white p-8 md:p-10
+              shadow-[0_1px_2px_rgba(10,25,41,0.04),0_24px_56px_-28px_rgba(0,200,150,0.25)]
+              lg:col-span-3
+            "
+          >
+            <div
+              aria-hidden
+              className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-green/60 to-transparent"
+            />
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-green/10 text-brand-green ring-1 ring-inset ring-brand-green/20">
+                <IconCheck size={18} />
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
+                  Enlaze es para ti si…
+                </p>
+                <p className="text-[17px] font-semibold text-navy-900">
+                  Eres una empresa de servicios que ya factura pero no escala
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-[14px] font-semibold text-navy-900">Marcos Robles</p>
-              <p className="text-[13px] text-navy-500">Fundador, Reformas Robles (Madrid)</p>
-            </div>
-            <div className="ml-auto hidden items-center gap-0.5 text-brand-green sm:flex">
-              {[0, 1, 2, 3, 4].map((i) => (
-                <IconStar key={i} size={14} className="fill-current" />
+
+            <ul className="mt-7 space-y-4">
+              {fitYes.map((t, i) => (
+                <li key={i} className="flex items-start gap-3">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-green/15 text-brand-green">
+                    <IconCheck size={12} />
+                  </span>
+                  <span className="text-[14.5px] leading-relaxed text-navy-700">
+                    {t}
+                  </span>
+                </li>
               ))}
+            </ul>
+          </div>
+
+          {/* NO */}
+          <div
+            className="
+              relative overflow-hidden rounded-2xl
+              border border-navy-100 bg-navy-50/40 p-8 md:p-10
+              lg:col-span-2
+            "
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-navy-100 text-navy-500 ring-1 ring-inset ring-navy-200">
+                <IconX size={18} />
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-500">
+                  Todavía no, si…
+                </p>
+                <p className="text-[17px] font-semibold text-navy-900">
+                  Te conviene más otra cosa
+                </p>
+              </div>
             </div>
-          </figcaption>
-        </figure>
+
+            <ul className="mt-7 space-y-4">
+              {fitNo.map((t, i) => (
+                <li key={i} className="flex items-start gap-3">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-navy-100 text-navy-500">
+                    <IconX size={12} />
+                  </span>
+                  <span className="text-[14px] leading-relaxed text-navy-600">
+                    {t}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -804,10 +1185,10 @@ function FinalCTA() {
               Empieza hoy
             </p>
             <h2 className="mx-auto mt-4 max-w-2xl text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 md:text-[2.75rem]">
-              Pon tu negocio en automático.
+              Tu próximo cliente ya te ha escrito. La pregunta es si vas a contestar a tiempo.
             </h2>
             <p className="mx-auto mt-5 max-w-xl text-[16px] leading-relaxed text-navy-500">
-              Crea tu cuenta gratis y empieza a gestionar clientes, automatizar mensajes y enviar presupuestos en menos de dos minutos. Sin tarjeta, sin compromiso.
+              Crea tu cuenta en dos minutos. A partir de hoy, el sistema trabaja mientras tú estás en la obra.
             </p>
 
             <div className="mt-10 flex flex-wrap justify-center gap-3">
@@ -871,7 +1252,7 @@ function Footer() {
           <div className="col-span-2 md:col-span-1">
             <Logo href="/" size={30} />
             <p className="mt-4 max-w-xs text-[13px] leading-relaxed text-navy-500">
-              El sistema todo-en-uno para empresas de reformas, instalaciones y servicios técnicos: CRM, automatización, presupuestos y seguimiento.
+              El sistema que contesta, presupuesta y hace el seguimiento por ti. Para empresas de reformas, instalaciones y servicios técnicos que quieren crecer sin añadir más horas de oficina.
             </p>
           </div>
 
@@ -952,9 +1333,12 @@ export default function Home() {
     <main className="min-h-screen bg-white text-navy-900 antialiased">
       <Navbar />
       <Hero />
+      <PainSection />
       <Benefits />
       <HowItWorks />
+      <BeforeAfter />
       <SocialProof />
+      <ForWhom />
       <FinalCTA />
       <Footer />
     </main>

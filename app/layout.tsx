@@ -3,9 +3,9 @@ import "./globals.css";
 import SplashScreen from "@/components/SplashScreen";
 
 export const metadata: Metadata = {
-  title: "Enlaze — El sistema completo para tu empresa de servicios",
+  title: "Enlaze — Cierra más obras sin trabajar más horas",
   description:
-    "CRM, automatización de WhatsApp y email, presupuestos con IA y seguimiento comercial en un mismo panel. Pensado para empresas de reformas, instalaciones y servicios técnicos que quieren ganar más clientes sin añadir más horas.",
+    "Enlaze contesta a tus clientes, genera presupuestos con IA y hace el seguimiento por ti. Para empresas de reformas, instalaciones y servicios técnicos que quieren crecer sin añadir más horas de oficina.",
 };
 
 export default function RootLayout({
