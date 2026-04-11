@@ -249,11 +249,11 @@ function Hero() {
           </div>
         </div>
 
-        {/* Headline — Variante A */}
+        {/* Headline */}
         <h1 className="mx-auto mt-8 max-w-4xl text-center text-[2.5rem] font-semibold leading-[1.05] tracking-[-0.025em] text-navy-900 md:text-[4rem] lg:text-[4.5rem]">
-          Cada presupuesto que no envías a tiempo es un{" "}
+          Tus clientes no esperan. Tu negocio{" "}
           <span className="relative inline-block whitespace-nowrap">
-            <span className="relative z-10 text-brand-green">cliente perdido</span>
+            <span className="relative z-10 text-brand-green">tampoco debería</span>
             <svg
               aria-hidden
               viewBox="0 0 300 12"
@@ -274,7 +274,7 @@ function Hero() {
 
         {/* Subheadline */}
         <p className="mx-auto mt-7 max-w-2xl text-center text-[17px] leading-relaxed text-navy-500 md:text-[18px]">
-          Enlaze contesta a tus clientes, genera presupuestos con IA y hace el seguimiento por ti. Tú te dedicas a la obra. El sistema se dedica a cerrarla.
+          Enlaze automatiza tu WhatsApp, tus emails y el seguimiento comercial para que cierres más trabajos sin perder ni un cliente más.
         </p>
 
         <div className="mt-10 flex flex-wrap justify-center gap-3">
@@ -291,7 +291,7 @@ function Hero() {
               focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:ring-offset-2
             "
           >
-            Empezar a cerrar más clientes
+            Probar gratis
             <IconArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
           </Link>
           <a
