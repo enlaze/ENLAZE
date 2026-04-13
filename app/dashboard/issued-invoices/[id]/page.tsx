@@ -9,6 +9,7 @@ import { recordFiscalEvent, getFiscalTimeline } from "@/lib/fiscal-events";
 import type { FiscalEventType } from "@/lib/fiscal-events";
 import { logActivity } from "@/lib/activity-log";
 import { notify } from "@/lib/notifications";
+import { registerPayment, getInvoicePayments, paymentMethodLabels, type Payment } from "@/lib/payments";
 
 /* ═══════════════ Types ═══════════════ */
 
@@ -175,6 +176,12 @@ export default function IssuedInvoiceDetailPage() {
   const [savingLine, setSavingLine] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
   const [fiscalTimeline, setFiscalTimeline] = useState<{ id: string; event_type: string; event_data: Record<string, unknown>; created_at: string; label: string; icon: string }[]>([]);
+  const [invoicePayments, setInvoicePayments] = useState<Payment[]>([]);
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("transfer");
+  const [paymentRef, setPaymentRef] = useState("");
+  const [registeringPayment, setRegisteringPayment] = useState(false);
 
   async function loadInvoice() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -187,9 +194,13 @@ export default function IssuedInvoiceDetailPage() {
     const { data: linesData } = await supabase.from("issued_invoice_lines").select("*").eq("invoice_id", invoiceId).order("sort_order");
     setLines((linesData as InvoiceLine[]) || []);
 
-    // Load fiscal timeline
-    const timeline = await getFiscalTimeline(supabase, invoiceId);
+    // Load fiscal timeline + payments
+    const [timeline, payments] = await Promise.all([
+      getFiscalTimeline(supabase, invoiceId),
+      getInvoicePayments(supabase, invoiceId),
+    ]);
     setFiscalTimeline(timeline);
+    setInvoicePayments(payments);
 
     setLoading(false);
   }
@@ -324,6 +335,40 @@ export default function IssuedInvoiceDetailPage() {
     }
 
     setSavingStatus(false);
+  }
+
+  async function handleRegisterPayment() {
+    if (!invoice || !paymentAmount) return;
+    setRegisteringPayment(true);
+    const amount = parseFloat(paymentAmount);
+    if (isNaN(amount) || amount <= 0) {
+      alert("Introduce un importe válido");
+      setRegisteringPayment(false);
+      return;
+    }
+
+    const result = await registerPayment(supabase, {
+      invoice_id: invoice.id,
+      amount,
+      payment_date: new Date().toISOString().split("T")[0],
+      payment_method: paymentMethod,
+      reference: paymentRef || undefined,
+    });
+
+    if (result.success) {
+      // Refresh invoice and payments
+      const newPaid = Number(invoice.amount_paid || 0) + amount;
+      const newStatus = newPaid >= Number(invoice.total) ? "paid" : "partial";
+      setInvoice({ ...invoice, amount_paid: newPaid, payment_status: newStatus } as IssuedInvoice);
+      const updatedPayments = await getInvoicePayments(supabase, invoice.id);
+      setInvoicePayments(updatedPayments);
+      setShowPaymentForm(false);
+      setPaymentAmount("");
+      setPaymentRef("");
+    } else {
+      alert(result.error || "Error al registrar el cobro");
+    }
+    setRegisteringPayment(false);
   }
 
   async function handleDownloadXML() {
@@ -576,6 +621,107 @@ export default function IssuedInvoiceDetailPage() {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Payment Section */}
+      {invoice.payment_status !== "paid" && invoice.status !== "cancelled" && invoice.status !== "draft" && (
+        <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-6 print:hidden">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider">Cobros</h3>
+            <button
+              onClick={() => setShowPaymentForm(!showPaymentForm)}
+              className="px-3 py-1.5 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-lg text-xs font-semibold hover:opacity-90 transition"
+            >
+              {showPaymentForm ? "Cancelar" : "+ Registrar cobro"}
+            </button>
+          </div>
+
+          {/* Payment progress */}
+          <div className="mb-4">
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-[var(--color-navy-400)]">Cobrado</span>
+              <span className="text-[var(--color-navy-300)] tabular-nums">
+                €{Number(invoice.amount_paid || 0).toLocaleString("es-ES", { minimumFractionDigits: 2 })} / €{Number(invoice.total).toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+            <div className="h-2 w-full rounded-full bg-[var(--color-navy-700)]">
+              <div
+                className="h-2 rounded-full bg-[var(--color-brand-green)] transition-all"
+                style={{ width: `${Math.min(100, Math.round((Number(invoice.amount_paid || 0) / Number(invoice.total)) * 100))}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Payment form */}
+          {showPaymentForm && (
+            <div className="bg-[var(--color-navy-750)] rounded-lg p-4 mb-4 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs text-[var(--color-navy-400)] block mb-1">Importe (€)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(e.target.value)}
+                    placeholder={String(Number(invoice.total) - Number(invoice.amount_paid || 0))}
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--color-navy-700)] border border-[var(--color-navy-600)] text-[var(--color-navy-100)] text-sm focus:outline-none focus:border-[var(--color-brand-green)]"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-[var(--color-navy-400)] block mb-1">Método</label>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--color-navy-700)] border border-[var(--color-navy-600)] text-[var(--color-navy-100)] text-sm focus:outline-none focus:border-[var(--color-brand-green)]"
+                  >
+                    {Object.entries(paymentMethodLabels).map(([k, v]) => (
+                      <option key={k} value={k}>{v}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-[var(--color-navy-400)] block mb-1">Referencia</label>
+                  <input
+                    type="text"
+                    value={paymentRef}
+                    onChange={(e) => setPaymentRef(e.target.value)}
+                    placeholder="Ej: TRF-2026-001"
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--color-navy-700)] border border-[var(--color-navy-600)] text-[var(--color-navy-100)] text-sm focus:outline-none focus:border-[var(--color-brand-green)]"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={handleRegisterPayment}
+                disabled={registeringPayment || !paymentAmount}
+                className="px-4 py-2 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-lg text-sm font-semibold hover:opacity-90 transition disabled:opacity-50"
+              >
+                {registeringPayment ? "Registrando..." : "Confirmar cobro"}
+              </button>
+            </div>
+          )}
+
+          {/* Payment history */}
+          {invoicePayments.length > 0 && (
+            <div className="space-y-2">
+              {invoicePayments.map((p) => (
+                <div key={p.id} className="flex items-center justify-between py-2 border-b border-[var(--color-navy-700)] last:border-0">
+                  <div>
+                    <p className="text-sm text-[var(--color-navy-200)]">
+                      {paymentMethodLabels[p.payment_method] || p.payment_method}
+                      {p.reference && <span className="ml-2 text-[var(--color-navy-500)] font-mono text-xs">{p.reference}</span>}
+                    </p>
+                    <p className="text-xs text-[var(--color-navy-500)]">
+                      {new Date(p.payment_date).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}
+                    </p>
+                  </div>
+                  <p className="text-sm font-semibold text-[var(--color-brand-green)]">
+                    +€{Number(p.amount).toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
