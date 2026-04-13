@@ -180,8 +180,7 @@ export default function ReceivedInvoicesPage() {
       <div className="flex flex-wrap gap-3 mb-6">
         <SearchInput
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && load()}
+          onChange={(v) => setSearch(v)}
           placeholder="Buscar por nº factura, proveedor..."
           className="w-64"
         />
