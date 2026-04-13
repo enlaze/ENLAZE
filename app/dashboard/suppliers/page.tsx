@@ -1,9 +1,9 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { useSector } from "@/lib/sector-context";
+import Link from "next/link";
 import PageHeader from "@/components/ui/page-header";
 import { Card, StatCard } from "@/components/ui/card";
 import { FormField, Input, Select, SearchInput } from "@/components/ui/form-fields";
@@ -88,7 +88,7 @@ export default function SuppliersPage() {
       setLoading(false);
     }
     init();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function resetForm() {
     setForm(emptyForm); setEditingId(null); setShowForm(false);
@@ -146,6 +146,9 @@ export default function SuppliersPage() {
 
   const totalProveedores = suppliers.filter((s) => s.type === "proveedor").length;
   const totalSubcontratas = suppliers.filter((s) => s.type === "subcontrata").length;
+
+  const fmtMoney = (n: number) =>
+    new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(n || 0);
 
   if (loading) {
     return <Loading />;
@@ -357,6 +360,7 @@ export default function SuppliersPage() {
                   <th className="text-center text-xs font-semibold text-navy-700 uppercase tracking-wider px-3 py-3">Oficio</th>
                   <th className="text-left text-xs font-semibold text-navy-700 uppercase tracking-wider px-3 py-3">Contacto</th>
                   <th className="text-center text-xs font-semibold text-navy-700 uppercase tracking-wider px-3 py-3">€/h</th>
+                  <th className="text-right text-xs font-semibold text-navy-700 uppercase tracking-wider px-3 py-3">Facturado</th>
                   <th className="text-center text-xs font-semibold text-navy-700 uppercase tracking-wider px-3 py-3">Valoración</th>
                   <th className="text-right text-xs font-semibold text-navy-700 uppercase tracking-wider px-5 py-3">Acciones</th>
                 </tr>
@@ -385,6 +389,12 @@ export default function SuppliersPage() {
                     <td className="px-3 py-3 text-center text-sm text-navy-700">
                       {Number(s.hourly_rate || 0) > 0 ? `${Number(s.hourly_rate).toFixed(0)}€` : "—"}
                     </td>
+                    <td className="px-3 py-3 text-right">
+                      <p className="text-sm font-medium text-navy-900">{fmtMoney(Number((s as Record<string, unknown>).total_invoiced || 0))}</p>
+                      {Number((s as Record<string, unknown>).total_invoiced || 0) > Number((s as Record<string, unknown>).total_paid || 0) && (
+                        <p className="text-xs text-orange-600">Pdte: {fmtMoney(Number((s as Record<string, unknown>).total_invoiced || 0) - Number((s as Record<string, unknown>).total_paid || 0))}</p>
+                      )}
+                    </td>
                     <td className="px-3 py-3 text-center">
                       {s.rating > 0 ? (
                         <span className="text-sm text-yellow-600">{"★".repeat(s.rating)}{"☆".repeat(5 - s.rating)}</span>
@@ -393,7 +403,8 @@ export default function SuppliersPage() {
                       )}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <button onClick={() => startEdit(s)} className="text-xs text-brand-green hover:underline mr-3">Editar</button>
+                      <Link href={`/dashboard/suppliers/${s.id}`} className="text-xs text-brand-green hover:underline mr-3">Ver</Link>
+                      <button onClick={() => startEdit(s)} className="text-xs text-navy-600 hover:underline mr-3">Editar</button>
                       <button onClick={() => handleDelete(s.id)} className="text-xs text-red-600 hover:underline">Eliminar</button>
                     </td>
                   </tr>

@@ -6,7 +6,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.
 
 interface SearchResult {
   id: string;
-  type: "client" | "budget" | "invoice" | "project" | "payment";
+  type: "client" | "budget" | "invoice" | "project" | "payment" | "supplier" | "received_invoice";
   title: string;
   subtitle: string;
   icon: string;
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   const results: SearchResult[] = [];
 
   // Search in parallel across all entities
-  const [clientsRes, budgetsRes, invoicesRes, projectsRes, paymentsRes] = await Promise.all([
+  const [clientsRes, budgetsRes, invoicesRes, projectsRes, paymentsRes, suppliersRes, receivedInvRes] = await Promise.all([
     // Clients
     supabase
       .from("clients")
@@ -67,6 +67,22 @@ export async function GET(req: NextRequest) {
       .select("id, concept, reference, amount, payment_date, payment_method")
       .eq("user_id", userId)
       .or(`concept.ilike.${query},reference.ilike.${query}`)
+      .limit(5),
+
+    // Suppliers
+    supabase
+      .from("suppliers")
+      .select("id, name, nif, email, phone, trade_name, status")
+      .eq("user_id", userId)
+      .or(`name.ilike.${query},nif.ilike.${query},trade_name.ilike.${query},email.ilike.${query}`)
+      .limit(5),
+
+    // Received Invoices
+    supabase
+      .from("received_invoices")
+      .select("id, invoice_number, supplier_name, status, total")
+      .eq("user_id", userId)
+      .or(`invoice_number.ilike.${query},supplier_name.ilike.${query}`)
       .limit(5),
   ]);
 
@@ -141,6 +157,36 @@ export async function GET(req: NextRequest) {
         icon: "💵",
         href: `/dashboard/payments`,
         relevance: 3,
+      });
+    }
+  }
+
+  // Process suppliers
+  if (suppliersRes.data) {
+    for (const s of suppliersRes.data) {
+      results.push({
+        id: s.id,
+        type: "supplier",
+        title: s.name,
+        subtitle: [s.nif, s.trade_name, s.email, s.status].filter(Boolean).join(" · "),
+        icon: "🔧",
+        href: `/dashboard/suppliers/${s.id}`,
+        relevance: (s.name || "").toLowerCase().startsWith(q.toLowerCase()) ? 10 : 5,
+      });
+    }
+  }
+
+  // Process received invoices
+  if (receivedInvRes.data) {
+    for (const ri of receivedInvRes.data) {
+      results.push({
+        id: ri.id,
+        type: "received_invoice",
+        title: ri.invoice_number,
+        subtitle: [ri.supplier_name, ri.status, ri.total ? `€${Number(ri.total).toLocaleString("es-ES")}` : null].filter(Boolean).join(" · "),
+        icon: "🧾",
+        href: `/dashboard/suppliers/invoices/${ri.id}`,
+        relevance: (ri.invoice_number || "").toLowerCase().includes(q.toLowerCase()) ? 10 : 5,
       });
     }
   }

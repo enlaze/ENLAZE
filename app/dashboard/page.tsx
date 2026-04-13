@@ -42,6 +42,9 @@ interface KpiData {
   incomeTrend: number;
   invoicesUnpaid: number;
   totalOutstanding: number;
+  expensesPending: number;
+  expensesOverdue: number;
+  totalExpensesPending: number;
 }
 
 interface MonthlyRevenue {
@@ -131,6 +134,7 @@ export default function DashboardHome() {
     activeClients: 0, budgetsSent: 0, incomeThisMonth: 0,
     conversionRate: 0, clientsTrend: 0, budgetsTrend: 0, incomeTrend: 0,
     invoicesUnpaid: 0, totalOutstanding: 0,
+    expensesPending: 0, expensesOverdue: 0, totalExpensesPending: 0,
   });
   const [monthlyRevenue, setMonthlyRevenue] = useState<MonthlyRevenue[]>([]);
   const [budgetBreakdown, setBudgetBreakdown] = useState<BudgetBreakdown[]>([]);
@@ -153,7 +157,7 @@ export default function DashboardHome() {
       const prevM = new Date(thisY, thisM - 1, 1);
 
       /* ── Parallel data fetch ────────────────────────────── */
-      const [clientsRes, budgetsRes, invoicesRes, activityRes, legalRes, aiRunsRes, incidentsRes] = await Promise.all([
+      const [clientsRes, budgetsRes, invoicesRes, activityRes, legalRes, aiRunsRes, incidentsRes, receivedInvRes] = await Promise.all([
         supabase.from("clients").select("id, status, created_at"),
         supabase.from("budgets").select("id, status, total, created_at"),
         supabase.from("issued_invoices").select("id, status, total, invoice_date, payment_status"),
@@ -161,6 +165,7 @@ export default function DashboardHome() {
         supabase.from("legal_acceptances").select("id").eq("user_id", user.id),
         supabase.from("ai_runs").select("id, human_reviewed").eq("user_id", user.id),
         supabase.from("security_incidents").select("id, status"),
+        supabase.from("received_invoices").select("id, status, total, amount_paid, due_date, payment_status"),
       ]);
 
       const allC = clientsRes.data ?? [];
@@ -170,6 +175,7 @@ export default function DashboardHome() {
       const allLegal = legalRes.data ?? [];
       const allAi = aiRunsRes.data ?? [];
       const allIncidents = incidentsRes.data ?? [];
+      const allReceivedInv = receivedInvRes.data ?? [];
 
       /* ── KPIs ───────────────────────────────────────────── */
       const activeClients = allC.filter(c => c.status === "active").length;
@@ -195,6 +201,11 @@ export default function DashboardHome() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const totalOutstanding = unpaidInvoices.reduce((s: number, inv: any) => s + Number(inv.total || 0), 0);
 
+      // Expenses (received invoices)
+      const unpaidExpenses = allReceivedInv.filter((ri: Record<string, unknown>) => ri.payment_status !== "paid");
+      const overdueExpenses = unpaidExpenses.filter((ri: Record<string, unknown>) => ri.due_date && new Date(ri.due_date as string) < new Date());
+      const totalExpensesPending = unpaidExpenses.reduce((s: number, ri: Record<string, unknown>) => s + Number(ri.total || 0) - Number(ri.amount_paid || 0), 0);
+
       setKpi({
         activeClients, budgetsSent: sentThisMonth, incomeThisMonth,
         conversionRate,
@@ -202,6 +213,9 @@ export default function DashboardHome() {
         budgetsTrend: pctChange(sentThisMonth, sentLastMonth),
         incomeTrend: pctChange(incomeThisMonth, incomeLastMonth),
         invoicesUnpaid, totalOutstanding,
+        expensesPending: unpaidExpenses.length,
+        expensesOverdue: overdueExpenses.length,
+        totalExpensesPending,
       });
 
       /* ── Monthly Revenue (last 6 months) ────────────────── */
@@ -378,6 +392,13 @@ export default function DashboardHome() {
             <AlertRow label="Facturas por cobrar" count={kpi.invoicesUnpaid} href="/dashboard/issued-invoices" severity="danger" />
             <AlertRow label="Importe pendiente" count={0} href="/dashboard/issued-invoices" severity="warning" customValue={`€${kpi.totalOutstanding.toLocaleString("es-ES")}`} />
             <AlertRow label="Tasa conversión" count={0} href="/dashboard/budgets" severity={kpi.conversionRate >= 50 ? "info" : "warning"} customValue={`${kpi.conversionRate}%`} />
+            <AlertRow label="Facturas por pagar" count={kpi.expensesPending} href="/dashboard/suppliers/invoices" severity={kpi.expensesPending > 0 ? "warning" : "info"} />
+            {kpi.expensesOverdue > 0 && (
+              <AlertRow label="Gastos vencidos" count={kpi.expensesOverdue} href="/dashboard/suppliers/invoices" severity="danger" />
+            )}
+            {kpi.totalExpensesPending > 0 && (
+              <AlertRow label="Total gastos pdtes." count={0} href="/dashboard/suppliers/invoices" severity="warning" customValue={`€${kpi.totalExpensesPending.toLocaleString("es-ES")}`} />
+            )}
           </ul>
         </section>
 

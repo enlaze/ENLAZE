@@ -20,7 +20,7 @@ const fallbackNavItems = [
   { href: "/dashboard/suppliers", label: "Proveedores", icon: "🔧" },
   { href: "/dashboard/orders", label: "Pedidos", icon: "📦" },
   { href: "/dashboard/delivery-notes", label: "Albaranes", icon: "📄" },
-  { href: "/dashboard/facturas", label: "Facturas recibidas", icon: "🧾" },
+  { href: "/dashboard/suppliers/invoices", label: "Facturas recibidas", icon: "🧾" },
   { href: "/dashboard/issued-invoices", label: "Facturas emitidas", icon: "📑" },
   { href: "/dashboard/payments", label: "Pagos y Tesorería", icon: "💵" },
   { href: "/dashboard/margins", label: "Márgenes", icon: "📊" },

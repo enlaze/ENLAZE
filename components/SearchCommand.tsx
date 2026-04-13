@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase-browser";
 
 interface SearchResult {
   id: string;
-  type: "client" | "budget" | "invoice" | "project" | "payment";
+  type: "client" | "budget" | "invoice" | "project" | "payment" | "supplier" | "received_invoice";
   title: string;
   subtitle: string;
   icon: string;
@@ -16,9 +16,11 @@ interface SearchResult {
 const typeLabels: Record<string, string> = {
   client: "Clientes",
   budget: "Presupuestos",
-  invoice: "Facturas",
+  invoice: "Facturas emitidas",
   project: "Obras",
   payment: "Pagos",
+  supplier: "Proveedores",
+  received_invoice: "Facturas recibidas",
 };
 
 const quickActions = [
@@ -27,6 +29,8 @@ const quickActions = [
   { label: "Ver clientes", href: "/dashboard/clientes", icon: "👥", keys: "G C" },
   { label: "Ver pagos", href: "/dashboard/payments", icon: "💵", keys: "G P" },
   { label: "Compliance", href: "/dashboard/compliance", icon: "🛡️", keys: "G X" },
+  { label: "Proveedores", href: "/dashboard/suppliers", icon: "🔧", keys: "G V" },
+  { label: "Facturas recibidas", href: "/dashboard/suppliers/invoices", icon: "🧾", keys: "G R" },
   { label: "Ajustes", href: "/dashboard/settings", icon: "⚙️", keys: "G S" },
 ];
 
