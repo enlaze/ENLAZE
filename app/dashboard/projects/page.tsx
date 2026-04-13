@@ -1,9 +1,17 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase-browser";
 import Link from "next/link";
 import { useSector } from "@/lib/sector-context";
+
+import PageHeader from "@/components/ui/page-header";
+import { Card, StatCard } from "@/components/ui/card";
+import { FormField, Input, Select, Textarea, SearchInput } from "@/components/ui/form-fields";
+import { Button } from "@/components/ui/button";
+import Badge from "@/components/ui/badge";
+import Loading from "@/components/ui/loading";
 
 interface ClientOption {
   id: string;
@@ -49,11 +57,35 @@ const emptyForm = {
   notes: "",
 };
 
+function eur(n: number) {
+  return Number(n || 0).toLocaleString("es-ES", { style: "currency", currency: "EUR" });
+}
+
+function fmtDate(d: string | null) {
+  return d ? new Date(d).toLocaleDateString("es-ES") : "—";
+}
+
+function getStatusBadgeVariant(status: string): "yellow" | "blue" | "green" | "gray" | "red" {
+  switch (status) {
+    case "planning":
+      return "yellow";
+    case "approved":
+      return "blue";
+    case "in_progress":
+      return "green";
+    case "paused":
+      return "gray";
+    case "completed":
+      return "green";
+    case "cancelled":
+      return "red";
+    default:
+      return "gray";
+  }
+}
+
 export default function ProjectsPage() {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = createClient();
   const { label } = useSector();
 
   const [userId, setUserId] = useState<string | null>(null);
@@ -197,262 +229,233 @@ export default function ProjectsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-brand-green)]"></div>
-      </div>
-    );
+    return <Loading />;
   }
 
   return (
     <div className="max-w-6xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">{label("projects")}</h1>
-          <p className="text-[var(--color-navy-400)] text-sm mt-1">
-            Gestiona tus {label("projects").toLowerCase()}, cliente asociado y control económico básico
-          </p>
-        </div>
-        <button
-          onClick={() => { resetForm(); setShowForm(true); }}
-          className="px-4 py-2 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-lg text-sm font-medium hover:opacity-90 transition"
-        >
-          + {label("project") === "Obra" ? "Nueva obra" : `Nuevo/a ${label("project").toLowerCase()}`}
-        </button>
-      </div>
+      <PageHeader
+        title={label("projects")}
+        description={`Gestiona tus ${label("projects").toLowerCase()}, cliente asociado y control económico básico`}
+        actions={
+          <Button onClick={() => { resetForm(); setShowForm(true); }}>
+            + {label("project") === "Obra" ? "Nueva obra" : `Nuevo/a ${label("project").toLowerCase()}`}
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-blue-400">{filtered.length}</p>
-          <p className="text-xs text-[var(--color-navy-400)]">{label("projects")}</p>
-        </div>
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-[var(--color-brand-green)]">{totalBudget.toFixed(2)}€</p>
-          <p className="text-xs text-[var(--color-navy-400)]">Presupuesto total</p>
-        </div>
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-          <p className={`text-2xl font-bold ${totalMargin >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-            {totalMargin.toFixed(2)}€
-          </p>
-          <p className="text-xs text-[var(--color-navy-400)]">Margen provisional</p>
-        </div>
+        <StatCard
+          label={label("projects")}
+          value={filtered.length}
+          accent="blue"
+        />
+        <StatCard
+          label="Presupuesto total"
+          value={eur(totalBudget)}
+          accent="green"
+        />
+        <StatCard
+          label="Margen provisional"
+          value={eur(totalMargin)}
+          accent={totalMargin >= 0 ? "green" : "red"}
+        />
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <input
-          type="text"
-          placeholder="Buscar por obra, dirección o cliente..."
+        <SearchInput
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 bg-[var(--color-navy-800)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-700)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm"
+          onChange={setSearch}
+          placeholder="Buscar por obra, dirección o cliente..."
+          className="flex-1"
         />
-        <select
+        <Select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
-          className="bg-[var(--color-navy-800)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-700)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm"
         >
           <option value="all">Todos los estados</option>
           {statusOptions.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
-        </select>
+        </Select>
       </div>
 
       {showForm && (
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-6 border border-[var(--color-navy-600)]">
-          <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-4">
-            {editingId ? "Editar obra" : "Nueva obra"}
-          </h3>
+        <Card className="mb-6">
+          <div className="border-b border-navy-100 pb-4 mb-4">
+            <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider">
+              {editingId ? "Editar obra" : "Nueva obra"}
+            </h3>
+          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Cliente</label>
-              <select
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <FormField label="Cliente">
+              <Select
                 value={form.client_id}
                 onChange={(e) => setForm({ ...form, client_id: e.target.value })}
-                className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm"
               >
                 <option value="">Sin asignar</option>
                 {clients.map((client) => (
                   <option key={client.id} value={client.id}>{client.name}</option>
                 ))}
-              </select>
-            </div>
+              </Select>
+            </FormField>
 
-            <div className="md:col-span-2">
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Nombre de la obra *</label>
-              <input
+            <FormField label="Nombre de la obra" required className="md:col-span-2">
+              <Input
                 type="text"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm"
                 placeholder="Ej: Reforma integral vivienda San Juan"
               />
-            </div>
+            </FormField>
 
-            <div className="md:col-span-3">
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Dirección</label>
-              <input
+            <FormField label="Dirección" className="md:col-span-3">
+              <Input
                 type="text"
                 value={form.address}
                 onChange={(e) => setForm({ ...form, address: e.target.value })}
-                className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm"
                 placeholder="Dirección de la obra"
               />
-            </div>
+            </FormField>
 
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Estado</label>
-              <select
+            <FormField label="Estado">
+              <Select
                 value={form.status}
                 onChange={(e) => setForm({ ...form, status: e.target.value })}
-                className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm"
               >
                 {statusOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
-              </select>
-            </div>
+              </Select>
+            </FormField>
 
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Fecha inicio</label>
-              <input
+            <FormField label="Fecha inicio">
+              <Input
                 type="date"
                 value={form.start_date}
                 onChange={(e) => setForm({ ...form, start_date: e.target.value })}
-                className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm"
               />
-            </div>
+            </FormField>
 
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Fecha fin</label>
-              <input
+            <FormField label="Fecha fin">
+              <Input
                 type="date"
                 value={form.end_date}
                 onChange={(e) => setForm({ ...form, end_date: e.target.value })}
-                className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm"
               />
-            </div>
+            </FormField>
 
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Presupuesto previsto (€)</label>
-              <input
+            <FormField label="Presupuesto previsto (€)">
+              <Input
                 type="number"
                 min="0"
                 step="0.01"
                 value={form.budget_amount}
                 onChange={(e) => setForm({ ...form, budget_amount: Number(e.target.value) || 0 })}
-                className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm"
               />
-            </div>
+            </FormField>
 
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Coste real (€)</label>
-              <input
+            <FormField label="Coste real (€)">
+              <Input
                 type="number"
                 min="0"
                 step="0.01"
                 value={form.actual_cost}
                 onChange={(e) => setForm({ ...form, actual_cost: Number(e.target.value) || 0 })}
-                className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm"
               />
-            </div>
+            </FormField>
 
-            <div className="md:col-span-3">
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Descripción</label>
-              <input
+            <FormField label="Descripción" className="md:col-span-3">
+              <Input
                 type="text"
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
-                className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm"
                 placeholder="Descripción breve de la obra"
               />
-            </div>
+            </FormField>
 
-            <div className="md:col-span-3">
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Notas</label>
-              <textarea
+            <FormField label="Notas" className="md:col-span-3">
+              <Textarea
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm min-h-[90px]"
                 placeholder="Observaciones internas"
+                className="min-h-[90px]"
               />
-            </div>
+            </FormField>
           </div>
 
-          <div className="flex gap-3 mt-4">
-            <button
-              onClick={handleSave}
-              className="px-5 py-2 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-lg text-sm font-medium hover:opacity-90 transition"
-            >
+          <div className="flex gap-3 pt-4 border-t border-navy-100">
+            <Button onClick={handleSave}>
               {editingId ? "Guardar cambios" : "Crear obra"}
-            </button>
-            <button
-              onClick={resetForm}
-              className="px-5 py-2 bg-[var(--color-navy-700)] text-[var(--color-navy-300)] rounded-lg text-sm hover:bg-[var(--color-navy-600)] transition"
-            >
+            </Button>
+            <Button variant="secondary" onClick={resetForm}>
               Cancelar
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
       {filtered.length === 0 ? (
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-10 text-center">
-          <p className="text-[var(--color-navy-400)]">No hay obras creadas todavía.</p>
-          <p className="text-sm text-[var(--color-navy-500)] mt-1">Pulsa “Nueva obra” para empezar a organizar proyectos.</p>
-        </div>
+        <Card>
+          <div className="text-center py-10">
+            <p className="text-navy-600">No hay obras creadas todavía.</p>
+            <p className="text-sm text-navy-500 mt-1">Pulsa "+ Nueva obra" para empezar a organizar proyectos.</p>
+          </div>
+        </Card>
       ) : (
-        <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden">
+        <div className="rounded-2xl border border-navy-100 bg-white shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--color-navy-700)]">
-                  <th className="text-left text-xs font-semibold text-[var(--color-navy-400)] uppercase tracking-wider px-5 py-3">Obra</th>
-                  <th className="text-left text-xs font-semibold text-[var(--color-navy-400)] uppercase tracking-wider px-3 py-3">Cliente</th>
-                  <th className="text-center text-xs font-semibold text-[var(--color-navy-400)] uppercase tracking-wider px-3 py-3">Estado</th>
-                  <th className="text-center text-xs font-semibold text-[var(--color-navy-400)] uppercase tracking-wider px-3 py-3">Inicio</th>
-                  <th className="text-center text-xs font-semibold text-[var(--color-navy-400)] uppercase tracking-wider px-3 py-3">Fin</th>
-                  <th className="text-right text-xs font-semibold text-[var(--color-navy-400)] uppercase tracking-wider px-3 py-3">Presupuesto</th>
-                  <th className="text-right text-xs font-semibold text-[var(--color-navy-400)] uppercase tracking-wider px-3 py-3">Coste</th>
-                  <th className="text-right text-xs font-semibold text-[var(--color-navy-400)] uppercase tracking-wider px-5 py-3">Acciones</th>
+                <tr className="border-b border-navy-50 bg-navy-50/60">
+                  <th className="text-left text-xs font-semibold text-navy-500 uppercase tracking-wider px-5 py-3">Obra</th>
+                  <th className="text-left text-xs font-semibold text-navy-500 uppercase tracking-wider px-3 py-3">Cliente</th>
+                  <th className="text-center text-xs font-semibold text-navy-500 uppercase tracking-wider px-3 py-3">Estado</th>
+                  <th className="text-center text-xs font-semibold text-navy-500 uppercase tracking-wider px-3 py-3">Inicio</th>
+                  <th className="text-center text-xs font-semibold text-navy-500 uppercase tracking-wider px-3 py-3">Fin</th>
+                  <th className="text-right text-xs font-semibold text-navy-500 uppercase tracking-wider px-3 py-3">Presupuesto</th>
+                  <th className="text-right text-xs font-semibold text-navy-500 uppercase tracking-wider px-3 py-3">Coste</th>
+                  <th className="text-right text-xs font-semibold text-navy-500 uppercase tracking-wider px-5 py-3">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((project) => (
-                  <tr key={project.id} className="border-t border-[var(--color-navy-700)] hover:bg-[var(--color-navy-750)] transition">
+                  <tr key={project.id} className="border-b border-navy-50 hover:bg-navy-50/40 transition-colors">
                     <td className="px-5 py-3">
-                      <Link href={`/dashboard/projects/${project.id}`} className="text-sm font-medium text-[var(--color-navy-100)] hover:text-[var(--color-brand-green)] transition">
+                      <Link href={`/dashboard/projects/${project.id}`} className="text-sm font-medium text-brand-green hover:underline">
                         {project.name}
                       </Link>
-                      {project.address && <p className="text-xs text-[var(--color-navy-400)]">{project.address}</p>}
+                      {project.address && <p className="text-xs text-navy-500">{project.address}</p>}
                     </td>
-                    <td className="px-3 py-3 text-sm text-[var(--color-navy-200)]">
+                    <td className="px-3 py-3 text-sm text-navy-600">
                       {clientMap[project.client_id || ""] || "Sin asignar"}
                     </td>
-                    <td className="px-3 py-3 text-center text-xs text-[var(--color-navy-200)]">
-                      {statusLabelMap[project.status] || project.status}
+                    <td className="px-3 py-3 text-center">
+                      <Badge variant={getStatusBadgeVariant(project.status)}>
+                        {statusLabelMap[project.status] || project.status}
+                      </Badge>
                     </td>
-                    <td className="px-3 py-3 text-center text-xs text-[var(--color-navy-300)]">
-                      {project.start_date || "—"}
+                    <td className="px-3 py-3 text-center text-xs text-navy-500">
+                      {fmtDate(project.start_date)}
                     </td>
-                    <td className="px-3 py-3 text-center text-xs text-[var(--color-navy-300)]">
-                      {project.end_date || "—"}
+                    <td className="px-3 py-3 text-center text-xs text-navy-500">
+                      {fmtDate(project.end_date)}
                     </td>
-                    <td className="px-3 py-3 text-right text-sm text-[var(--color-navy-100)]">
-                      {Number(project.budget_amount || 0).toFixed(2)}€
+                    <td className="px-3 py-3 text-right text-sm text-navy-900 font-medium">
+                      {eur(project.budget_amount)}
                     </td>
-                    <td className="px-3 py-3 text-right text-sm text-[var(--color-navy-100)]">
-                      {Number(project.actual_cost || 0).toFixed(2)}€
+                    <td className="px-3 py-3 text-right text-sm text-navy-900 font-medium">
+                      {eur(project.actual_cost)}
                     </td>
-                    <td className="px-5 py-3 text-right">
-                      <Link href={`/dashboard/projects/${project.id}`} className="text-xs text-blue-400 hover:underline mr-3">
+                    <td className="px-5 py-3 text-right space-x-2">
+                      <Link href={`/dashboard/projects/${project.id}`} className="text-xs text-brand-green hover:underline mr-3">
                         Ver detalle
                       </Link>
-                      <button onClick={() => startEdit(project)} className="text-xs text-[var(--color-brand-green)] hover:underline mr-3">
+                      <button onClick={() => startEdit(project)} className="text-xs text-brand-green hover:underline mr-3">
                         Editar
                       </button>
-                      <button onClick={() => handleDelete(project.id)} className="text-xs text-red-400 hover:underline">
+                      <button onClick={() => handleDelete(project.id)} className="text-xs text-red-600 hover:underline">
                         Eliminar
                       </button>
                     </td>

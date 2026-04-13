@@ -4,10 +4,15 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase-browser";
 import { useSector } from "@/lib/sector-context";
-
-/* ═══════════════ Types ═══════════════ */
+import PageHeader from "@/components/ui/page-header";
+import { Card, StatCard } from "@/components/ui/card";
+import { FormField, Input, Select, SearchInput } from "@/components/ui/form-fields";
+import { Button } from "@/components/ui/button";
+import Badge from "@/components/ui/badge";
+import EmptyState from "@/components/ui/empty-state";
+import Loading from "@/components/ui/loading";
 
 interface DeliveryNote {
   id: string;
@@ -30,27 +35,19 @@ interface Supplier { id: string; name: string; }
 interface Project { id: string; name: string; }
 interface OrderMin { id: string; title: string; order_number: string; }
 
-/* ═══════════════ Labels ═══════════════ */
-
-const statusMap: Record<string, { label: string; color: string }> = {
-  pending: { label: "Pendiente", color: "bg-yellow-900/30 text-yellow-300" },
-  received: { label: "Recibido", color: "bg-blue-900/30 text-blue-300" },
-  verified: { label: "Verificado", color: "bg-green-900/30 text-green-300" },
-  disputed: { label: "Incidencia", color: "bg-red-900/30 text-red-300" },
+const statusConfig: Record<string, { label: string; variant: "yellow" | "blue" | "green" | "red" }> = {
+  pending: { label: "Pendiente", variant: "yellow" },
+  received: { label: "Recibido", variant: "blue" },
+  verified: { label: "Verificado", variant: "green" },
+  disputed: { label: "Incidencia", variant: "red" },
 };
-
-/* ═══════════════ Helpers ═══════════════ */
 
 function eur(n: number) { return Number(n || 0).toLocaleString("es-ES", { style: "currency", currency: "EUR" }); }
 function fmtDate(d: string | null) { return d ? new Date(d).toLocaleDateString("es-ES") : "—"; }
 
-const inputCls = "w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm";
-
-/* ═══════════════ Page ═══════════════ */
-
 export default function DeliveryNotesPage() {
   const router = useRouter();
-  const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+  const supabase = createClient();
   const { label } = useSector();
 
   const [userId, setUserId] = useState<string | null>(null);
@@ -60,11 +57,9 @@ export default function DeliveryNotesPage() {
   const [orders, setOrders] = useState<OrderMin[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Filters
   const [filterStatus, setFilterStatus] = useState("all");
   const [search, setSearch] = useState("");
 
-  // Form
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -136,160 +131,128 @@ export default function DeliveryNotesPage() {
   const supplierName = (id: string | null) => suppliers.find((s) => s.id === id)?.name || "—";
   const projectName = (id: string | null) => projects.find((p) => p.id === id)?.name || "—";
   const orderLabel = (id: string | null) => {
-    const o = orders.find((o) => o.id === id);
+    const o = orders.find((ord) => ord.id === id);
     return o ? (o.order_number || o.title) : "—";
   };
 
-  // KPIs
   const totalAlbaranes = notes.length;
   const pendientes = notes.filter((n) => n.status === "pending" || n.status === "received").length;
   const conIncidencia = notes.filter((n) => n.status === "disputed").length;
   const totalImporte = notes.reduce((s, n) => s + Number(n.total || 0), 0);
 
-  if (loading) {
-    return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-brand-green)]"></div></div>;
-  }
+  if (loading) return <Loading />;
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">{label("delivery_notes")}</h1>
-          <p className="text-sm text-[var(--color-navy-400)]">Recepción de material y servicios</p>
-        </div>
-        <button onClick={() => setShowForm(!showForm)}
-          className="px-5 py-2.5 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-xl font-semibold text-sm hover:opacity-90 transition">
-          + Nuevo albarán
-        </button>
+    <>
+      <PageHeader
+        title={label("delivery_notes")}
+        description="Recepción de material y servicios"
+        actions={<Button onClick={() => setShowForm(!showForm)}>+ Nuevo albarán</Button>}
+      />
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <StatCard label="Total albaranes" value={totalAlbaranes} accent="blue" />
+        <StatCard label="Pendientes / Recibidos" value={pendientes} accent="yellow" />
+        <StatCard label="Con incidencia" value={conIncidencia} accent="red" />
+        <StatCard label="Importe total" value={eur(totalImporte)} accent="green" />
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-          <p className="text-lg font-bold text-blue-400">{totalAlbaranes}</p>
-          <p className="text-xs text-[var(--color-navy-400)]">Total albaranes</p>
-        </div>
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-          <p className="text-lg font-bold text-yellow-400">{pendientes}</p>
-          <p className="text-xs text-[var(--color-navy-400)]">Pendientes/Recibidos</p>
-        </div>
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-          <p className="text-lg font-bold text-red-400">{conIncidencia}</p>
-          <p className="text-xs text-[var(--color-navy-400)]">Con incidencia</p>
-        </div>
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-          <p className="text-lg font-bold text-emerald-400">{eur(totalImporte)}</p>
-          <p className="text-xs text-[var(--color-navy-400)]">Importe total</p>
-        </div>
-      </div>
-
-      {/* Form */}
       {showForm && (
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-6 border border-[var(--color-navy-600)]">
-          <h3 className="text-sm font-semibold text-[var(--color-navy-100)] mb-4">Nuevo albarán</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Nº Albarán</label>
-              <input type="text" value={form.note_number} onChange={(e) => setForm({ ...form, note_number: e.target.value })} className={inputCls} placeholder="ALB-001" />
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Proveedor</label>
-              <select value={form.supplier_id} onChange={(e) => setForm({ ...form, supplier_id: e.target.value })} className={inputCls}>
+        <Card className="mb-8">
+          <h3 className="text-base font-semibold text-navy-900 mb-5">Nuevo albarán</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-4">
+            <FormField label="N.º Albarán">
+              <Input type="text" value={form.note_number} onChange={(e) => setForm({ ...form, note_number: e.target.value })} placeholder="ALB-001" />
+            </FormField>
+            <FormField label="Proveedor">
+              <Select value={form.supplier_id} onChange={(e) => setForm({ ...form, supplier_id: e.target.value })}>
                 <option value="">Sin asignar</option>
                 {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Obra</label>
-              <select value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })} className={inputCls}>
+              </Select>
+            </FormField>
+            <FormField label="Obra">
+              <Select value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })}>
                 <option value="">Sin asignar</option>
                 {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Pedido vinculado</label>
-              <select value={form.order_id} onChange={(e) => setForm({ ...form, order_id: e.target.value })} className={inputCls}>
+              </Select>
+            </FormField>
+            <FormField label="Pedido vinculado">
+              <Select value={form.order_id} onChange={(e) => setForm({ ...form, order_id: e.target.value })}>
                 <option value="">Ninguno</option>
                 {orders.map((o) => <option key={o.id} value={o.id}>{o.order_number || o.title}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Fecha recepción</label>
-              <input type="date" value={form.reception_date} onChange={(e) => setForm({ ...form, reception_date: e.target.value })} className={inputCls} />
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Notas</label>
-              <input type="text" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className={inputCls} placeholder="Observaciones" />
-            </div>
+              </Select>
+            </FormField>
+            <FormField label="Fecha recepción">
+              <Input type="date" value={form.reception_date} onChange={(e) => setForm({ ...form, reception_date: e.target.value })} />
+            </FormField>
+            <FormField label="Notas">
+              <Input type="text" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Observaciones" />
+            </FormField>
           </div>
-          <div className="flex justify-end gap-3 mt-4">
-            <button onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-[var(--color-navy-400)] hover:text-[var(--color-navy-200)] transition">Cancelar</button>
-            <button onClick={handleSave} disabled={saving}
-              className="px-5 py-2 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-lg text-sm font-medium hover:opacity-90 transition disabled:opacity-50">
-              {saving ? "Guardando..." : "Crear albarán"}
-            </button>
+          <div className="flex justify-end gap-3 mt-5">
+            <Button variant="secondary" onClick={() => setShowForm(false)}>Cancelar</Button>
+            <Button onClick={handleSave} disabled={saving}>{saving ? "Guardando..." : "Crear albarán"}</Button>
+          </div>
+        </Card>
+      )}
+
+      <div className="flex flex-wrap gap-3 mb-6">
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por n.º albarán..." className="w-64" />
+        <Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-auto">
+          <option value="all">Todos los estados</option>
+          {Object.entries(statusConfig).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+        </Select>
+      </div>
+
+      {filtered.length === 0 ? (
+        <EmptyState
+          title={search || filterStatus !== "all" ? "Sin resultados" : "Sin albaranes todavía"}
+          description="Crea tu primer albarán para registrar recepciones de material"
+        />
+      ) : (
+        <div className="rounded-2xl border border-navy-100 bg-white shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-navy-100 bg-navy-50/60">
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 uppercase tracking-wider">N.º Albarán</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 uppercase tracking-wider">Proveedor</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 uppercase tracking-wider hidden md:table-cell">Obra</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 uppercase tracking-wider hidden lg:table-cell">Pedido</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 uppercase tracking-wider">Fecha</th>
+                  <th className="px-5 py-3 text-right text-[11px] font-semibold text-navy-500 uppercase tracking-wider">Total</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 uppercase tracking-wider">Estado</th>
+                  <th className="px-5 py-3 text-right text-[11px] font-semibold text-navy-500 uppercase tracking-wider">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((n) => {
+                  const st = statusConfig[n.status] || { label: n.status, variant: "gray" as const };
+                  return (
+                    <tr key={n.id} className="border-b border-navy-50 hover:bg-navy-50/40 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <Link href={`/dashboard/delivery-notes/${n.id}`} className="text-navy-900 hover:text-brand-green font-medium font-mono transition-colors">
+                          {n.note_number || "Sin n.º"}
+                        </Link>
+                      </td>
+                      <td className="px-5 py-3.5 text-navy-600">{supplierName(n.supplier_id)}</td>
+                      <td className="px-5 py-3.5 text-navy-600 hidden md:table-cell">{projectName(n.project_id)}</td>
+                      <td className="px-5 py-3.5 text-navy-500 hidden lg:table-cell">{orderLabel(n.order_id)}</td>
+                      <td className="px-5 py-3.5 text-navy-500">{fmtDate(n.reception_date)}</td>
+                      <td className="px-5 py-3.5 text-right font-medium text-navy-900">{eur(n.total)}</td>
+                      <td className="px-5 py-3.5"><Badge variant={st.variant}>{st.label}</Badge></td>
+                      <td className="px-5 py-3.5 text-right">
+                        <Link href={`/dashboard/delivery-notes/${n.id}`} className="text-xs text-brand-green hover:underline font-medium mr-3">Detalle</Link>
+                        <button onClick={() => handleDelete(n.id)} className="text-xs text-red-600 hover:underline font-medium">Eliminar</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
-
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-4">
-        <input type="text" placeholder="Buscar por nº albarán..." value={search} onChange={(e) => setSearch(e.target.value)}
-          className="bg-[var(--color-navy-800)] text-[var(--color-navy-100)] rounded-lg px-4 py-2 text-sm border border-[var(--color-navy-700)] focus:border-[var(--color-brand-green)] focus:outline-none w-64" />
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
-          className="bg-[var(--color-navy-800)] text-[var(--color-navy-100)] rounded-lg px-3 py-2 text-sm border border-[var(--color-navy-700)]">
-          <option value="all">Todos los estados</option>
-          {Object.entries(statusMap).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-        </select>
-      </div>
-
-      {/* Table */}
-      <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden">
-        {filtered.length === 0 ? (
-          <div className="p-8 text-center"><p className="text-[var(--color-navy-500)]">No hay albaranes{search || filterStatus !== "all" ? " con esos filtros" : ""}.</p></div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--color-navy-700)]">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-navy-400)] uppercase">Nº Albarán</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-navy-400)] uppercase">Proveedor</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-navy-400)] uppercase">Obra</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-navy-400)] uppercase">Pedido</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-navy-400)] uppercase">Fecha</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-[var(--color-navy-400)] uppercase">Total</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-navy-400)] uppercase">Estado</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-[var(--color-navy-400)] uppercase">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((n) => {
-                const st = statusMap[n.status] || { label: n.status, color: "bg-gray-700 text-gray-300" };
-                return (
-                  <tr key={n.id} className="border-b border-[var(--color-navy-700)]/50 hover:bg-[var(--color-navy-750)] transition">
-                    <td className="px-4 py-3">
-                      <Link href={`/dashboard/delivery-notes/${n.id}`} className="text-[var(--color-navy-100)] hover:text-[var(--color-brand-green)] font-medium font-mono transition">
-                        {n.note_number || "Sin nº"}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-[var(--color-navy-400)]">{supplierName(n.supplier_id)}</td>
-                    <td className="px-4 py-3 text-[var(--color-navy-400)]">{projectName(n.project_id)}</td>
-                    <td className="px-4 py-3 text-[var(--color-navy-400)]">{orderLabel(n.order_id)}</td>
-                    <td className="px-4 py-3 text-[var(--color-navy-400)]">{fmtDate(n.reception_date)}</td>
-                    <td className="px-4 py-3 text-right font-medium text-[var(--color-navy-100)]">{eur(n.total)}</td>
-                    <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.color}`}>{st.label}</span></td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end gap-2">
-                        <Link href={`/dashboard/delivery-notes/${n.id}`} className="text-xs text-[var(--color-brand-green)] hover:underline">Detalle</Link>
-                        <button onClick={() => handleDelete(n.id)} className="text-xs text-red-400 hover:underline">Eliminar</button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </div>
+    </>
   );
 }

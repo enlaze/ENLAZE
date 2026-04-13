@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase-browser";
+import PageHeader from "@/components/ui/page-header";
+import { Card, StatCard } from "@/components/ui/card";
+import { FormField, Input, Select, SearchInput } from "@/components/ui/form-fields";
+import { Button } from "@/components/ui/button";
+import Badge from "@/components/ui/badge";
+import EmptyState from "@/components/ui/empty-state";
+import Loading from "@/components/ui/loading";
 
 interface Invoice {
   id: string;
@@ -29,17 +36,8 @@ interface Invoice {
   created_at: string;
 }
 
-interface ClientOption {
-  id: string;
-  name: string;
-}
-
-interface ProjectOption {
-  id: string;
-  name: string;
-  client_id: string | null;
-}
-
+interface ClientOption { id: string; name: string; }
+interface ProjectOption { id: string; name: string; client_id: string | null; }
 
 const categoryLabels: Record<string, string> = {
   material: "Material", servicio: "Servicio", suministro: "Suministro",
@@ -47,11 +45,11 @@ const categoryLabels: Record<string, string> = {
   transporte: "Transporte", seguro: "Seguro", general: "General",
 };
 
-const statusLabels: Record<string, { label: string; color: string }> = {
-  pending: { label: "Pendiente", color: "bg-yellow-900/30 text-yellow-300" },
-  paid: { label: "Pagada", color: "bg-green-900/30 text-green-300" },
-  overdue: { label: "Vencida", color: "bg-red-900/30 text-red-300" },
-  cancelled: { label: "Anulada", color: "bg-gray-700 text-gray-400" },
+const statusConfig: Record<string, { label: string; variant: "yellow" | "green" | "red" | "gray" }> = {
+  pending: { label: "Pendiente", variant: "yellow" },
+  paid: { label: "Pagada", variant: "green" },
+  overdue: { label: "Vencida", variant: "red" },
+  cancelled: { label: "Anulada", variant: "gray" },
 };
 
 const emptyForm = {
@@ -62,11 +60,10 @@ const emptyForm = {
   payment_status: "pending", payment_method: "", notes: "",
 };
 
+function eur(n: number) { return Number(n || 0).toLocaleString("es-ES", { style: "currency", currency: "EUR" }); }
+
 export default function FacturasPage() {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = createClient();
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [clients, setClients] = useState<ClientOption[]>([]);
@@ -96,29 +93,18 @@ export default function FacturasPage() {
   }, []);
 
   useEffect(() => {
-    if (
-      selectedClientId &&
-      selectedProjectId &&
-      !projects.some((project) => project.id === selectedProjectId && project.client_id === selectedClientId)
-    ) {
+    if (selectedClientId && selectedProjectId && !projects.some((p) => p.id === selectedProjectId && p.client_id === selectedClientId)) {
       setSelectedProjectId("");
     }
   }, [selectedClientId, selectedProjectId, projects]);
 
-
   async function loadClients() {
-    const { data } = await supabase
-      .from("clients")
-      .select("id, name")
-      .order("name");
+    const { data } = await supabase.from("clients").select("id, name").order("name");
     setClients(data || []);
   }
 
   async function loadProjects() {
-    const { data } = await supabase
-      .from("projects")
-      .select("id, name, client_id")
-      .order("name");
+    const { data } = await supabase.from("projects").select("id, name, client_id").order("name");
     setProjects(data || []);
   }
 
@@ -129,19 +115,15 @@ export default function FacturasPage() {
   }
 
   function resetForm() {
-    setForm(emptyForm);
-    setEditingId(null);
-    setShowForm(false);
-    setSelectedClientId("");
+    setForm(emptyForm); setEditingId(null); setShowForm(false); setSelectedClientId("");
   }
 
-  function updateField(field: string, value: any) {
+  function updateField(field: string, value: string | number) {
     const updated = { ...form, [field]: value };
-    // Auto-calcular IVA e IRPF
     if (["base_amount", "iva_percentage", "irpf_percentage"].includes(field)) {
-      const base = field === "base_amount" ? parseFloat(value) || 0 : parseFloat(String(updated.base_amount)) || 0;
-      const ivaPct = field === "iva_percentage" ? parseFloat(value) || 0 : parseFloat(String(updated.iva_percentage)) || 0;
-      const irpfPct = field === "irpf_percentage" ? parseFloat(value) || 0 : parseFloat(String(updated.irpf_percentage)) || 0;
+      const base = field === "base_amount" ? parseFloat(String(value)) || 0 : parseFloat(String(updated.base_amount)) || 0;
+      const ivaPct = field === "iva_percentage" ? parseFloat(String(value)) || 0 : parseFloat(String(updated.iva_percentage)) || 0;
+      const irpfPct = field === "irpf_percentage" ? parseFloat(String(value)) || 0 : parseFloat(String(updated.irpf_percentage)) || 0;
       updated.iva_amount = parseFloat((base * ivaPct / 100).toFixed(2));
       updated.irpf_amount = parseFloat((base * irpfPct / 100).toFixed(2));
       updated.total_amount = parseFloat((base + updated.iva_amount - updated.irpf_amount).toFixed(2));
@@ -161,9 +143,7 @@ export default function FacturasPage() {
       payment_status: inv.payment_status, payment_method: inv.payment_method,
       notes: inv.notes,
     });
-    setEditingId(inv.id);
-    setShowForm(true);
-    setSelectedInvoice(null);
+    setEditingId(inv.id); setShowForm(true); setSelectedInvoice(null);
   }
 
   async function handleSave() {
@@ -175,18 +155,11 @@ export default function FacturasPage() {
     const quarter = month <= 3 ? "Q1" : month <= 6 ? "Q2" : month <= 9 ? "Q3" : "Q4";
 
     const payload = {
-      ...form,
-      client_id: selectedClientId || null,
-      project_id: selectedProjectId || null,
-      base_amount: form.base_amount || 0,
-      iva_amount: form.iva_amount || 0,
-      irpf_amount: form.irpf_amount || 0,
-      total_amount: form.total_amount || 0,
-      invoice_date: form.invoice_date || null,
-      due_date: form.due_date || null,
-      quarter,
-      fiscal_year: invoiceDate.getFullYear(),
-      manually_verified: true,
+      ...form, client_id: selectedClientId || null, project_id: selectedProjectId || null,
+      base_amount: form.base_amount || 0, iva_amount: form.iva_amount || 0,
+      irpf_amount: form.irpf_amount || 0, total_amount: form.total_amount || 0,
+      invoice_date: form.invoice_date || null, due_date: form.due_date || null,
+      quarter, fiscal_year: invoiceDate.getFullYear(), manually_verified: true,
       updated_at: new Date().toISOString(),
     };
 
@@ -195,16 +168,12 @@ export default function FacturasPage() {
     } else {
       await supabase.from("invoices").insert({ ...payload, user_id: userId });
     }
-    resetForm();
-    loadInvoices();
+    resetForm(); loadInvoices();
   }
-
 
   async function compressImageForUpload(file: File): Promise<File> {
     if (file.size <= 1_500_000 && file.type === "image/jpeg") return file;
-
     const objectUrl = URL.createObjectURL(file);
-
     try {
       const img = await new Promise<HTMLImageElement>((resolve, reject) => {
         const image = new Image();
@@ -212,70 +181,43 @@ export default function FacturasPage() {
         image.onerror = () => reject(new Error("No se pudo cargar la imagen"));
         image.src = objectUrl;
       });
-
       const maxSide = 1400;
       const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
       const width = Math.max(1, Math.round(img.width * scale));
       const height = Math.max(1, Math.round(img.height * scale));
-
       const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-
+      canvas.width = width; canvas.height = height;
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("No se pudo preparar la imagen");
-
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, width, height);
       ctx.drawImage(img, 0, 0, width, height);
-
-      const toBlob = (quality: number) =>
-        new Promise<Blob | null>((resolve) => {
-          canvas.toBlob(resolve, "image/jpeg", quality);
-        });
-
+      const toBlob = (quality: number) => new Promise<Blob | null>((resolve) => { canvas.toBlob(resolve, "image/jpeg", quality); });
       let blob = await toBlob(0.72);
       if (!blob) throw new Error("No se pudo comprimir la imagen");
-
-      if (blob.size > 2_500_000) {
-        blob = await toBlob(0.6);
-      }
-
+      if (blob.size > 2_500_000) blob = await toBlob(0.6);
       if (!blob) throw new Error("No se pudo comprimir la imagen");
-
       const baseName = file.name.replace(/\.[^.]+$/, "");
       return new File([blob], `${baseName}.jpg`, { type: "image/jpeg" });
-    } finally {
-      URL.revokeObjectURL(objectUrl);
-    }
+    } finally { URL.revokeObjectURL(objectUrl); }
   }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !userId) return;
-
     if (!file.type.startsWith("image/")) {
       alert("Por favor sube una imagen (JPG, PNG, WEBP). Los PDF no están soportados aún.");
-      e.target.value = "";
-      return;
+      e.target.value = ""; return;
     }
-
-    setUploading(true);
-    setUploadProgress("Preparando imagen...");
-
+    setUploading(true); setUploadProgress("Preparando imagen...");
     try {
       const optimizedFile = await compressImageForUpload(file);
-
       setUploadProgress("Analizando factura con IA...");
-
       const formData = new FormData();
       formData.append("file", optimizedFile);
       formData.append("userId", userId);
       formData.append("clientId", selectedClientId);
-
       const res = await fetch("/api/invoices/ocr", { method: "POST", body: formData });
       const result = await res.json();
-
       if (result.success) {
         setUploadProgress("Factura procesada correctamente");
         await loadInvoices();
@@ -284,11 +226,10 @@ export default function FacturasPage() {
         setUploadProgress("Error: " + (result.error || result.details || "No se pudo procesar"));
         setTimeout(() => { setUploading(false); setUploadProgress(""); }, 5000);
       }
-    } catch (err: any) {
-      setUploadProgress("Error: " + err.message);
+    } catch (err: unknown) {
+      setUploadProgress("Error: " + (err instanceof Error ? err.message : "Error desconocido"));
       setTimeout(() => { setUploading(false); setUploadProgress(""); }, 5000);
     }
-
     e.target.value = "";
   }
 
@@ -304,13 +245,10 @@ export default function FacturasPage() {
     loadInvoices();
   }
 
-  const visibleProjects = selectedClientId
-    ? projects.filter((project) => project.client_id === selectedClientId)
-    : projects;
+  const visibleProjects = selectedClientId ? projects.filter((p) => p.client_id === selectedClientId) : projects;
 
   const filtered = invoices.filter((inv) => {
-    const matchSearch = inv.supplier_name.toLowerCase().includes(search.toLowerCase()) ||
-      (inv.invoice_number || "").toLowerCase().includes(search.toLowerCase());
+    const matchSearch = inv.supplier_name.toLowerCase().includes(search.toLowerCase()) || (inv.invoice_number || "").toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === "all" || inv.payment_status === filterStatus;
     const matchQuarter = filterQuarter === "all" || `${inv.fiscal_year}-${inv.quarter}` === filterQuarter;
     const matchClient = !selectedClientId || inv.client_id === selectedClientId;
@@ -325,263 +263,216 @@ export default function FacturasPage() {
   const overdueCount = invoices.filter(i => i.payment_status === "overdue").length;
   const quarters = [...new Set(invoices.map(i => `${i.fiscal_year}-${i.quarter}`))].sort().reverse();
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-brand-green)]"></div></div>;
+  if (loading) return <Loading />;
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">Facturas</h1>
-          <p className="text-[var(--color-navy-400)] text-sm mt-1">Sube fotos de facturas y la IA extrae los datos automáticamente</p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <select
-            value={selectedClientId}
-            onChange={(e) => setSelectedClientId(e.target.value)}
-            className="px-4 py-2 rounded-lg text-sm bg-[var(--color-navy-800)] text-[var(--color-navy-50)] border border-[var(--color-navy-700)]"
-          >
-            <option value="">Sin asignar / seleccionar cliente...</option>
-            {clients.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={selectedProjectId}
-            onChange={(e) => setSelectedProjectId(e.target.value)}
-            className="px-4 py-2 rounded-lg text-sm bg-[var(--color-navy-800)] text-[var(--color-navy-50)] border border-[var(--color-navy-700)]"
-          >
-            <option value="">Sin asignar / seleccionar obra...</option>
-            {visibleProjects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
-          <label className={`px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition ${uploading ? "bg-gray-600 text-gray-300 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-500"}`}>
-            {uploading ? uploadProgress : "📷 Escanear factura"}
-            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleUpload} disabled={uploading} className="hidden" />
-          </label>
-          <button onClick={() => { resetForm(); setShowForm(true); setSelectedInvoice(null); }} className="px-4 py-2 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-lg text-sm font-medium hover:opacity-90 transition">
-            + Nueva factura
-          </button>
-        </div>
-      </div>
+    <>
+      <PageHeader
+        title="Facturas recibidas"
+        description="Sube fotos de facturas y la IA extrae los datos automáticamente"
+        actions={
+          <div className="flex gap-2 flex-wrap">
+            <label className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-medium cursor-pointer transition ${uploading ? "bg-navy-100 text-navy-400 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              {uploading ? uploadProgress : "Escanear factura"}
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleUpload} disabled={uploading} className="hidden" />
+            </label>
+            <Button onClick={() => { resetForm(); setShowForm(true); setSelectedInvoice(null); }}>+ Nueva factura</Button>
+          </div>
+        }
+      />
 
-      {/* Stats */}
+      {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-blue-400">{filtered.length}</p>
-          <p className="text-xs text-[var(--color-navy-400)]">Facturas</p>
-        </div>
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-[var(--color-brand-green)]">{totalAmount.toFixed(2)}€</p>
-          <p className="text-xs text-[var(--color-navy-400)]">Total</p>
-        </div>
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-yellow-400">{pendingCount}</p>
-          <p className="text-xs text-[var(--color-navy-400)]">Pendientes</p>
-        </div>
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-red-400">{overdueCount}</p>
-          <p className="text-xs text-[var(--color-navy-400)]">Vencidas</p>
-        </div>
+        <StatCard label="Facturas" value={filtered.length} accent="blue" />
+        <StatCard label="Total" value={eur(totalAmount)} accent="green" />
+        <StatCard label="Pendientes" value={pendingCount} accent="yellow" />
+        <StatCard label="Vencidas" value={overdueCount} accent="red" />
       </div>
 
       {/* Resumen fiscal */}
-      <div className="bg-[var(--color-navy-800)] rounded-xl p-4 mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div><p className="text-xs text-[var(--color-navy-400)]">Base imponible</p><p className="text-lg font-semibold text-[var(--color-navy-100)]">{totalBase.toFixed(2)}€</p></div>
-        <div><p className="text-xs text-[var(--color-navy-400)]">IVA soportado</p><p className="text-lg font-semibold text-blue-300">{totalIVA.toFixed(2)}€</p></div>
-        <div><p className="text-xs text-[var(--color-navy-400)]">IRPF retenido</p><p className="text-lg font-semibold text-orange-300">{totalIRPF.toFixed(2)}€</p></div>
-        <div><p className="text-xs text-[var(--color-navy-400)]">Total facturas</p><p className="text-lg font-semibold text-[var(--color-brand-green)]">{totalAmount.toFixed(2)}€</p></div>
-      </div>
+      <Card className="mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div><p className="text-xs font-medium text-navy-500 uppercase tracking-wider">Base imponible</p><p className="text-lg font-bold text-navy-900 mt-1">{eur(totalBase)}</p></div>
+          <div><p className="text-xs font-medium text-navy-500 uppercase tracking-wider">IVA soportado</p><p className="text-lg font-bold text-blue-600 mt-1">{eur(totalIVA)}</p></div>
+          <div><p className="text-xs font-medium text-navy-500 uppercase tracking-wider">IRPF retenido</p><p className="text-lg font-bold text-orange-600 mt-1">{eur(totalIRPF)}</p></div>
+          <div><p className="text-xs font-medium text-navy-500 uppercase tracking-wider">Total facturas</p><p className="text-lg font-bold text-brand-green mt-1">{eur(totalAmount)}</p></div>
+        </div>
+      </Card>
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <input type="text" placeholder="Buscar por proveedor o nº factura..." value={search} onChange={(e) => setSearch(e.target.value)} className="flex-1 bg-[var(--color-navy-800)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-700)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm" />
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-[var(--color-navy-800)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-700)] text-sm">
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por proveedor o n.º factura..." className="flex-1" />
+        <Select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-auto">
+          <option value="">Todos los clientes</option>
+          {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </Select>
+        <Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-auto">
           <option value="all">Todos los estados</option>
           <option value="pending">Pendiente</option>
           <option value="paid">Pagada</option>
           <option value="overdue">Vencida</option>
-        </select>
-        <select value={filterQuarter} onChange={(e) => setFilterQuarter(e.target.value)} className="bg-[var(--color-navy-800)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-700)] text-sm">
+        </Select>
+        <Select value={filterQuarter} onChange={(e) => setFilterQuarter(e.target.value)} className="w-auto">
           <option value="all">Todos los trimestres</option>
           {quarters.map(q => <option key={q} value={q}>{q}</option>)}
-        </select>
+        </Select>
       </div>
 
-      {/* Manual Form */}
+      {/* Form */}
       {showForm && (
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-6 border border-[var(--color-navy-600)]">
-          <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-4">
-            {editingId ? "Editar factura" : "Nueva factura manual"}
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Proveedor *</label>
-              <input type="text" value={form.supplier_name} onChange={(e) => updateField("supplier_name", e.target.value)} placeholder="Nombre del proveedor" className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-3 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">NIF/CIF</label>
-              <input type="text" value={form.supplier_nif} onChange={(e) => updateField("supplier_nif", e.target.value)} placeholder="B12345678" className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-3 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Nº Factura</label>
-              <input type="text" value={form.invoice_number} onChange={(e) => updateField("invoice_number", e.target.value)} placeholder="FAC-2024-001" className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-3 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Fecha factura</label>
-              <input type="date" value={form.invoice_date} onChange={(e) => updateField("invoice_date", e.target.value)} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-3 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Vencimiento</label>
-              <input type="date" value={form.due_date} onChange={(e) => updateField("due_date", e.target.value)} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-3 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Categoría</label>
-              <select value={form.category} onChange={(e) => updateField("category", e.target.value)} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-3 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm">
+        <Card className="mb-6">
+          <h3 className="text-base font-semibold text-navy-900 mb-5">{editingId ? "Editar factura" : "Nueva factura manual"}</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-4">
+            <FormField label="Proveedor" required>
+              <Input type="text" value={form.supplier_name} onChange={(e) => updateField("supplier_name", e.target.value)} placeholder="Nombre del proveedor" />
+            </FormField>
+            <FormField label="NIF/CIF">
+              <Input type="text" value={form.supplier_nif} onChange={(e) => updateField("supplier_nif", e.target.value)} placeholder="B12345678" />
+            </FormField>
+            <FormField label="N.º Factura">
+              <Input type="text" value={form.invoice_number} onChange={(e) => updateField("invoice_number", e.target.value)} placeholder="FAC-2024-001" />
+            </FormField>
+            <FormField label="Fecha factura">
+              <Input type="date" value={form.invoice_date} onChange={(e) => updateField("invoice_date", e.target.value)} />
+            </FormField>
+            <FormField label="Vencimiento">
+              <Input type="date" value={form.due_date} onChange={(e) => updateField("due_date", e.target.value)} />
+            </FormField>
+            <FormField label="Categoría">
+              <Select value={form.category} onChange={(e) => updateField("category", e.target.value)}>
                 {Object.entries(categoryLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Base imponible *</label>
-              <input type="number" step="0.01" value={form.base_amount} onChange={(e) => updateField("base_amount", e.target.value)} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-3 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">IVA %</label>
-              <select value={form.iva_percentage} onChange={(e) => updateField("iva_percentage", e.target.value)} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-3 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm">
+              </Select>
+            </FormField>
+            <FormField label="Base imponible" required>
+              <Input type="number" step="0.01" value={form.base_amount} onChange={(e) => updateField("base_amount", e.target.value)} />
+            </FormField>
+            <FormField label="IVA %">
+              <Select value={form.iva_percentage} onChange={(e) => updateField("iva_percentage", e.target.value)}>
                 <option value="0">0% (Exento)</option>
                 <option value="4">4% (Superreducido)</option>
                 <option value="10">10% (Reducido)</option>
                 <option value="21">21% (General)</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">IRPF %</label>
-              <select value={form.irpf_percentage} onChange={(e) => updateField("irpf_percentage", e.target.value)} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-3 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm">
+              </Select>
+            </FormField>
+            <FormField label="IRPF %">
+              <Select value={form.irpf_percentage} onChange={(e) => updateField("irpf_percentage", e.target.value)}>
                 <option value="0">0% (Sin retención)</option>
                 <option value="7">7%</option>
                 <option value="15">15%</option>
                 <option value="19">19%</option>
-              </select>
+              </Select>
+            </FormField>
+            <div className="rounded-xl bg-navy-50/80 border border-navy-100 p-4">
+              <p className="text-xs text-navy-500">IVA: <span className="font-semibold text-blue-600">{form.iva_amount.toFixed(2)} EUR</span></p>
+              <p className="text-xs text-navy-500">IRPF: <span className="font-semibold text-orange-600">-{form.irpf_amount.toFixed(2)} EUR</span></p>
+              <p className="text-sm font-bold text-brand-green mt-1">Total: {form.total_amount.toFixed(2)} EUR</p>
             </div>
-            <div className="bg-[var(--color-navy-700)] rounded-lg p-3">
-              <p className="text-xs text-[var(--color-navy-400)]">IVA: <span className="text-blue-300">{form.iva_amount.toFixed(2)}€</span></p>
-              <p className="text-xs text-[var(--color-navy-400)]">IRPF: <span className="text-orange-300">-{form.irpf_amount.toFixed(2)}€</span></p>
-              <p className="text-sm font-bold text-[var(--color-brand-green)] mt-1">Total: {form.total_amount.toFixed(2)}€</p>
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Estado</label>
-              <select value={form.payment_status} onChange={(e) => updateField("payment_status", e.target.value)} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-3 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm">
+            <FormField label="Estado">
+              <Select value={form.payment_status} onChange={(e) => updateField("payment_status", e.target.value)}>
                 <option value="pending">Pendiente</option>
                 <option value="paid">Pagada</option>
                 <option value="overdue">Vencida</option>
                 <option value="cancelled">Anulada</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Método de pago</label>
-              <select value={form.payment_method} onChange={(e) => updateField("payment_method", e.target.value)} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-3 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm">
+              </Select>
+            </FormField>
+            <FormField label="Método de pago">
+              <Select value={form.payment_method} onChange={(e) => updateField("payment_method", e.target.value)}>
                 <option value="">Sin especificar</option>
                 <option value="transferencia">Transferencia</option>
                 <option value="tarjeta">Tarjeta</option>
                 <option value="efectivo">Efectivo</option>
                 <option value="domiciliacion">Domiciliación</option>
-              </select>
-            </div>
-            <div className="md:col-span-3">
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Notas</label>
-              <input type="text" value={form.notes} onChange={(e) => updateField("notes", e.target.value)} placeholder="Observaciones..." className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-3 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm" />
-            </div>
+              </Select>
+            </FormField>
+            <FormField label="Notas" className="md:col-span-3">
+              <Input type="text" value={form.notes} onChange={(e) => updateField("notes", e.target.value)} placeholder="Observaciones..." />
+            </FormField>
           </div>
-          <div className="flex gap-3 mt-4">
-            <button onClick={handleSave} className="px-5 py-2 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-lg text-sm font-medium hover:opacity-90 transition">
-              {editingId ? "Guardar cambios" : "Registrar factura"}
-            </button>
-            <button onClick={resetForm} className="px-5 py-2 bg-[var(--color-navy-700)] text-[var(--color-navy-300)] rounded-lg text-sm hover:bg-[var(--color-navy-600)] transition">Cancelar</button>
+          <div className="flex gap-3 mt-5 justify-end">
+            <Button variant="secondary" onClick={resetForm}>Cancelar</Button>
+            <Button onClick={handleSave}>{editingId ? "Guardar cambios" : "Registrar factura"}</Button>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Detail */}
       {selectedInvoice && !showForm && (
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-6 border border-[var(--color-navy-600)]">
+        <Card className="mb-6">
           <div className="flex justify-between items-start mb-4">
-            <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider">Detalle factura</h3>
+            <h3 className="text-sm font-semibold text-navy-900 uppercase tracking-wider">Detalle factura</h3>
             <div className="flex gap-3">
-              <button onClick={() => startEdit(selectedInvoice)} className="text-xs text-blue-400 hover:underline">Editar</button>
-              <button onClick={() => setSelectedInvoice(null)} className="text-xs text-[var(--color-navy-400)] hover:underline">Cerrar</button>
+              <button onClick={() => startEdit(selectedInvoice)} className="text-xs text-brand-green hover:underline font-medium">Editar</button>
+              <button onClick={() => setSelectedInvoice(null)} className="text-xs text-navy-500 hover:underline">Cerrar</button>
             </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div><p className="text-xs text-[var(--color-navy-400)]">Proveedor</p><p className="text-[var(--color-navy-100)] font-medium">{selectedInvoice.supplier_name}</p></div>
-            <div><p className="text-xs text-[var(--color-navy-400)]">NIF</p><p className="text-[var(--color-navy-100)]">{selectedInvoice.supplier_nif || "—"}</p></div>
-            <div><p className="text-xs text-[var(--color-navy-400)]">Nº Factura</p><p className="text-[var(--color-navy-100)]">{selectedInvoice.invoice_number || "—"}</p></div>
-            <div><p className="text-xs text-[var(--color-navy-400)]">Fecha</p><p className="text-[var(--color-navy-100)]">{selectedInvoice.invoice_date ? new Date(selectedInvoice.invoice_date).toLocaleDateString("es-ES") : "—"}</p></div>
-            <div><p className="text-xs text-[var(--color-navy-400)]">Base</p><p className="text-[var(--color-navy-100)]">{Number(selectedInvoice.base_amount).toFixed(2)}€</p></div>
-            <div><p className="text-xs text-[var(--color-navy-400)]">IVA ({selectedInvoice.iva_percentage}%)</p><p className="text-blue-300">{Number(selectedInvoice.iva_amount).toFixed(2)}€</p></div>
-            <div><p className="text-xs text-[var(--color-navy-400)]">IRPF ({selectedInvoice.irpf_percentage}%)</p><p className="text-orange-300">{Number(selectedInvoice.irpf_amount).toFixed(2)}€</p></div>
-            <div><p className="text-xs text-[var(--color-navy-400)]">Total</p><p className="text-[var(--color-brand-green)] font-bold">{Number(selectedInvoice.total_amount).toFixed(2)}€</p></div>
+            <div><p className="text-xs text-navy-500">Proveedor</p><p className="text-navy-900 font-medium">{selectedInvoice.supplier_name}</p></div>
+            <div><p className="text-xs text-navy-500">NIF</p><p className="text-navy-900">{selectedInvoice.supplier_nif || "—"}</p></div>
+            <div><p className="text-xs text-navy-500">N.º Factura</p><p className="text-navy-900">{selectedInvoice.invoice_number || "—"}</p></div>
+            <div><p className="text-xs text-navy-500">Fecha</p><p className="text-navy-900">{selectedInvoice.invoice_date ? new Date(selectedInvoice.invoice_date).toLocaleDateString("es-ES") : "—"}</p></div>
+            <div><p className="text-xs text-navy-500">Base</p><p className="text-navy-900">{Number(selectedInvoice.base_amount).toFixed(2)} EUR</p></div>
+            <div><p className="text-xs text-navy-500">IVA ({selectedInvoice.iva_percentage}%)</p><p className="text-blue-600">{Number(selectedInvoice.iva_amount).toFixed(2)} EUR</p></div>
+            <div><p className="text-xs text-navy-500">IRPF ({selectedInvoice.irpf_percentage}%)</p><p className="text-orange-600">{Number(selectedInvoice.irpf_amount).toFixed(2)} EUR</p></div>
+            <div><p className="text-xs text-navy-500">Total</p><p className="text-brand-green font-bold">{Number(selectedInvoice.total_amount).toFixed(2)} EUR</p></div>
             {selectedInvoice.ocr_confidence > 0 && (
-              <div><p className="text-xs text-[var(--color-navy-400)]">Confianza OCR</p><p className="text-[var(--color-navy-100)]">{(Number(selectedInvoice.ocr_confidence) * 100).toFixed(0)}%{selectedInvoice.manually_verified ? " ✓" : ""}</p></div>
+              <div><p className="text-xs text-navy-500">Confianza OCR</p><p className="text-navy-900">{(Number(selectedInvoice.ocr_confidence) * 100).toFixed(0)}%{selectedInvoice.manually_verified ? " (verificada)" : ""}</p></div>
             )}
-            <div><p className="text-xs text-[var(--color-navy-400)]">Trimestre</p><p className="text-[var(--color-navy-100)]">{selectedInvoice.fiscal_year} {selectedInvoice.quarter}</p></div>
+            <div><p className="text-xs text-navy-500">Trimestre</p><p className="text-navy-900">{selectedInvoice.fiscal_year} {selectedInvoice.quarter}</p></div>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Table */}
       {filtered.length === 0 ? (
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-10 text-center">
-          <p className="text-4xl mb-3">🧾</p>
-          <p className="text-[var(--color-navy-400)]">No hay facturas todavía.</p>
-          <p className="text-sm text-[var(--color-navy-500)] mt-1">Sube una foto con &quot;Escanear factura&quot; o añade una manualmente con &quot;+ Nueva factura&quot;.</p>
-        </div>
+        <EmptyState
+          title="Sin facturas todavía"
+          description='Sube una foto con "Escanear factura" o añade una manualmente'
+        />
       ) : (
-        <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden">
+        <div className="rounded-2xl border border-navy-100 bg-white shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--color-navy-700)]">
-                  <th className="text-left text-xs font-semibold text-[var(--color-navy-400)] uppercase px-5 py-3">Proveedor</th>
-                  <th className="text-center text-xs font-semibold text-[var(--color-navy-400)] uppercase px-3 py-3">Nº</th>
-                  <th className="text-center text-xs font-semibold text-[var(--color-navy-400)] uppercase px-3 py-3">Fecha</th>
-                  <th className="text-center text-xs font-semibold text-[var(--color-navy-400)] uppercase px-3 py-3">Categ.</th>
-                  <th className="text-right text-xs font-semibold text-[var(--color-navy-400)] uppercase px-3 py-3">Base</th>
-                  <th className="text-right text-xs font-semibold text-[var(--color-navy-400)] uppercase px-3 py-3">IVA</th>
-                  <th className="text-right text-xs font-semibold text-[var(--color-navy-400)] uppercase px-5 py-3">Total</th>
-                  <th className="text-center text-xs font-semibold text-[var(--color-navy-400)] uppercase px-3 py-3">Estado</th>
-                  <th className="text-right text-xs font-semibold text-[var(--color-navy-400)] uppercase px-5 py-3">Acciones</th>
+                <tr className="border-b border-navy-100 bg-navy-50/60">
+                  <th className="text-left text-[11px] font-semibold text-navy-500 uppercase tracking-wider px-5 py-3">Proveedor</th>
+                  <th className="text-center text-[11px] font-semibold text-navy-500 uppercase tracking-wider px-3 py-3 hidden md:table-cell">N.º</th>
+                  <th className="text-center text-[11px] font-semibold text-navy-500 uppercase tracking-wider px-3 py-3 hidden md:table-cell">Fecha</th>
+                  <th className="text-center text-[11px] font-semibold text-navy-500 uppercase tracking-wider px-3 py-3 hidden lg:table-cell">Categ.</th>
+                  <th className="text-right text-[11px] font-semibold text-navy-500 uppercase tracking-wider px-3 py-3 hidden lg:table-cell">Base</th>
+                  <th className="text-right text-[11px] font-semibold text-navy-500 uppercase tracking-wider px-5 py-3">Total</th>
+                  <th className="text-center text-[11px] font-semibold text-navy-500 uppercase tracking-wider px-3 py-3">Estado</th>
+                  <th className="text-right text-[11px] font-semibold text-navy-500 uppercase tracking-wider px-5 py-3">Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((inv) => (
-                  <tr key={inv.id} className="border-t border-[var(--color-navy-700)] hover:bg-[var(--color-navy-750)] transition cursor-pointer" onClick={() => { setSelectedInvoice(inv); setShowForm(false); }}>
-                    <td className="px-5 py-3">
-                      <p className="text-sm font-medium text-[var(--color-navy-100)]">{inv.supplier_name || "Sin proveedor"}</p>
-                      {inv.supplier_nif && <p className="text-xs text-[var(--color-navy-400)]">{inv.supplier_nif}</p>}
-                    </td>
-                    <td className="px-3 py-3 text-center text-xs text-[var(--color-navy-300)]">{inv.invoice_number || "—"}</td>
-                    <td className="px-3 py-3 text-center text-xs text-[var(--color-navy-300)]">{inv.invoice_date ? new Date(inv.invoice_date).toLocaleDateString("es-ES") : "—"}</td>
-                    <td className="px-3 py-3 text-center"><span className="text-xs px-2 py-1 rounded-full bg-blue-900/30 text-blue-300">{categoryLabels[inv.category] || inv.category}</span></td>
-                    <td className="px-3 py-3 text-right text-sm text-[var(--color-navy-200)]">{Number(inv.base_amount).toFixed(2)}€</td>
-                    <td className="px-3 py-3 text-right text-sm text-blue-300">{Number(inv.iva_amount).toFixed(2)}€</td>
-                    <td className="px-5 py-3 text-right text-sm font-semibold text-[var(--color-navy-100)]">{Number(inv.total_amount).toFixed(2)}€</td>
-                    <td className="px-3 py-3 text-center"><span className={`text-xs px-2 py-1 rounded-full ${statusLabels[inv.payment_status]?.color}`}>{statusLabels[inv.payment_status]?.label}</span></td>
-                    <td className="px-5 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                      <button onClick={() => startEdit(inv)} className="text-xs text-blue-400 hover:underline mr-2">Editar</button>
-                      {inv.payment_status === "pending" && <button onClick={() => markAsPaid(inv.id)} className="text-xs text-[var(--color-brand-green)] hover:underline mr-2">Pagada</button>}
-                      <button onClick={() => deleteInvoice(inv.id)} className="text-xs text-red-400 hover:underline">Eliminar</button>
-                    </td>
-                  </tr>
-                ))}
+                {filtered.map((inv) => {
+                  const st = statusConfig[inv.payment_status] || { label: inv.payment_status, variant: "gray" as const };
+                  return (
+                    <tr key={inv.id} className="border-b border-navy-50 hover:bg-navy-50/40 transition-colors cursor-pointer" onClick={() => { setSelectedInvoice(inv); setShowForm(false); }}>
+                      <td className="px-5 py-3.5">
+                        <p className="text-sm font-medium text-navy-900">{inv.supplier_name || "Sin proveedor"}</p>
+                        {inv.supplier_nif && <p className="text-xs text-navy-500">{inv.supplier_nif}</p>}
+                      </td>
+                      <td className="px-3 py-3.5 text-center text-xs text-navy-600 hidden md:table-cell">{inv.invoice_number || "—"}</td>
+                      <td className="px-3 py-3.5 text-center text-xs text-navy-600 hidden md:table-cell">{inv.invoice_date ? new Date(inv.invoice_date).toLocaleDateString("es-ES") : "—"}</td>
+                      <td className="px-3 py-3.5 text-center hidden lg:table-cell"><Badge variant="blue">{categoryLabels[inv.category] || inv.category}</Badge></td>
+                      <td className="px-3 py-3.5 text-right text-navy-600 hidden lg:table-cell">{Number(inv.base_amount).toFixed(2)} EUR</td>
+                      <td className="px-5 py-3.5 text-right font-medium text-navy-900">{Number(inv.total_amount).toFixed(2)} EUR</td>
+                      <td className="px-3 py-3.5 text-center"><Badge variant={st.variant}>{st.label}</Badge></td>
+                      <td className="px-5 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+                        <button onClick={() => startEdit(inv)} className="text-xs text-brand-green hover:underline font-medium mr-2">Editar</button>
+                        {inv.payment_status === "pending" && <button onClick={() => markAsPaid(inv.id)} className="text-xs text-blue-600 hover:underline font-medium mr-2">Pagada</button>}
+                        <button onClick={() => deleteInvoice(inv.id)} className="text-xs text-red-600 hover:underline font-medium">Eliminar</button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

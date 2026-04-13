@@ -4,6 +4,12 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import Link from "next/link";
 import { useSector } from "@/lib/sector-context";
+import PageHeader from "@/components/ui/page-header";
+import { Card, StatCard } from "@/components/ui/card";
+import { Button, LinkButton } from "@/components/ui/button";
+import Badge from "@/components/ui/badge";
+import { SearchInput, Select } from "@/components/ui/form-fields";
+import EmptyState from "@/components/ui/empty-state";
 
 type Budget = {
   id: string;
@@ -33,7 +39,7 @@ export default function BudgetsPage() {
   useEffect(() => { fetchBudgets(); }, []);
 
   const handleDelete = async (id: string) => {
-    if (confirm("Eliminar este presupuesto?")) {
+    if (confirm("¿Eliminar este presupuesto?")) {
       await supabase.from("budgets").delete().eq("id", id);
       await fetchBudgets();
     }
@@ -50,12 +56,8 @@ export default function BudgetsPage() {
     return matchSearch && matchStatus;
   });
 
-  const statusColor = (s: string) => {
-    if (s === "accepted") return "bg-brand-green/10 text-brand-green";
-    if (s === "sent") return "bg-blue-50 text-blue-600";
-    if (s === "pending") return "bg-yellow-50 text-yellow-600";
-    return "bg-red-50 text-red-500";
-  };
+  const statusVariant = (s: string): "green" | "blue" | "yellow" | "red" =>
+    s === "accepted" ? "green" : s === "sent" ? "blue" : s === "pending" ? "yellow" : "red";
   const statusLabel = (s: string) => {
     if (s === "accepted") return "Aceptado";
     if (s === "sent") return "Enviado";
@@ -73,75 +75,110 @@ export default function BudgetsPage() {
 
   return (
     <>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-navy-900">{label("budgets")}</h1>
-          <p className="mt-1 text-navy-600">{budgets.length} presupuesto{budgets.length !== 1 ? "s" : ""} en total</p>
-        </div>
-        <Link href="/dashboard/budgets/generate" className="px-4 py-2 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-lg text-sm font-medium hover:opacity-90 transition">⚡ Generar con IA</Link>
-          <Link href="/dashboard/budgets/new" className="px-5 py-2.5 rounded-xl bg-brand-green text-white font-semibold shadow-lg shadow-brand-green/25 hover:bg-brand-green-dark transition-colors text-center">+ Nuevo presupuesto</Link>
-      </div>
+      <PageHeader
+        title={label("budgets")}
+        count={budgets.length}
+        countLabel={`presupuesto${budgets.length !== 1 ? "s" : ""} en total`}
+        actions={
+          <div className="flex gap-2">
+            <LinkButton href="/dashboard/budgets/generate" variant="secondary" size="md">
+              Generar con IA
+            </LinkButton>
+            <LinkButton href="/dashboard/budgets/new" size="md">
+              + Nuevo presupuesto
+            </LinkButton>
+          </div>
+        }
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-        <div className="rounded-2xl border border-navy-100 bg-white p-5 shadow-sm">
-          <p className="text-sm text-navy-500">Aceptados</p>
-          <p className="mt-1 text-2xl font-bold text-brand-green">{totalAccepted.toLocaleString("es-ES", { style: "currency", currency: "EUR" })}</p>
-        </div>
-        <div className="rounded-2xl border border-navy-100 bg-white p-5 shadow-sm">
-          <p className="text-sm text-navy-500">Pendientes</p>
-          <p className="mt-1 text-2xl font-bold text-yellow-600">{totalPending.toLocaleString("es-ES", { style: "currency", currency: "EUR" })}</p>
-        </div>
+        <StatCard
+          label="Aceptados"
+          value={totalAccepted.toLocaleString("es-ES", { style: "currency", currency: "EUR" })}
+          accent="green"
+        />
+        <StatCard
+          label="Pendientes"
+          value={totalPending.toLocaleString("es-ES", { style: "currency", currency: "EUR" })}
+          accent="yellow"
+        />
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <input type="text" value={search} onChange={e => setSearch(e.target.value)} className="flex-1 max-w-md px-4 py-3 rounded-xl border border-navy-200 bg-white text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50" placeholder="Buscar por titulo, numero o cliente..." />
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="px-4 py-3 rounded-xl border border-navy-200 bg-white text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por título, número o cliente..."
+          className="flex-1 max-w-md"
+        />
+        <Select
+          value={filterStatus}
+          onChange={e => setFilterStatus(e.target.value)}
+          className="sm:w-auto"
+        >
           <option value="all">Todos</option>
           <option value="pending">Pendientes</option>
           <option value="sent">Enviados</option>
           <option value="accepted">Aceptados</option>
           <option value="rejected">Rechazados</option>
-        </select>
+        </Select>
       </div>
 
       {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-navy-100 bg-white p-12 text-center">
-          <p className="text-4xl mb-4">📋</p>
-          <h3 className="text-lg font-bold text-navy-900">{search || filterStatus !== "all" ? "Sin resultados" : "Sin presupuestos todavia"}</h3>
-          <p className="mt-2 text-navy-600">{search ? "Prueba con otro termino" : "Crea tu primer presupuesto profesional"}</p>
-        </div>
+        <EmptyState
+          title={search || filterStatus !== "all" ? "Sin resultados" : "Sin presupuestos todavía"}
+          description={search ? "Prueba con otro término" : "Crea tu primer presupuesto profesional"}
+        />
       ) : (
         <div className="space-y-4">
           {filtered.map(b => (
-            <div key={b.id} className="rounded-2xl border border-navy-100 bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-3 mb-1">
-                    <span className="text-xs font-mono text-navy-400">{b.budget_number}</span>
-                    <span className={`inline-block px-2.5 py-1 rounded-lg text-xs font-semibold ${statusColor(b.status)}`}>{statusLabel(b.status)}</span>
-                    <span className="text-xs text-navy-400">{serviceLabel(b.service_type)}</span>
+            <Card key={b.id} className="hover:shadow-md transition-shadow">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2 flex-wrap">
+                    <span className="text-xs font-mono text-navy-500">{b.budget_number}</span>
+                    <Badge variant={statusVariant(b.status)}>
+                      {statusLabel(b.status)}
+                    </Badge>
+                    <span className="text-xs text-navy-500">{serviceLabel(b.service_type)}</span>
                   </div>
-                  <h3 className="text-lg font-bold text-navy-900">{b.title}</h3>
-                  {b.clients && <p className="text-sm text-navy-600">{b.clients.name}{b.clients.company ? " · " + b.clients.company : ""}</p>}
-                  <p className="text-xs text-navy-400 mt-1">{new Date(b.created_at).toLocaleDateString("es-ES")}</p>
+                  <h3 className="text-base font-bold text-navy-900">{b.title}</h3>
+                  {b.clients && (
+                    <p className="text-sm text-navy-600 mt-1">
+                      {b.clients.name}{b.clients.company ? " · " + b.clients.company : ""}
+                    </p>
+                  )}
+                  <p className="text-xs text-navy-400 mt-1.5">{new Date(b.created_at).toLocaleDateString("es-ES")}</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-2xl font-bold text-navy-900">{Number(b.total).toLocaleString("es-ES", { style: "currency", currency: "EUR" })}</p>
+                <div className="text-right sm:flex-shrink-0">
+                  <p className="text-xl font-bold text-navy-900">{Number(b.total).toLocaleString("es-ES", { style: "currency", currency: "EUR" })}</p>
                   <p className="text-xs text-navy-400">IVA incluido</p>
                 </div>
               </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Link href={`/dashboard/budgets/${b.id}`} className="px-3 py-1.5 rounded-lg border border-navy-200 text-xs font-medium text-navy-700 hover:bg-navy-50">Ver / Editar</Link>
-                {b.status === "pending" && <button onClick={() => updateStatus(b.id, "sent")} className="px-3 py-1.5 rounded-lg border border-blue-200 text-xs font-medium text-blue-600 hover:bg-blue-50">Marcar enviado</button>}
+              <div className="flex flex-wrap gap-2 pt-4 border-t border-navy-100">
+                <LinkButton href={`/dashboard/budgets/${b.id}`} variant="secondary" size="sm">
+                  Ver / Editar
+                </LinkButton>
+                {b.status === "pending" && (
+                  <Button onClick={() => updateStatus(b.id, "sent")} variant="secondary" size="sm">
+                    Marcar enviado
+                  </Button>
+                )}
                 {b.status === "sent" && (
                   <>
-                    <button onClick={() => updateStatus(b.id, "accepted")} className="px-3 py-1.5 rounded-lg border border-brand-green/30 text-xs font-medium text-brand-green hover:bg-brand-green/5">Aceptado</button>
-                    <button onClick={() => updateStatus(b.id, "rejected")} className="px-3 py-1.5 rounded-lg border border-red-200 text-xs font-medium text-red-500 hover:bg-red-50">Rechazado</button>
+                    <Button onClick={() => updateStatus(b.id, "accepted")} variant="secondary" size="sm">
+                      Aceptado
+                    </Button>
+                    <Button onClick={() => updateStatus(b.id, "rejected")} variant="danger" size="sm">
+                      Rechazado
+                    </Button>
                   </>
                 )}
-                <button onClick={() => handleDelete(b.id)} className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50">Eliminar</button>
+                <Button onClick={() => handleDelete(b.id)} variant="danger" size="sm">
+                  Eliminar
+                </Button>
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}

@@ -59,13 +59,11 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
     router.push("/");
   };
 
-  // Build nav items from sector config or fallback
   const sectorModules = visibleModules();
   const navItems = sectorModules.length > 0
     ? sectorModules.map(m => ({ href: m.href, label: m.label, icon: m.icon }))
     : fallbackNavItems;
 
-  // User initials for the avatar
   const initials = (() => {
     const name = user?.user_metadata?.full_name || user?.user_metadata?.name;
     if (name) {
@@ -88,7 +86,6 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
       {/* ── Topbar ─────────────────────────────────────────────────── */}
       <header className="fixed top-0 left-0 right-0 z-40 border-b border-navy-100 bg-white/90 backdrop-blur">
         <div className="flex items-center gap-4 px-4 py-3 sm:px-6">
-          {/* Logo + mobile toggle */}
           <div className="flex shrink-0 items-center gap-3 lg:w-64">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -102,7 +99,6 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
             <Logo href="/dashboard" size={30} />
           </div>
 
-          {/* Search */}
           <div className="relative hidden max-w-md flex-1 md:block">
             <svg
               className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-navy-400"
@@ -120,7 +116,6 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex flex-1 items-center justify-end gap-2 sm:gap-3">
-            {/* Notifications */}
             <button
               type="button"
               aria-label="Notificaciones"
@@ -133,7 +128,6 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
               <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-brand-green ring-2 ring-white" />
             </button>
 
-            {/* Avatar + menu */}
             <div className="relative">
               <button
                 onClick={() => setMenuOpen(v => !v)}
@@ -187,7 +181,7 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      {/* ── Sidebar ────────────────────────────────────────────────── */}
+      {/* ── Sidebar (only navigation — clean) ──────────────────────── */}
       <aside
         className={`fixed bottom-0 left-0 top-[57px] z-30 w-64 transform border-r border-navy-100 bg-white transition-transform duration-200 lg:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"

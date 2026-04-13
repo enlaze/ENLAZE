@@ -2,14 +2,19 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
+import PageHeader from "@/components/ui/page-header";
+import { Card, CardHeader } from "@/components/ui/card";
+import { FormField, Input, Select, Textarea } from "@/components/ui/form-fields";
+import { Button } from "@/components/ui/button";
+import Badge from "@/components/ui/badge";
 
 type Client = { id: string; name: string; email: string };
 type Message = { id: string; client_id: string; content: string; status: string; created_at: string; clients: { name: string; email: string } };
 
 const templates = [
   { name: "Bienvenida", subject: "Bienvenido a {empresa}", body: "Hola {nombre},\n\nGracias por confiar en nosotros. Estamos encantados de tenerte como cliente.\n\nSi tienes cualquier duda, no dudes en escribirnos.\n\nUn saludo" },
-  { name: "Recordatorio cita", subject: "Recordatorio de tu cita", body: "Hola {nombre},\n\nTe recordamos que tienes una cita programada con nosotros.\n\nSi necesitas cambiarla, contactanos con antelacion.\n\nUn saludo" },
-  { name: "Seguimiento", subject: "Como va todo?", body: "Hola {nombre},\n\nQueriamos saber como va todo y si podemos ayudarte en algo.\n\nEstamos a tu disposicion.\n\nUn saludo" },
+  { name: "Recordatorio cita", subject: "Recordatorio de tu cita", body: "Hola {nombre},\n\nTe recordamos que tienes una cita programada con nosotros.\n\nSi necesitas cambiarla, contáctanos con antelación.\n\nUn saludo" },
+  { name: "Seguimiento", subject: "¿Cómo va todo?", body: "Hola {nombre},\n\nQueríamos saber cómo va todo y si podemos ayudarte en algo.\n\nEstamos a tu disposición.\n\nUn saludo" },
 ];
 
 export default function EmailsPage() {
@@ -68,58 +73,63 @@ export default function EmailsPage() {
   };
 
   const clientsWithEmail = clients.filter(c => c.email);
-  const statusColor = (s: string) => s === "sent" || s === "delivered" ? "bg-brand-green/10 text-brand-green" : s === "pending" ? "bg-yellow-50 text-yellow-600" : "bg-red-50 text-red-500";
-  const statusLabel = (s: string) => s === "sent" ? "Enviado" : s === "delivered" ? "Entregado" : s === "pending" ? "Pendiente" : "Error";
+
+  const statusBadge = (s: string) => {
+    if (s === "sent" || s === "delivered") return <Badge variant="green">{s === "sent" ? "Enviado" : "Entregado"}</Badge>;
+    if (s === "pending") return <Badge variant="yellow">Pendiente</Badge>;
+    return <Badge variant="red">Error</Badge>;
+  };
 
   return (
     <>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-navy-900">Emails</h1>
-        <p className="mt-1 text-navy-600">Envia emails automaticos a tus clientes</p>
-      </div>
+      <PageHeader title="Emails" description="Envía emails automáticos a tus clientes" />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-6">
-          <div className="rounded-2xl border border-navy-100 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-bold text-navy-900 mb-4">Nuevo email</h2>
+          <Card>
+            <h2 className="text-base font-semibold text-navy-900 mb-5">Nuevo email</h2>
             <form onSubmit={handleSend} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-navy-700 mb-1">Cliente</label>
-                <select value={selectedClient} onChange={e => setSelectedClient(e.target.value)} required className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50">
+              <FormField label="Cliente" required>
+                <Select value={selectedClient} onChange={e => setSelectedClient(e.target.value)} required>
                   <option value="">Seleccionar cliente...</option>
                   {clientsWithEmail.map(c => (<option key={c.id} value={c.id}>{c.name} ({c.email})</option>))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-navy-700 mb-1">Plantilla rapida</label>
+                </Select>
+              </FormField>
+              <FormField label="Plantilla rápida">
                 <div className="flex flex-wrap gap-2">
-                  {templates.map((t, i) => (<button key={i} type="button" onClick={() => applyTemplate(t)} className="px-3 py-1.5 rounded-lg border border-navy-200 text-xs font-medium text-navy-700 hover:bg-navy-50 transition-colors">{t.name}</button>))}
+                  {templates.map((t, i) => (
+                    <Button key={i} type="button" variant="secondary" size="sm" onClick={() => applyTemplate(t)}>{t.name}</Button>
+                  ))}
                 </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-navy-700 mb-1">Asunto</label>
-                <input type="text" value={subject} onChange={e => setSubject(e.target.value)} required className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50" placeholder="Asunto del email" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-navy-700 mb-1">Mensaje</label>
-                <textarea value={content} onChange={e => setContent(e.target.value)} required rows={5} className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50 resize-none" placeholder="Escribe tu mensaje..." />
-              </div>
-              {result.text && <p className={`text-sm ${result.type === "success" ? "text-brand-green" : "text-red-500"}`}>{result.text}</p>}
-              <button type="submit" disabled={sending} className="w-full py-3 rounded-xl bg-brand-green text-white font-semibold shadow-lg shadow-brand-green/25 hover:bg-brand-green-dark transition-colors disabled:opacity-50">{sending ? "Enviando..." : "Enviar email"}</button>
+              </FormField>
+              <FormField label="Asunto" required>
+                <Input type="text" value={subject} onChange={e => setSubject(e.target.value)} required placeholder="Asunto del email" />
+              </FormField>
+              <FormField label="Mensaje" required>
+                <Textarea value={content} onChange={e => setContent(e.target.value)} required rows={5} placeholder="Escribe tu mensaje..." />
+              </FormField>
+              {result.text && <p className={`text-sm font-medium ${result.type === "success" ? "text-brand-green" : "text-red-600"}`}>{result.text}</p>}
+              <Button type="submit" disabled={sending} className="w-full">
+                {sending ? "Enviando..." : "Enviar email"}
+              </Button>
             </form>
-          </div>
+          </Card>
         </div>
         <div className="lg:col-span-2">
-          <div className="rounded-2xl border border-navy-100 bg-white shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-navy-100"><h2 className="font-bold text-navy-900">Historial de emails</h2></div>
+          <Card padding={false} className="overflow-hidden">
+            <CardHeader title="Historial de emails" />
             {messages.length === 0 ? (
-              <div className="p-12 text-center"><p className="text-4xl mb-4">📧</p><h3 className="text-lg font-bold text-navy-900">Sin emails todavia</h3><p className="mt-2 text-navy-600">Envia tu primer email automatico</p></div>
+              <div className="py-16 text-center">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto text-navy-300 mb-3"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                <h3 className="text-base font-semibold text-navy-900">Sin emails todavía</h3>
+                <p className="mt-1 text-sm text-navy-500">Envía tu primer email automático</p>
+              </div>
             ) : (
               <div className="divide-y divide-navy-50">
                 {messages.map(msg => (
-                  <div key={msg.id} className="px-6 py-4 hover:bg-navy-50/50 transition-colors">
+                  <div key={msg.id} className="px-6 py-4 hover:bg-navy-50/40 transition-colors">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-semibold text-navy-900">{msg.clients?.name || "Cliente"}</span>
-                      <span className={`inline-block px-2.5 py-1 rounded-lg text-xs font-semibold ${statusColor(msg.status)}`}>{statusLabel(msg.status)}</span>
+                      <span className="text-sm font-medium text-navy-900">{msg.clients?.name || "Cliente"}</span>
+                      {statusBadge(msg.status)}
                     </div>
                     <p className="text-sm text-navy-600 truncate">{msg.content}</p>
                     <p className="mt-1 text-xs text-navy-400">{new Date(msg.created_at).toLocaleString("es-ES")}</p>
@@ -127,7 +137,7 @@ export default function EmailsPage() {
                 ))}
               </div>
             )}
-          </div>
+          </Card>
         </div>
       </div>
     </>

@@ -1,8 +1,16 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase-browser";
 import { useSector } from "@/lib/sector-context";
+import PageHeader from "@/components/ui/page-header";
+import { Card, StatCard } from "@/components/ui/card";
+import { FormField, Input, Select, SearchInput } from "@/components/ui/form-fields";
+import { Button } from "@/components/ui/button";
+import Badge from "@/components/ui/badge";
+import EmptyState from "@/components/ui/empty-state";
+import Loading from "@/components/ui/loading";
 
 interface Supplier {
   id: string;
@@ -45,10 +53,7 @@ const emptyForm = {
 };
 
 export default function SuppliersPage() {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = createClient();
   const { label, options } = useSector();
 
   const [userId, setUserId] = useState<string | null>(null);
@@ -143,197 +148,260 @@ export default function SuppliersPage() {
   const totalSubcontratas = suppliers.filter((s) => s.type === "subcontrata").length;
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-brand-green)]"></div>
-      </div>
-    );
+    return <Loading />;
   }
-
-  const inputCls = "w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm";
 
   return (
     <div className="max-w-6xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">{label("suppliers")}</h1>
-          <p className="text-[var(--color-navy-400)] text-sm mt-1">Gestiona tu red de proveedores, subcontratas y oficios</p>
-        </div>
-        <button onClick={() => { resetForm(); setShowForm(true); }}
-          className="px-4 py-2 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-lg text-sm font-medium hover:opacity-90 transition">
-          + Nuevo proveedor
-        </button>
-      </div>
+      <PageHeader
+        title={label("suppliers")}
+        description="Gestiona tu red de proveedores, subcontratas y oficios"
+        actions={
+          <Button onClick={() => { resetForm(); setShowForm(true); }}>
+            + Nuevo proveedor
+          </Button>
+        }
+      />
 
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-blue-400">{suppliers.length}</p>
-          <p className="text-xs text-[var(--color-navy-400)]">Total</p>
-        </div>
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-[var(--color-brand-green)]">{totalProveedores}</p>
-          <p className="text-xs text-[var(--color-navy-400)]">{label("suppliers")}</p>
-        </div>
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-orange-400">{totalSubcontratas}</p>
-          <p className="text-xs text-[var(--color-navy-400)]">Subcontratas</p>
-        </div>
+        <StatCard label="Total" value={suppliers.length} accent="blue" />
+        <StatCard label={label("suppliers")} value={totalProveedores} accent="green" />
+        <StatCard label="Subcontratas" value={totalSubcontratas} accent="yellow" />
       </div>
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <input type="text" placeholder="Buscar por nombre, NIF, contacto, especialidad..."
-          value={search} onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 bg-[var(--color-navy-800)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-700)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm" />
-        <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
-          className="bg-[var(--color-navy-800)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-700)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm">
+        <SearchInput
+          placeholder="Buscar por nombre, NIF, contacto, especialidad..."
+          value={search}
+          onChange={setSearch}
+          className="flex-1"
+        />
+        <Select
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+        >
           <option value="all">Todos los tipos</option>
           {typeOptions.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
-        <select value={filterTrade} onChange={(e) => setFilterTrade(e.target.value)}
-          className="bg-[var(--color-navy-800)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-700)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm">
+        </Select>
+        <Select
+          value={filterTrade}
+          onChange={(e) => setFilterTrade(e.target.value)}
+        >
           <option value="all">Todos los oficios</option>
           {tradeOptions.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
+        </Select>
       </div>
 
       {/* Form */}
       {showForm && (
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-6 border border-[var(--color-navy-600)]">
-          <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-4">
-            {editingId ? "Editar proveedor" : "Nuevo proveedor / subcontrata"}
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2">
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Nombre / Razón social *</label>
-              <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputCls} placeholder="Ej: Fontanería García S.L." />
+        <Card className="mb-6">
+          <div className="p-5">
+            <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-4">
+              {editingId ? "Editar proveedor" : "Nuevo proveedor / subcontrata"}
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="md:col-span-2">
+                <FormField label="Nombre / Razón social *">
+                  <Input
+                    type="text"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    placeholder="Ej: Fontanería García S.L."
+                  />
+                </FormField>
+              </div>
+              <div>
+                <FormField label="Tipo">
+                  <Select
+                    value={form.type}
+                    onChange={(e) => setForm({ ...form, type: e.target.value })}
+                  >
+                    {typeOptions.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </Select>
+                </FormField>
+              </div>
+              <div>
+                <FormField label="NIF / CIF">
+                  <Input
+                    type="text"
+                    value={form.nif}
+                    onChange={(e) => setForm({ ...form, nif: e.target.value })}
+                    placeholder="B12345678"
+                  />
+                </FormField>
+              </div>
+              <div>
+                <FormField label="Persona de contacto">
+                  <Input
+                    type="text"
+                    value={form.contact_person}
+                    onChange={(e) => setForm({ ...form, contact_person: e.target.value })}
+                    placeholder="Nombre del contacto"
+                  />
+                </FormField>
+              </div>
+              <div>
+                <FormField label="Teléfono">
+                  <Input
+                    type="text"
+                    value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    placeholder="600 000 000"
+                  />
+                </FormField>
+              </div>
+              <div>
+                <FormField label="Email">
+                  <Input
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    placeholder="email@empresa.com"
+                  />
+                </FormField>
+              </div>
+              <div>
+                <FormField label="Oficio">
+                  <Select
+                    value={form.trade}
+                    onChange={(e) => setForm({ ...form, trade: e.target.value })}
+                  >
+                    {tradeOptions.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </Select>
+                </FormField>
+              </div>
+              <div>
+                <FormField label="Precio/hora (€)">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={form.hourly_rate || ""}
+                    onChange={(e) => setForm({ ...form, hourly_rate: parseFloat(e.target.value) || 0 })}
+                    placeholder="0.00"
+                  />
+                </FormField>
+              </div>
+              <div className="md:col-span-3">
+                <FormField label="Dirección">
+                  <Input
+                    type="text"
+                    value={form.address}
+                    onChange={(e) => setForm({ ...form, address: e.target.value })}
+                    placeholder="Dirección completa"
+                  />
+                </FormField>
+              </div>
+              <div className="md:col-span-2">
+                <FormField label="Especialidad">
+                  <Input
+                    type="text"
+                    value={form.specialty}
+                    onChange={(e) => setForm({ ...form, specialty: e.target.value })}
+                    placeholder="Ej: Reformas de baño, Instalación solar..."
+                  />
+                </FormField>
+              </div>
+              <div>
+                <FormField label="Valoración (1-5)">
+                  <Input
+                    type="number"
+                    min="0"
+                    max="5"
+                    value={form.rating || ""}
+                    onChange={(e) => setForm({ ...form, rating: parseInt(e.target.value) || 0 })}
+                    placeholder="0"
+                  />
+                </FormField>
+              </div>
+              <div className="md:col-span-3">
+                <FormField label="Notas">
+                  <textarea
+                    value={form.notes}
+                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                    className="w-full rounded-xl border border-navy-200 bg-navy-50/60 px-4 py-2.5 text-sm text-navy-900 placeholder:text-navy-400 focus:border-brand-green/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-green/20 transition-colors min-h-[80px]"
+                    placeholder="Observaciones, condiciones, plazos..."
+                  />
+                </FormField>
+              </div>
             </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Tipo</label>
-              <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className={inputCls}>
-                {typeOptions.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">NIF / CIF</label>
-              <input type="text" value={form.nif} onChange={(e) => setForm({ ...form, nif: e.target.value })} className={inputCls} placeholder="B12345678" />
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Persona de contacto</label>
-              <input type="text" value={form.contact_person} onChange={(e) => setForm({ ...form, contact_person: e.target.value })} className={inputCls} placeholder="Nombre del contacto" />
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Teléfono</label>
-              <input type="text" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={inputCls} placeholder="600 000 000" />
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Email</label>
-              <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={inputCls} placeholder="email@empresa.com" />
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Oficio</label>
-              <select value={form.trade} onChange={(e) => setForm({ ...form, trade: e.target.value })} className={inputCls}>
-                {tradeOptions.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Precio/hora (€)</label>
-              <input type="number" min="0" step="0.5" value={form.hourly_rate || ""} onChange={(e) => setForm({ ...form, hourly_rate: parseFloat(e.target.value) || 0 })} className={inputCls} placeholder="0.00" />
-            </div>
-            <div className="md:col-span-3">
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Dirección</label>
-              <input type="text" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className={inputCls} placeholder="Dirección completa" />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Especialidad</label>
-              <input type="text" value={form.specialty} onChange={(e) => setForm({ ...form, specialty: e.target.value })} className={inputCls} placeholder="Ej: Reformas de baño, Instalación solar..." />
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Valoración (1-5)</label>
-              <input type="number" min="0" max="5" value={form.rating || ""} onChange={(e) => setForm({ ...form, rating: parseInt(e.target.value) || 0 })} className={inputCls} placeholder="0" />
-            </div>
-            <div className="md:col-span-3">
-              <label className="block text-xs text-[var(--color-navy-400)] mb-1">Notas</label>
-              <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className={`${inputCls} min-h-[80px]`} placeholder="Observaciones, condiciones, plazos..." />
+            <div className="flex gap-3 mt-4">
+              <Button onClick={handleSave}>
+                {editingId ? "Guardar cambios" : "Crear proveedor"}
+              </Button>
+              <Button variant="secondary" onClick={resetForm}>
+                Cancelar
+              </Button>
             </div>
           </div>
-          <div className="flex gap-3 mt-4">
-            <button onClick={handleSave}
-              className="px-5 py-2 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-lg text-sm font-medium hover:opacity-90 transition">
-              {editingId ? "Guardar cambios" : "Crear proveedor"}
-            </button>
-            <button onClick={resetForm}
-              className="px-5 py-2 bg-[var(--color-navy-700)] text-[var(--color-navy-300)] rounded-lg text-sm hover:bg-[var(--color-navy-600)] transition">
-              Cancelar
-            </button>
-          </div>
-        </div>
+        </Card>
       )}
 
       {/* Table */}
       {filtered.length === 0 ? (
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-10 text-center">
-          <p className="text-[var(--color-navy-400)]">No hay proveedores creados todavía.</p>
-          <p className="text-sm text-[var(--color-navy-500)] mt-1">Pulsa &quot;Nuevo proveedor&quot; para empezar.</p>
-        </div>
+        <EmptyState
+          title="Sin proveedores todavía"
+          description="Pulsa 'Nuevo proveedor' para empezar."
+        />
       ) : (
-        <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden">
+        <Card>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-[var(--color-navy-700)]">
-                  <th className="text-left text-xs font-semibold text-[var(--color-navy-400)] uppercase tracking-wider px-5 py-3">Nombre</th>
-                  <th className="text-center text-xs font-semibold text-[var(--color-navy-400)] uppercase tracking-wider px-3 py-3">Tipo</th>
-                  <th className="text-center text-xs font-semibold text-[var(--color-navy-400)] uppercase tracking-wider px-3 py-3">Oficio</th>
-                  <th className="text-left text-xs font-semibold text-[var(--color-navy-400)] uppercase tracking-wider px-3 py-3">Contacto</th>
-                  <th className="text-center text-xs font-semibold text-[var(--color-navy-400)] uppercase tracking-wider px-3 py-3">€/h</th>
-                  <th className="text-center text-xs font-semibold text-[var(--color-navy-400)] uppercase tracking-wider px-3 py-3">Valoración</th>
-                  <th className="text-right text-xs font-semibold text-[var(--color-navy-400)] uppercase tracking-wider px-5 py-3">Acciones</th>
+                <tr className="border-b border-navy-100 bg-navy-50/60">
+                  <th className="text-left text-xs font-semibold text-navy-700 uppercase tracking-wider px-5 py-3">Nombre</th>
+                  <th className="text-center text-xs font-semibold text-navy-700 uppercase tracking-wider px-3 py-3">Tipo</th>
+                  <th className="text-center text-xs font-semibold text-navy-700 uppercase tracking-wider px-3 py-3">Oficio</th>
+                  <th className="text-left text-xs font-semibold text-navy-700 uppercase tracking-wider px-3 py-3">Contacto</th>
+                  <th className="text-center text-xs font-semibold text-navy-700 uppercase tracking-wider px-3 py-3">€/h</th>
+                  <th className="text-center text-xs font-semibold text-navy-700 uppercase tracking-wider px-3 py-3">Valoración</th>
+                  <th className="text-right text-xs font-semibold text-navy-700 uppercase tracking-wider px-5 py-3">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((s) => (
-                  <tr key={s.id} className="border-t border-[var(--color-navy-700)] hover:bg-[var(--color-navy-750)] transition">
+                  <tr key={s.id} className="border-b border-navy-100 hover:bg-navy-50/40 transition">
                     <td className="px-5 py-3">
-                      <p className="text-sm font-medium text-[var(--color-navy-100)]">{s.name}</p>
-                      {s.nif && <p className="text-xs text-[var(--color-navy-400)]">{s.nif}</p>}
-                      {s.specialty && <p className="text-xs text-[var(--color-navy-500)]">{s.specialty}</p>}
+                      <p className="text-sm font-medium text-navy-900">{s.name}</p>
+                      {s.nif && <p className="text-xs text-navy-600">{s.nif}</p>}
+                      {s.specialty && <p className="text-xs text-navy-500">{s.specialty}</p>}
                     </td>
                     <td className="px-3 py-3 text-center">
-                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                        s.type === "subcontrata" ? "bg-orange-900/30 text-orange-300" : "bg-blue-900/30 text-blue-300"
-                      }`}>
-                        {s.type === "subcontrata" ? "Subcontrata" : "Proveedor"}
-                      </span>
+                      {s.type === "subcontrata" ? (
+                        <Badge variant="orange">Subcontrata</Badge>
+                      ) : (
+                        <Badge variant="blue">Proveedor</Badge>
+                      )}
                     </td>
-                    <td className="px-3 py-3 text-center text-xs text-[var(--color-navy-300)]">{tradeMap[s.trade] || s.trade}</td>
+                    <td className="px-3 py-3 text-center text-xs text-navy-600">{tradeMap[s.trade] || s.trade}</td>
                     <td className="px-3 py-3">
-                      {s.contact_person && <p className="text-sm text-[var(--color-navy-200)]">{s.contact_person}</p>}
-                      {s.phone && <p className="text-xs text-[var(--color-navy-400)]">{s.phone}</p>}
-                      {s.email && <p className="text-xs text-[var(--color-navy-400)]">{s.email}</p>}
+                      {s.contact_person && <p className="text-sm text-navy-800">{s.contact_person}</p>}
+                      {s.phone && <p className="text-xs text-navy-600">{s.phone}</p>}
+                      {s.email && <p className="text-xs text-navy-600">{s.email}</p>}
                     </td>
-                    <td className="px-3 py-3 text-center text-sm text-[var(--color-navy-200)]">
+                    <td className="px-3 py-3 text-center text-sm text-navy-700">
                       {Number(s.hourly_rate || 0) > 0 ? `${Number(s.hourly_rate).toFixed(0)}€` : "—"}
                     </td>
                     <td className="px-3 py-3 text-center">
                       {s.rating > 0 ? (
-                        <span className="text-sm text-yellow-400">{"★".repeat(s.rating)}{"☆".repeat(5 - s.rating)}</span>
+                        <span className="text-sm text-yellow-600">{"★".repeat(s.rating)}{"☆".repeat(5 - s.rating)}</span>
                       ) : (
-                        <span className="text-xs text-[var(--color-navy-500)]">—</span>
+                        <span className="text-xs text-navy-400">—</span>
                       )}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <button onClick={() => startEdit(s)} className="text-xs text-[var(--color-brand-green)] hover:underline mr-3">Editar</button>
-                      <button onClick={() => handleDelete(s.id)} className="text-xs text-red-400 hover:underline">Eliminar</button>
+                      <button onClick={() => startEdit(s)} className="text-xs text-brand-green hover:underline mr-3">Editar</button>
+                      <button onClick={() => handleDelete(s.id)} className="text-xs text-red-600 hover:underline">Eliminar</button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );

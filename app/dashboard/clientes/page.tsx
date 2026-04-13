@@ -1,6 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
+import PageHeader from "@/components/ui/page-header";
+import { Card } from "@/components/ui/card";
+import { Button, LinkButton } from "@/components/ui/button";
+import Badge from "@/components/ui/badge";
+import { FormField, Input, Select, Textarea, SearchInput } from "@/components/ui/form-fields";
+import EmptyState from "@/components/ui/empty-state";
 
 type Client = {
   id: string;
@@ -49,7 +55,7 @@ export default function ClientsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Estas seguro de eliminar este cliente?")) {
+    if (confirm("Estás seguro de eliminar este cliente?")) {
       await supabase.from("clients").delete().eq("id", id);
       await fetchClients();
     }
@@ -61,80 +67,132 @@ export default function ClientsPage() {
     (c.company && c.company.toLowerCase().includes(search.toLowerCase()))
   );
 
-  const statusColor = (s: string) => s === "active" ? "bg-brand-green/10 text-brand-green" : s === "lead" ? "bg-blue-50 text-blue-600" : "bg-navy-100 text-navy-500";
+  const statusVariant = (s: string): "green" | "blue" | "gray" =>
+    s === "active" ? "green" : s === "lead" ? "blue" : "gray";
   const statusLabel = (s: string) => s === "active" ? "Activo" : s === "lead" ? "Lead" : "Inactivo";
 
   return (
     <>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-navy-900">Clientes</h1>
-          <p className="mt-1 text-navy-600">{clients.length} contacto{clients.length !== 1 ? "s" : ""} en total</p>
-        </div>
-        <button onClick={() => { setShowForm(true); setEditingClient(null); setForm({ name: "", email: "", phone: "", company: "", notes: "", status: "lead" }); }} className="px-5 py-2.5 rounded-xl bg-brand-green text-white font-semibold shadow-lg shadow-brand-green/25 hover:bg-brand-green-dark transition-colors">
-          + Nuevo cliente
-        </button>
-      </div>
+      <PageHeader
+        title="Clientes"
+        count={clients.length}
+        countLabel={`contacto${clients.length !== 1 ? "s" : ""} en total`}
+        actions={
+          <Button
+            onClick={() => {
+              setShowForm(true);
+              setEditingClient(null);
+              setForm({ name: "", email: "", phone: "", company: "", notes: "", status: "lead" });
+            }}
+          >
+            + Nuevo cliente
+          </Button>
+        }
+      />
 
       {showForm && (
-        <div className="mb-8 rounded-2xl border border-navy-100 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-navy-900 mb-4">{editingClient ? "Editar cliente" : "Nuevo cliente"}</h2>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-navy-700 mb-1">Nombre *</label>
-              <input type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50" placeholder="Nombre del cliente" />
+        <Card className="mb-8">
+          <h2 className="text-lg font-bold text-navy-900 mb-6">{editingClient ? "Editar cliente" : "Nuevo cliente"}</h2>
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <FormField label="Nombre" required>
+                <Input
+                  type="text"
+                  value={form.name}
+                  onChange={e => setForm({...form, name: e.target.value})}
+                  required
+                  placeholder="Nombre del cliente"
+                />
+              </FormField>
+              <FormField label="Email">
+                <Input
+                  type="email"
+                  value={form.email}
+                  onChange={e => setForm({...form, email: e.target.value})}
+                  placeholder="email@ejemplo.com"
+                />
+              </FormField>
+              <FormField label="Teléfono">
+                <Input
+                  type="tel"
+                  value={form.phone}
+                  onChange={e => setForm({...form, phone: e.target.value})}
+                  placeholder="+34 600 000 000"
+                />
+              </FormField>
+              <FormField label="Empresa">
+                <Input
+                  type="text"
+                  value={form.company}
+                  onChange={e => setForm({...form, company: e.target.value})}
+                  placeholder="Nombre de la empresa"
+                />
+              </FormField>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-navy-700 mb-1">Email</label>
-              <input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50" placeholder="email@ejemplo.com" />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <FormField label="Estado">
+                <Select
+                  value={form.status}
+                  onChange={e => setForm({...form, status: e.target.value})}
+                >
+                  <option value="lead">Lead</option>
+                  <option value="active">Activo</option>
+                  <option value="inactive">Inactivo</option>
+                </Select>
+              </FormField>
+              <FormField label="Notas">
+                <Textarea
+                  value={form.notes}
+                  onChange={e => setForm({...form, notes: e.target.value})}
+                  placeholder="Notas adicionales"
+                  rows={1}
+                />
+              </FormField>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-navy-700 mb-1">Telefono</label>
-              <input type="tel" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50" placeholder="+34 600 000 000" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-navy-700 mb-1">Empresa</label>
-              <input type="text" value={form.company} onChange={e => setForm({...form, company: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50" placeholder="Nombre de la empresa" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-navy-700 mb-1">Estado</label>
-              <select value={form.status} onChange={e => setForm({...form, status: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50">
-                <option value="lead">Lead</option>
-                <option value="active">Activo</option>
-                <option value="inactive">Inactivo</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-navy-700 mb-1">Notas</label>
-              <input type="text" value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50" placeholder="Notas adicionales" />
-            </div>
-            <div className="md:col-span-2 flex gap-3 justify-end">
-              <button type="button" onClick={() => { setShowForm(false); setEditingClient(null); }} className="px-5 py-2.5 rounded-xl border border-navy-200 text-sm font-medium text-navy-700 hover:bg-navy-50">Cancelar</button>
-              <button type="submit" className="px-5 py-2.5 rounded-xl bg-brand-green text-white text-sm font-semibold hover:bg-brand-green-dark transition-colors">{editingClient ? "Guardar cambios" : "Agregar cliente"}</button>
+
+            <div className="flex gap-3 justify-end pt-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setShowForm(false);
+                  setEditingClient(null);
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit">
+                {editingClient ? "Guardar cambios" : "Agregar cliente"}
+              </Button>
             </div>
           </form>
-        </div>
+        </Card>
       )}
 
       <div className="mb-6">
-        <input type="text" value={search} onChange={e => setSearch(e.target.value)} className="w-full max-w-md px-4 py-3 rounded-xl border border-navy-200 bg-white text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50" placeholder="Buscar por nombre, email o empresa..." />
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por nombre, email o empresa..."
+          className="max-w-md"
+        />
       </div>
 
       {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-navy-100 bg-white p-12 text-center">
-          <p className="text-4xl mb-4">👥</p>
-          <h3 className="text-lg font-bold text-navy-900">{search ? "Sin resultados" : "Sin clientes todavia"}</h3>
-          <p className="mt-2 text-navy-600">{search ? "Prueba con otro termino" : "Agrega tu primer cliente para empezar"}</p>
-        </div>
+        <EmptyState
+          title={search ? "Sin resultados" : "Sin clientes todavía"}
+          description={search ? "Prueba con otro término" : "Agrega tu primer cliente para empezar"}
+        />
       ) : (
-        <div className="rounded-2xl border border-navy-100 bg-white shadow-sm overflow-hidden">
+        <Card padding={false} className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-navy-100 bg-navy-50">
+                <tr className="border-b border-navy-100 bg-navy-50/60">
                   <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 uppercase tracking-wider">Nombre</th>
                   <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 uppercase tracking-wider hidden md:table-cell">Email</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 uppercase tracking-wider hidden lg:table-cell">Telefono</th>
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 uppercase tracking-wider hidden lg:table-cell">Teléfono</th>
                   <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 uppercase tracking-wider hidden md:table-cell">Empresa</th>
                   <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 uppercase tracking-wider">Estado</th>
                   <th className="text-right px-6 py-3 text-xs font-semibold text-navy-500 uppercase tracking-wider">Acciones</th>
@@ -142,22 +200,26 @@ export default function ClientsPage() {
               </thead>
               <tbody>
                 {filtered.map(client => (
-                  <tr key={client.id} className="border-b border-navy-50 hover:bg-navy-50/50 transition-colors">
+                  <tr key={client.id} className="border-b border-navy-50 hover:bg-navy-50/40 transition-colors">
                     <td className="px-6 py-4 text-sm font-medium text-navy-900">{client.name}</td>
                     <td className="px-6 py-4 text-sm text-navy-600 hidden md:table-cell">{client.email || "—"}</td>
                     <td className="px-6 py-4 text-sm text-navy-600 hidden lg:table-cell">{client.phone || "—"}</td>
                     <td className="px-6 py-4 text-sm text-navy-600 hidden md:table-cell">{client.company || "—"}</td>
-                    <td className="px-6 py-4"><span className={`inline-block px-2.5 py-1 rounded-lg text-xs font-semibold ${statusColor(client.status)}`}>{statusLabel(client.status)}</span></td>
-                    <td className="px-6 py-4 text-right">
-                      <button onClick={() => handleEdit(client)} className="text-sm text-brand-green hover:underline mr-3">Editar</button>
-                      <button onClick={() => handleDelete(client.id)} className="text-sm text-red-500 hover:underline">Eliminar</button>
+                    <td className="px-6 py-4">
+                      <Badge variant={statusVariant(client.status)}>
+                        {statusLabel(client.status)}
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-4 text-right space-x-2">
+                      <button onClick={() => handleEdit(client)} className="text-sm text-brand-green hover:text-brand-green-dark font-medium transition-colors">Editar</button>
+                      <button onClick={() => handleDelete(client.id)} className="text-sm text-red-600 hover:text-red-700 font-medium transition-colors">Eliminar</button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
       )}
     </>
   );
