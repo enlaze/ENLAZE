@@ -22,6 +22,7 @@ interface IssuedInvoice {
   subtotal: number; iva_percent: number; iva_amount: number;
   irpf_percent: number; irpf_amount: number; total: number;
   status: string; payment_status: string; payment_date: string | null; payment_method: string;
+  amount_paid: number;
   verifactu_hash: string; verifactu_prev_hash: string; verifactu_qr_data: string; verifactu_registered: boolean;
   facturae_xml: string; notes: string;
 }
