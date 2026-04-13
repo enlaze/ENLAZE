@@ -237,26 +237,26 @@ export async function createReceivedInvoice(supabase: SupabaseClient, invoice: P
 
   if (data && invoice.supplier_id) {
     // Update supplier total_invoiced
-    supabase.rpc("increment_supplier_invoiced", {
-      p_supplier_id: invoice.supplier_id,
-      p_amount: invoice.total || 0,
-    }).catch(() => {
-      // Fallback: manual update
-      supabase
-        .from("suppliers")
-        .select("total_invoiced")
-        .eq("id", invoice.supplier_id as string)
-        .single()
-        .then(({ data: s }) => {
-          if (s) {
-            supabase
-              .from("suppliers")
-              .update({ total_invoiced: Number(s.total_invoiced) + Number(invoice.total || 0) })
-              .eq("id", invoice.supplier_id as string)
-              .then(() => {});
-          }
-        });
-    });
+const { error: incrementError } = await supabase.rpc("increment_supplier_invoiced", {
+  p_supplier_id: invoice.supplier_id,
+  p_amount: invoice.total || 0,
+});
+
+if (incrementError) {
+  // Fallback: manual update
+  const { data: s } = await supabase
+    .from("suppliers")
+    .select("total_invoiced")
+    .eq("id", invoice.supplier_id as string)
+    .single();
+
+  if (s) {
+    await supabase
+      .from("suppliers")
+      .update({ total_invoiced: Number(s.total_invoiced) + Number(invoice.total || 0) })
+      .eq("id", invoice.supplier_id as string);
+  }
+}
 
     notify(supabase, {
       type: "system",
