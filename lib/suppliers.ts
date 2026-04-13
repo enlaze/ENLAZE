@@ -170,7 +170,7 @@ export async function createSupplier(supabase: SupabaseClient, supplier: Partial
       action: "supplier_created",
       entity_type: "supplier",
       entity_id: data.id,
-      description: `Proveedor creado: ${supplier.name}`,
+      metadata: { description: `Proveedor creado: ${supplier.name}` },
     }).catch(() => {});
   }
 
@@ -190,7 +190,7 @@ export async function updateSupplier(supabase: SupabaseClient, id: string, updat
       action: "supplier_updated",
       entity_type: "supplier",
       entity_id: id,
-      description: `Proveedor actualizado: ${data.name}`,
+      metadata: { description: `Proveedor actualizado: ${data.name}` },
     }).catch(() => {});
   }
 
@@ -272,7 +272,7 @@ export async function createReceivedInvoice(supabase: SupabaseClient, invoice: P
       action: "received_invoice_created",
       entity_type: "received_invoice",
       entity_id: data.id,
-      description: `Factura recibida: ${invoice.invoice_number} de ${invoice.supplier_name}`,
+      metadata: { description: `Factura recibida: ${invoice.invoice_number} de ${invoice.supplier_name}` },
     }).catch(() => {});
   }
 
@@ -367,7 +367,7 @@ export async function registerSupplierPayment(
       action: "supplier_payment_registered",
       entity_type: "supplier_payment",
       entity_id: params.received_invoice_id,
-      description: `Pago ${params.amount.toFixed(2)}€ a ${inv.supplier_name} (${inv.invoice_number})`,
+      metadata: { description: `Pago ${params.amount.toFixed(2)}€ a ${inv.supplier_name} (${inv.invoice_number})` },
     }).catch(() => {});
   }
 
