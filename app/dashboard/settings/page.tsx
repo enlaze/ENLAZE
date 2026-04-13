@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
-import { useSector } from "@/lib/sector-context";
 import Link from "next/link";
 
 export default function SettingsPage() {
@@ -76,6 +75,15 @@ export default function SettingsPage() {
               <div>
                 <h3 className="font-semibold text-navy-900 group-hover:text-brand-green transition-colors">Ajustes fiscales</h3>
                 <p className="text-xs text-navy-500">NIF, IVA, series, Verifactu</p>
+              </div>
+            </div>
+          </Link>
+          <Link href="/dashboard/settings/notifications" className="rounded-2xl border border-navy-100 bg-white p-5 shadow-sm hover:shadow-md transition-shadow group">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🔔</span>
+              <div>
+                <h3 className="font-semibold text-navy-900 group-hover:text-brand-green transition-colors">Notificaciones</h3>
+                <p className="text-xs text-navy-500">Configura alertas y preferencias</p>
               </div>
             </div>
           </Link>

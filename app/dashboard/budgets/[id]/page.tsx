@@ -8,6 +8,7 @@ import { useSector } from "@/lib/sector-context";
 import AcceptanceTimeline from "@/components/AcceptanceTimeline";
 import { saveDocumentVersion, getNextVersion } from "@/lib/document-versions";
 import { logActivity } from "@/lib/activity-log";
+import { notify } from "@/lib/notifications";
 
 interface BudgetItem {
   id: string;
@@ -140,13 +141,27 @@ export default function BudgetDetailPage() {
       const updated = { ...budget, status: newStatus, ...timestampUpdates };
       setBudget(updated);
 
-      // Fire-and-forget: log activity + save version snapshot
+      // Fire-and-forget: log activity + save version snapshot + notify
       logActivity(supabase, {
         action: `budget.status_changed`,
         entity_type: "budget",
         entity_id: budget.id,
         metadata: { from: budget.status, to: newStatus },
       });
+
+      const notifMap: Record<string, { type: "budget_sent" | "budget_accepted" | "budget_rejected"; title: string; severity: "info" | "success" | "error" }> = {
+        enviado: { type: "budget_sent", title: `Presupuesto ${budget.budget_number} enviado a ${budget.client_name}`, severity: "info" },
+        aceptado: { type: "budget_accepted", title: `Presupuesto ${budget.budget_number} aceptado`, severity: "success" },
+        rechazado: { type: "budget_rejected", title: `Presupuesto ${budget.budget_number} rechazado`, severity: "error" },
+      };
+      if (notifMap[newStatus]) {
+        notify(supabase, {
+          ...notifMap[newStatus],
+          entity_type: "budget",
+          entity_id: budget.id,
+          action_url: `/dashboard/budgets/${budget.id}`,
+        });
+      }
 
       const nextVer = await getNextVersion(supabase, "budget", budget.id);
       saveDocumentVersion(supabase, {

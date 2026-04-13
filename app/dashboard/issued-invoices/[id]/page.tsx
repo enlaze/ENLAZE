@@ -8,6 +8,7 @@ import { createBrowserClient } from "@supabase/ssr";
 import { recordFiscalEvent, getFiscalTimeline } from "@/lib/fiscal-events";
 import type { FiscalEventType } from "@/lib/fiscal-events";
 import { logActivity } from "@/lib/activity-log";
+import { notify } from "@/lib/notifications";
 
 /* ═══════════════ Types ═══════════════ */
 
@@ -305,6 +306,22 @@ export default function IssuedInvoiceDetailPage() {
       entity_id: invoice.id,
       metadata: { from: invoice.status, to: newStatus, invoice_number: invoice.invoice_number },
     });
+
+    // Fire-and-forget notification
+    const invoiceNotifMap: Record<string, { type: "invoice_paid" | "invoice_due" | "compliance_alert"; title: string; severity: "success" | "warning" | "error" | "info" }> = {
+      paid: { type: "invoice_paid", title: `Factura ${invoice.invoice_number} marcada como pagada`, severity: "success" },
+      sent: { type: "invoice_due", title: `Factura ${invoice.invoice_number} enviada al cliente`, severity: "info" },
+      cancelled: { type: "compliance_alert", title: `Factura ${invoice.invoice_number} anulada`, severity: "error" },
+      rectified: { type: "compliance_alert", title: `Factura ${invoice.invoice_number} rectificada`, severity: "warning" },
+    };
+    if (invoiceNotifMap[newStatus]) {
+      notify(supabase, {
+        ...invoiceNotifMap[newStatus],
+        entity_type: "issued_invoice",
+        entity_id: invoice.id,
+        action_url: `/dashboard/issued-invoices/${invoice.id}`,
+      });
+    }
 
     setSavingStatus(false);
   }
