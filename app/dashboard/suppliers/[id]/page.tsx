@@ -81,7 +81,7 @@ export default function SupplierDetailPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <StatCard label="Total facturado" value={fmtMoney(Number(supplier.total_invoiced))} accent="blue" />
         <StatCard label="Total pagado" value={fmtMoney(Number(supplier.total_paid))} accent="green" />
-        <StatCard label="Pendiente de pago" value={fmtMoney(pending)} accent={pending > 0 ? "orange" : "green"} />
+        <StatCard label="Pendiente de pago" value={fmtMoney(pending)} accent={pending > 0 ? "yellow" : "green"} />
         <StatCard label="Facturas" value={invoices.length} accent="blue" />
       </div>
 

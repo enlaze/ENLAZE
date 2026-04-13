@@ -169,7 +169,7 @@ export default function ReceivedInvoicesPage() {
       {/* KPIs */}
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <StatCard label="Pendiente de pago" value={fmtMoney(summary.total_pending)} accent="orange" />
+          <StatCard label="Pendiente de pago" value={fmtMoney(summary.total_pending)} accent="yellow" />
           <StatCard label="Pagado este mes" value={fmtMoney(summary.total_paid_month)} accent="green" />
           <StatCard label="Vencido" value={fmtMoney(summary.total_overdue)} accent={summary.total_overdue > 0 ? "red" : "green"} />
           <StatCard label="Proveedores activos" value={summary.suppliers_active} accent="blue" />
