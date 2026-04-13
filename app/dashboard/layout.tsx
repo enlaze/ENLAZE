@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import Logo from "@/components/Logo";
 import NotificationCenter from "@/components/NotificationCenter";
+import SearchCommand from "@/components/SearchCommand";
 import { SectorProvider, useSector } from "@/lib/sector-context";
 
 /* Fallback nav items used while sector config loads */
@@ -111,21 +112,20 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
             <Logo href="/dashboard" size={30} />
           </div>
 
-          {/* Search */}
+          {/* Search trigger */}
           <div className="relative hidden max-w-md flex-1 md:block">
-            <svg
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-navy-400"
-              width="16" height="16" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            <button
+              type="button"
+              onClick={() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}
+              className="flex h-10 w-full items-center gap-2 rounded-xl border border-navy-100 bg-navy-50/60 pl-3 pr-3 text-sm text-navy-400 transition-colors hover:border-navy-200 hover:bg-navy-50"
             >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
-            <input
-              type="search"
-              placeholder="Buscar clientes, presupuestos…"
-              className="h-10 w-full rounded-xl border border-navy-100 bg-navy-50/60 pl-9 pr-3 text-sm text-navy-900 placeholder:text-navy-400 focus:border-brand-green/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-green/20"
-            />
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+              <span className="flex-1 text-left">Buscar clientes, presupuestos…</span>
+              <kbd className="hidden sm:inline-flex h-5 items-center rounded border border-navy-200 bg-white px-1.5 text-[10px] font-medium text-navy-400">⌘K</kbd>
+            </button>
           </div>
 
           <div className="flex flex-1 items-center justify-end gap-2 sm:gap-3">
@@ -245,6 +245,9 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
       <main className="pt-[57px] lg:pl-64">
         <div className="px-6 py-10 md:px-12 md:py-14">{children}</div>
       </main>
+
+      {/* Global search modal */}
+      <SearchCommand />
     </div>
   );
 }
