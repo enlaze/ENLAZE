@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import sharp from "sharp";
+import { logAiRun, hashText } from "@/lib/ai-logger";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -85,6 +86,7 @@ export async function POST(request: Request) {
     }
 
     const preparedImage = await prepareImageForClaude(file);
+    const startTime = Date.now();
     // Enviar a Claude para OCR
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
@@ -213,6 +215,7 @@ Responde SOLO con el JSON, sin texto adicional:
 
     // Guardar líneas de factura
     if (invoiceData.items && Array.isArray(invoiceData.items) && invoice) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const items = invoiceData.items.map((item: any, idx: number) => ({
         invoice_id: invoice.id,
         description: item.description || "",
@@ -234,12 +237,28 @@ Responde SOLO con el JSON, sin texto adicional:
       }
     }
 
+    // Fire-and-forget: log AI run for compliance
+    const durationMs = Date.now() - startTime;
+    logAiRun(supabase, {
+      run_type: "ocr_invoice",
+      model: "claude-sonnet-4-20250514",
+      prompt_version: "v1.0",
+      input_hash: await hashText(file.name + file.size),
+      output_hash: await hashText(responseText),
+      tokens_in: message.usage?.input_tokens,
+      tokens_out: message.usage?.output_tokens,
+      duration_ms: durationMs,
+      entity_type: "invoice",
+      entity_id: invoice?.id,
+    });
+
     return NextResponse.json({
       success: true,
       invoice,
       ocr_data: invoiceData,
       message: "Factura procesada correctamente",
     });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error("OCR Error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });

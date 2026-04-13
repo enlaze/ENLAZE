@@ -22,6 +22,8 @@ const fallbackNavItems = [
   { href: "/dashboard/issued-invoices", label: "Facturas emitidas", icon: "📑" },
   { href: "/dashboard/margins", label: "Márgenes", icon: "📊" },
   { href: "/dashboard/calendar", label: "Calendario", icon: "📅" },
+  { href: "/dashboard/compliance", label: "Compliance", icon: "🛡️" },
+  { href: "/dashboard/audit-log", label: "Audit Log", icon: "📋" },
   { href: "/dashboard/settings", label: "Ajustes", icon: "⚙️" },
 ];
 
@@ -34,6 +36,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 }
 
 function DashboardInner({ children }: { children: React.ReactNode }) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -60,8 +63,12 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
   };
 
   const sectorModules = visibleModules();
+  const complianceItems = [
+    { href: "/dashboard/compliance", label: "Compliance", icon: "🛡️" },
+    { href: "/dashboard/audit-log", label: "Audit Log", icon: "📋" },
+  ];
   const navItems = sectorModules.length > 0
-    ? sectorModules.map(m => ({ href: m.href, label: m.label, icon: m.icon }))
+    ? [...sectorModules.map(m => ({ href: m.href, label: m.label, icon: m.icon })), ...complianceItems, { href: "/dashboard/settings", label: "Ajustes", icon: "⚙️" }]
     : fallbackNavItems;
 
   const initials = (() => {

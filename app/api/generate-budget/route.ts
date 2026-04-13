@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { getSectorConfig } from "@/lib/agent-prompts";
+import { logAiRun, hashText } from "@/lib/ai-logger";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -185,6 +186,8 @@ export async function POST(request: Request) {
       sectorConfig.categories[0]?.value +
       '",\n      "unit_price": 0.00\n    }\n  ],\n  "notes": "Notas sobre plazos, garantias, condiciones y normativa aplicable"\n}';
 
+    const startTime = Date.now();
+
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
       max_tokens: 6000,
@@ -204,11 +207,14 @@ export async function POST(request: Request) {
       system: systemPrompt,
     });
 
+    const durationMs = Date.now() - startTime;
+
     const responseText = message.content
       .filter((block): block is Anthropic.TextBlock => block.type === "text")
       .map((block) => block.text)
       .join("");
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let result: any;
     const cleaned = extractLikelyJson(responseText);
 
@@ -227,6 +233,7 @@ export async function POST(request: Request) {
       throw new Error("La respuesta de la IA no contiene una lista valida de partidas");
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const partidasWithCalcs = result.partidas.map((p: any) => {
       const quantity = Number(p.quantity || 0);
       const unitPrice = Number(p.unit_price || 0);
@@ -244,11 +251,26 @@ export async function POST(request: Request) {
       };
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const totalCost = partidasWithCalcs.reduce((sum: number, p: any) => sum + p.subtotal_cost, 0);
     const totalClient = partidasWithCalcs.reduce(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (sum: number, p: any) => sum + p.subtotal_client,
       0
     );
+
+    // Fire-and-forget: log AI run for compliance
+    logAiRun(supabase, {
+      run_type: "budget_generation",
+      model: "claude-sonnet-4-20250514",
+      prompt_version: "v1.0",
+      input_hash: await hashText(description),
+      output_hash: await hashText(responseText),
+      tokens_in: message.usage?.input_tokens,
+      tokens_out: message.usage?.output_tokens,
+      duration_ms: durationMs,
+      entity_type: "budget",
+    });
 
     return NextResponse.json({
       title: result.title,
@@ -261,6 +283,7 @@ export async function POST(request: Request) {
       sector: sector,
       agent_name: sectorConfig.agent_name,
     });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (e: any) {
     console.error("Error generating budget:", e);
     return NextResponse.json(
