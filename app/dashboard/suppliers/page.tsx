@@ -28,6 +28,8 @@ interface Supplier {
   notes: string;
   status: string;
   rating: number;
+  total_invoiced: number;
+  total_paid: number;
   created_at: string;
 }
 
@@ -390,9 +392,9 @@ export default function SuppliersPage() {
                       {Number(s.hourly_rate || 0) > 0 ? `${Number(s.hourly_rate).toFixed(0)}€` : "—"}
                     </td>
                     <td className="px-3 py-3 text-right">
-                      <p className="text-sm font-medium text-navy-900">{fmtMoney(Number((s as Record<string, unknown>).total_invoiced || 0))}</p>
-                      {Number((s as Record<string, unknown>).total_invoiced || 0) > Number((s as Record<string, unknown>).total_paid || 0) && (
-                        <p className="text-xs text-orange-600">Pdte: {fmtMoney(Number((s as Record<string, unknown>).total_invoiced || 0) - Number((s as Record<string, unknown>).total_paid || 0))}</p>
+                      <p className="text-sm font-medium text-navy-900">{fmtMoney(Number(s.total_invoiced || 0))}</p>
+                      {Number(s.total_invoiced || 0) > Number(s.total_paid || 0) && (
+                        <p className="text-xs text-orange-600">Pdte: {fmtMoney(Number(s.total_invoiced || 0) - Number(s.total_paid || 0))}</p>
                       )}
                     </td>
                     <td className="px-3 py-3 text-center">
