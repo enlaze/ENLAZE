@@ -158,12 +158,13 @@ export async function createSupplier(supabase: SupabaseClient, supplier: Partial
 
   if (data) {
     notify(supabase, {
-      user_id: user.id,
       type: "system",
       severity: "info",
       title: "Nuevo proveedor registrado",
-      message: `Se ha dado de alta el proveedor "${supplier.name}"`,
-      link: `/dashboard/suppliers/${data.id}`,
+      body: `Se ha dado de alta el proveedor "${supplier.name}"`,
+      entity_type: "supplier",
+      entity_id: data.id,
+      action_url: `/dashboard/suppliers/${data.id}`,
     }).catch(() => {});
     logActivity(supabase, {
       action: "supplier_created",
@@ -258,12 +259,13 @@ export async function createReceivedInvoice(supabase: SupabaseClient, invoice: P
     });
 
     notify(supabase, {
-      user_id: user.id,
-      type: "invoice",
+      type: "system",
       severity: "info",
       title: "Factura recibida registrada",
-      message: `Factura ${invoice.invoice_number} de ${invoice.supplier_name} por ${Number(invoice.total).toFixed(2)}€`,
-      link: `/dashboard/suppliers/invoices/${data.id}`,
+      body: `Factura ${invoice.invoice_number} de ${invoice.supplier_name} por ${Number(invoice.total).toFixed(2)}€`,
+      entity_type: "received_invoice",
+      entity_id: data.id,
+      action_url: `/dashboard/suppliers/invoices/${data.id}`,
     }).catch(() => {});
 
     logActivity(supabase, {
@@ -352,12 +354,13 @@ export async function registerSupplierPayment(
     }
 
     notify(supabase, {
-      user_id: user.id,
-      type: "payment",
+      type: "system",
       severity: "success",
       title: "Pago a proveedor registrado",
-      message: `Pago de ${params.amount.toFixed(2)}€ en factura ${inv.invoice_number} de ${inv.supplier_name}`,
-      link: `/dashboard/suppliers/invoices/${params.received_invoice_id}`,
+      body: `Pago de ${params.amount.toFixed(2)}€ en factura ${inv.invoice_number} de ${inv.supplier_name}`,
+      entity_type: "supplier_payment",
+      entity_id: params.received_invoice_id,
+      action_url: `/dashboard/suppliers/invoices/${params.received_invoice_id}`,
     }).catch(() => {});
 
     logActivity(supabase, {
