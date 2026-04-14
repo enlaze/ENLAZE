@@ -715,14 +715,14 @@ const beforeItems = [
   "Domingo haciendo presupuestos para entregar el lunes",
   "Clientes que no contestan porque tardas 4 días en enviar",
   "«Se me había olvidado ese cliente, lo llamo el lunes»",
-  "Tres libretas, dos Excel y un WhatsApp del encargado",
+  "Tres carpetas, dos Excel y un WhatsApp que nadie encuentra",
   "Pierdes el 60 % de los presupuestos por no hacer seguimiento",
   "Trabajas 60 horas y facturas lo mismo que el mes pasado",
 ];
 
 const afterItems = [
   "Fin de semana libre. Los presupuestos salen en 30 segundos",
-  "Presupuesto enviado el mismo día de la visita",
+  "Presupuesto enviado el mismo día de la reunión",
   "Seguimiento automático. Ningún cliente se queda sin respuesta",
   "Un único panel con todo: clientes, proyectos, mensajes, presupuestos",
   "Cierras más clientes sin mover un dedo de más",
