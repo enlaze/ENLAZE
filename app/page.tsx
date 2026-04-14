@@ -251,9 +251,9 @@ function Hero() {
 
         {/* Headline */}
         <h1 className="mx-auto mt-8 max-w-4xl text-center text-[2.5rem] font-semibold leading-[1.05] tracking-[-0.025em] text-navy-900 md:text-[4rem] lg:text-[4.5rem]">
-          Tus clientes no esperan. Tu negocio{" "}
+          Cierra más clientes{" "}
           <span className="relative inline-block whitespace-nowrap">
-            <span className="relative z-10 text-brand-green">tampoco debería</span>
+            <span className="relative z-10 text-brand-green">sin trabajar más horas</span>
             <svg
               aria-hidden
               viewBox="0 0 300 12"
@@ -269,7 +269,6 @@ function Hero() {
               />
             </svg>
           </span>
-          .
         </h1>
 
         {/* Subheadline */}
@@ -291,7 +290,7 @@ function Hero() {
               focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:ring-offset-2
             "
           >
-            Probar gratis
+            Solicitar demo
             <IconArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
           </Link>
           <a
@@ -308,7 +307,11 @@ function Hero() {
           </a>
         </div>
 
-        <p className="mt-6 text-center text-[13px] text-navy-500">
+        <p className="mx-auto mt-6 max-w-xl text-center text-[14px] leading-relaxed text-navy-400">
+          Menos WhatsApp perdido, menos Excel disperso y menos tiempo apagando fuegos. Más orden, más seguimiento y más ventas.
+        </p>
+
+        <p className="mt-4 text-center text-[13px] text-navy-500">
           Sin tarjeta · Configuración en 2 minutos · Cancela cuando quieras
         </p>
 
@@ -571,10 +574,10 @@ function Benefits() {
             La solución
           </p>
           <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 md:text-[2.75rem]">
-            Esto es lo que deja de pasar cuando usas Enlaze
+            Todo lo que necesitas para vender mejor y gestionar mejor
           </h2>
           <p className="mt-4 text-[16px] leading-relaxed text-navy-500">
-            No es otra herramienta más para tu carpeta. Es el sistema que hace el trabajo que hoy tienes que hacer tú por la noche.
+            ENLAZE te ayuda a organizar el trabajo comercial y operativo de tu empresa para responder más rápido, crear presupuestos con más agilidad, hacer seguimiento sin olvidos y centralizar la información importante.
           </p>
         </div>
 
@@ -970,10 +973,10 @@ function ForWhom() {
             Para quién es
           </p>
           <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 md:text-[2.75rem]">
-            ¿Es Enlaze para ti?
+            Diseñado para empresas de servicios que viven de atender bien y responder rápido
           </h2>
           <p className="mt-4 text-[16px] leading-relaxed text-navy-500">
-            No queremos vender a todo el mundo. Queremos vender a quien le va a funcionar.
+            ENLAZE está pensado para negocios que trabajan con solicitudes, clientes, presupuestos, tareas y seguimiento diario.
           </p>
         </div>
 

@@ -5,7 +5,7 @@ import SplashScreen from "@/components/SplashScreen";
 export const metadata: Metadata = {
   title: "Enlaze — Cierra más clientes sin trabajar más horas",
   description:
-    "Enlaze contesta a tus clientes, genera presupuestos con IA y hace el seguimiento por ti. Para empresas de reformas, instalaciones y servicios técnicos que quieren crecer sin añadir más horas de oficina.",
+    "ENLAZE centraliza clientes, presupuestos, seguimiento y operaciones en un solo lugar para empresas de servicios que quieren responder más rápido, vender mejor y tener más control del negocio.",
 };
 
 export default function RootLayout({
