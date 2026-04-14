@@ -274,7 +274,7 @@ function Hero() {
 
         {/* Subheadline */}
         <p className="mx-auto mt-7 max-w-2xl text-center text-[17px] leading-relaxed text-navy-500 md:text-[18px]">
-          Enlaze automatiza tu WhatsApp, tus emails y el seguimiento comercial para que cierres más trabajos sin perder ni un cliente más.
+          ENLAZE centraliza clientes, presupuestos, seguimiento y operaciones en un solo lugar para empresas de servicios que quieren responder más rápido, vender mejor y tener más control del negocio.
         </p>
 
         <div className="mt-10 flex flex-wrap justify-center gap-3">
@@ -363,7 +363,7 @@ function ProductPreview() {
               <MockNavItem label="Dashboard" active />
               <MockNavItem label="Clientes" />
               <MockNavItem label="Presupuestos" />
-              <MockNavItem label="Obras" />
+              <MockNavItem label="Proyectos" />
               <MockNavItem label="Facturas" />
               <MockNavItem label="Ajustes" />
             </div>
@@ -376,7 +376,7 @@ function ProductPreview() {
                   Nuevo presupuesto
                 </div>
                 <div className="mt-1 text-[15px] font-semibold text-navy-900">
-                  Reforma integral — Piso C/ Castellana 48
+                  Mantenimiento integral — Oficinas Castellana 48
                 </div>
               </div>
               <div className="hidden items-center gap-2 rounded-full border border-brand-green/20 bg-brand-green/10 px-2.5 py-1 sm:inline-flex">
@@ -395,10 +395,10 @@ function ProductPreview() {
                 <div className="col-span-2 text-right">Total</div>
               </div>
 
-              <MockLine label="Demolición de tabiquería interior" qty="35 m²" unit="12,00" total="420,00" />
-              <MockLine label="Instalación eléctrica completa" qty="1 ud" unit="1.850,00" total="1.850,00" />
-              <MockLine label="Fontanería baño principal" qty="1 ud" unit="920,00" total="920,00" />
-              <MockLine label="Suelo laminado AC5 roble natural" qty="48 m²" unit="34,50" total="1.656,00" />
+              <MockLine label="Diagnóstico y planificación inicial" qty="1 ud" unit="420,00" total="420,00" />
+              <MockLine label="Servicio técnico especializado" qty="1 ud" unit="1.850,00" total="1.850,00" />
+              <MockLine label="Revisión y puesta a punto completa" qty="1 ud" unit="920,00" total="920,00" />
+              <MockLine label="Mantenimiento preventivo trimestral" qty="4 ud" unit="414,00" total="1.656,00" />
             </div>
 
             <div className="mt-5 flex items-end justify-between gap-4">
@@ -463,7 +463,7 @@ function MockLine({
 const pains = [
   {
     title: "Contestas cuando puedes, no cuando el cliente quiere",
-    desc: "Entre visita y visita, los mensajes se acumulan. Y el cliente que no espera, ya está hablando con otro.",
+    desc: "Entre un cliente y otro, los mensajes se acumulan. Y el que no espera, ya está hablando con tu competencia.",
   },
   {
     title: "Haces presupuestos el domingo por la noche",
@@ -475,10 +475,10 @@ const pains = [
   },
   {
     title: "Tu información vive en cinco sitios distintos",
-    desc: "Una libreta, el WhatsApp del encargado, un Excel, la memoria de alguien y un cajón. Nadie sabe dónde está qué.",
+    desc: "Una libreta, el WhatsApp de alguien, un Excel, la memoria del equipo y una carpeta perdida. Nadie sabe dónde está qué.",
   },
   {
-    title: "Cada visita son dos horas de papeleo después",
+    title: "Cada reunión son dos horas de papeleo después",
     desc: "Apuntar, preparar presupuesto, enviarlo, recordar quién dijo qué. Y mañana, vuelta a empezar.",
   },
   {
@@ -542,13 +542,13 @@ function PainSection() {
 const benefits = [
   {
     Icon: IconMessage,
-    title: "Contestas a todos tus clientes en minutos, aunque estés en la obra",
-    desc: "WhatsApp y email automáticos. Las preguntas repetidas se responden solas. Las visitas quedan confirmadas. Tú ni abres el móvil y el cliente ya sabe que estás al otro lado.",
+    title: "Contestas a todos tus clientes en minutos, aunque estés fuera de la oficina",
+    desc: "WhatsApp y email automáticos. Las preguntas repetidas se responden solas. Las citas quedan confirmadas. Tú ni abres el móvil y el cliente ya sabe que estás al otro lado.",
   },
   {
     Icon: IconZap,
-    title: "Envías el presupuesto el mismo día de la visita",
-    desc: "Describes el trabajo en lenguaje natural y la IA genera un presupuesto profesional con partidas, medidas y precios en 30 segundos. Cero plantillas de Word. Cero cálculos a mano.",
+    title: "Envías el presupuesto el mismo día de la reunión",
+    desc: "Describes el servicio en lenguaje natural y la IA genera un presupuesto profesional con partidas, cantidades y precios en 30 segundos. Cero plantillas de Word. Cero cálculos a mano.",
   },
   {
     Icon: IconRefresh,
@@ -558,7 +558,7 @@ const benefits = [
   {
     Icon: IconTarget,
     title: "Todo tu negocio cabe en un solo panel",
-    desc: "Clientes, obras, mensajes, presupuestos, facturas y pedidos a proveedor. Un único sitio, todo conectado. Se acabaron las libretas sueltas y los «¿dónde lo tenía apuntado?».",
+    desc: "Clientes, proyectos, mensajes, presupuestos, facturas y operaciones. Un único sitio, todo conectado. Se acabaron las libretas sueltas y los «¿dónde lo tenía apuntado?».",
   },
 ];
 
@@ -633,7 +633,7 @@ const steps = [
     n: "03",
     Icon: IconSparkles,
     title: "Respira. A partir de aquí, el sistema trabaja",
-    desc: "Contesta a tus clientes, manda presupuestos el mismo día y hace el seguimiento solo. Tú te dedicas a la obra. Enlaze cierra la venta.",
+    desc: "Contesta a tus clientes, manda presupuestos el mismo día y hace el seguimiento solo. Tú te dedicas al servicio. Enlaze cierra la venta.",
   },
 ];
 
@@ -724,8 +724,8 @@ const afterItems = [
   "Fin de semana libre. Los presupuestos salen en 30 segundos",
   "Presupuesto enviado el mismo día de la visita",
   "Seguimiento automático. Ningún cliente se queda sin respuesta",
-  "Un único panel con todo: clientes, obras, mensajes, presupuestos",
-  "Cierras más trabajos sin mover un dedo de más",
+  "Un único panel con todo: clientes, proyectos, mensajes, presupuestos",
+  "Cierras más clientes sin mover un dedo de más",
   "Trabajas 40 horas y facturas un 30 % más",
 ];
 
@@ -834,15 +834,15 @@ const testimonials = [
   {
     initials: "MR",
     name: "Marcos Robles",
-    role: "Fundador, Reformas Robles",
+    role: "Fundador, Robles Servicios Técnicos",
     city: "Madrid",
     quote:
-      "Antes perdíamos clientes simplemente por no contestar a tiempo. Ahora Enlaze responde por nosotros y envía los presupuestos el mismo día de la visita. Hemos pasado de 12 a 34 obras al mes sin contratar a nadie.",
+      "Antes perdíamos clientes simplemente por no contestar a tiempo. Ahora Enlaze responde por nosotros y envía los presupuestos el mismo día. Hemos triplicado los proyectos cerrados al mes sin contratar a nadie.",
   },
   {
     initials: "LG",
     name: "Laura Giménez",
-    role: "Gerente, Giménez Instalaciones Eléctricas",
+    role: "Gerente, Giménez Consulting",
     city: "Valencia",
     quote:
       "El seguimiento automático nos ha cambiado el mes. Antes cerrábamos 3 de cada 10 presupuestos. Ahora cerramos 7. Lo único que cambió fue que Enlaze no se olvida de ninguno.",
@@ -853,7 +853,7 @@ const testimonials = [
     role: "Director, Ortiz Mantenimiento",
     city: "Sevilla",
     quote:
-      "Lo más valioso no es el tiempo que ahorramos. Es que los domingos ya no trabajo. Los presupuestos que antes me llevaban dos horas salen ahora en treinta segundos y llegan al cliente antes de que yo vuelva a la oficina.",
+      "Lo más valioso no es el tiempo que ahorramos. Es que los domingos ya no trabajo. Los presupuestos que antes me llevaban dos horas salen ahora en treinta segundos y llegan al cliente antes de que cuelgue el teléfono.",
   },
 ];
 
@@ -947,7 +947,7 @@ function SocialProof() {
  * ──────────────────────────────────────────────────────────────────── */
 
 const fitYes = [
-  "Tienes una empresa de reformas, instalaciones, mantenimiento o servicios técnicos",
+  "Tienes una empresa de servicios: mantenimiento, asesoría, consultoría, agencia, clínica, instaladores, multiservicio...",
   "Te tiras horas cada semana haciendo presupuestos a mano",
   "Has perdido clientes por no llegar a contestar a tiempo",
   "Tu información está repartida entre libretas, Excel y WhatsApp",
@@ -1097,7 +1097,7 @@ function FinalCTA() {
               Tu próximo cliente ya te ha escrito. La pregunta es si vas a contestar a tiempo.
             </h2>
             <p className="mx-auto mt-5 max-w-xl text-[16px] leading-relaxed text-navy-500">
-              Crea tu cuenta en dos minutos. A partir de hoy, el sistema trabaja mientras tú estás en la obra.
+              Crea tu cuenta en dos minutos. A partir de hoy, el sistema trabaja mientras tú te dedicas a lo que mejor sabes hacer.
             </p>
 
             <div className="mt-10 flex flex-wrap justify-center gap-3">
@@ -1161,7 +1161,7 @@ function Footer() {
           <div className="col-span-2 md:col-span-1">
             <Logo href="/" size={30} />
             <p className="mt-4 max-w-xs text-[13px] leading-relaxed text-navy-500">
-              El sistema que contesta, presupuesta y hace el seguimiento por ti. Para empresas de reformas, instalaciones y servicios técnicos que quieren crecer sin añadir más horas de oficina.
+              El sistema que contesta, presupuesta y hace el seguimiento por ti. Para empresas de servicios que quieren crecer sin añadir más horas de oficina.
             </p>
           </div>
 
