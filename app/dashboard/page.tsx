@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import Link from "next/link";
+import OnboardingChecklist from "@/components/OnboardingChecklist";
 
 /* ─────────────────────────────────────────────────────────────────────
  *  Icons — Lucide-style (stroke 1.75, 24×24, rounded)
@@ -333,6 +334,9 @@ export default function DashboardHome() {
           Esto es lo que necesita tu atención hoy.
         </p>
       </div>
+
+      {/* ── Onboarding checklist (auto-hides when all steps done) ── */}
+      <OnboardingChecklist />
 
       {/* ── 2. KPI Cards ─────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">

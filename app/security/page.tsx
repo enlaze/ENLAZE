@@ -1,8 +1,12 @@
 import Link from 'next/link';
 
 export const metadata = {
-  title: 'Security | ENLAZE',
-  description: 'Security and infrastructure information for ENLAZE',
+  title: 'Seguridad',
+  description: 'Infraestructura, encriptación y cumplimiento normativo de Enlaze. Tus datos están seguros.',
+  openGraph: {
+    title: 'Seguridad | Enlaze',
+    description: 'Infraestructura, encriptación y cumplimiento normativo de Enlaze.',
+  },
 };
 
 export default function SecurityPage() {
