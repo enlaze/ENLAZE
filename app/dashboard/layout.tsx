@@ -8,64 +8,28 @@ import NotificationCenter from "@/components/NotificationCenter";
 import SearchCommand from "@/components/SearchCommand";
 import { SectorProvider, useSector } from "@/lib/sector-context";
 
-/* ─── Nav item with unique id ─────────────────────────────────────── */
-
-interface NavItem {
-  id: string;
-  href: string;
-  label: string;
-  icon: string;
-}
-
 /* Fallback nav items used while sector config loads */
-const fallbackNavItems: NavItem[] = [
-  { id: "dashboard",         href: "/dashboard",                   label: "Dashboard",           icon: "📊" },
-  { id: "clientes",          href: "/dashboard/clientes",          label: "Clientes",            icon: "👥" },
-  { id: "budgets",           href: "/dashboard/budgets",           label: "Presupuestos",        icon: "📋" },
-  { id: "messages",          href: "/dashboard/messages",          label: "WhatsApp",            icon: "💬" },
-  { id: "emails",            href: "/dashboard/emails",            label: "Emails",              icon: "📧" },
-  { id: "prices",            href: "/dashboard/prices",            label: "Banco precios",       icon: "💰" },
-  { id: "projects",          href: "/dashboard/projects",          label: "Obras",               icon: "🏗️" },
-  { id: "suppliers",         href: "/dashboard/suppliers",         label: "Proveedores",         icon: "🔧" },
-  { id: "orders",            href: "/dashboard/orders",            label: "Pedidos",             icon: "📦" },
-  { id: "delivery-notes",    href: "/dashboard/delivery-notes",    label: "Albaranes",           icon: "📄" },
-  { id: "facturas",          href: "/dashboard/facturas",          label: "Facturas recibidas",  icon: "🧾" },
-  { id: "issued-invoices",   href: "/dashboard/issued-invoices",   label: "Facturas emitidas",   icon: "📑" },
-  { id: "payments",          href: "/dashboard/payments",          label: "Pagos y Tesorería",   icon: "💵" },
-  { id: "margins",           href: "/dashboard/margins",           label: "Márgenes",            icon: "📊" },
-  { id: "calendar",          href: "/dashboard/calendar",          label: "Calendario",          icon: "📅" },
-  { id: "compliance",        href: "/dashboard/compliance",        label: "Compliance",          icon: "🛡️" },
-  { id: "audit-log",         href: "/dashboard/audit-log",         label: "Audit Log",           icon: "📋" },
-  { id: "settings",          href: "/dashboard/settings",          label: "Ajustes",             icon: "⚙️" },
+const fallbackNavItems = [
+  { href: "/dashboard", label: "Dashboard", icon: "📊" },
+  { href: "/dashboard/clientes", label: "Clientes", icon: "👥" },
+  { href: "/dashboard/budgets", label: "Presupuestos", icon: "📋" },
+  { href: "/dashboard/messages", label: "WhatsApp", icon: "💬" },
+  { href: "/dashboard/emails", label: "Emails", icon: "📧" },
+  { href: "/dashboard/prices", label: "Banco precios", icon: "💰" },
+  { href: "/dashboard/projects", label: "Obras", icon: "🏗️" },
+  { href: "/dashboard/suppliers", label: "Proveedores", icon: "🔧" },
+  { href: "/dashboard/orders", label: "Pedidos", icon: "📦" },
+  { href: "/dashboard/delivery-notes", label: "Albaranes", icon: "📄" },
+  { href: "/dashboard/suppliers/invoices", label: "Facturas recibidas", icon: "🧾" },
+  { href: "/dashboard/issued-invoices", label: "Facturas emitidas", icon: "📑" },
+  { href: "/dashboard/payments", label: "Pagos y Tesorería", icon: "💵" },
+  { href: "/dashboard/margins", label: "Márgenes", icon: "📊" },
+  { href: "/dashboard/calendar", label: "Calendario", icon: "📅" },
+  { href: "/dashboard/agent", label: "Asistente IA", icon: "🤖" },
+  { href: "/dashboard/compliance", label: "Compliance", icon: "🛡️" },
+  { href: "/dashboard/audit-log", label: "Audit Log", icon: "📋" },
+  { href: "/dashboard/settings", label: "Ajustes", icon: "⚙️" },
 ];
-
-/* Items that are always appended at the bottom (only if not already present) */
-const systemItems: NavItem[] = [
-  { id: "compliance",  href: "/dashboard/compliance", label: "Compliance", icon: "🛡️" },
-  { id: "audit-log",   href: "/dashboard/audit-log",  label: "Audit Log",  icon: "📋" },
-  { id: "settings",    href: "/dashboard/settings",   label: "Ajustes",    icon: "⚙️" },
-];
-
-/** Merge sector modules with system items, deduplicating by href */
-function buildNavItems(sectorModules: { key: string; href: string; label: string; icon: string }[]): NavItem[] {
-  const items: NavItem[] = sectorModules.map(m => ({
-    id: m.key,
-    href: m.href,
-    label: m.label,
-    icon: m.icon,
-  }));
-
-  const seenHrefs = new Set(items.map(i => i.href));
-
-  for (const sys of systemItems) {
-    if (!seenHrefs.has(sys.href)) {
-      items.push(sys);
-      seenHrefs.add(sys.href);
-    }
-  }
-
-  return items;
-}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -104,8 +68,12 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
 
   // Build nav items from sector config or fallback
   const sectorModules = visibleModules();
-  const navItems: NavItem[] = sectorModules.length > 0
-    ? buildNavItems(sectorModules)
+  const complianceItems = [
+    { href: "/dashboard/compliance", label: "Compliance", icon: "🛡️" },
+    { href: "/dashboard/audit-log", label: "Audit Log", icon: "📋" },
+  ];
+  const navItems = sectorModules.length > 0
+    ? [...sectorModules.map(m => ({ href: m.href, label: m.label, icon: m.icon })), ...complianceItems, { href: "/dashboard/settings", label: "Ajustes", icon: "⚙️" }]
     : fallbackNavItems;
 
   // User initials for the avatar
@@ -236,7 +204,7 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
                   ? pathname === "/dashboard"
                   : pathname === item.href || pathname.startsWith(item.href + "/");
               return (
-                <li key={item.id}>
+                <li key={item.href}>
                   <Link
                     href={item.href}
                     onClick={() => setSidebarOpen(false)}
