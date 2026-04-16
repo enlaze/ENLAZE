@@ -1,0 +1,310 @@
+{
+  "name": "Comercio local — Multiusuario v4 Operativo",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "n01",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "position": [
+        0,
+        240
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 6
+            }
+          ]
+        }
+      },
+      "id": "n02",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        0,
+        420
+      ],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.ENLAZE_BASE_URL || 'https://enlaze.vercel.app' }}/api/agent/users?sector=comercio_local",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.AGENT_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "n03",
+      "name": "List Active Users",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        260,
+        330
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "const feeds = [\n  { url: 'https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/economia/portada', name: 'El País' },\n  { url: 'https://www.europapress.es/rss/rss.aspx?ch=136', name: 'Europa Press' },\n  { url: 'https://cincodias.elpais.com/rss/feed.html?feedId=17066', name: 'Cinco Días' },\n  { url: 'https://www.boe.es/rss/canal.php?c=ayudas', name: 'BOE Ayudas' }\n];\n\nconst results = await Promise.all(feeds.map(async (feed) => {\n  try {\n    const resp = await fetch(feed.url, { signal: AbortSignal.timeout(15000) });\n    return { name: feed.name, text: await resp.text(), ok: true };\n  } catch (e) {\n    console.log(`[RSS] ${feed.name}: ${e.message}`);\n    return { name: feed.name, text: '', ok: false, error: e.message };\n  }\n}));\n\nconst newsXml = results.filter(r => r.name !== 'BOE Ayudas').map(r => r.text).join('\\n');\nconst boeXml = results.find(r => r.name === 'BOE Ayudas')?.text || '';\nreturn [{ json: { newsXml, boeXml, feedStatus: results } }];"
+      },
+      "id": "n04",
+      "name": "Fetch Shared Sources",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        520,
+        330
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "const usersResp = $('List Active Users').first().json;\nif (!usersResp.ok || !Array.isArray(usersResp.users) || usersResp.users.length === 0) {\n  return [{\n    json: {\n      _skip: true,\n      reason: 'No active comercio_local users',\n      count: 0\n    }\n  }];\n}\nreturn usersResp.users.map(u => ({\n  json: {\n    user_id: u.user_id || u.id,\n    business_name: u.business_name || '',\n    business_type: u.business_type || '',\n    city: u.city || '',\n    sector: u.sector || 'comercio_local'\n  }\n}));"
+      },
+      "id": "n05",
+      "name": "Split Users",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        780,
+        330
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.ENLAZE_BASE_URL || 'https://enlaze.vercel.app' }}/api/agent/config",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "user_id",
+              "value": "={{ $json.user_id }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.AGENT_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "n06",
+      "name": "Get User Config",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1040,
+        330
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "const config0 = $input.first().json;\nconst baseUrl = config0.ENLAZE_BASE_URL || 'https://enlaze.vercel.app';\nconst agentKey = config0.AGENT_API_KEY || '';\nconst shared = $('Fetch Shared Sources').first().json;\n\nfunction parseRSS(xml) {\n  const out = [];\n  const rx = /<item[^>]*>([\\s\\S]*?)<\\/item>/gi;\n  let m;\n  while ((m = rx.exec(xml || '')) !== null) {\n    const b = m[1];\n    const title = (b.match(/<title[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/title>/s) || [])[1] || '';\n    const link = (b.match(/<link[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/link>/s) || [])[1] || '';\n    const desc = (b.match(/<description[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/description>/s) || [])[1] || '';\n    const pubDate = (b.match(/<pubDate[^>]*>(.*?)<\\/pubDate>/s) || [])[1] || '';\n    out.push({ title: title.trim(), link: link.trim(), desc: desc.trim(), pubDate: pubDate.trim() });\n  }\n  return out;\n}\n\nfunction strip(s='') {\n  return String(s).replace(/<[^>]*>/g, ' ').replace(/&[a-z]+;/gi, ' ').replace(/\\s+/g, ' ').trim();\n}\n\nfunction safeIsoDate(raw) {\n  try {\n    return raw ? new Date(raw).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];\n  } catch {\n    return new Date().toISOString().split('T')[0];\n  }\n}\n\nfunction normalizeKey(v) {\n  return String(v || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();\n}\n\nfunction buildKeywordSet(config) {\n  const base = [\n    'comercio local','pyme','autonomo','autónomo','hosteleria','hostelería',\n    'subvencion','subvención','digitalizacion','digitalización','kit digital',\n    'iva','energia','energía','alquiler','empleo','consumo','proveedores'\n  ];\n  const dynamic = [\n    ...(config.keywords || []),\n    ...(config.rss_filter_hints || []),\n    config.business_type,\n    config.city\n  ].filter(Boolean);\n  return [...new Set([...base, ...dynamic].map(normalizeKey).filter(Boolean))];\n}\n\nfunction scoreText(text, keywords) {\n  const normalized = normalizeKey(text);\n  let score = 0;\n  for (const kw of keywords) {\n    if (normalized.includes(kw)) score += kw.length > 8 ? 4 : 2;\n  }\n  return Math.min(score, 10);\n}\n\nfunction parseNews(config) {\n  const keywords = buildKeywordSet(config);\n  const newsItems = parseRSS(shared.newsXml || '');\n  return newsItems.map(item => {\n    const src = item.link.includes('elpais') ? 'El País' :\n                item.link.includes('europapress') ? 'Europa Press' :\n                item.link.includes('cincodias') ? 'Cinco Días' : 'Prensa';\n    const relevance = scoreText(`${item.title} ${item.desc}`, keywords);\n    return {\n      id: 'news_' + Buffer.from(item.link || item.title).toString('base64').slice(0, 12),\n      title: strip(item.title),\n      summary: strip(item.desc).slice(0, 320),\n      source: src,\n      url: item.link,\n      date: safeIsoDate(item.pubDate),\n      category: 'noticias',\n      relevance,\n      tags: keywords.filter(kw => normalizeKey(`${item.title} ${item.desc}`).includes(kw)).slice(0, 8)\n    };\n  }).filter(n => n.relevance >= 3).sort((a,b) => b.relevance - a.relevance).slice(0, 15);\n}\n\nfunction parseBoe(config) {\n  const keywords = buildKeywordSet(config);\n  const boeItems = parseRSS(shared.boeXml || '');\n  const subsidies = [];\n  const regulations = [];\n  for (const item of boeItems) {\n    const text = `${item.title} ${item.desc}`;\n    const normalized = normalizeKey(text);\n    if (!keywords.some(kw => normalized.includes(kw))) continue;\n    const common = {\n      id: Buffer.from(item.link || item.title).toString('base64').slice(0, 12),\n      title: strip(item.title),\n      summary: strip(item.desc).slice(0, 300),\n      url: item.link\n    };\n    if (/(ley|reglamento|obligacion|obligación|normativa|sancion|sanción)/i.test(text)) {\n      regulations.push({\n        id: `reg_${common.id}`,\n        title: common.title,\n        type: 'normativa',\n        summary: common.summary,\n        url: common.url,\n        impact: /(obligacion|obligación|sancion|sanción)/i.test(text) ? 'high' : 'medium',\n        action_required: 'Revisar requisitos, plazos y adaptación operativa'\n      });\n    } else {\n      subsidies.push({\n        id: `sub_${common.id}`,\n        title: common.title,\n        type: /formacion|formación/i.test(text) ? 'formación' : /subvencion|subvención/i.test(text) ? 'subvención' : 'ayuda',\n        amount_range: '',\n        deadline: '',\n        target: 'Pymes y autónomos',\n        url: common.url,\n        status: 'abierta'\n      });\n    }\n  }\n  return { subsidies: subsidies.slice(0, 10), regulations: regulations.slice(0, 10) };\n}\n\nasync function maybeApi(path) {\n  try {\n    const resp = await fetch(`${baseUrl}${path}`, {\n      method: 'GET',\n      headers: {\n        'Authorization': `Bearer ${agentKey}`,\n        'Content-Type': 'application/json'\n      },\n      signal: AbortSignal.timeout(12000)\n    });\n    if (!resp.ok) {\n      return { ok: false, status: resp.status, data: null };\n    }\n    return { ok: true, status: resp.status, data: await resp.json() };\n  } catch (error) {\n    return { ok: false, status: 0, data: null, error: error.message };\n  }\n}\n\nfunction defaultInbox() {\n  return {\n    connected: false,\n    unread_count: 0,\n    priority_threads: [],\n    awaiting_reply: [],\n    supplier_messages: [],\n    customer_messages: [],\n    invoice_messages: [],\n    summary: 'Gmail no conectado'\n  };\n}\n\nfunction defaultCalendar() {\n  return {\n    connected: false,\n    today_events: [],\n    next_events: [],\n    free_slots: [],\n    reminders: [],\n    summary: 'Google Calendar no conectado'\n  };\n}\n\nfunction defaultReputation() {\n  return {\n    connected: false,\n    reviews: {\n      current_rating: 0,\n      total_reviews: 0,\n      new_reviews_count: 0,\n      urgent: [],\n      recurring_themes: [],\n      trend: 'unknown'\n    },\n    summary: 'Google Business no conectado'\n  };\n}\n\nfunction defaultMarket() {\n  return {\n    connected: false,\n    price_signals: [],\n    competitor_signals: [],\n    market_signals: [],\n    supplier_alerts: []\n  };\n}\n\nfunction buildCampaigns(config, context) {\n  const bizName = config.business_name || 'Tu negocio';\n  const bt = normalizeKey(config.business_type || 'comercio');\n  const campaigns = [];\n  const today = new Date();\n  const iso = d => d.toISOString().split('T')[0];\n\n  if (['bar','cafeteria','cafetería','restaurante'].some(x => bt.includes(normalizeKey(x)))) {\n    const tue = new Date(today.getTime() + ((9 - today.getDay()) % 7) * 86400000);\n    campaigns.push({\n      title: 'Promoción día valle',\n      type: 'promotion',\n      channel: ['whatsapp','instagram'],\n      target_audience: 'clientes_recurrentes',\n      suggested_date: iso(tue),\n      message_draft: `Esta semana en ${bizName}: promo especial entre semana para aumentar tráfico en horas valle.`,\n      reason: 'Optimización de ocupación entre semana'\n    });\n  }\n\n  if ((context.reputation.reviews?.urgent || []).length > 0) {\n    campaigns.push({\n      title: 'Campaña recuperación reputacional',\n      type: 'service_recovery',\n      channel: ['email','whatsapp'],\n      target_audience: 'clientes_insatisfechos',\n      suggested_date: iso(new Date(today.getTime() + 86400000)),\n      message_draft: `Gracias por seguir confiando en ${bizName}. Estamos mejorando nuestro servicio y queremos invitarte a volver.`,\n      reason: 'Hay reseñas negativas urgentes pendientes'\n    });\n  }\n\n  if ((context.market.price_signals || []).length > 0) {\n    campaigns.push({\n      title: 'Ajuste de oferta por costes',\n      type: 'pricing',\n      channel: ['interno'],\n      target_audience: 'gerencia',\n      suggested_date: iso(new Date(today.getTime() + 2 * 86400000)),\n      message_draft: 'Revisar escandallos, márgenes y precios de productos clave por cambios de mercado.',\n      reason: 'Se detectan señales de precio/proveedor'\n    });\n  }\n\n  if ((context.calendar.free_slots || []).length > 0) {\n    campaigns.push({\n      title: 'Huecos libres para activar ventas',\n      type: 'promotion',\n      channel: ['whatsapp','instagram stories'],\n      target_audience: 'clientes_recurrentes',\n      suggested_date: iso(today),\n      message_draft: `Tenemos disponibilidad/huecos libres hoy en ${bizName}. Reserva o ven a visitarnos.`,\n      reason: 'Agenda con huecos libres detectados'\n    });\n  }\n\n  if (campaigns.length === 0) {\n    campaigns.push({\n      title: 'Campaña semanal de visibilidad',\n      type: 'content',\n      channel: ['instagram','whatsapp'],\n      target_audience: 'todos',\n      suggested_date: iso(new Date(today.getTime() + 86400000)),\n      message_draft: `Publica hoy una pieza sobre producto estrella, testimonio de cliente o promoción de la semana en ${bizName}.`,\n      reason: 'Mantener presencia comercial continua'\n    });\n  }\n\n  return campaigns.slice(0, 5);\n}\n\nfunction buildDailySummary(config, context) {\n  const opportunities = (context.radar.subsidies?.length || 0) + (context.marketing.campaigns?.length || 0) + (context.calendar.free_slots?.length || 0);\n  const risks = (context.radar.regulations?.length || 0) + (context.inbox.awaiting_reply?.length || 0) + (context.reputation.reviews?.urgent?.length || 0);\n  const unread = context.inbox.unread_count || 0;\n  const score = Math.max(0, Math.min(100,\n    55\n    + (context.radar.news?.length || 0) * 2\n    + (context.radar.subsidies?.length || 0) * 4\n    + (context.marketing.campaigns?.length || 0) * 3\n    - (context.reputation.reviews?.urgent?.length || 0) * 8\n    - (context.radar.regulations?.length || 0) * 5\n    - (context.inbox.awaiting_reply?.length || 0) * 4\n  ));\n\n  let headline = `Hoy tienes ${context.radar.news.length} noticias relevantes`;\n  if ((context.radar.subsidies || []).length > 0) headline += `, ${context.radar.subsidies.length} ayudas detectadas`;\n  if (unread > 0) headline += ` y ${unread} email(s) sin leer`;\n  headline += '.';\n\n  const actions = [];\n  if ((context.inbox.awaiting_reply || []).length > 0) actions.push(`Responder ${context.inbox.awaiting_reply.length} conversación(es) pendientes`);\n  if ((context.reputation.reviews?.urgent || []).length > 0) actions.push(`Atender ${context.reputation.reviews.urgent.length} reseña(s) urgente(s)`);\n  if ((context.radar.regulations || []).length > 0) actions.push(`Revisar ${context.radar.regulations.length} cambio(s) normativo(s)`);\n  if ((context.calendar.reminders || []).length > 0) actions.push(`Ejecutar ${context.calendar.reminders.length} recordatorio(s) de agenda`);\n  if ((context.market.price_signals || []).length > 0) actions.push(`Revisar ${context.market.price_signals.length} señal(es) de precios/proveedores`);\n  if ((context.marketing.campaigns || []).length > 0) actions.push(`Lanzar ${context.marketing.campaigns.length} acción(es) de marketing sugeridas`);\n\n  return {\n    headline,\n    priority_actions: actions.slice(0, 6),\n    opportunities_count: opportunities,\n    risks_count: risks,\n    score\n  };\n}\n\nconst items = $input.all();\nconst outputs = [];\n\nfor (const item of items) {\n  const config = item.json;\n  if (config._skip) {\n    outputs.push({ json: { ...config, skipped: true } });\n    continue;\n  }\n\n  const radarNews = parseNews(config);\n  const boe = parseBoe(config);\n\n  const modules = config.agent_modules_enabled || {};\n  const gmailConnected = Boolean(config.gmail_connected || modules.gmail);\n  const calendarConnected = Boolean(config.google_calendar_connected || modules.calendar);\n  const businessConnected = Boolean(config.google_business_connected || config.google_place_id || modules.reputation);\n  const marketConnected = Boolean(modules.market || true);\n\n  const [gmailResp, calendarResp, reputationResp, marketResp] = await Promise.all([\n    gmailConnected ? maybeApi(`/api/agent/gmail/summary?user_id=${encodeURIComponent(config.user_id)}`) : Promise.resolve({ ok: false }),\n    calendarConnected ? maybeApi(`/api/agent/calendar/summary?user_id=${encodeURIComponent(config.user_id)}`) : Promise.resolve({ ok: false }),\n    businessConnected ? maybeApi(`/api/agent/reputation/summary?user_id=${encodeURIComponent(config.user_id)}`) : Promise.resolve({ ok: false }),\n    marketConnected ? maybeApi(`/api/agent/market/summary?user_id=${encodeURIComponent(config.user_id)}`) : Promise.resolve({ ok: false })\n  ]);\n\n  const inbox = gmailResp.ok && gmailResp.data ? {\n    connected: true,\n    unread_count: gmailResp.data.unread_count || 0,\n    priority_threads: gmailResp.data.priority_threads || [],\n    awaiting_reply: gmailResp.data.awaiting_reply || [],\n    supplier_messages: gmailResp.data.supplier_messages || [],\n    customer_messages: gmailResp.data.customer_messages || [],\n    invoice_messages: gmailResp.data.invoice_messages || [],\n    summary: gmailResp.data.summary || 'Resumen Gmail disponible'\n  } : defaultInbox();\n\n  const calendar = calendarResp.ok && calendarResp.data ? {\n    connected: true,\n    today_events: calendarResp.data.today_events || [],\n    next_events: calendarResp.data.next_events || [],\n    free_slots: calendarResp.data.free_slots || [],\n    reminders: calendarResp.data.reminders || [],\n    summary: calendarResp.data.summary || 'Resumen Calendar disponible'\n  } : defaultCalendar();\n\n  const reputation = reputationResp.ok && reputationResp.data ? {\n    connected: true,\n    reviews: reputationResp.data.reviews || defaultReputation().reviews,\n    summary: reputationResp.data.summary || 'Resumen reputación disponible'\n  } : defaultReputation();\n\n  const market = marketResp.ok && marketResp.data ? {\n    connected: true,\n    price_signals: marketResp.data.price_signals || [],\n    competitor_signals: marketResp.data.competitor_signals || [],\n    market_signals: marketResp.data.market_signals || [],\n    supplier_alerts: marketResp.data.supplier_alerts || []\n  } : defaultMarket();\n\n  const automation = {\n    gmail_connected: inbox.connected,\n    calendar_connected: calendar.connected,\n    google_business_connected: reputation.connected,\n    module_status: {\n      gmail: gmailResp.ok ? 'ok' : gmailConnected ? 'pending_backend_or_error' : 'disabled',\n      calendar: calendarResp.ok ? 'ok' : calendarConnected ? 'pending_backend_or_error' : 'disabled',\n      reputation: reputationResp.ok ? 'ok' : businessConnected ? 'pending_backend_or_error' : 'disabled',\n      market: marketResp.ok ? 'ok' : 'fallback_only'\n    },\n    reminders: [...calendar.reminders],\n    pending_tasks: [\n      ...((inbox.awaiting_reply || []).map(x => ({ type: 'email_reply', title: x.subject || 'Email pendiente', source: 'gmail' }))),\n      ...((reputation.reviews?.urgent || []).map(x => ({ type: 'review_reply', title: x.author || 'Reseña urgente', source: 'google_business' })))\n    ].slice(0, 10)\n  };\n\n  const context = {\n    inbox,\n    calendar,\n    reputation,\n    market,\n    radar: {\n      news: radarNews,\n      regulations: boe.regulations,\n      subsidies: boe.subsidies,\n      competitor_signals: market.competitor_signals || [],\n      local_events: market.market_signals || []\n    }\n  };\n\n  const campaigns = buildCampaigns(config, {\n    inbox,\n    calendar,\n    reputation,\n    market,\n    radar: context.radar\n  });\n\n  const payload = {\n    user_id: config.user_id,\n    business_id: config.business_id || config.user_id,\n    business_name: config.business_name,\n    business_type: config.business_type,\n    city: config.city,\n    sector: config.sector || 'comercio_local',\n    agent: 'comercio_local',\n    version: '4.0',\n    timestamp: new Date().toISOString(),\n    daily_summary: buildDailySummary(config, {\n      inbox,\n      calendar,\n      reputation,\n      market,\n      radar: context.radar,\n      marketing: { campaigns }\n    }),\n    radar: context.radar,\n    inbox,\n    calendar,\n    reputation,\n    market,\n    marketing: {\n      campaigns,\n      upcoming_dates: calendar.next_events || []\n    },\n    automation,\n    connections: {\n      gmail_connected: inbox.connected,\n      google_calendar_connected: calendar.connected,\n      google_business_connected: reputation.connected\n    }\n  };\n\n  outputs.push({ json: payload });\n}\n\nreturn outputs;"
+      },
+      "id": "n07",
+      "name": "Run User Modules",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1300,
+        330
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ENLAZE_BASE_URL || 'https://enlaze.vercel.app' }}/api/agent/ingest",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.AGENT_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "n08",
+      "name": "Send to ENLAZE",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1560,
+        330
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n  const r = item.json || {};\n  return {\n    json: {\n      success: r.success === true || r.ok === true,\n      timestamp: r.timestamp || new Date().toISOString(),\n      user_id: r.user_id || null,\n      results: r.results || {}\n    }\n  };\n});"
+      },
+      "id": "n09",
+      "name": "Log Results",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1820,
+        330
+      ],
+      "typeVersion": 2
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "List Active Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "List Active Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Active Users": {
+      "main": [
+        [
+          {
+            "node": "Fetch Shared Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Shared Sources": {
+      "main": [
+        [
+          {
+            "node": "Split Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Users": {
+      "main": [
+        [
+          {
+            "node": "Get User Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get User Config": {
+      "main": [
+        [
+          {
+            "node": "Run User Modules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run User Modules": {
+      "main": [
+        [
+          {
+            "node": "Send to ENLAZE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to ENLAZE": {
+      "main": [
+        [
+          {
+            "node": "Log Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "enlaze",
+      "id": "1"
+    },
+    {
+      "name": "comercio-local",
+      "id": "2"
+    },
+    {
+      "name": "multiusuario",
+      "id": "3"
+    },
+    {
+      "name": "automatizacion",
+      "id": "4"
+    }
+  ],
+  "triggerCount": 2,
+  "versionId": "4"
+}

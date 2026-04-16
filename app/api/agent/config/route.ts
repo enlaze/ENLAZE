@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
     const { data: profile, error } = await supabase
       .from("profiles")
       .select(
-        "id, email, full_name, company_name, business_name, business_sector, business_type, city, google_place_id, coordinates, agent_keywords, competitors, agent_enabled, agent_status",
+        "id, email, full_name, company_name, business_name, business_sector, business_type, city, google_place_id, coordinates, agent_keywords, competitors, agent_enabled, agent_status, agent_modules_enabled",
       )
       .eq("id", userId)
       .maybeSingle();
@@ -99,6 +99,19 @@ export async function GET(req: NextRequest) {
     const userKw: string[] = profile.agent_keywords || [];
     const mergedKeywords = [...new Set([...userKw, ...defaultKw])];
 
+    // Fetch module connections for this user
+    const { data: connections } = await supabase
+      .from("agent_connections")
+      .select("module, connected, status")
+      .eq("user_id", userId);
+
+    const connMap: Record<string, boolean> = {};
+    for (const c of connections || []) {
+      connMap[c.module] = c.connected === true;
+    }
+
+    const modulesEnabled = profile.agent_modules_enabled || {};
+
     // Update agent_status to running
     await supabase
       .from("profiles")
@@ -121,7 +134,14 @@ export async function GET(req: NextRequest) {
       marketing_hints: MARKETING_HINTS[bizType] || ["promoción", "descuento", "evento"],
       competitors: profile.competitors || [],
       agent_enabled: profile.agent_enabled ?? false,
+      // Module connection flags
+      gmail_connected: connMap["gmail"] || false,
+      google_calendar_connected: connMap["google_calendar"] || false,
+      google_business_connected: connMap["google_business"] || Boolean(profile.google_place_id),
+      agent_modules_enabled: modulesEnabled,
+      // Base URL & API key for Code-node fetch calls (avoids $env in n8n Code nodes)
       ENLAZE_BASE_URL: resolveBaseUrl(),
+      AGENT_API_KEY: process.env.AGENT_API_KEY || "",
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
