@@ -257,9 +257,19 @@ export async function POST(req: NextRequest) {
       results.tasks = { inserted: error ? 0 : rows.length, errors: error ? 1 : 0 };
     }
 
+    // Update agent run metadata on profile
+    await supabase
+      .from("profiles")
+      .update({
+        agent_last_run_at: new Date().toISOString(),
+        agent_status: "idle",
+      })
+      .eq("id", userId);
+
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
+      user_id: userId,
       results,
     });
   } catch (err) {

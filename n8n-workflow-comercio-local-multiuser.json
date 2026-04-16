@@ -1,0 +1,423 @@
+{
+  "name": "Comercio local — Multiusuario",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "n_manual",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 400]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "triggerAtHour": 6 }]
+        }
+      },
+      "id": "n_schedule",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 600]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.ENLAZE_BASE_URL || 'https://enlaze.vercel.app' }}/api/agent/users?sector=comercio_local",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.AGENT_API_KEY }}" }
+          ]
+        },
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      },
+      "id": "n_list_users",
+      "name": "List Active Users",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract users array into individual items for the loop\nconst response = $input.first().json;\nif (!response.ok || !response.users || response.users.length === 0) {\n  return [{ json: { _skip: true, reason: 'No active users found', count: 0 } }];\n}\n\nconsole.log(`[ENLAZE Agent] Processing ${response.users.length} users`);\n\nreturn response.users.map(u => ({ json: u }));"
+      },
+      "id": "n_split_users",
+      "name": "Split Users",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Skip guard — if no users, stop here\nconst item = $input.first().json;\nif (item._skip) {\n  return [{ json: { done: true, reason: item.reason } }];\n}\n// Otherwise pass through (this node is only reached inside the loop)\nreturn $input.all();"
+      },
+      "id": "n_skip_guard",
+      "name": "Skip Guard",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 500]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "loopCount": "={{ $input.all().length }}"
+      },
+      "id": "n_loop",
+      "name": "Loop Over Users",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [940, 500]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.ENLAZE_BASE_URL || 'https://enlaze.vercel.app' }}/api/agent/config",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "user_id", "value": "={{ $json.user_id }}" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.AGENT_API_KEY }}" }
+          ]
+        },
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      },
+      "id": "n_get_config",
+      "name": "Get User Config",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 500]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/economia/portada",
+        "options": { "response": { "response": { "responseFormat": "text" } } }
+      },
+      "id": "n_rss1",
+      "name": "RSS El País",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1460, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.europapress.es/rss/rss.aspx?ch=136",
+        "options": { "response": { "response": { "responseFormat": "text" } } }
+      },
+      "id": "n_rss2",
+      "name": "RSS Europa Press",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1460, 380]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://cincodias.elpais.com/rss/feed.html?feedId=17066",
+        "options": { "response": { "response": { "responseFormat": "text" } } }
+      },
+      "id": "n_rss3",
+      "name": "RSS Cinco Días",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1460, 560]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.boe.es/rss/canal.php?c=ayudas",
+        "options": { "response": { "response": { "responseFormat": "text" } } }
+      },
+      "id": "n_rss_boe",
+      "name": "RSS BOE Ayudas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1460, 740]
+    },
+    {
+      "parameters": {
+        "jsCode": "// parse_news — Filtra noticias RSS usando keywords + rss_filter_hints del usuario\nconst config = $node['Get User Config'].json;\nconst baseKeywords = [\n  'comercio local', 'pyme', 'autónomo', 'subvención', 'digitalización',\n  'hostelería', 'comercio minorista', 'iva', 'seguridad social',\n  'licencia apertura', 'kit digital', 'empleo', 'inflación',\n  'turismo', 'consumo', 'alquiler', 'energía', 'impuesto'\n];\nconst userKeywords = config.keywords || [];\nconst rssHints = config.rss_filter_hints || [];\nconst keywords = [...new Set([...baseKeywords, ...userKeywords, ...rssHints])].map(k => k.toLowerCase());\n\nfunction parseRSS(xml, src) {\n  const items = [];\n  const rx = /<item[^>]*>([\\s\\S]*?)<\\/item>/gi;\n  let m;\n  while ((m = rx.exec(xml)) !== null) {\n    const b = m[1];\n    const title = (b.match(/<title[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/title>/s)||[])[1]||'';\n    const link = (b.match(/<link[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/link>/s)||[])[1]||'';\n    const desc = (b.match(/<description[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/description>/s)||[])[1]||'';\n    const pubDate = (b.match(/<pubDate[^>]*>(.*?)<\\/pubDate>/s)||[])[1]||'';\n    items.push({ title: title.trim(), link: link.trim(), desc: desc.trim(), pubDate: pubDate.trim(), source: src });\n  }\n  return items;\n}\nfunction strip(s) { return s.replace(/<[^>]*>/g,'').replace(/&[a-z]+;/gi,' ').trim(); }\nfunction score(title, desc) {\n  const t = (title+' '+desc).toLowerCase();\n  let s = 0;\n  for (const kw of keywords) { if (t.includes(kw)) s += 3; }\n  return Math.min(s, 10);\n}\n\nconst all = [];\nfor (const item of $input.all()) {\n  const d = item.json.data || item.json.body || item.json;\n  const txt = typeof d === 'string' ? d : JSON.stringify(d);\n  let src = 'Desconocido';\n  if (txt.includes('elpais.com')) src = 'El País';\n  else if (txt.includes('europapress')) src = 'Europa Press';\n  else if (txt.includes('cincodias')) src = 'Cinco Días';\n  all.push(...parseRSS(txt, src));\n}\n\nconst news = all.map(i => {\n  const rel = score(i.title, i.desc);\n  return {\n    id: 'news_' + Buffer.from(i.link||i.title).toString('base64').slice(0,12),\n    title: strip(i.title), summary: strip(i.desc).slice(0,300),\n    source: i.source, url: i.link,\n    date: i.pubDate ? new Date(i.pubDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],\n    category: 'noticias', relevance: rel,\n    tags: keywords.filter(kw => (i.title+' '+i.desc).toLowerCase().includes(kw))\n  };\n}).filter(n => n.relevance >= 3).sort((a,b) => b.relevance - a.relevance).slice(0,15);\n\nreturn [{ json: { news } }];"
+      },
+      "id": "n_parse_news",
+      "name": "Parse News",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1720, 380]
+    },
+    {
+      "parameters": {
+        "jsCode": "// parse_ayudas — Filtra ayudas BOE usando keywords del usuario\nconst config = $node['Get User Config'].json;\nconst baseKw = ['pyme','comercio','digitalización','kit digital','autónomo','empleo','formación','subvención','ayuda','bonificación','hostelería','turismo'];\nconst userKw = (config.keywords || []).map(k=>k.toLowerCase());\nconst keywords = [...new Set([...baseKw,...userKw])];\n\nfunction parseRSS(xml) {\n  const items = [];\n  const rx = /<item[^>]*>([\\s\\S]*?)<\\/item>/gi;\n  let m;\n  while ((m = rx.exec(xml)) !== null) {\n    const b = m[1];\n    const title = (b.match(/<title[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/title>/s)||[])[1]||'';\n    const link = (b.match(/<link[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/link>/s)||[])[1]||'';\n    const desc = (b.match(/<description[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/description>/s)||[])[1]||'';\n    items.push({ title: title.trim(), link: link.trim(), desc: desc.trim() });\n  }\n  return items;\n}\nfunction strip(s) { return s.replace(/<[^>]*>/g,'').replace(/&[a-z]+;/gi,' ').trim(); }\nfunction classify(t, d) {\n  const x = (t+' '+d).toLowerCase();\n  if (x.includes('subvención')||x.includes('subvencion')) return 'subvención';\n  if (x.includes('bonificación')||x.includes('bonificacion')) return 'bonificación';\n  if (x.includes('formación')||x.includes('formacion')) return 'formación';\n  return 'ayuda';\n}\n\nlet xml = '';\nfor (const i of $input.all()) {\n  const d = i.json.data || i.json.body || i.json;\n  xml += typeof d === 'string' ? d : JSON.stringify(d);\n}\n\nconst raw = parseRSS(xml);\nconst subsidies = [], regulations = [];\n\nfor (const i of raw) {\n  const text = (i.title+' '+i.desc).toLowerCase();\n  if (!keywords.some(kw => text.includes(kw))) continue;\n  const ct = strip(i.title), cd = strip(i.desc);\n  if (text.includes('normativa')||text.includes('reglamento')||text.includes('obligación')||text.includes('ley ')) {\n    regulations.push({ id:'reg_'+Buffer.from(i.link||i.title).toString('base64').slice(0,12), title:ct, type:'normativa', summary:cd.slice(0,300), url:i.link, impact:text.includes('obligat')||text.includes('sanción')?'high':'medium', action_required:'Revisar requisitos y plazos' });\n  } else {\n    subsidies.push({ id:'sub_'+Buffer.from(i.link||i.title).toString('base64').slice(0,12), title:ct, type:classify(i.title,i.desc), amount_range:'', deadline:'', target:'Pymes y autónomos', url:i.link, status:'abierta' });\n  }\n}\n\nreturn [{ json: { subsidies: subsidies.slice(0,10), regulations: regulations.slice(0,10) } }];"
+      },
+      "id": "n_parse_ayudas",
+      "name": "Parse Ayudas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1720, 740]
+    },
+    {
+      "parameters": {
+        "jsCode": "// build_radar — Combina news + ayudas\nconst items = $input.all();\nlet news=[], subsidies=[], regulations=[];\nfor (const i of items) {\n  if (i.json.news) news = i.json.news;\n  if (i.json.subsidies) subsidies = i.json.subsidies;\n  if (i.json.regulations) regulations = i.json.regulations;\n}\nreturn [{ json: { radar: { news, regulations, subsidies, competitor_signals: [], local_events: [] } } }];"
+      },
+      "id": "n_build_radar",
+      "name": "Build Radar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 560]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://places.googleapis.com/v1/places/{{ $node['Get User Config'].json.google_place_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Goog-Api-Key", "value": "={{ $env.GOOGLE_PLACES_API_KEY }}" },
+            { "name": "X-Goog-FieldMask", "value": "id,displayName,rating,userRatingCount,reviews" }
+          ]
+        },
+        "options": {
+          "response": { "response": { "responseFormat": "json" } },
+          "timeout": 10000
+        }
+      },
+      "id": "n_google_place",
+      "name": "Google Place Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1460, 960]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analyze reviews from Google Places (new API)\nconst config = $node['Get User Config'].json;\nconst placeData = $input.first().json;\nconst reviews = placeData.reviews || [];\nconst currentRating = placeData.rating || 0;\nconst totalReviews = placeData.userRatingCount || 0;\n\nconst themeKw = {\n  espera: ['espera','tardaron','lento','rápido','rapidez','demora'],\n  trato: ['trato','amable','simpático','maleducado','atención','servicio'],\n  precio: ['precio','caro','barato','económico','relación calidad'],\n  limpieza: ['limpio','sucio','limpieza','higiene'],\n  calidad: ['calidad','bueno','malo','fresco','rico','delicioso','mediocre'],\n  ambiente: ['ambiente','acogedor','ruidoso','tranquilo','decoración'],\n};\n\nfunction themes(text) {\n  if (!text) return [];\n  const l = text.toLowerCase();\n  return Object.entries(themeKw).filter(([,kws]) => kws.some(kw => l.includes(kw))).map(([t]) => t);\n}\n\nfunction suggestResponse(r) {\n  const name = r.authorAttribution?.displayName || 'cliente';\n  if ((r.rating||0) <= 2) return `Estimado/a ${name}, lamentamos que su experiencia no haya sido satisfactoria. Nos encantaría conocer más detalles para mejorar. ¿Podría contactarnos directamente?`;\n  if ((r.rating||0) === 3) return `Gracias por su visita, ${name}. Tomamos nota y trabajaremos para mejorar.`;\n  return null;\n}\n\nlet pos=0, neu=0, neg=0;\nconst urgent = [], allThemes = [];\n\nfor (const r of reviews) {\n  const rating = r.rating || 3;\n  if (rating >= 4) pos++; else if (rating === 3) neu++; else neg++;\n  const t = themes(r.text?.text || r.originalText?.text || '');\n  allThemes.push(...t);\n  if (rating <= 2) {\n    urgent.push({\n      author: r.authorAttribution?.displayName || 'Anónimo',\n      rating, text: (r.text?.text || r.originalText?.text || '').slice(0,500),\n      date: r.publishTime || null, themes: t, responded: false,\n      suggested_response: suggestResponse(r)\n    });\n  }\n}\n\nconst tc = {};\nfor (const t of allThemes) tc[t] = (tc[t]||0)+1;\nconst recurring = Object.entries(tc).filter(([,c])=>c>=2).sort((a,b)=>b[1]-a[1]).map(([t])=>t);\n\nreturn [{ json: { reputation: { reviews: {\n  current_rating: currentRating, total_reviews: totalReviews,\n  new_reviews_count: reviews.length,\n  sentiment_breakdown: { positive: pos, neutral: neu, negative: neg },\n  recurring_themes: recurring, urgent: urgent.slice(0,5),\n  trend: pos > neg ? 'improving' : neg > pos ? 'declining' : 'stable'\n} } } }];"
+      },
+      "id": "n_analyze_reviews",
+      "name": "Analyze Reviews",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1720, 960]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate marketing ideas based on business_type, calendar, and marketing_hints\nconst config = $node['Get User Config'].json;\nconst bizType = (config.business_type || 'comercio').toLowerCase();\nconst bizName = config.business_name || 'Mi Negocio';\nconst hints = config.marketing_hints || [];\n\nconst now = new Date();\nconst month = now.getMonth() + 1;\nconst dates30 = [];\nfor (let i = 0; i < 30; i++) {\n  const d = new Date(now.getTime() + i * 86400000);\n  dates30.push({ date: d, m: d.getMonth()+1, d: d.getDate(), dow: d.getDay() });\n}\n\nconst calendar = [\n  { m:1,d:6,name:'Reyes',for:['tienda','comercio'] },\n  { m:2,d:14,name:'San Valentín',for:['restaurante','bar','estetica','peluqueria','floristeria'] },\n  { m:3,d:8,name:'Día de la Mujer',for:['estetica','peluqueria'] },\n  { m:3,d:19,name:'Día del Padre',for:['tienda','restaurante','bar','peluqueria'] },\n  { m:5,d:1,name:'Día del Trabajador',for:['todos'] },\n  { m:5,d:4,name:'Día de la Madre',for:['tienda','restaurante','estetica','peluqueria','floristeria'] },\n  { m:6,d:21,name:'Inicio Verano',for:['todos'] },\n  { m:9,d:1,name:'Vuelta al cole',for:['tienda','peluqueria'] },\n  { m:10,d:31,name:'Halloween',for:['bar','restaurante','tienda'] },\n  { m:11,d:25,name:'Black Friday',for:['todos'] },\n  { m:12,d:25,name:'Navidad',for:['todos'] },\n  { m:12,d:31,name:'Nochevieja',for:['restaurante','bar'] },\n];\n\nconst upcoming = [], campaigns = [];\nconst norm = s => s.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'');\nconst bt = norm(bizType);\n\nfor (const e of calendar) {\n  for (const d of dates30) {\n    if (d.m === e.m && d.d === e.d) {\n      if (e.for.includes('todos') || e.for.some(t => bt.includes(t))) {\n        const ds = d.date.toISOString().split('T')[0];\n        upcoming.push({ name: e.name, date: ds });\n        campaigns.push({ title:`Campaña ${e.name}`, type:'promotion', channel:['whatsapp','instagram'], target_audience:'clientes_recurrentes', suggested_date:ds, message_draft:`¡${e.name} se acerca! En ${bizName} tenemos algo especial. ¡No te lo pierdas!`, reason:`Fecha señalada: ${e.name}` });\n      }\n    }\n  }\n}\n\n// Valley day for hospitality\nif (['bar','restaurante','cafeteria','cafe'].some(t => bt.includes(t))) {\n  const tue = dates30.find(d => d.dow === 2);\n  if (tue) {\n    campaigns.push({ title:'Promo día valle — Martes', type:'promotion', channel:['whatsapp','instagram'], target_audience:'clientes_recurrentes', suggested_date:tue.date.toISOString().split('T')[0], message_draft:`¡Este martes en ${bizName} oferta especial entre semana!`, reason:'Martes = día valle en hostelería' });\n  }\n}\n\n// Business-type-specific hint campaign\nif (hints.length > 0 && campaigns.length < 3) {\n  const hint = hints[Math.floor(Math.random() * hints.length)];\n  campaigns.push({ title:`Idea: ${hint}`, type:'content', channel:['instagram'], target_audience:'todos', suggested_date:dates30[3]?.date.toISOString().split('T')[0]||'', message_draft:`¡Novedad en ${bizName}! ${hint.charAt(0).toUpperCase()+hint.slice(1)}. ¡Ven a probarlo!`, reason:`Idea basada en tipo de negocio: ${bizType}` });\n}\n\n// Seasonal fallback\nif (campaigns.length === 0) {\n  let idea = '';\n  if (month>=6&&month<=8) idea = 'Campaña de verano';\n  else if (month>=11||month<=1) idea = 'Campaña navideña';\n  else if (month>=3&&month<=5) idea = 'Campaña de primavera';\n  else idea = 'Campaña de otoño';\n  campaigns.push({ title:idea, type:'content', channel:['instagram'], target_audience:'todos', suggested_date:dates30[3]?.date.toISOString().split('T')[0]||'', message_draft:`¡Novedades en ${bizName}! Descubre lo que tenemos esta temporada.`, reason:'Campaña estacional' });\n}\n\nreturn [{ json: { campaigns, upcoming_dates: upcoming } }];"
+      },
+      "id": "n_marketing",
+      "name": "Marketing Ideas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1460, 1180]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine reviews + marketing into reputation\nconst items = $input.all();\nlet reputation = { reviews: {} }, campaigns = [];\nfor (const i of items) {\n  if (i.json.reputation) reputation = i.json.reputation;\n  if (i.json.campaigns) campaigns = i.json.campaigns;\n}\nreputation.campaigns = campaigns;\nreturn [{ json: { reputation } }];"
+      },
+      "id": "n_build_rep",
+      "name": "Build Reputation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 1060]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "n_merge",
+      "name": "Merge Modules",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [2240, 800]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build final payload for this user\nconst items = $input.all();\nconst config = $node['Get User Config'].json;\n\nlet radar = { news:[], regulations:[], subsidies:[], competitor_signals:[], local_events:[] };\nlet reputation = { reviews:{}, campaigns:[] };\n\nfor (const i of items) {\n  if (i.json.radar) radar = { ...radar, ...i.json.radar };\n  if (i.json.reputation) reputation = { ...reputation, ...i.json.reputation };\n}\n\nconst nc = (radar.news||[]).length;\nconst sc = (radar.subsidies||[]).length;\nconst rc = (radar.regulations||[]).length;\nconst ur = reputation.reviews?.urgent?.length || 0;\nconst cc = (reputation.campaigns||[]).length;\n\nlet headline = `Hoy tienes ${nc} noticias relevantes`;\nif (sc > 0) headline += `, ${sc} ayudas disponibles`;\nif (ur > 0) headline += `, ${ur} reseñas que requieren atención`;\nheadline += '.';\n\nconst actions = [];\nif (ur > 0) actions.push(`Responder a ${ur} reseña(s) negativa(s)`);\nif (sc > 0) actions.push(`Revisar ${sc} ayuda(s)/subvención(es)`);\nif (rc > 0) actions.push(`Revisar ${rc} cambio(s) normativo(s)`);\nif (cc > 0) actions.push(`Considerar ${cc} idea(s) de marketing`);\n\nconst score = Math.max(0, Math.min(100, 40 + nc*3 + sc*8 + cc*5 - ur*10 - rc*5));\n\nreturn [{ json: {\n  user_id: config.user_id,\n  agent: 'comercio_local',\n  version: '2.0',\n  business_id: config.business_id || null,\n  timestamp: new Date().toISOString(),\n  daily_summary: { headline, priority_actions: actions, opportunities_count: sc+cc, risks_count: rc+ur, score },\n  radar,\n  reputation\n} }];"
+      },
+      "id": "n_build_payload",
+      "name": "Build Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2500, 800]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ENLAZE_BASE_URL || 'https://enlaze.vercel.app' }}/api/agent/ingest",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.AGENT_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      },
+      "id": "n_send",
+      "name": "Send to ENLAZE",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2760, 800]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log result and continue loop\nconst result = $input.first().json;\nconst config = $node['Get User Config'].json;\nconsole.log(`[ENLAZE Agent] Done: ${config.business_name} (${config.user_id}) — success: ${result.success}`);\nreturn [{ json: { user_id: config.user_id, business_name: config.business_name, success: result.success, timestamp: result.timestamp } }];"
+      },
+      "id": "n_log",
+      "name": "Log Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3020, 800]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if google_place_id exists — if not, skip Google Places\nconst config = $node['Get User Config'].json;\nconst hasPlace = config.google_place_id && config.google_place_id !== '' && config.google_place_id !== 'demo-place-id';\nreturn [{ json: { ...config, _has_place: hasPlace } }];"
+      },
+      "id": "n_check_place",
+      "name": "Check Place ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1460, 1060]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json._has_place }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "n_if_place",
+      "name": "Has Place ID?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1580, 1060]
+    },
+    {
+      "parameters": {
+        "jsCode": "// No Google Place — return empty reputation\nreturn [{ json: { reputation: { reviews: { current_rating: 0, total_reviews: 0, new_reviews_count: 0, sentiment_breakdown: { positive:0, neutral:0, negative:0 }, recurring_themes: [], urgent: [], trend: 'unknown' } } } }];"
+      },
+      "id": "n_no_place",
+      "name": "Empty Reviews",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1720, 1140]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "List Active Users", "type": "main", "index": 0 }]]
+    },
+    "Schedule Trigger": {
+      "main": [[{ "node": "List Active Users", "type": "main", "index": 0 }]]
+    },
+    "List Active Users": {
+      "main": [[{ "node": "Split Users", "type": "main", "index": 0 }]]
+    },
+    "Split Users": {
+      "main": [[{ "node": "Skip Guard", "type": "main", "index": 0 }]]
+    },
+    "Skip Guard": {
+      "main": [[{ "node": "Loop Over Users", "type": "main", "index": 0 }]]
+    },
+    "Loop Over Users": {
+      "main": [
+        [{ "node": "Get User Config", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Get User Config": {
+      "main": [[
+        { "node": "RSS El País", "type": "main", "index": 0 },
+        { "node": "RSS Europa Press", "type": "main", "index": 0 },
+        { "node": "RSS Cinco Días", "type": "main", "index": 0 },
+        { "node": "RSS BOE Ayudas", "type": "main", "index": 0 },
+        { "node": "Check Place ID", "type": "main", "index": 0 },
+        { "node": "Marketing Ideas", "type": "main", "index": 0 }
+      ]]
+    },
+    "RSS El País": {
+      "main": [[{ "node": "Parse News", "type": "main", "index": 0 }]]
+    },
+    "RSS Europa Press": {
+      "main": [[{ "node": "Parse News", "type": "main", "index": 0 }]]
+    },
+    "RSS Cinco Días": {
+      "main": [[{ "node": "Parse News", "type": "main", "index": 0 }]]
+    },
+    "RSS BOE Ayudas": {
+      "main": [[{ "node": "Parse Ayudas", "type": "main", "index": 0 }]]
+    },
+    "Parse News": {
+      "main": [[{ "node": "Build Radar", "type": "main", "index": 0 }]]
+    },
+    "Parse Ayudas": {
+      "main": [[{ "node": "Build Radar", "type": "main", "index": 0 }]]
+    },
+    "Build Radar": {
+      "main": [[{ "node": "Merge Modules", "type": "main", "index": 0 }]]
+    },
+    "Check Place ID": {
+      "main": [[{ "node": "Has Place ID?", "type": "main", "index": 0 }]]
+    },
+    "Has Place ID?": {
+      "main": [
+        [{ "node": "Google Place Details", "type": "main", "index": 0 }],
+        [{ "node": "Empty Reviews", "type": "main", "index": 0 }]
+      ]
+    },
+    "Google Place Details": {
+      "main": [[{ "node": "Analyze Reviews", "type": "main", "index": 0 }]]
+    },
+    "Analyze Reviews": {
+      "main": [[{ "node": "Build Reputation", "type": "main", "index": 0 }]]
+    },
+    "Empty Reviews": {
+      "main": [[{ "node": "Build Reputation", "type": "main", "index": 0 }]]
+    },
+    "Marketing Ideas": {
+      "main": [[{ "node": "Build Reputation", "type": "main", "index": 0 }]]
+    },
+    "Build Reputation": {
+      "main": [[{ "node": "Merge Modules", "type": "main", "index": 1 }]]
+    },
+    "Merge Modules": {
+      "main": [[{ "node": "Build Payload", "type": "main", "index": 0 }]]
+    },
+    "Build Payload": {
+      "main": [[{ "node": "Send to ENLAZE", "type": "main", "index": 0 }]]
+    },
+    "Send to ENLAZE": {
+      "main": [[{ "node": "Log Result", "type": "main", "index": 0 }]]
+    },
+    "Log Result": {
+      "main": [[{ "node": "Loop Over Users", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "enlaze", "id": "1" },
+    { "name": "comercio-local", "id": "2" },
+    { "name": "multiusuario", "id": "3" }
+  ],
+  "triggerCount": 2,
+  "versionId": "2"
+}
