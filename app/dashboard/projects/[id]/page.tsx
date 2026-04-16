@@ -175,7 +175,7 @@ const invoiceStatusMap: Record<string, { label: string; color: string }> = {
   pending: { label: "Pendiente", color: "bg-yellow-900/30 text-yellow-300" },
   paid: { label: "Pagada", color: "bg-green-900/30 text-green-300" },
   overdue: { label: "Vencida", color: "bg-red-900/30 text-red-300" },
-  cancelled: { label: "Anulada", color: "bg-gray-700 text-gray-400" },
+  cancelled: { label: "Anulada", color: "bg-zinc-900/30 text-zinc-400 dark:bg-zinc-900/50 dark:text-zinc-500" },
 };
 const changeStatusMap: Record<string, { label: string; color: string }> = {
   proposed: { label: "Propuesto", color: "bg-blue-900/30 text-blue-300" },
@@ -190,7 +190,7 @@ const milestoneStatusMap: Record<string, { label: string; color: string }> = {
   cancelled: { label: "Cancelado", color: "bg-red-900/30 text-red-300" },
 };
 const orderStatusMap: Record<string, { label: string; color: string }> = {
-  draft: { label: "Borrador", color: "bg-gray-700 text-gray-300" },
+  draft: { label: "Borrador", color: "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400" },
   sent: { label: "Enviado", color: "bg-blue-900/30 text-blue-300" },
   confirmed: { label: "Confirmado", color: "bg-emerald-900/30 text-emerald-300" },
   partial: { label: "Parcial", color: "bg-yellow-900/30 text-yellow-300" },
@@ -745,7 +745,7 @@ export default function ProjectDetailPage() {
           {project.address && <p className="text-[var(--color-navy-400)] text-sm mt-0.5">📍 {project.address}</p>}
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusColorMap[project.status] || "bg-gray-700 text-gray-300"}`}>
+          <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusColorMap[project.status] || "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400"}`}>
             {statusLabelMap[project.status] || project.status}
           </span>
           <span className={`px-3 py-1 rounded-full text-sm font-medium border ${estadoColors[kpis.estadoEconomico]}`}>
@@ -924,7 +924,7 @@ export default function ProjectDetailPage() {
                   <Th align="left">Nº</Th><Th align="left">Título</Th><Th>Servicio</Th><Th>Estado</Th><Th align="right">Total</Th><Th>Fecha</Th><Th align="right">Acción</Th>
                 </tr></thead>
                 <tbody>{budgets.map((b) => {
-                  const st = budgetStatusMap[b.status] || { label: b.status, color: "bg-gray-700 text-gray-300" };
+                  const st = budgetStatusMap[b.status] || { label: b.status, color: "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400" };
                   return (
                     <tr key={b.id} className="border-t border-[var(--color-navy-700)] hover:bg-[var(--color-navy-750)] transition">
                       <td className="px-5 py-3 text-sm text-[var(--color-navy-300)] font-mono">{b.budget_number}</td>
@@ -966,7 +966,7 @@ export default function ProjectDetailPage() {
                   <Th align="left">Nº</Th><Th align="left">Proveedor</Th><Th>Categoría</Th><Th>Estado</Th><Th align="right">Base</Th><Th align="right">Total</Th><Th>Fecha</Th>
                 </tr></thead>
                 <tbody>{invoices.map((inv) => {
-                  const st = invoiceStatusMap[inv.payment_status] || { label: inv.payment_status, color: "bg-gray-700 text-gray-300" };
+                  const st = invoiceStatusMap[inv.payment_status] || { label: inv.payment_status, color: "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400" };
                   return (
                     <tr key={inv.id} className="border-t border-[var(--color-navy-700)] hover:bg-[var(--color-navy-750)] transition">
                       <td className="px-5 py-3 text-sm text-[var(--color-navy-300)] font-mono">{inv.invoice_number || "—"}</td>
@@ -1111,7 +1111,7 @@ export default function ProjectDetailPage() {
             ) : (
               <div className="divide-y divide-[var(--color-navy-700)]">
                 {changes.map((c) => {
-                  const st = changeStatusMap[c.status] || { label: c.status, color: "bg-gray-700 text-gray-300" };
+                  const st = changeStatusMap[c.status] || { label: c.status, color: "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400" };
                   return (
                     <div key={c.id} className="p-5 hover:bg-[var(--color-navy-750)] transition">
                       <div className="flex items-start justify-between gap-4">
@@ -1216,7 +1216,7 @@ export default function ProjectDetailPage() {
             ) : (
               <div className="divide-y divide-[var(--color-navy-700)]">
                 {milestones.map((m, idx) => {
-                  const st = milestoneStatusMap[m.status] || { label: m.status, color: "bg-gray-700 text-gray-300" };
+                  const st = milestoneStatusMap[m.status] || { label: m.status, color: "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400" };
                   const isLate = m.planned_date && !m.actual_date && m.status !== "completed" && m.status !== "cancelled" && new Date(m.planned_date) < new Date();
                   return (
                     <div key={m.id} className="p-4 hover:bg-[var(--color-navy-750)] transition">
@@ -1366,7 +1366,7 @@ export default function ProjectDetailPage() {
                   </thead>
                   <tbody>
                     {projectOrders.map((o) => {
-                      const ost = orderStatusMap[o.status] || { label: o.status, color: "bg-gray-700 text-gray-300" };
+                      const ost = orderStatusMap[o.status] || { label: o.status, color: "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400" };
                       const sName = allSuppliers.find((s) => s.id === o.supplier_id)?.name;
                       return (
                         <tr key={o.id} className="border-b border-[var(--color-navy-700)]/50 hover:bg-[var(--color-navy-750)] transition">
@@ -1405,7 +1405,7 @@ export default function ProjectDetailPage() {
                   </thead>
                   <tbody>
                     {projectDeliveryNotes.map((dn) => {
-                      const dst = dnStatusMap[dn.status] || { label: dn.status, color: "bg-gray-700 text-gray-300" };
+                      const dst = dnStatusMap[dn.status] || { label: dn.status, color: "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400" };
                       const linkedOrder = projectOrders.find((o) => o.id === dn.order_id);
                       return (
                         <tr key={dn.id} className="border-b border-[var(--color-navy-700)]/50 hover:bg-[var(--color-navy-750)] transition">

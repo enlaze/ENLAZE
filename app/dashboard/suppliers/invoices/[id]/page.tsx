@@ -160,8 +160,8 @@ export default function ReceivedInvoiceDetailPage() {
                 <span className="text-red-600">-{fmtMoney(invoice.irpf_amount)}</span>
               </div>
             )}
-            <div className="border-t border-navy-100 pt-2 flex justify-between">
-              <span className="font-semibold text-navy-900">Total</span>
+            <div className="border-t border-navy-100 dark:border-zinc-800 pt-2 flex justify-between">
+              <span className="font-semibold text-navy-900 dark:text-white">Total</span>
               <span className="font-bold text-navy-900 text-lg">{fmtMoney(invoice.total)}</span>
             </div>
           </div>
@@ -200,7 +200,7 @@ export default function ReceivedInvoiceDetailPage() {
           </span>
           <span className="text-sm font-semibold">{paidPct}%</span>
         </div>
-        <div className="w-full h-3 bg-navy-100 rounded-full overflow-hidden mb-4">
+        <div className="w-full h-3 bg-navy-100 dark:bg-zinc-900 rounded-full overflow-hidden mb-4">
           <div
             className="h-full rounded-full transition-all"
             style={{
@@ -218,7 +218,7 @@ export default function ReceivedInvoiceDetailPage() {
 
         {/* Payment form */}
         {showPaymentForm && (
-          <form onSubmit={handleRegisterPayment} className="mt-4 p-4 bg-navy-50/60 rounded-xl space-y-3">
+          <form onSubmit={handleRegisterPayment} className="mt-4 p-4 bg-navy-50/60 dark:bg-zinc-900/50 rounded-xl space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <FormField label="Importe (€)" required>
                 <Input
@@ -258,14 +258,14 @@ export default function ReceivedInvoiceDetailPage() {
         {/* Payment history */}
         {payments.length > 0 && (
           <div className="mt-4">
-            <h4 className="text-xs font-semibold text-navy-600 uppercase mb-2">Historial de pagos</h4>
+            <h4 className="text-xs font-semibold text-navy-600 dark:text-zinc-300 uppercase mb-2">Historial de pagos</h4>
             <div className="space-y-2">
               {payments.map((p) => (
-                <div key={p.id} className="flex items-center justify-between py-2 px-3 bg-white rounded-lg border border-navy-100">
+                <div key={p.id} className="flex items-center justify-between py-2 px-3 bg-white dark:bg-zinc-900 rounded-lg border border-navy-100 dark:border-zinc-800">
                   <div>
-                    <span className="text-sm font-medium text-navy-900">{fmtMoney(p.amount)}</span>
-                    <span className="text-xs text-navy-500 ml-2">{paymentMethodLabels[p.payment_method] || p.payment_method}</span>
-                    {p.reference && <span className="text-xs text-navy-400 ml-2">Ref: {p.reference}</span>}
+                    <span className="text-sm font-medium text-navy-900 dark:text-white">{fmtMoney(p.amount)}</span>
+                    <span className="text-xs text-navy-500 dark:text-zinc-400 ml-2">{paymentMethodLabels[p.payment_method] || p.payment_method}</span>
+                    {p.reference && <span className="text-xs text-navy-400 dark:text-zinc-500 ml-2">Ref: {p.reference}</span>}
                   </div>
                   <span className="text-xs text-navy-500">{fmtDate(p.payment_date)}</span>
                 </div>

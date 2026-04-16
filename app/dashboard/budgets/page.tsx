@@ -155,7 +155,7 @@ export default function BudgetsPage() {
                   <p className="text-xs text-navy-400">IVA incluido</p>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2 pt-4 border-t border-navy-100">
+              <div className="flex flex-wrap gap-2 pt-4 border-t border-navy-100 dark:border-zinc-800">
                 <LinkButton href={`/dashboard/budgets/${b.id}`} variant="secondary" size="sm">
                   Ver / Editar
                 </LinkButton>

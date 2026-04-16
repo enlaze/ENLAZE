@@ -144,7 +144,7 @@ const IconRefresh = (p: IconProps) => (
 function Navbar() {
   const [open, setOpen] = useState(false);
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-navy-100 bg-white/80 backdrop-blur-xl">
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-navy-100 bg-white/80 backdrop-blur-xl transition-colors">
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <Logo href="/" size={34} />
 
@@ -178,7 +178,7 @@ function Navbar() {
 
         <button
           onClick={() => setOpen(!open)}
-          className="text-navy-700 md:hidden"
+          className="text-navy-700 transition-colors md:hidden"
           aria-label="Abrir menú"
         >
           {open ? <IconClose size={22} /> : <IconMenu size={22} />}
@@ -186,23 +186,23 @@ function Navbar() {
       </nav>
 
       {open && (
-        <div className="flex flex-col gap-4 border-b border-navy-100 bg-white px-6 py-5 md:hidden">
-          <a href="#producto" onClick={() => setOpen(false)} className="text-sm font-medium text-navy-700">
+        <div className="flex flex-col gap-4 border-b border-navy-100 bg-white px-6 py-5 transition-colors md:hidden">
+          <a href="#producto" onClick={() => setOpen(false)} className="text-sm font-medium text-navy-700 transition-colors">
             Producto
           </a>
-          <a href="#como-funciona" onClick={() => setOpen(false)} className="text-sm font-medium text-navy-700">
+          <a href="#como-funciona" onClick={() => setOpen(false)} className="text-sm font-medium text-navy-700 transition-colors">
             Cómo funciona
           </a>
-          <Link href="/pricing" onClick={() => setOpen(false)} className="text-sm font-medium text-navy-700">
+          <Link href="/pricing" onClick={() => setOpen(false)} className="text-sm font-medium text-navy-700 transition-colors">
             Precios
           </Link>
-          <Link href="/login" onClick={() => setOpen(false)} className="text-sm font-medium text-navy-700">
+          <Link href="/login" onClick={() => setOpen(false)} className="text-sm font-medium text-navy-700 transition-colors">
             Iniciar sesión
           </Link>
           <Link
             href="/register"
             onClick={() => setOpen(false)}
-            className="rounded-xl bg-navy-900 px-4 py-2.5 text-center text-sm font-semibold text-white"
+            className="rounded-xl bg-navy-900 px-4 py-2.5 text-center text-sm font-semibold text-white transition-colors"
           >
             Crear cuenta
           </Link>
@@ -223,7 +223,7 @@ function Hero() {
         aria-hidden
         className="
           pointer-events-none absolute inset-x-0 top-0 h-[720px] -z-10
-          bg-[radial-gradient(ellipse_at_top,rgba(0,200,150,0.10),transparent_55%),radial-gradient(ellipse_at_bottom,rgba(10,25,41,0.05),transparent_60%)]
+          bg-[radial-gradient(ellipse_at_top,rgba(0,200,150,0.10),transparent_55%),radial-gradient(ellipse_at_bottom,rgba(10,25,41,0.05),transparent_60%)]]
         "
       />
       <div
@@ -232,32 +232,32 @@ function Hero() {
           pointer-events-none absolute inset-0 -z-10 opacity-[0.22]
           [background-image:linear-gradient(to_right,#e8eef4_1px,transparent_1px),linear-gradient(to_bottom,#e8eef4_1px,transparent_1px)]
           [background-size:64px_64px]
-          [mask-image:radial-gradient(ellipse_at_top,black_45%,transparent_75%)]
+          [mask-image:radial-gradient(ellipse_at_top,black_45%,transparent_75%)]]]
         "
       />
 
       <div className="relative mx-auto max-w-6xl px-6">
         <div className="flex justify-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-navy-100 bg-white/80 px-3.5 py-1.5 shadow-[0_1px_2px_rgba(10,25,41,0.04)] backdrop-blur">
+          <div className="inline-flex items-center gap-2 rounded-full border border-navy-100 bg-white/80 px-3.5 py-1.5 shadow-[0_1px_2px_rgba(10,25,41,0.04)] backdrop-blur transition-colors]">
             <span className="relative flex h-1.5 w-1.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-green/60" />
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-brand-green" />
             </span>
-            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-600">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-600 transition-colors">
               Automatización para empresas de servicios
             </span>
           </div>
         </div>
 
         {/* Headline */}
-        <h1 className="mx-auto mt-8 max-w-4xl text-center text-[2.5rem] font-semibold leading-[1.05] tracking-[-0.025em] text-navy-900 md:text-[4rem] lg:text-[4.5rem]">
+        <h1 className="mx-auto mt-8 max-w-4xl text-center text-[2.5rem] font-semibold leading-[1.05] tracking-[-0.025em] text-navy-900 transition-colors md:text-[4rem] lg:text-[4.5rem]">
           Cierra más clientes{" "}
           <span className="relative inline-block whitespace-nowrap">
             <span className="relative z-10 text-brand-green">sin trabajar más horas</span>
             <svg
               aria-hidden
               viewBox="0 0 300 12"
-              className="absolute -bottom-2 left-0 h-2.5 w-full text-brand-green/30"
+              className="absolute -bottom-2 left-0 h-2.5 w-full text-brand-green/30 transition-colors"
               preserveAspectRatio="none"
             >
               <path
@@ -272,7 +272,7 @@ function Hero() {
         </h1>
 
         {/* Subheadline */}
-        <p className="mx-auto mt-7 max-w-2xl text-center text-[17px] leading-relaxed text-navy-500 md:text-[18px]">
+        <p className="mx-auto mt-7 max-w-2xl text-center text-[17px] leading-relaxed text-navy-500 transition-colors md:text-[18px]">
           ENLAZE centraliza clientes, presupuestos, seguimiento y operaciones en un solo lugar para empresas de servicios que quieren responder más rápido, vender mejor y tener más control del negocio.
         </p>
 
@@ -307,11 +307,11 @@ function Hero() {
           </a>
         </div>
 
-        <p className="mx-auto mt-6 max-w-xl text-center text-[14px] leading-relaxed text-navy-400">
+        <p className="mx-auto mt-6 max-w-xl text-center text-[14px] leading-relaxed text-navy-400 transition-colors">
           Menos WhatsApp perdido, menos Excel disperso y menos tiempo apagando fuegos. Más orden, más seguimiento y más ventas.
         </p>
 
-        <p className="mt-4 text-center text-[13px] text-navy-500">
+        <p className="mt-4 text-center text-[13px] text-navy-500 transition-colors">
           Sin tarjeta · Configuración en 2 minutos · Cancela cuando quieras
         </p>
 
@@ -492,16 +492,16 @@ const pains = [
 
 function PainSection() {
   return (
-    <section className="relative border-y border-navy-100 bg-navy-50/40 py-28">
+    <section className="relative border-y border-navy-100 bg-navy-50/40 py-28 transition-colors">
       <div className="mx-auto max-w-6xl px-6">
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
             El problema
           </p>
-          <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 md:text-[2.75rem]">
+          <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 transition-colors md:text-[2.75rem]">
             Tu problema no es que falten clientes. Es lo que pasa después.
           </h2>
-          <p className="mt-4 text-[16px] leading-relaxed text-navy-500">
+          <p className="mt-4 text-[16px] leading-relaxed text-navy-500 transition-colors">
             Si alguna de estas frases te suena, no eres tú. Es el sistema con el que estás trabajando.
           </p>
         </div>
@@ -515,7 +515,7 @@ function PainSection() {
                 shadow-[0_1px_2px_rgba(10,25,41,0.04)]
                 transition-all duration-300
                 hover:-translate-y-[2px] hover:border-navy-200
-                hover:shadow-[0_12px_32px_-16px_rgba(10,25,41,0.18)]
+                hover:shadow-[0_12px_32px_-16px_rgba(10,25,41,0.18)]]]
               "
             >
               <div
@@ -526,10 +526,10 @@ function PainSection() {
               >
                 <IconAlert size={18} />
               </div>
-              <h3 className="mt-5 text-[15.5px] font-semibold tracking-tight text-navy-900">
+              <h3 className="mt-5 text-[15.5px] font-semibold tracking-tight text-navy-900 transition-colors">
                 {p.title}
               </h3>
-              <p className="mt-2 text-[14px] leading-relaxed text-navy-500">{p.desc}</p>
+              <p className="mt-2 text-[14px] leading-relaxed text-navy-500 transition-colors">{p.desc}</p>
             </article>
           ))}
         </div>
@@ -573,10 +573,10 @@ function Benefits() {
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
             La solución
           </p>
-          <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 md:text-[2.75rem]">
+          <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 transition-colors md:text-[2.75rem]">
             Todo lo que necesitas para vender mejor y gestionar mejor
           </h2>
-          <p className="mt-4 text-[16px] leading-relaxed text-navy-500">
+          <p className="mt-4 text-[16px] leading-relaxed text-navy-500 transition-colors">
             ENLAZE te ayuda a organizar el trabajo comercial y operativo de tu empresa para responder más rápido, crear presupuestos con más agilidad, hacer seguimiento sin olvidos y centralizar la información importante.
           </p>
         </div>
@@ -590,7 +590,7 @@ function Benefits() {
                 shadow-[0_1px_2px_rgba(10,25,41,0.04)]
                 transition-all duration-300 ease-out
                 hover:-translate-y-[2px] hover:border-navy-200
-                hover:shadow-[0_12px_32px_-16px_rgba(10,25,41,0.18)]
+                hover:shadow-[0_12px_32px_-16px_rgba(10,25,41,0.18)]]]
               "
             >
               <div
@@ -603,10 +603,10 @@ function Benefits() {
               >
                 <Icon size={20} />
               </div>
-              <h3 className="mt-6 text-[17px] font-semibold tracking-tight text-navy-900">
+              <h3 className="mt-6 text-[17px] font-semibold tracking-tight text-navy-900 transition-colors">
                 {title}
               </h3>
-              <p className="mt-2.5 text-[14.5px] leading-relaxed text-navy-500">{desc}</p>
+              <p className="mt-2.5 text-[14.5px] leading-relaxed text-navy-500 transition-colors">{desc}</p>
             </article>
           ))}
         </div>
@@ -740,10 +740,10 @@ function BeforeAfter() {
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
             Antes vs. después
           </p>
-          <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 md:text-[2.75rem]">
+          <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 transition-colors md:text-[2.75rem]">
             Así cambia tu semana
           </h2>
-          <p className="mt-4 text-[16px] leading-relaxed text-navy-500">
+          <p className="mt-4 text-[16px] leading-relaxed text-navy-500 transition-colors">
             La misma empresa, los mismos clientes, los mismos trabajos. Solo cambia quién hace la parte aburrida.
           </p>
         </div>
@@ -753,7 +753,7 @@ function BeforeAfter() {
           <div
             className="
               relative overflow-hidden rounded-2xl
-              border border-navy-100 bg-white p-8 md:p-10
+              border border-navy-100 bg-white p-8 transition-colors] md:p-10
               shadow-[0_1px_2px_rgba(10,25,41,0.04)]
             "
           >
@@ -762,10 +762,10 @@ function BeforeAfter() {
                 <IconX size={18} />
               </div>
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-400">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-400 transition-colors">
                   Antes
                 </p>
-                <p className="text-[17px] font-semibold text-navy-900">Sin Enlaze</p>
+                <p className="text-[17px] font-semibold text-navy-900 transition-colors">Sin Enlaze</p>
               </div>
             </div>
 
@@ -775,7 +775,7 @@ function BeforeAfter() {
                   <span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-500">
                     <IconX size={10} />
                   </span>
-                  <span className="text-[14.5px] leading-relaxed text-navy-600">{t}</span>
+                  <span className="text-[14.5px] leading-relaxed text-navy-600 transition-colors">{t}</span>
                 </li>
               ))}
             </ul>
@@ -785,7 +785,7 @@ function BeforeAfter() {
           <div
             className="
               relative overflow-hidden rounded-2xl
-              border border-brand-green/20 bg-white p-8 md:p-10
+              border border-brand-green/20 bg-white p-8 transition-colors] md:p-10
               shadow-[0_1px_2px_rgba(10,25,41,0.04),0_24px_56px_-28px_rgba(0,200,150,0.25)]
             "
           >
@@ -801,7 +801,7 @@ function BeforeAfter() {
                 <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
                   Después
                 </p>
-                <p className="text-[17px] font-semibold text-navy-900">Con Enlaze</p>
+                <p className="text-[17px] font-semibold text-navy-900 transition-colors">Con Enlaze</p>
               </div>
             </div>
 
@@ -811,7 +811,7 @@ function BeforeAfter() {
                   <span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-green/15 text-brand-green">
                     <IconCheck size={10} />
                   </span>
-                  <span className="text-[14.5px] leading-relaxed text-navy-700">{t}</span>
+                  <span className="text-[14.5px] leading-relaxed text-navy-700 transition-colors">{t}</span>
                 </li>
               ))}
             </ul>
@@ -862,16 +862,16 @@ const testimonials = [
 
 function SocialProof() {
   return (
-    <section className="relative border-y border-navy-100 bg-navy-50/40 py-28">
+    <section className="relative border-y border-navy-100 bg-navy-50/40 py-28 transition-colors">
       <div className="mx-auto max-w-6xl px-6">
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
             Resultados
           </p>
-          <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 md:text-[2.75rem]">
+          <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 transition-colors md:text-[2.75rem]">
             Empresas reales, resultados medibles
           </h2>
-          <p className="mt-4 text-[16px] leading-relaxed text-navy-500">
+          <p className="mt-4 text-[16px] leading-relaxed text-navy-500 transition-colors">
             Lo que consiguen los equipos que ya trabajan con Enlaze.
           </p>
         </div>
@@ -881,8 +881,8 @@ function SocialProof() {
             <div
               key={i}
               className="
-                rounded-2xl border border-navy-100 bg-white p-6
-                shadow-[0_1px_2px_rgba(10,25,41,0.04)]
+                rounded-2xl border border-navy-100 bg-white p-6 transition-colors
+                shadow-[0_1px_2px_rgba(10,25,41,0.04)]]
               "
             >
               <div
@@ -893,10 +893,10 @@ function SocialProof() {
               >
                 <Icon size={16} />
               </div>
-              <p className="mt-5 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900">
+              <p className="mt-5 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 transition-colors">
                 {value}
               </p>
-              <p className="mt-1 text-[13px] leading-snug text-navy-500">{label}</p>
+              <p className="mt-1 text-[13px] leading-snug text-navy-500 transition-colors">{label}</p>
             </div>
           ))}
         </div>
@@ -972,10 +972,10 @@ function ForWhom() {
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
             Para quién es
           </p>
-          <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 md:text-[2.75rem]">
+          <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 transition-colors md:text-[2.75rem]">
             Diseñado para empresas de servicios que viven de atender bien y responder rápido
           </h2>
-          <p className="mt-4 text-[16px] leading-relaxed text-navy-500">
+          <p className="mt-4 text-[16px] leading-relaxed text-navy-500 transition-colors">
             ENLAZE está pensado para negocios que trabajan con solicitudes, clientes, presupuestos, tareas y seguimiento diario.
           </p>
         </div>
@@ -985,7 +985,7 @@ function ForWhom() {
           <div
             className="
               relative overflow-hidden rounded-2xl
-              border border-brand-green/20 bg-white p-8 md:p-10
+              border border-brand-green/20 bg-white p-8 transition-colors] md:p-10
               shadow-[0_1px_2px_rgba(10,25,41,0.04),0_24px_56px_-28px_rgba(0,200,150,0.25)]
               lg:col-span-3
             "
@@ -1002,7 +1002,7 @@ function ForWhom() {
                 <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
                   Enlaze es para ti si…
                 </p>
-                <p className="text-[17px] font-semibold text-navy-900">
+                <p className="text-[17px] font-semibold text-navy-900 transition-colors">
                   Eres una empresa de servicios que ya factura pero no escala
                 </p>
               </div>
@@ -1014,7 +1014,7 @@ function ForWhom() {
                   <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-green/15 text-brand-green">
                     <IconCheck size={12} />
                   </span>
-                  <span className="text-[14.5px] leading-relaxed text-navy-700">{t}</span>
+                  <span className="text-[14.5px] leading-relaxed text-navy-700 transition-colors">{t}</span>
                 </li>
               ))}
             </ul>
@@ -1024,7 +1024,7 @@ function ForWhom() {
           <div
             className="
               relative overflow-hidden rounded-2xl
-              border border-navy-100 bg-navy-50/40 p-8 md:p-10
+              border border-navy-100 bg-navy-50/40 p-8 transition-colors md:p-10
               lg:col-span-2
             "
           >
@@ -1033,10 +1033,10 @@ function ForWhom() {
                 <IconX size={18} />
               </div>
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-500">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-500 transition-colors">
                   Todavía no, si…
                 </p>
-                <p className="text-[17px] font-semibold text-navy-900">Te conviene más otra cosa</p>
+                <p className="text-[17px] font-semibold text-navy-900 transition-colors">Te conviene más otra cosa</p>
               </div>
             </div>
 
@@ -1046,7 +1046,7 @@ function ForWhom() {
                   <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-navy-100 text-navy-500">
                     <IconX size={12} />
                   </span>
-                  <span className="text-[14px] leading-relaxed text-navy-600">{t}</span>
+                  <span className="text-[14px] leading-relaxed text-navy-600 transition-colors">{t}</span>
                 </li>
               ))}
             </ul>
@@ -1063,20 +1063,18 @@ function ForWhom() {
 
 function FinalCTA() {
   return (
-    <section className="relative overflow-hidden py-28">
+    <section className="relative overflow-hidden py-28 transition-colors">
       <div
         aria-hidden
         className="
           pointer-events-none absolute inset-0 -z-10
-          bg-[radial-gradient(ellipse_at_center,rgba(0,200,150,0.08),transparent_60%)]
+          bg-[radial-gradient(ellipse_at_center,rgba(0,200,150,0.08),transparent_60%)]]
         "
       />
       <div className="mx-auto max-w-4xl px-6">
         <div
           className="
-            relative overflow-hidden rounded-3xl border border-navy-100
-            bg-gradient-to-b from-white to-navy-50/60
-            p-10 md:p-16
+            relative overflow-hidden rounded-3xl border border-navy-100 bg-gradient-to-b from-white to-navy-50/60 p-10 transition-colors] md:p-16
             shadow-[0_1px_2px_rgba(10,25,41,0.04),0_30px_60px_-30px_rgba(10,25,41,0.15)]
           "
         >
@@ -1096,10 +1094,10 @@ function FinalCTA() {
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
               Empieza hoy
             </p>
-            <h2 className="mx-auto mt-4 max-w-2xl text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 md:text-[2.75rem]">
+            <h2 className="mx-auto mt-4 max-w-2xl text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 transition-colors md:text-[2.75rem]">
               Tu próximo cliente ya te ha escrito. La pregunta es si vas a contestar a tiempo.
             </h2>
-            <p className="mx-auto mt-5 max-w-xl text-[16px] leading-relaxed text-navy-500">
+            <p className="mx-auto mt-5 max-w-xl text-[16px] leading-relaxed text-navy-500 transition-colors">
               Crea tu cuenta en dos minutos. A partir de hoy, el sistema trabaja mientras tú te dedicas a lo que mejor sabes hacer.
             </p>
 
@@ -1131,7 +1129,7 @@ function FinalCTA() {
               </Link>
             </div>
 
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[12.5px] text-navy-500">
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[12.5px] text-navy-500 transition-colors">
               <span className="inline-flex items-center gap-1.5">
                 <IconCheck size={14} className="text-brand-green" />
                 Sin tarjeta de crédito
@@ -1158,12 +1156,12 @@ function FinalCTA() {
 
 function Footer() {
   return (
-    <footer className="border-t border-navy-100 bg-white">
+    <footer className="border-t border-navy-100 bg-white transition-colors">
       <div className="mx-auto max-w-6xl px-6 py-14">
         <div className="grid grid-cols-2 gap-10 md:grid-cols-4">
           <div className="col-span-2 md:col-span-1">
             <Logo href="/" size={30} />
-            <p className="mt-4 max-w-xs text-[13px] leading-relaxed text-navy-500">
+            <p className="mt-4 max-w-xs text-[13px] leading-relaxed text-navy-500 transition-colors">
               El sistema que contesta, presupuesta y hace el seguimiento por ti. Para empresas de servicios que quieren crecer sin añadir más horas de oficina.
             </p>
           </div>
@@ -1195,11 +1193,11 @@ function Footer() {
           />
         </div>
 
-        <div className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-navy-100 pt-8 sm:flex-row">
-          <p className="text-[12.5px] text-navy-500">
+        <div className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-navy-100 pt-8 transition-colors sm:flex-row">
+          <p className="text-[12.5px] text-navy-500 transition-colors">
             © 2026 Enlaze. Hecho con cuidado en España.
           </p>
-          <div className="flex items-center gap-2 text-[12.5px] text-navy-500">
+          <div className="flex items-center gap-2 text-[12.5px] text-navy-500 transition-colors">
             <span className="inline-flex h-1.5 w-1.5 rounded-full bg-brand-green" />
             Todos los sistemas operativos
           </div>
@@ -1218,7 +1216,7 @@ function FooterCol({
 }) {
   return (
     <div>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-900">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-900 transition-colors">
         {title}
       </p>
       <ul className="mt-4 space-y-2.5">
@@ -1243,7 +1241,7 @@ function FooterCol({
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-white text-navy-900 antialiased">
+    <main className="min-h-screen bg-white text-navy-900 transition-colors antialiased">
       <Navbar />
       <Hero />
       <PainSection />

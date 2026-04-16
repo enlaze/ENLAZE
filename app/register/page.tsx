@@ -26,7 +26,29 @@ export default function RegisterPage() {
       setError(error.message);
       setLoading(false);
     } else {
-      setSuccess(true);
+      // Send verification email
+      try {
+        const response = await fetch("/api/auth/send-verification-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          setSuccess(true);
+        } else {
+          setError(
+            data.message || "Cuenta creada pero no pudimos enviar el email de verificación. Intenta manualmente."
+          );
+        }
+      } catch (err) {
+        console.error("Failed to send verification email:", err);
+        setError(
+          "Cuenta creada pero hubo un error al enviar el email de verificación. Intenta manualmente."
+        );
+      }
       setLoading(false);
     }
   };
@@ -37,7 +59,13 @@ export default function RegisterPage() {
         <div className="max-w-md w-full bg-white rounded-2xl border border-navy-100 p-10 text-center shadow-lg">
           <div className="w-16 h-16 mx-auto rounded-full bg-brand-green/10 flex items-center justify-center text-3xl mb-6">✓</div>
           <h2 className="text-2xl font-bold text-navy-900">Revisa tu email</h2>
-          <p className="mt-3 text-navy-600">Te hemos enviado un enlace de confirmacion a <strong>{email}</strong></p>
+          <p className="mt-3 text-navy-600">Te hemos enviado un enlace de confirmación a <strong>{email}</strong></p>
+          <p className="mt-4 text-sm text-navy-500">Haz clic en el enlace para verificar tu cuenta y completar el registro.</p>
+          <div className="mt-6 p-4 rounded-lg bg-navy-50 border border-navy-100">
+            <p className="text-xs text-navy-600">
+              <strong>Nota:</strong> El enlace es válido por 24 horas. Si no lo ves en tu bandeja, revisa la carpeta de spam.
+            </p>
+          </div>
           <Link href="/login" className="mt-6 inline-block text-brand-green font-semibold hover:underline">Ir al login</Link>
         </div>
       </div>

@@ -282,7 +282,7 @@ export default function ProjectsPage() {
 
       {showForm && (
         <Card className="mb-6">
-          <div className="border-b border-navy-100 pb-4 mb-4">
+          <div className="border-b border-navy-100 dark:border-zinc-800 pb-4 mb-4">
             <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider">
               {editingId ? "Editar obra" : "Nueva obra"}
             </h3>
@@ -385,7 +385,7 @@ export default function ProjectsPage() {
             </FormField>
           </div>
 
-          <div className="flex gap-3 pt-4 border-t border-navy-100">
+          <div className="flex gap-3 pt-4 border-t border-navy-100 dark:border-zinc-800">
             <Button onClick={handleSave}>
               {editingId ? "Guardar cambios" : "Crear obra"}
             </Button>
@@ -400,35 +400,35 @@ export default function ProjectsPage() {
         <Card>
           <div className="text-center py-10">
             <p className="text-navy-600">No hay obras creadas todavía.</p>
-            <p className="text-sm text-navy-500 mt-1">Pulsa "+ Nueva obra" para empezar a organizar proyectos.</p>
+            <p className="text-sm text-navy-500 dark:text-zinc-500 mt-1">Pulsa "+ Nueva obra" para empezar a organizar proyectos.</p>
           </div>
         </Card>
       ) : (
-        <div className="rounded-2xl border border-navy-100 bg-white shadow-sm overflow-hidden">
+        <div className="rounded-2xl border border-navy-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-navy-50 bg-navy-50/60">
-                  <th className="text-left text-xs font-semibold text-navy-500 uppercase tracking-wider px-5 py-3">Obra</th>
-                  <th className="text-left text-xs font-semibold text-navy-500 uppercase tracking-wider px-3 py-3">Cliente</th>
-                  <th className="text-center text-xs font-semibold text-navy-500 uppercase tracking-wider px-3 py-3">Estado</th>
-                  <th className="text-center text-xs font-semibold text-navy-500 uppercase tracking-wider px-3 py-3">Inicio</th>
-                  <th className="text-center text-xs font-semibold text-navy-500 uppercase tracking-wider px-3 py-3">Fin</th>
-                  <th className="text-right text-xs font-semibold text-navy-500 uppercase tracking-wider px-3 py-3">Presupuesto</th>
-                  <th className="text-right text-xs font-semibold text-navy-500 uppercase tracking-wider px-3 py-3">Coste</th>
-                  <th className="text-right text-xs font-semibold text-navy-500 uppercase tracking-wider px-5 py-3">Acciones</th>
+                <tr className="border-b border-navy-50 bg-navy-50 dark:bg-zinc-900/60">
+                  <th className="text-left text-xs font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider px-5 py-3">Obra</th>
+                  <th className="text-left text-xs font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider px-3 py-3">Cliente</th>
+                  <th className="text-center text-xs font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider px-3 py-3">Estado</th>
+                  <th className="text-center text-xs font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider px-3 py-3">Inicio</th>
+                  <th className="text-center text-xs font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider px-3 py-3">Fin</th>
+                  <th className="text-right text-xs font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider px-3 py-3">Presupuesto</th>
+                  <th className="text-right text-xs font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider px-3 py-3">Coste</th>
+                  <th className="text-right text-xs font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider px-5 py-3">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((project) => (
-                  <tr key={project.id} className="border-b border-navy-50 hover:bg-navy-50/40 transition-colors">
+                  <tr key={project.id} className="border-b border-navy-50 hover:bg-navy-50 dark:hover:bg-zinc-800/50 transition-colors">
                     <td className="px-5 py-3">
                       <Link href={`/dashboard/projects/${project.id}`} className="text-sm font-medium text-brand-green hover:underline">
                         {project.name}
                       </Link>
-                      {project.address && <p className="text-xs text-navy-500">{project.address}</p>}
+                      {project.address && <p className="text-xs text-navy-500 dark:text-zinc-500">{project.address}</p>}
                     </td>
-                    <td className="px-3 py-3 text-sm text-navy-600">
+                    <td className="px-3 py-3 text-sm text-navy-600 dark:text-zinc-400">
                       {clientMap[project.client_id || ""] || "Sin asignar"}
                     </td>
                     <td className="px-3 py-3 text-center">
@@ -436,16 +436,16 @@ export default function ProjectsPage() {
                         {statusLabelMap[project.status] || project.status}
                       </Badge>
                     </td>
-                    <td className="px-3 py-3 text-center text-xs text-navy-500">
+                    <td className="px-3 py-3 text-center text-xs text-navy-500 dark:text-zinc-500">
                       {fmtDate(project.start_date)}
                     </td>
-                    <td className="px-3 py-3 text-center text-xs text-navy-500">
+                    <td className="px-3 py-3 text-center text-xs text-navy-500 dark:text-zinc-500">
                       {fmtDate(project.end_date)}
                     </td>
-                    <td className="px-3 py-3 text-right text-sm text-navy-900 font-medium">
+                    <td className="px-3 py-3 text-right text-sm text-navy-900 dark:text-white font-medium">
                       {eur(project.budget_amount)}
                     </td>
-                    <td className="px-3 py-3 text-right text-sm text-navy-900 font-medium">
+                    <td className="px-3 py-3 text-right text-sm text-navy-900 dark:text-white font-medium">
                       {eur(project.actual_cost)}
                     </td>
                     <td className="px-5 py-3 text-right space-x-2">

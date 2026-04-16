@@ -289,10 +289,10 @@ export default function ReceivedInvoicesPage() {
                   onChange={(e) => setForm({ ...form, irpf_percent: e.target.value })}
                 />
               </FormField>
-              <div className="bg-navy-50/60 rounded-xl p-3 flex flex-col justify-center">
-                <p className="text-xs text-navy-500">IVA: {fmtMoney(computedIva)}</p>
-                <p className="text-xs text-navy-500">IRPF: -{fmtMoney(computedIrpf)}</p>
-                <p className="text-sm font-bold text-navy-900">Total: {fmtMoney(computedTotal)}</p>
+              <div className="bg-navy-50/60 dark:bg-zinc-900/50 rounded-xl p-3 flex flex-col justify-center">
+                <p className="text-xs text-navy-500 dark:text-zinc-400">IVA: {fmtMoney(computedIva)}</p>
+                <p className="text-xs text-navy-500 dark:text-zinc-400">IRPF: -{fmtMoney(computedIrpf)}</p>
+                <p className="text-sm font-bold text-navy-900 dark:text-white">Total: {fmtMoney(computedTotal)}</p>
               </div>
             </div>
 
@@ -328,14 +328,14 @@ export default function ReceivedInvoicesPage() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-navy-100 bg-navy-50/60">
-                  <th className="text-left text-xs font-semibold text-navy-700 uppercase px-4 py-2.5">Nº Factura</th>
-                  <th className="text-left text-xs font-semibold text-navy-700 uppercase px-3 py-2.5">Proveedor</th>
-                  <th className="text-center text-xs font-semibold text-navy-700 uppercase px-3 py-2.5">Fecha</th>
-                  <th className="text-center text-xs font-semibold text-navy-700 uppercase px-3 py-2.5">Vencimiento</th>
-                  <th className="text-right text-xs font-semibold text-navy-700 uppercase px-3 py-2.5">Total</th>
-                  <th className="text-right text-xs font-semibold text-navy-700 uppercase px-3 py-2.5">Pagado</th>
-                  <th className="text-center text-xs font-semibold text-navy-700 uppercase px-4 py-2.5">Estado</th>
+                <tr className="border-b border-navy-100 dark:border-zinc-800 bg-navy-50/60 dark:bg-zinc-900/50">
+                  <th className="text-left text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase px-4 py-2.5">Nº Factura</th>
+                  <th className="text-left text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase px-3 py-2.5">Proveedor</th>
+                  <th className="text-center text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase px-3 py-2.5">Fecha</th>
+                  <th className="text-center text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase px-3 py-2.5">Vencimiento</th>
+                  <th className="text-right text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase px-3 py-2.5">Total</th>
+                  <th className="text-right text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase px-3 py-2.5">Pagado</th>
+                  <th className="text-center text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase px-4 py-2.5">Estado</th>
                 </tr>
               </thead>
               <tbody>
@@ -343,15 +343,15 @@ export default function ReceivedInvoicesPage() {
                   const st = receivedInvoiceStatusLabels[inv.status] || { label: inv.status, color: "" };
                   const isOverdue = inv.due_date && new Date(inv.due_date) < new Date() && inv.payment_status !== "paid";
                   return (
-                    <tr key={inv.id} className="border-b border-navy-100 hover:bg-navy-50/40 transition">
+                    <tr key={inv.id} className="border-b border-navy-100 dark:border-zinc-800 hover:bg-navy-50/40 dark:hover:bg-zinc-800/50 transition">
                       <td className="px-4 py-2.5">
                         <Link href={`/dashboard/suppliers/invoices/${inv.id}`} className="text-sm font-medium text-brand-green hover:underline">
                           {inv.invoice_number}
                         </Link>
                       </td>
                       <td className="px-3 py-2.5">
-                        <p className="text-sm text-navy-900">{inv.supplier_name}</p>
-                        {inv.supplier_nif && <p className="text-xs text-navy-500">{inv.supplier_nif}</p>}
+                        <p className="text-sm text-navy-900 dark:text-white">{inv.supplier_name}</p>
+                        {inv.supplier_nif && <p className="text-xs text-navy-500 dark:text-zinc-400">{inv.supplier_nif}</p>}
                       </td>
                       <td className="px-3 py-2.5 text-center text-sm text-navy-600">{fmtDate(inv.issue_date)}</td>
                       <td className="px-3 py-2.5 text-center text-sm">

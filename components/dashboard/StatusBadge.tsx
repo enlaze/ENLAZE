@@ -5,17 +5,17 @@ const STYLES: Record<
   { wrap: string; dot: string; label: string }
 > = {
   pending: {
-    wrap: "bg-amber-50/80 text-amber-700 ring-1 ring-inset ring-amber-200/50",
+    wrap: "bg-amber-50/80 text-amber-700 ring-1 ring-inset ring-amber-200/50 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-800/50",
     dot: "bg-amber-500",
     label: "Pendiente",
   },
   accepted: {
-    wrap: "bg-brand-green/10 text-brand-green ring-1 ring-inset ring-brand-green/20",
+    wrap: "bg-brand-green/10 text-brand-green ring-1 ring-inset ring-brand-green/20 dark:bg-brand-green/15 dark:ring-brand-green/30",
     dot: "bg-brand-green",
     label: "Aceptado",
   },
   rejected: {
-    wrap: "bg-red-50/80 text-red-600 ring-1 ring-inset ring-red-200/50",
+    wrap: "bg-red-50/80 text-red-600 ring-1 ring-inset ring-red-200/50 dark:bg-red-950/40 dark:text-red-400 dark:ring-red-800/50",
     dot: "bg-red-500",
     label: "Rechazado",
   },

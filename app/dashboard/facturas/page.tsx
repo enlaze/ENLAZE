@@ -272,7 +272,7 @@ export default function FacturasPage() {
         description="Sube fotos de facturas y la IA extrae los datos automáticamente"
         actions={
           <div className="flex gap-2 flex-wrap">
-            <label className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-medium cursor-pointer transition ${uploading ? "bg-navy-100 text-navy-400 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
+            <label className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-medium cursor-pointer transition ${uploading ? "bg-navy-100 text-navy-400 dark:text-zinc-500 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
               {uploading ? uploadProgress : "Escanear factura"}
               <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleUpload} disabled={uploading} className="hidden" />
@@ -293,10 +293,10 @@ export default function FacturasPage() {
       {/* Resumen fiscal */}
       <Card className="mb-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div><p className="text-xs font-medium text-navy-500 uppercase tracking-wider">Base imponible</p><p className="text-lg font-bold text-navy-900 mt-1">{eur(totalBase)}</p></div>
-          <div><p className="text-xs font-medium text-navy-500 uppercase tracking-wider">IVA soportado</p><p className="text-lg font-bold text-blue-600 mt-1">{eur(totalIVA)}</p></div>
-          <div><p className="text-xs font-medium text-navy-500 uppercase tracking-wider">IRPF retenido</p><p className="text-lg font-bold text-orange-600 mt-1">{eur(totalIRPF)}</p></div>
-          <div><p className="text-xs font-medium text-navy-500 uppercase tracking-wider">Total facturas</p><p className="text-lg font-bold text-brand-green mt-1">{eur(totalAmount)}</p></div>
+          <div><p className="text-xs font-medium text-navy-500 dark:text-zinc-500 uppercase tracking-wider">Base imponible</p><p className="text-lg font-bold text-navy-900 dark:text-white mt-1">{eur(totalBase)}</p></div>
+          <div><p className="text-xs font-medium text-navy-500 dark:text-zinc-500 uppercase tracking-wider">IVA soportado</p><p className="text-lg font-bold text-blue-600 mt-1">{eur(totalIVA)}</p></div>
+          <div><p className="text-xs font-medium text-navy-500 dark:text-zinc-500 uppercase tracking-wider">IRPF retenido</p><p className="text-lg font-bold text-orange-600 mt-1">{eur(totalIRPF)}</p></div>
+          <div><p className="text-xs font-medium text-navy-500 dark:text-zinc-500 uppercase tracking-wider">Total facturas</p><p className="text-lg font-bold text-brand-green mt-1">{eur(totalAmount)}</p></div>
         </div>
       </Card>
 
@@ -322,7 +322,7 @@ export default function FacturasPage() {
       {/* Form */}
       {showForm && (
         <Card className="mb-6">
-          <h3 className="text-base font-semibold text-navy-900 mb-5">{editingId ? "Editar factura" : "Nueva factura manual"}</h3>
+          <h3 className="text-base font-semibold text-navy-900 dark:text-white mb-5">{editingId ? "Editar factura" : "Nueva factura manual"}</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-4">
             <FormField label="Proveedor" required>
               <Input type="text" value={form.supplier_name} onChange={(e) => updateField("supplier_name", e.target.value)} placeholder="Nombre del proveedor" />
@@ -363,9 +363,9 @@ export default function FacturasPage() {
                 <option value="19">19%</option>
               </Select>
             </FormField>
-            <div className="rounded-xl bg-navy-50/80 border border-navy-100 p-4">
-              <p className="text-xs text-navy-500">IVA: <span className="font-semibold text-blue-600">{form.iva_amount.toFixed(2)} EUR</span></p>
-              <p className="text-xs text-navy-500">IRPF: <span className="font-semibold text-orange-600">-{form.irpf_amount.toFixed(2)} EUR</span></p>
+            <div className="rounded-xl bg-navy-50 dark:bg-zinc-900/80 border border-navy-100 dark:border-zinc-800 p-4">
+              <p className="text-xs text-navy-500 dark:text-zinc-500">IVA: <span className="font-semibold text-blue-600">{form.iva_amount.toFixed(2)} EUR</span></p>
+              <p className="text-xs text-navy-500 dark:text-zinc-500">IRPF: <span className="font-semibold text-orange-600">-{form.irpf_amount.toFixed(2)} EUR</span></p>
               <p className="text-sm font-bold text-brand-green mt-1">Total: {form.total_amount.toFixed(2)} EUR</p>
             </div>
             <FormField label="Estado">
@@ -400,25 +400,25 @@ export default function FacturasPage() {
       {selectedInvoice && !showForm && (
         <Card className="mb-6">
           <div className="flex justify-between items-start mb-4">
-            <h3 className="text-sm font-semibold text-navy-900 uppercase tracking-wider">Detalle factura</h3>
+            <h3 className="text-sm font-semibold text-navy-900 dark:text-white uppercase tracking-wider">Detalle factura</h3>
             <div className="flex gap-3">
               <button onClick={() => startEdit(selectedInvoice)} className="text-xs text-brand-green hover:underline font-medium">Editar</button>
-              <button onClick={() => setSelectedInvoice(null)} className="text-xs text-navy-500 hover:underline">Cerrar</button>
+              <button onClick={() => setSelectedInvoice(null)} className="text-xs text-navy-500 dark:text-zinc-500 hover:underline">Cerrar</button>
             </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div><p className="text-xs text-navy-500">Proveedor</p><p className="text-navy-900 font-medium">{selectedInvoice.supplier_name}</p></div>
-            <div><p className="text-xs text-navy-500">NIF</p><p className="text-navy-900">{selectedInvoice.supplier_nif || "—"}</p></div>
-            <div><p className="text-xs text-navy-500">N.º Factura</p><p className="text-navy-900">{selectedInvoice.invoice_number || "—"}</p></div>
-            <div><p className="text-xs text-navy-500">Fecha</p><p className="text-navy-900">{selectedInvoice.invoice_date ? new Date(selectedInvoice.invoice_date).toLocaleDateString("es-ES") : "—"}</p></div>
-            <div><p className="text-xs text-navy-500">Base</p><p className="text-navy-900">{Number(selectedInvoice.base_amount).toFixed(2)} EUR</p></div>
-            <div><p className="text-xs text-navy-500">IVA ({selectedInvoice.iva_percentage}%)</p><p className="text-blue-600">{Number(selectedInvoice.iva_amount).toFixed(2)} EUR</p></div>
-            <div><p className="text-xs text-navy-500">IRPF ({selectedInvoice.irpf_percentage}%)</p><p className="text-orange-600">{Number(selectedInvoice.irpf_amount).toFixed(2)} EUR</p></div>
-            <div><p className="text-xs text-navy-500">Total</p><p className="text-brand-green font-bold">{Number(selectedInvoice.total_amount).toFixed(2)} EUR</p></div>
+            <div><p className="text-xs text-navy-500 dark:text-zinc-500">Proveedor</p><p className="text-navy-900 font-medium">{selectedInvoice.supplier_name}</p></div>
+            <div><p className="text-xs text-navy-500 dark:text-zinc-500">NIF</p><p className="text-navy-900">{selectedInvoice.supplier_nif || "—"}</p></div>
+            <div><p className="text-xs text-navy-500 dark:text-zinc-500">N.º Factura</p><p className="text-navy-900">{selectedInvoice.invoice_number || "—"}</p></div>
+            <div><p className="text-xs text-navy-500 dark:text-zinc-500">Fecha</p><p className="text-navy-900">{selectedInvoice.invoice_date ? new Date(selectedInvoice.invoice_date).toLocaleDateString("es-ES") : "—"}</p></div>
+            <div><p className="text-xs text-navy-500 dark:text-zinc-500">Base</p><p className="text-navy-900">{Number(selectedInvoice.base_amount).toFixed(2)} EUR</p></div>
+            <div><p className="text-xs text-navy-500 dark:text-zinc-500">IVA ({selectedInvoice.iva_percentage}%)</p><p className="text-blue-600">{Number(selectedInvoice.iva_amount).toFixed(2)} EUR</p></div>
+            <div><p className="text-xs text-navy-500 dark:text-zinc-500">IRPF ({selectedInvoice.irpf_percentage}%)</p><p className="text-orange-600">{Number(selectedInvoice.irpf_amount).toFixed(2)} EUR</p></div>
+            <div><p className="text-xs text-navy-500 dark:text-zinc-500">Total</p><p className="text-brand-green font-bold">{Number(selectedInvoice.total_amount).toFixed(2)} EUR</p></div>
             {selectedInvoice.ocr_confidence > 0 && (
-              <div><p className="text-xs text-navy-500">Confianza OCR</p><p className="text-navy-900">{(Number(selectedInvoice.ocr_confidence) * 100).toFixed(0)}%{selectedInvoice.manually_verified ? " (verificada)" : ""}</p></div>
+              <div><p className="text-xs text-navy-500 dark:text-zinc-500">Confianza OCR</p><p className="text-navy-900">{(Number(selectedInvoice.ocr_confidence) * 100).toFixed(0)}%{selectedInvoice.manually_verified ? " (verificada)" : ""}</p></div>
             )}
-            <div><p className="text-xs text-navy-500">Trimestre</p><p className="text-navy-900">{selectedInvoice.fiscal_year} {selectedInvoice.quarter}</p></div>
+            <div><p className="text-xs text-navy-500 dark:text-zinc-500">Trimestre</p><p className="text-navy-900">{selectedInvoice.fiscal_year} {selectedInvoice.quarter}</p></div>
           </div>
         </Card>
       )}
@@ -430,35 +430,35 @@ export default function FacturasPage() {
           description='Sube una foto con "Escanear factura" o añade una manualmente'
         />
       ) : (
-        <div className="rounded-2xl border border-navy-100 bg-white shadow-sm overflow-hidden">
+        <div className="rounded-2xl border border-navy-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-navy-100 bg-navy-50/60">
-                  <th className="text-left text-[11px] font-semibold text-navy-500 uppercase tracking-wider px-5 py-3">Proveedor</th>
-                  <th className="text-center text-[11px] font-semibold text-navy-500 uppercase tracking-wider px-3 py-3 hidden md:table-cell">N.º</th>
-                  <th className="text-center text-[11px] font-semibold text-navy-500 uppercase tracking-wider px-3 py-3 hidden md:table-cell">Fecha</th>
-                  <th className="text-center text-[11px] font-semibold text-navy-500 uppercase tracking-wider px-3 py-3 hidden lg:table-cell">Categ.</th>
-                  <th className="text-right text-[11px] font-semibold text-navy-500 uppercase tracking-wider px-3 py-3 hidden lg:table-cell">Base</th>
-                  <th className="text-right text-[11px] font-semibold text-navy-500 uppercase tracking-wider px-5 py-3">Total</th>
-                  <th className="text-center text-[11px] font-semibold text-navy-500 uppercase tracking-wider px-3 py-3">Estado</th>
-                  <th className="text-right text-[11px] font-semibold text-navy-500 uppercase tracking-wider px-5 py-3">Acciones</th>
+                <tr className="border-b border-navy-100 dark:border-zinc-800 bg-navy-50 dark:bg-zinc-900/60">
+                  <th className="text-left text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider px-5 py-3">Proveedor</th>
+                  <th className="text-center text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider px-3 py-3 hidden md:table-cell">N.º</th>
+                  <th className="text-center text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider px-3 py-3 hidden md:table-cell">Fecha</th>
+                  <th className="text-center text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider px-3 py-3 hidden lg:table-cell">Categ.</th>
+                  <th className="text-right text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider px-3 py-3 hidden lg:table-cell">Base</th>
+                  <th className="text-right text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider px-5 py-3">Total</th>
+                  <th className="text-center text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider px-3 py-3">Estado</th>
+                  <th className="text-right text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider px-5 py-3">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((inv) => {
                   const st = statusConfig[inv.payment_status] || { label: inv.payment_status, variant: "gray" as const };
                   return (
-                    <tr key={inv.id} className="border-b border-navy-50 hover:bg-navy-50/40 transition-colors cursor-pointer" onClick={() => { setSelectedInvoice(inv); setShowForm(false); }}>
+                    <tr key={inv.id} className="border-b border-navy-50 hover:bg-navy-50 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer" onClick={() => { setSelectedInvoice(inv); setShowForm(false); }}>
                       <td className="px-5 py-3.5">
-                        <p className="text-sm font-medium text-navy-900">{inv.supplier_name || "Sin proveedor"}</p>
-                        {inv.supplier_nif && <p className="text-xs text-navy-500">{inv.supplier_nif}</p>}
+                        <p className="text-sm font-medium text-navy-900 dark:text-white">{inv.supplier_name || "Sin proveedor"}</p>
+                        {inv.supplier_nif && <p className="text-xs text-navy-500 dark:text-zinc-500">{inv.supplier_nif}</p>}
                       </td>
-                      <td className="px-3 py-3.5 text-center text-xs text-navy-600 hidden md:table-cell">{inv.invoice_number || "—"}</td>
-                      <td className="px-3 py-3.5 text-center text-xs text-navy-600 hidden md:table-cell">{inv.invoice_date ? new Date(inv.invoice_date).toLocaleDateString("es-ES") : "—"}</td>
+                      <td className="px-3 py-3.5 text-center text-xs text-navy-600 dark:text-zinc-400 hidden md:table-cell">{inv.invoice_number || "—"}</td>
+                      <td className="px-3 py-3.5 text-center text-xs text-navy-600 dark:text-zinc-400 hidden md:table-cell">{inv.invoice_date ? new Date(inv.invoice_date).toLocaleDateString("es-ES") : "—"}</td>
                       <td className="px-3 py-3.5 text-center hidden lg:table-cell"><Badge variant="blue">{categoryLabels[inv.category] || inv.category}</Badge></td>
-                      <td className="px-3 py-3.5 text-right text-navy-600 hidden lg:table-cell">{Number(inv.base_amount).toFixed(2)} EUR</td>
-                      <td className="px-5 py-3.5 text-right font-medium text-navy-900">{Number(inv.total_amount).toFixed(2)} EUR</td>
+                      <td className="px-3 py-3.5 text-right text-navy-600 dark:text-zinc-400 hidden lg:table-cell">{Number(inv.base_amount).toFixed(2)} EUR</td>
+                      <td className="px-5 py-3.5 text-right font-medium text-navy-900 dark:text-white">{Number(inv.total_amount).toFixed(2)} EUR</td>
                       <td className="px-3 py-3.5 text-center"><Badge variant={st.variant}>{st.label}</Badge></td>
                       <td className="px-5 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
                         <button onClick={() => startEdit(inv)} className="text-xs text-brand-green hover:underline font-medium mr-2">Editar</button>

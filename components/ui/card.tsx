@@ -13,7 +13,7 @@ interface CardProps {
 export function Card({ children, className = "", padding = true }: CardProps) {
   return (
     <div
-      className={`rounded-2xl border border-navy-100 bg-white shadow-sm ${
+      className={`rounded-2xl border border-navy-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none ${
         padding ? "p-6" : ""
       } ${className}`}
     >
@@ -32,11 +32,11 @@ interface StatCardProps {
 }
 
 const accentColors: Record<string, string> = {
-  default: "text-navy-900",
+  default: "text-navy-900 dark:text-white",
   green: "text-brand-green",
-  yellow: "text-amber-600",
-  red: "text-red-600",
-  blue: "text-blue-600",
+  yellow: "text-amber-600 dark:text-amber-400",
+  red: "text-red-600 dark:text-red-400",
+  blue: "text-blue-600 dark:text-blue-400",
 };
 
 export function StatCard({
@@ -46,14 +46,14 @@ export function StatCard({
   detail,
 }: StatCardProps) {
   return (
-    <div className="rounded-2xl border border-navy-100 bg-white p-5 shadow-sm">
-      <p className="text-xs font-medium text-navy-500 uppercase tracking-wider">
+    <div className="rounded-2xl border border-navy-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
+      <p className="text-xs font-medium text-navy-500 uppercase tracking-wider dark:text-zinc-400">
         {label}
       </p>
       <p className={`mt-1.5 text-2xl font-bold ${accentColors[accent]}`}>
         {value}
       </p>
-      {detail && <p className="mt-0.5 text-xs text-navy-400">{detail}</p>}
+      {detail && <p className="mt-0.5 text-xs text-navy-400 dark:text-zinc-500">{detail}</p>}
     </div>
   );
 }
@@ -67,8 +67,8 @@ interface CardHeaderProps {
 
 export function CardHeader({ title, action }: CardHeaderProps) {
   return (
-    <div className="flex items-center justify-between border-b border-navy-100 px-6 py-4">
-      <h2 className="text-sm font-semibold text-navy-900">{title}</h2>
+    <div className="flex items-center justify-between border-b border-navy-100 px-6 py-4 dark:border-zinc-800">
+      <h2 className="text-sm font-semibold text-navy-900 dark:text-white">{title}</h2>
       {action}
     </div>
   );

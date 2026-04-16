@@ -87,7 +87,7 @@ export default function CalendarPage() {
 
       {showForm && (
         <Card className="mb-8">
-          <h2 className="text-base font-semibold text-navy-900 mb-5">Nueva cita</h2>
+          <h2 className="text-base font-semibold text-navy-900 dark:text-white mb-5">Nueva cita</h2>
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
             <FormField label="Título" required>
               <Input type="text" value={form.title} onChange={e => setForm({...form, title: e.target.value})} required placeholder="Ej: Reunión con cliente" />
@@ -131,16 +131,16 @@ export default function CalendarPage() {
         <div className="lg:col-span-2">
           <Card>
             <div className="flex items-center justify-between mb-6">
-              <button onClick={prevMonth} className="p-2 rounded-lg hover:bg-navy-50 text-navy-600 transition-colors">
+              <button onClick={prevMonth} className="p-2 rounded-lg hover:bg-navy-50 dark:hover:bg-zinc-800 text-navy-600 dark:text-zinc-400 transition-colors">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
               </button>
-              <h2 className="text-base font-semibold text-navy-900">{monthNames[month]} {year}</h2>
-              <button onClick={nextMonth} className="p-2 rounded-lg hover:bg-navy-50 text-navy-600 transition-colors">
+              <h2 className="text-base font-semibold text-navy-900 dark:text-white">{monthNames[month]} {year}</h2>
+              <button onClick={nextMonth} className="p-2 rounded-lg hover:bg-navy-50 dark:hover:bg-zinc-800 text-navy-600 dark:text-zinc-400 transition-colors">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
               </button>
             </div>
             <div className="grid grid-cols-7 gap-1">
-              {daysOfWeek.map(d => (<div key={d} className="text-center text-[11px] font-semibold text-navy-500 py-2">{d}</div>))}
+              {daysOfWeek.map(d => (<div key={d} className="text-center text-[11px] font-semibold text-navy-500 dark:text-zinc-500 py-2">{d}</div>))}
               {Array.from({ length: offset }).map((_, i) => <div key={"e" + i} />)}
               {Array.from({ length: daysInMonth }).map((_, i) => {
                 const day = i + 1;
@@ -149,7 +149,7 @@ export default function CalendarPage() {
                 const isToday = dateStr === today;
                 const isSelected = dateStr === selectedDate;
                 return (
-                  <button key={day} onClick={() => setSelectedDate(dateStr)} className={`relative p-2 rounded-xl text-sm font-medium transition-colors ${isSelected ? "bg-brand-green text-white" : isToday ? "bg-brand-green/10 text-brand-green" : "text-navy-900 hover:bg-navy-50"}`}>
+                  <button key={day} onClick={() => setSelectedDate(dateStr)} className={`relative p-2 rounded-xl text-sm font-medium transition-colors ${isSelected ? "bg-brand-green text-white" : isToday ? "bg-brand-green/10 text-brand-green" : "text-navy-900 dark:text-white hover:bg-navy-50 dark:hover:bg-zinc-800"}`}>
                     {day}
                     {dayEvents.length > 0 && <span className={`absolute bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full ${isSelected ? "bg-white" : "bg-brand-green"}`} />}
                   </button>
@@ -164,24 +164,24 @@ export default function CalendarPage() {
             <CardHeader title={selectedDate ? new Date(selectedDate + "T12:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" }) : "Selecciona un día"} />
             {!selectedDate ? (
               <div className="py-12 text-center">
-                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto text-navy-300 mb-3"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
-                <p className="text-sm text-navy-500">Haz clic en un día para ver sus citas</p>
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto text-navy-300 dark:text-zinc-600 mb-3"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
+                <p className="text-sm text-navy-500 dark:text-zinc-400">Haz clic en un día para ver sus citas</p>
               </div>
             ) : selectedEvents.length === 0 ? (
               <div className="py-12 text-center">
-                <p className="text-sm text-navy-500">Sin citas este día</p>
+                <p className="text-sm text-navy-500 dark:text-zinc-400">Sin citas este día</p>
               </div>
             ) : (
-              <div className="divide-y divide-navy-50">
+              <div className="divide-y divide-navy-50 dark:divide-zinc-800">
                 {selectedEvents.map(ev => (
                   <div key={ev.id} className="px-6 py-4">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium text-navy-900">{ev.title}</span>
+                      <span className="text-sm font-medium text-navy-900 dark:text-white">{ev.title}</span>
                       <button onClick={() => handleDelete(ev.id)} className="text-xs text-red-600 hover:underline font-medium">Eliminar</button>
                     </div>
                     {ev.clients && <p className="text-xs text-brand-green font-medium">{ev.clients.name}</p>}
-                    <p className="text-xs text-navy-500 mt-1">{ev.event_time?.slice(0, 5)} · {ev.duration_minutes} min</p>
-                    {ev.description && <p className="text-xs text-navy-600 mt-1">{ev.description}</p>}
+                    <p className="text-xs text-navy-500 dark:text-zinc-400 mt-1">{ev.event_time?.slice(0, 5)} · {ev.duration_minutes} min</p>
+                    {ev.description && <p className="text-xs text-navy-600 dark:text-zinc-400 mt-1">{ev.description}</p>}
                     <div className="mt-2">{statusBadge(ev.status)}</div>
                   </div>
                 ))}

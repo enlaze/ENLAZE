@@ -124,14 +124,14 @@ export default function EmailsPage() {
                 <p className="mt-1 text-sm text-navy-500">Envía tu primer email automático</p>
               </div>
             ) : (
-              <div className="divide-y divide-navy-50">
+              <div className="divide-y divide-navy-50 dark:divide-zinc-800">
                 {messages.map(msg => (
-                  <div key={msg.id} className="px-6 py-4 hover:bg-navy-50/40 transition-colors">
+                  <div key={msg.id} className="px-6 py-4 hover:bg-navy-50/40 dark:hover:bg-zinc-800/50 transition-colors">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium text-navy-900">{msg.clients?.name || "Cliente"}</span>
+                      <span className="text-sm font-medium text-navy-900 dark:text-white">{msg.clients?.name || "Cliente"}</span>
                       {statusBadge(msg.status)}
                     </div>
-                    <p className="text-sm text-navy-600 truncate">{msg.content}</p>
+                    <p className="text-sm text-navy-600 dark:text-zinc-400 truncate">{msg.content}</p>
                     <p className="mt-1 text-xs text-navy-400">{new Date(msg.created_at).toLocaleString("es-ES")}</p>
                   </div>
                 ))}

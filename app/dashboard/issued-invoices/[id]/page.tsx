@@ -35,12 +35,12 @@ interface InvoiceLine {
 /* ═══════════════ Labels ═══════════════ */
 
 const statusMap: Record<string, { label: string; color: string }> = {
-  draft: { label: "Borrador", color: "bg-gray-700 text-gray-300" },
+  draft: { label: "Borrador", color: "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400" },
   issued: { label: "Emitida", color: "bg-blue-900/30 text-blue-300" },
   sent: { label: "Enviada", color: "bg-purple-900/30 text-purple-300" },
   paid: { label: "Cobrada", color: "bg-green-900/30 text-green-300" },
   overdue: { label: "Vencida", color: "bg-red-900/30 text-red-300" },
-  cancelled: { label: "Anulada", color: "bg-gray-700 text-gray-400" },
+  cancelled: { label: "Anulada", color: "bg-zinc-900/30 text-zinc-400 dark:bg-zinc-900/50 dark:text-zinc-500" },
   rectified: { label: "Rectificada", color: "bg-orange-900/30 text-orange-300" },
 };
 
@@ -417,7 +417,7 @@ export default function IssuedInvoiceDetailPage() {
   }
   if (!invoice) return null;
 
-  const st = statusMap[invoice.status] || { label: invoice.status, color: "bg-gray-700 text-gray-300" };
+  const st = statusMap[invoice.status] || { label: invoice.status, color: "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400" };
   const gross = lineForm.quantity * lineForm.unit_price;
   const linePreview = gross * (1 - lineForm.discount_percent / 100);
 

@@ -140,23 +140,23 @@ export default function OnboardingChecklist() {
   const progress = Math.round((completed.length / STEPS.length) * 100);
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-brand-green/20 bg-gradient-to-br from-brand-green/[0.04] to-white shadow-[0_1px_2px_rgba(10,25,41,0.04)]">
+    <section className="overflow-hidden rounded-2xl border border-brand-green/20 bg-gradient-to-br from-brand-green/[0.04] to-white shadow-[0_1px_2px_rgba(10,25,41,0.04)] dark:border-brand-green/25 dark:from-brand-green/[0.06] dark:to-zinc-900 dark:shadow-none">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 px-6 py-5">
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <span className="text-lg" aria-hidden>🚀</span>
-            <h2 className="text-[15px] font-semibold text-navy-900">
+            <h2 className="text-[15px] font-semibold text-navy-900 dark:text-white">
               Primeros pasos con Enlaze
             </h2>
           </div>
-          <p className="mt-1 text-[13px] text-navy-500">
+          <p className="mt-1 text-[13px] text-navy-500 dark:text-zinc-400">
             Completa estos pasos para sacar el máximo partido a tu cuenta.
           </p>
         </div>
         <button
           onClick={dismiss}
-          className="shrink-0 rounded-lg p-1.5 text-navy-400 transition-colors hover:bg-navy-100 hover:text-navy-600"
+          className="shrink-0 rounded-lg p-1.5 text-navy-400 transition-colors hover:bg-navy-100 hover:text-navy-600 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
           aria-label="Cerrar guía"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -168,10 +168,10 @@ export default function OnboardingChecklist() {
       {/* Progress bar */}
       <div className="px-6 pb-4">
         <div className="flex items-center justify-between text-[11px] font-medium">
-          <span className="text-navy-500">{completed.length} de {STEPS.length} completados</span>
+          <span className="text-navy-500 dark:text-zinc-400">{completed.length} de {STEPS.length} completados</span>
           <span className="text-brand-green">{progress}%</span>
         </div>
-        <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-navy-100">
+        <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-navy-100 dark:bg-zinc-800">
           <div
             className="h-full rounded-full bg-brand-green transition-all duration-500"
             style={{ width: `${progress}%` }}
@@ -180,7 +180,7 @@ export default function OnboardingChecklist() {
       </div>
 
       {/* Steps */}
-      <ul className="border-t border-navy-100/60">
+      <ul className="border-t border-navy-100/60 dark:border-zinc-800">
         {STEPS.map((step) => {
           const done = step.checkFn(ctx);
           const isOpen = !done && !collapsedSteps.has(step.id);
@@ -188,20 +188,20 @@ export default function OnboardingChecklist() {
           return (
             <li
               key={step.id}
-              className={`border-b border-navy-100/40 last:border-b-0 ${
-                done ? "bg-brand-green/[0.03]" : ""
+              className={`border-b border-navy-100/40 last:border-b-0 dark:border-zinc-800/60 ${
+                done ? "bg-brand-green/[0.03] dark:bg-brand-green/[0.06]" : ""
               }`}
             >
               <button
                 onClick={() => !done && toggleStep(step.id)}
-                className="flex w-full items-center gap-3 px-6 py-3.5 text-left transition-colors hover:bg-navy-50/50"
+                className="flex w-full items-center gap-3 px-6 py-3.5 text-left transition-colors hover:bg-navy-50/50 dark:hover:bg-zinc-800/50"
               >
                 {/* Check circle */}
                 <span
                   className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
                     done
                       ? "border-brand-green bg-brand-green text-white"
-                      : "border-navy-200 bg-white"
+                      : "border-navy-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
                   }`}
                 >
                   {done && (
@@ -214,7 +214,7 @@ export default function OnboardingChecklist() {
                 {/* Label */}
                 <span
                   className={`flex-1 text-[13.5px] font-medium ${
-                    done ? "text-navy-400 line-through" : "text-navy-800"
+                    done ? "text-navy-400 line-through dark:text-zinc-500" : "text-navy-800 dark:text-zinc-100"
                   }`}
                 >
                   {step.label}
@@ -231,7 +231,7 @@ export default function OnboardingChecklist() {
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className={`text-navy-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                    className={`text-navy-400 transition-transform dark:text-zinc-500 ${isOpen ? "rotate-180" : ""}`}
                   >
                     <path d="m6 9 6 6 6-6" />
                   </svg>
@@ -241,10 +241,10 @@ export default function OnboardingChecklist() {
               {/* Expanded detail */}
               {isOpen && (
                 <div className="px-6 pb-4 pl-[3.25rem]">
-                  <p className="text-[12.5px] text-navy-500">{step.description}</p>
+                  <p className="text-[12.5px] text-navy-500 dark:text-zinc-400">{step.description}</p>
                   <Link
                     href={step.href}
-                    className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-navy-900 px-3.5 py-1.5 text-[12px] font-semibold text-white shadow-sm transition-colors hover:bg-navy-800"
+                    className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-navy-900 px-3.5 py-1.5 text-[12px] font-semibold text-white shadow-sm transition-colors hover:bg-navy-800 dark:bg-brand-green dark:text-zinc-950 dark:hover:bg-brand-green-light"
                   >
                     Empezar
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

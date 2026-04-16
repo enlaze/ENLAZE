@@ -115,8 +115,8 @@ export default function NotificationsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-navy-900">Notificaciones</h1>
-          <p className="text-sm text-navy-500 mt-1">
+          <h1 className="text-2xl font-bold text-navy-900 dark:text-white">Notificaciones</h1>
+          <p className="text-sm text-navy-500 dark:text-zinc-500 mt-1">
             {unreadCount > 0
               ? `${unreadCount} notificación${unreadCount !== 1 ? "es" : ""} sin leer`
               : "Todas las notificaciones leídas"}
@@ -141,7 +141,7 @@ export default function NotificationsPage() {
             className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
               filter === opt.value
                 ? "bg-navy-900 text-white"
-                : "bg-navy-50 text-navy-600 hover:bg-navy-100"
+                : "bg-navy-50 text-navy-600 dark:text-zinc-400 hover:bg-navy-100"
             }`}
           >
             {opt.label}
@@ -152,12 +152,12 @@ export default function NotificationsPage() {
       {/* Notification list */}
       {loading && notifications.length === 0 ? (
         <div className="flex items-center justify-center py-16">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-navy-200 border-t-brand-green" />
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-navy-200 dark:border-zinc-800 border-t-brand-green" />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-navy-100 bg-white py-16 text-center">
+        <div className="rounded-xl border border-navy-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-16 text-center">
           <p className="text-4xl mb-3">🔔</p>
-          <p className="text-sm text-navy-500">
+          <p className="text-sm text-navy-500 dark:text-zinc-500">
             {filter === "all"
               ? "No hay notificaciones todavía"
               : "No hay notificaciones con este filtro"}
@@ -178,7 +178,7 @@ export default function NotificationsPage() {
                 className={`group flex items-start gap-4 rounded-xl border p-4 transition-colors ${
                   isUnread
                     ? "border-brand-green/20 bg-brand-green/[0.02]"
-                    : "border-navy-100 bg-white"
+                    : "border-navy-100 dark:border-zinc-800 bg-white dark:bg-zinc-900"
                 }`}
               >
                 <span
@@ -196,8 +196,8 @@ export default function NotificationsPage() {
                           onClick={() => handleMarkRead(n)}
                           className={`text-sm leading-snug hover:underline ${
                             isUnread
-                              ? "font-semibold text-navy-900"
-                              : "text-navy-700"
+                              ? "font-semibold text-navy-900 dark:text-white"
+                              : "text-navy-700 dark:text-zinc-300"
                           }`}
                         >
                           {n.title}
@@ -206,15 +206,15 @@ export default function NotificationsPage() {
                         <p
                           className={`text-sm leading-snug ${
                             isUnread
-                              ? "font-semibold text-navy-900"
-                              : "text-navy-700"
+                              ? "font-semibold text-navy-900 dark:text-white"
+                              : "text-navy-700 dark:text-zinc-300"
                           }`}
                         >
                           {n.title}
                         </p>
                       )}
                       {n.body && (
-                        <p className="mt-1 text-xs text-navy-500">{n.body}</p>
+                        <p className="mt-1 text-xs text-navy-500 dark:text-zinc-500">{n.body}</p>
                       )}
                     </div>
 
@@ -226,11 +226,11 @@ export default function NotificationsPage() {
                   </div>
 
                   <div className="mt-2 flex items-center gap-3">
-                    <span className="text-[11px] text-navy-400">
+                    <span className="text-[11px] text-navy-400 dark:text-zinc-500">
                       {formatDate(n.created_at)}
                     </span>
                     {n.entity_type && (
-                      <span className="rounded bg-navy-50 px-1.5 py-0.5 text-[10px] font-medium text-navy-500 uppercase">
+                      <span className="rounded bg-navy-50 px-1.5 py-0.5 text-[10px] font-medium text-navy-500 dark:text-zinc-500 uppercase">
                         {n.entity_type}
                       </span>
                     )}
@@ -238,14 +238,14 @@ export default function NotificationsPage() {
                       {isUnread && (
                         <button
                           onClick={() => handleMarkRead(n)}
-                          className="rounded px-2 py-1 text-[11px] text-navy-500 hover:bg-navy-50 hover:text-navy-700"
+                          className="rounded px-2 py-1 text-[11px] text-navy-500 dark:text-zinc-500 hover:bg-navy-50 dark:hover:bg-zinc-800/50 hover:text-navy-700 dark:text-zinc-300"
                         >
                           Marcar leída
                         </button>
                       )}
                       <button
                         onClick={() => handleDismiss(n.id)}
-                        className="rounded px-2 py-1 text-[11px] text-navy-500 hover:bg-red-50 hover:text-red-600"
+                        className="rounded px-2 py-1 text-[11px] text-navy-500 dark:text-zinc-500 hover:bg-red-50 hover:text-red-600"
                       >
                         Descartar
                       </button>
@@ -262,7 +262,7 @@ export default function NotificationsPage() {
               <button
                 onClick={handleLoadMore}
                 disabled={loading}
-                className="rounded-lg bg-navy-50 px-6 py-2 text-sm font-medium text-navy-600 transition-colors hover:bg-navy-100 disabled:opacity-50"
+                className="rounded-lg bg-navy-50 px-6 py-2 text-sm font-medium text-navy-600 dark:text-zinc-400 transition-colors hover:bg-navy-100 disabled:opacity-50"
               >
                 {loading ? "Cargando..." : "Cargar más"}
               </button>

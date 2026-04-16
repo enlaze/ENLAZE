@@ -20,14 +20,14 @@ export default function PageHeader({
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
       <div>
-        <h1 className="text-2xl font-bold text-navy-900 tracking-tight">
+        <h1 className="text-2xl font-bold text-navy-900 dark:text-white tracking-tight">
           {title}
         </h1>
         {description && (
-          <p className="mt-1 text-sm text-navy-500">{description}</p>
+          <p className="mt-1 text-sm text-navy-500 dark:text-zinc-400">{description}</p>
         )}
         {count !== undefined && (
-          <p className="mt-1 text-sm text-navy-500">
+          <p className="mt-1 text-sm text-navy-500 dark:text-zinc-400">
             {count} {countLabel}
           </p>
         )}

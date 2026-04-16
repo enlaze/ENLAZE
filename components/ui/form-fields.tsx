@@ -5,7 +5,7 @@ import React from "react";
 /* ─── Shared input class ───────────────────────────────────────────── */
 
 export const inputBase =
-  "w-full rounded-xl border border-navy-200 bg-navy-50/60 px-4 py-2.5 text-sm text-navy-900 placeholder:text-navy-400 focus:border-brand-green/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-green/20 transition-colors";
+  "w-full rounded-xl border border-navy-200 bg-navy-50/60 px-4 py-2.5 text-sm text-navy-900 placeholder:text-navy-400 focus:border-brand-green/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-green/20 transition-colors dark:border-zinc-800 dark:bg-zinc-900 dark:text-white dark:placeholder:text-zinc-500 dark:focus:border-zinc-600 dark:focus:bg-zinc-900 dark:focus:ring-zinc-700/60";
 
 /* ─── FormField wrapper ────────────────────────────────────────────── */
 
@@ -26,12 +26,12 @@ export function FormField({
 }: FormFieldProps) {
   return (
     <div className={className}>
-      <label className="mb-1.5 block text-xs font-medium text-navy-600">
+      <label className="mb-1.5 block text-xs font-medium text-navy-600 dark:text-zinc-300">
         {label}
-        {required && <span className="ml-0.5 text-red-400">*</span>}
+        {required && <span className="ml-0.5 text-red-400 dark:text-red-500">*</span>}
       </label>
       {children}
-      {hint && <p className="mt-1 text-xs text-navy-400">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-navy-400 dark:text-zinc-500">{hint}</p>}
     </div>
   );
 }
@@ -90,7 +90,7 @@ export function SearchInput({
   return (
     <div className={`relative ${className}`}>
       <svg
-        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-navy-400"
+        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-navy-400 dark:text-zinc-500"
         width="15"
         height="15"
         viewBox="0 0 24 24"

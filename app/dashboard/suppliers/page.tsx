@@ -327,7 +327,7 @@ export default function SuppliersPage() {
                   <textarea
                     value={form.notes}
                     onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                    className="w-full rounded-xl border border-navy-200 bg-navy-50/60 px-4 py-2.5 text-sm text-navy-900 placeholder:text-navy-400 focus:border-brand-green/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-green/20 transition-colors min-h-[80px]"
+                    className="w-full rounded-xl border border-navy-200 dark:border-zinc-800 bg-navy-50 dark:bg-zinc-900/60 px-4 py-2.5 text-sm text-navy-900 dark:text-white placeholder:text-navy-400 focus:border-brand-green/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-green/20 transition-colors min-h-[80px]"
                     placeholder="Observaciones, condiciones, plazos..."
                   />
                 </FormField>
@@ -356,24 +356,24 @@ export default function SuppliersPage() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-navy-100 bg-navy-50/60">
-                  <th className="text-left text-xs font-semibold text-navy-700 uppercase tracking-wider px-5 py-3">Nombre</th>
-                  <th className="text-center text-xs font-semibold text-navy-700 uppercase tracking-wider px-3 py-3">Tipo</th>
-                  <th className="text-center text-xs font-semibold text-navy-700 uppercase tracking-wider px-3 py-3">Oficio</th>
-                  <th className="text-left text-xs font-semibold text-navy-700 uppercase tracking-wider px-3 py-3">Contacto</th>
-                  <th className="text-center text-xs font-semibold text-navy-700 uppercase tracking-wider px-3 py-3">€/h</th>
-                  <th className="text-right text-xs font-semibold text-navy-700 uppercase tracking-wider px-3 py-3">Facturado</th>
-                  <th className="text-center text-xs font-semibold text-navy-700 uppercase tracking-wider px-3 py-3">Valoración</th>
-                  <th className="text-right text-xs font-semibold text-navy-700 uppercase tracking-wider px-5 py-3">Acciones</th>
+                <tr className="border-b border-navy-100 dark:border-zinc-800 bg-navy-50 dark:bg-zinc-900/60">
+                  <th className="text-left text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase tracking-wider px-5 py-3">Nombre</th>
+                  <th className="text-center text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase tracking-wider px-3 py-3">Tipo</th>
+                  <th className="text-center text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase tracking-wider px-3 py-3">Oficio</th>
+                  <th className="text-left text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase tracking-wider px-3 py-3">Contacto</th>
+                  <th className="text-center text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase tracking-wider px-3 py-3">€/h</th>
+                  <th className="text-right text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase tracking-wider px-3 py-3">Facturado</th>
+                  <th className="text-center text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase tracking-wider px-3 py-3">Valoración</th>
+                  <th className="text-right text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase tracking-wider px-5 py-3">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((s) => (
-                  <tr key={s.id} className="border-b border-navy-100 hover:bg-navy-50/40 transition">
+                  <tr key={s.id} className="border-b border-navy-100 dark:border-zinc-800 hover:bg-navy-50 dark:hover:bg-zinc-800/50 transition">
                     <td className="px-5 py-3">
-                      <p className="text-sm font-medium text-navy-900">{s.name}</p>
-                      {s.nif && <p className="text-xs text-navy-600">{s.nif}</p>}
-                      {s.specialty && <p className="text-xs text-navy-500">{s.specialty}</p>}
+                      <p className="text-sm font-medium text-navy-900 dark:text-white">{s.name}</p>
+                      {s.nif && <p className="text-xs text-navy-600 dark:text-zinc-400">{s.nif}</p>}
+                      {s.specialty && <p className="text-xs text-navy-500 dark:text-zinc-500">{s.specialty}</p>}
                     </td>
                     <td className="px-3 py-3 text-center">
                       {s.type === "subcontrata" ? (
@@ -382,17 +382,17 @@ export default function SuppliersPage() {
                         <Badge variant="blue">Proveedor</Badge>
                       )}
                     </td>
-                    <td className="px-3 py-3 text-center text-xs text-navy-600">{tradeMap[s.trade] || s.trade}</td>
+                    <td className="px-3 py-3 text-center text-xs text-navy-600 dark:text-zinc-400">{tradeMap[s.trade] || s.trade}</td>
                     <td className="px-3 py-3">
                       {s.contact_person && <p className="text-sm text-navy-800">{s.contact_person}</p>}
-                      {s.phone && <p className="text-xs text-navy-600">{s.phone}</p>}
-                      {s.email && <p className="text-xs text-navy-600">{s.email}</p>}
+                      {s.phone && <p className="text-xs text-navy-600 dark:text-zinc-400">{s.phone}</p>}
+                      {s.email && <p className="text-xs text-navy-600 dark:text-zinc-400">{s.email}</p>}
                     </td>
-                    <td className="px-3 py-3 text-center text-sm text-navy-700">
+                    <td className="px-3 py-3 text-center text-sm text-navy-700 dark:text-zinc-300">
                       {Number(s.hourly_rate || 0) > 0 ? `${Number(s.hourly_rate).toFixed(0)}€` : "—"}
                     </td>
                     <td className="px-3 py-3 text-right">
-                      <p className="text-sm font-medium text-navy-900">{fmtMoney(Number(s.total_invoiced || 0))}</p>
+                      <p className="text-sm font-medium text-navy-900 dark:text-white">{fmtMoney(Number(s.total_invoiced || 0))}</p>
                       {Number(s.total_invoiced || 0) > Number(s.total_paid || 0) && (
                         <p className="text-xs text-orange-600">Pdte: {fmtMoney(Number(s.total_invoiced || 0) - Number(s.total_paid || 0))}</p>
                       )}
@@ -401,12 +401,12 @@ export default function SuppliersPage() {
                       {s.rating > 0 ? (
                         <span className="text-sm text-yellow-600">{"★".repeat(s.rating)}{"☆".repeat(5 - s.rating)}</span>
                       ) : (
-                        <span className="text-xs text-navy-400">—</span>
+                        <span className="text-xs text-navy-400 dark:text-zinc-500">—</span>
                       )}
                     </td>
                     <td className="px-5 py-3 text-right">
                       <Link href={`/dashboard/suppliers/${s.id}`} className="text-xs text-brand-green hover:underline mr-3">Ver</Link>
-                      <button onClick={() => startEdit(s)} className="text-xs text-navy-600 hover:underline mr-3">Editar</button>
+                      <button onClick={() => startEdit(s)} className="text-xs text-navy-600 dark:text-zinc-400 hover:underline mr-3">Editar</button>
                       <button onClick={() => handleDelete(s.id)} className="text-xs text-red-600 hover:underline">Eliminar</button>
                     </td>
                   </tr>

@@ -228,7 +228,7 @@ export default function PricesPage() {
 
   // KPIs: show first 3 categories dynamically
   const kpiCats = categories.slice(0, 3);
-  const kpiColors = ["text-blue-400", "text-orange-400", "text-gray-400"];
+  const kpiColors = ["text-blue-400", "text-orange-400", "text-zinc-400"];
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-brand-green)]"></div></div>;
 
@@ -258,7 +258,7 @@ export default function PricesPage() {
       <div className={`grid grid-cols-${Math.min(kpiCats.length, 4)} gap-4 mb-6`}>
         {kpiCats.map((cat, i) => (
           <div key={cat.value} className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-            <p className={`text-2xl font-bold ${kpiColors[i] || "text-gray-400"}`}>{items.filter(it => it.category === cat.value).length}</p>
+            <p className={`text-2xl font-bold ${kpiColors[i] || "text-zinc-400"}`}>{items.filter(it => it.category === cat.value).length}</p>
             <p className="text-xs text-[var(--color-navy-400)]">{cat.label}</p>
           </div>
         ))}
@@ -351,7 +351,7 @@ export default function PricesPage() {
                       <span className={`text-xs px-2 py-1 rounded-full ${
                         item.category === "material" ? "bg-blue-900/30 text-blue-300" :
                         item.category === "mano_obra" ? "bg-orange-900/30 text-orange-300" :
-                        "bg-gray-700 text-gray-300"
+                        "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400"
                       }`}>{catLabel[item.category]}</span>
                     </td>
                     <td className="px-3 py-3 text-center text-xs text-[var(--color-navy-300)]">{item.subcategory || "—"}</td>

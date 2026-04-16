@@ -83,8 +83,8 @@ export default function SectorSettingsPage() {
   return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-navy-900">Sector de actividad</h1>
-        <p className="text-sm text-navy-500 mt-1">
+        <h1 className="text-2xl font-bold text-navy-900 dark:text-white">Sector de actividad</h1>
+        <p className="text-sm text-navy-500 dark:text-zinc-500 mt-1">
           Selecciona tu sector para adaptar la terminología, módulos visibles y opciones de formulario a tu negocio.
         </p>
       </div>
@@ -99,32 +99,32 @@ export default function SectorSettingsPage() {
               className={`text-left rounded-2xl border-2 p-5 transition-all ${
                 isSelected
                   ? "border-brand-green bg-brand-green/5 shadow-md"
-                  : "border-navy-100 bg-white hover:border-navy-200 hover:shadow-sm"
+                  : "border-navy-100 bg-white dark:bg-zinc-900 hover:border-navy-200 dark:hover:border-zinc-800 hover:shadow-sm"
               }`}
             >
               <div className="flex items-start gap-3">
                 <span className="text-3xl">{sectorIcons[s.sector_key] || "📦"}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <h3 className={`font-semibold ${isSelected ? "text-brand-green" : "text-navy-900"}`}>
+                    <h3 className={`font-semibold ${isSelected ? "text-brand-green" : "text-navy-900 dark:text-white"}`}>
                       {s.sector_label}
                     </h3>
                     {isSelected && (
                       <span className="text-xs bg-brand-green text-white px-2 py-0.5 rounded-full">Seleccionado</span>
                     )}
                   </div>
-                  <p className="text-sm text-navy-500 mt-1">{s.description}</p>
+                  <p className="text-sm text-navy-500 dark:text-zinc-500 mt-1">{s.description}</p>
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {(s.sidebar_modules || [])
                       .filter((m) => m.visible)
                       .slice(0, 6)
                       .map((m) => (
-                        <span key={m.key} className="text-xs bg-navy-50 text-navy-600 px-2 py-0.5 rounded-lg">
+                        <span key={m.key} className="text-xs bg-navy-50 dark:bg-zinc-900/70 text-navy-600 dark:text-zinc-300 px-2 py-0.5 rounded-lg">
                           {m.icon} {m.label}
                         </span>
                       ))}
                     {(s.sidebar_modules || []).filter((m) => m.visible).length > 6 && (
-                      <span className="text-xs text-navy-400">
+                      <span className="text-xs text-navy-400 dark:text-zinc-500">
                         +{(s.sidebar_modules || []).filter((m) => m.visible).length - 6} más
                       </span>
                     )}

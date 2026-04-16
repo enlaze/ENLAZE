@@ -72,7 +72,7 @@ export default function MessagesPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-6">
           <Card>
-            <h2 className="text-base font-semibold text-navy-900 mb-5">Nuevo mensaje</h2>
+            <h2 className="text-base font-semibold text-navy-900 dark:text-white mb-5">Nuevo mensaje</h2>
             <form onSubmit={handleSend} className="space-y-4">
               <FormField label="Cliente" required>
                 <Select value={selectedClient} onChange={e => setSelectedClient(e.target.value)} required>
@@ -94,9 +94,9 @@ export default function MessagesPage() {
               </Button>
             </form>
 
-            <div className="mt-6 rounded-xl bg-navy-50/60 border border-navy-100 p-4">
-              <p className="text-xs font-semibold text-navy-700 mb-1">Conectar WhatsApp Business API</p>
-              <p className="text-xs text-navy-500">Para enviar mensajes reales necesitas una cuenta de Meta Business verificada. Los mensajes se guardarán como pendientes hasta que conectes la API.</p>
+            <div className="mt-6 rounded-xl bg-navy-50/60 dark:bg-zinc-900/50 border border-navy-100 dark:border-zinc-800 p-4">
+              <p className="text-xs font-semibold text-navy-700 dark:text-zinc-200 mb-1">Conectar WhatsApp Business API</p>
+              <p className="text-xs text-navy-500 dark:text-zinc-400">Para enviar mensajes reales necesitas una cuenta de Meta Business verificada. Los mensajes se guardarán como pendientes hasta que conectes la API.</p>
             </div>
           </Card>
         </div>
@@ -106,16 +106,16 @@ export default function MessagesPage() {
             <CardHeader title="Historial de mensajes" />
             {messages.length === 0 ? (
               <div className="py-16 text-center">
-                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto text-navy-300 mb-3"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                <h3 className="text-base font-semibold text-navy-900">Sin mensajes todavía</h3>
-                <p className="mt-1 text-sm text-navy-500">Envía tu primer mensaje de WhatsApp</p>
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto text-navy-300 dark:text-zinc-600 mb-3"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <h3 className="text-base font-semibold text-navy-900 dark:text-white">Sin mensajes todavía</h3>
+                <p className="mt-1 text-sm text-navy-500 dark:text-zinc-400">Envía tu primer mensaje de WhatsApp</p>
               </div>
             ) : (
-              <div className="divide-y divide-navy-50">
+              <div className="divide-y divide-navy-50 dark:divide-zinc-800">
                 {messages.map(msg => (
-                  <div key={msg.id} className="px-6 py-4 hover:bg-navy-50/40 transition-colors">
+                  <div key={msg.id} className="px-6 py-4 hover:bg-navy-50/40 dark:hover:bg-zinc-800/50 transition-colors">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium text-navy-900">{msg.clients?.name || "Cliente"}</span>
+                      <span className="text-sm font-medium text-navy-900 dark:text-white">{msg.clients?.name || "Cliente"}</span>
                       {statusBadge(msg.status)}
                     </div>
                     <p className="text-sm text-navy-600">{msg.content}</p>

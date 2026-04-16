@@ -1,6 +1,15 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────────────────────
+   Tailwind v4 — class-based dark mode
+   Without this, `dark:` utilities fall back to the
+   (prefers-color-scheme: dark) media query and ignore the
+   `.dark` class toggle on <html>.
+   ───────────────────────────────────────────────────────────── */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
+  /* Navy palette (used on public marketing pages — light only) */
   --color-navy-50: #f4f7fa;
   --color-navy-100: #e8eef4;
   --color-navy-200: #d0dce8;
@@ -12,12 +21,92 @@
   --color-navy-800: #0f2744;
   --color-navy-900: #0a1929;
   --color-navy-950: #060f1a;
+
+  /* Brand */
   --color-brand-green: #00c896;
   --color-brand-green-dark: #00a67a;
   --color-brand-green-light: #00e6ac;
+
+  /* Typography */
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Base document colors
+   - Light mode: white background with navy text
+   - Dark mode: zinc-950 background with zinc-100 text
+   ───────────────────────────────────────────────────────────── */
+:root {
+  color-scheme: light;
+  --app-bg: #ffffff;
+  --app-fg: #0a1929; /* navy-900 */
+}
+
+:root.dark {
+  color-scheme: dark;
+  --app-bg: #09090b; /* zinc-950 */
+  --app-fg: #e4e4e7; /* zinc-200 */
 }
 
 html {
   scroll-behavior: smooth;
+  background-color: var(--app-bg);
+  color: var(--app-fg);
+}
+
+html.dark body,
+html.dark {
+  background-color: #09090b; /* zinc-950 — no white bleed */
+  color: #e4e4e7;
+}
+
+/* Smooth transition for dark mode toggling */
+html {
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* Remove the default blue focus ring that clashes with the
+   zinc palette on dashboard inputs; components add their own. */
+html.dark input:focus,
+html.dark select:focus,
+html.dark textarea:focus {
+  outline: none;
+}
+
+/* Webkit autofill — keep zinc background in dark mode */
+html.dark input:-webkit-autofill,
+html.dark input:-webkit-autofill:hover,
+html.dark input:-webkit-autofill:focus,
+html.dark textarea:-webkit-autofill,
+html.dark select:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px #18181b inset !important; /* zinc-900 */
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ffffff;
+  border-color: #27272a !important; /* zinc-800 */
+}
+
+/* Scrollbars in dark mode — subtle, not black */
+html.dark {
+  scrollbar-color: #3f3f46 #18181b; /* zinc-700 on zinc-900 */
+}
+html.dark ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+html.dark ::-webkit-scrollbar-track {
+  background: #18181b; /* zinc-900 */
+}
+html.dark ::-webkit-scrollbar-thumb {
+  background: #3f3f46; /* zinc-700 */
+  border-radius: 8px;
+  border: 2px solid #18181b;
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #52525b; /* zinc-600 */
+}
+
+/* Selection */
+html.dark ::selection {
+  background: rgba(0, 200, 150, 0.3);
+  color: #ffffff;
 }

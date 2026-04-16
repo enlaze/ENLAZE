@@ -80,22 +80,22 @@ export default function MarginsPage() {
 
       {/* Ejemplo visual */}
       <Card className="mb-8">
-        <h3 className="text-xs font-semibold text-navy-500 uppercase tracking-wider mb-4">Ejemplo con margen general ({generalMargin}%)</h3>
+        <h3 className="text-xs font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider mb-4">Ejemplo con margen general ({generalMargin}%)</h3>
         <div className="grid grid-cols-3 gap-4 text-center">
-          <div className="rounded-xl bg-navy-50/60 border border-navy-100 p-4">
-            <p className="text-xs text-navy-500 mb-1">Tu coste</p>
-            <p className="text-xl font-bold text-navy-900">1.000 EUR</p>
-            <p className="text-xs text-navy-400 mt-0.5">PDF interno</p>
+          <div className="rounded-xl bg-navy-50 dark:bg-zinc-900/60 border border-navy-100 dark:border-zinc-800 p-4">
+            <p className="text-xs text-navy-500 dark:text-zinc-500 mb-1">Tu coste</p>
+            <p className="text-xl font-bold text-navy-900 dark:text-white">1.000 EUR</p>
+            <p className="text-xs text-navy-400 dark:text-zinc-500 mt-0.5">PDF interno</p>
           </div>
           <div className="rounded-xl bg-emerald-50/60 border border-emerald-100 p-4">
-            <p className="text-xs text-navy-500 mb-1">Precio cliente</p>
+            <p className="text-xs text-navy-500 dark:text-zinc-500 mb-1">Precio cliente</p>
             <p className="text-xl font-bold text-brand-green">{exampleCalc(1000, generalMargin).clientPrice.toFixed(0)} EUR</p>
-            <p className="text-xs text-navy-400 mt-0.5">PDF cliente</p>
+            <p className="text-xs text-navy-400 dark:text-zinc-500 mt-0.5">PDF cliente</p>
           </div>
           <div className="rounded-xl bg-blue-50/60 border border-blue-100 p-4">
-            <p className="text-xs text-navy-500 mb-1">Tu beneficio</p>
+            <p className="text-xs text-navy-500 dark:text-zinc-500 mb-1">Tu beneficio</p>
             <p className="text-xl font-bold text-blue-600">{exampleCalc(1000, generalMargin).profit.toFixed(0)} EUR</p>
-            <p className="text-xs text-navy-400 mt-0.5">por presupuesto</p>
+            <p className="text-xs text-navy-400 dark:text-zinc-500 mt-0.5">por presupuesto</p>
           </div>
         </div>
       </Card>
@@ -115,16 +115,16 @@ export default function MarginsPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-medium text-navy-900">{service.label}</h3>
+                      <h3 className="text-sm font-medium text-navy-900 dark:text-white">{service.label}</h3>
                       {isGeneral && <span className="text-[11px] bg-brand-green/10 text-brand-green px-2 py-0.5 rounded-full font-medium">por defecto</span>}
-                      {!isGeneral && !hasCustom && <span className="text-xs text-navy-400">(usa margen general)</span>}
+                      {!isGeneral && !hasCustom && <span className="text-xs text-navy-400 dark:text-zinc-500">(usa margen general)</span>}
                     </div>
                     {isGeneral && (
-                      <p className="text-xs text-navy-500 mt-0.5">Se aplica a todos los servicios que no tengan un margen específico</p>
+                      <p className="text-xs text-navy-500 dark:text-zinc-500 mt-0.5">Se aplica a todos los servicios que no tengan un margen específico</p>
                     )}
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 rounded-xl bg-navy-50/60 border border-navy-100 px-3 py-2">
+                    <div className="flex items-center gap-2 rounded-xl bg-navy-50 dark:bg-zinc-900/60 border border-navy-100 dark:border-zinc-800 px-3 py-2">
                       <input
                         type="range"
                         min="0"
@@ -155,9 +155,9 @@ export default function MarginsPage() {
                           }
                           setMargins(updated);
                         }}
-                        className="w-14 rounded-lg border border-navy-200 bg-white px-2 py-1 text-sm text-center text-navy-900 focus:border-brand-green/40 focus:outline-none"
+                        className="w-14 rounded-lg border border-navy-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2 py-1 text-sm text-center text-navy-900 dark:text-white focus:border-brand-green/40 focus:outline-none"
                       />
-                      <span className="text-sm text-navy-500">%</span>
+                      <span className="text-sm text-navy-500 dark:text-zinc-500">%</span>
                     </div>
                     <Button
                       onClick={() => saveMargin(service.value, currentMargin)}
@@ -176,8 +176,8 @@ export default function MarginsPage() {
 
       {/* Info */}
       <Card className="mt-8">
-        <h3 className="text-xs font-semibold text-navy-500 uppercase tracking-wider mb-3">¿Cómo funciona?</h3>
-        <div className="text-sm text-navy-600 space-y-2">
+        <h3 className="text-xs font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider mb-3">¿Cómo funciona?</h3>
+        <div className="text-sm text-navy-600 dark:text-zinc-400 space-y-2">
           <p>Cuando el agente IA genera un presupuesto, usa los precios de tu banco de precios como <strong className="text-navy-900">coste base</strong>.</p>
           <p>Luego aplica el margen comercial correspondiente al tipo de servicio para calcular el <strong className="text-navy-900">precio al cliente</strong>.</p>
           <p>Se generan <strong className="text-navy-900">2 PDFs</strong>: uno interno con los costes reales (para ti) y otro con los precios finales (para el cliente).</p>

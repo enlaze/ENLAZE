@@ -58,7 +58,7 @@ export default function SupplierDetailPage() {
     ? Math.round((Number(supplier.total_paid) / Number(supplier.total_invoiced)) * 100)
     : 0;
 
-  const statusBadge = supplierStatusLabels[supplier.status] || { label: supplier.status, color: "bg-gray-700 text-gray-300" };
+  const statusBadge = supplierStatusLabels[supplier.status] || { label: supplier.status, color: "bg-zinc-800 text-zinc-400 dark:bg-zinc-900 dark:text-zinc-400" };
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -89,10 +89,10 @@ export default function SupplierDetailPage() {
       {Number(supplier.total_invoiced) > 0 && (
         <Card className="mb-6">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-navy-600">Progreso de pago</span>
-            <span className="text-sm font-semibold text-navy-900">{paidPct}%</span>
+            <span className="text-sm text-navy-600 dark:text-zinc-400">Progreso de pago</span>
+            <span className="text-sm font-semibold text-navy-900 dark:text-white">{paidPct}%</span>
           </div>
-          <div className="w-full h-3 bg-navy-100 rounded-full overflow-hidden">
+          <div className="w-full h-3 bg-navy-100 dark:bg-zinc-900 rounded-full overflow-hidden">
             <div
               className="h-full rounded-full transition-all"
               style={{
@@ -153,18 +153,18 @@ export default function SupplierDetailPage() {
           </Link>
         </div>
         {invoices.length === 0 ? (
-          <p className="text-sm text-navy-500 py-4 text-center">Sin facturas registradas de este proveedor.</p>
+          <p className="text-sm text-navy-500 dark:text-zinc-400 py-4 text-center">Sin facturas registradas de este proveedor.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-navy-100 bg-navy-50/60">
-                  <th className="text-left text-xs font-semibold text-navy-700 uppercase px-4 py-2">Nº Factura</th>
-                  <th className="text-center text-xs font-semibold text-navy-700 uppercase px-3 py-2">Fecha</th>
-                  <th className="text-center text-xs font-semibold text-navy-700 uppercase px-3 py-2">Vencimiento</th>
-                  <th className="text-right text-xs font-semibold text-navy-700 uppercase px-3 py-2">Total</th>
-                  <th className="text-right text-xs font-semibold text-navy-700 uppercase px-3 py-2">Pagado</th>
-                  <th className="text-center text-xs font-semibold text-navy-700 uppercase px-4 py-2">Estado</th>
+                <tr className="border-b border-navy-100 dark:border-zinc-800 bg-navy-50/60 dark:bg-zinc-900/50">
+                  <th className="text-left text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase px-4 py-2">Nº Factura</th>
+                  <th className="text-center text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase px-3 py-2">Fecha</th>
+                  <th className="text-center text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase px-3 py-2">Vencimiento</th>
+                  <th className="text-right text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase px-3 py-2">Total</th>
+                  <th className="text-right text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase px-3 py-2">Pagado</th>
+                  <th className="text-center text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase px-4 py-2">Estado</th>
                 </tr>
               </thead>
               <tbody>
@@ -172,21 +172,21 @@ export default function SupplierDetailPage() {
                   const st = receivedInvoiceStatusLabels[inv.status] || { label: inv.status, color: "" };
                   const isOverdue = inv.due_date && new Date(inv.due_date) < new Date() && inv.payment_status !== "paid";
                   return (
-                    <tr key={inv.id} className="border-b border-navy-100 hover:bg-navy-50/40 transition">
+                    <tr key={inv.id} className="border-b border-navy-100 dark:border-zinc-800 hover:bg-navy-50/40 dark:hover:bg-zinc-800/50 transition">
                       <td className="px-4 py-2.5">
                         <Link href={`/dashboard/suppliers/invoices/${inv.id}`} className="text-sm font-medium text-brand-green hover:underline">
                           {inv.invoice_number}
                         </Link>
                       </td>
-                      <td className="px-3 py-2.5 text-center text-sm text-navy-600">{fmtDate(inv.issue_date)}</td>
+                      <td className="px-3 py-2.5 text-center text-sm text-navy-600 dark:text-zinc-400">{fmtDate(inv.issue_date)}</td>
                       <td className="px-3 py-2.5 text-center text-sm">
-                        <span className={isOverdue ? "text-red-600 font-medium" : "text-navy-600"}>
+                        <span className={isOverdue ? "text-red-600 font-medium" : "text-navy-600 dark:text-zinc-400"}>
                           {fmtDate(inv.due_date)}
                           {isOverdue && " ⚠"}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 text-right text-sm font-medium text-navy-900">{fmtMoney(inv.total)}</td>
-                      <td className="px-3 py-2.5 text-right text-sm text-navy-600">{fmtMoney(inv.amount_paid)}</td>
+                      <td className="px-3 py-2.5 text-right text-sm font-medium text-navy-900 dark:text-white">{fmtMoney(inv.total)}</td>
+                      <td className="px-3 py-2.5 text-right text-sm text-navy-600 dark:text-zinc-400">{fmtMoney(inv.amount_paid)}</td>
                       <td className="px-4 py-2.5 text-center">
                         <span className={`inline-block text-xs px-2 py-0.5 rounded-full ${st.color}`}>
                           {st.label}

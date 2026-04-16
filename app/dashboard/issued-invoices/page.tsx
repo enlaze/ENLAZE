@@ -47,7 +47,7 @@ function eur(n: number) { return Number(n || 0).toLocaleString("es-ES", { style:
 function fmtDate(d: string | null) { return d ? new Date(d).toLocaleDateString("es-ES") : "—"; }
 function daysSince(d: string) { return Math.floor((Date.now() - new Date(d).getTime()) / 86400000); }
 
-const inputCls = "w-full bg-white text-navy-900 rounded-lg px-4 py-2 border border-navy-200 focus:border-brand-green focus:outline-none text-sm";
+const inputCls = "w-full bg-white dark:bg-zinc-900 text-navy-900 dark:text-white placeholder:text-navy-400 dark:placeholder:text-zinc-500 rounded-lg px-4 py-2 border border-navy-200 dark:border-zinc-800 focus:border-brand-green focus:outline-none text-sm";
 
 /* ═══════════════ Page ═══════════════ */
 
@@ -186,16 +186,16 @@ export default function IssuedInvoicesPage() {
     <div className="max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-navy-900">Facturas Emitidas</h1>
-          <p className="text-sm text-navy-600">Facturación a clientes con Verifactu y Facturae</p>
+          <h1 className="text-2xl font-bold text-navy-900 dark:text-white">Facturas Emitidas</h1>
+          <p className="text-sm text-navy-600 dark:text-zinc-400">Facturación a clientes con Verifactu y Facturae</p>
         </div>
         <div className="flex gap-2">
           <Link href="/dashboard/settings/fiscal"
-            className="px-4 py-2.5 bg-white text-navy-700 rounded-xl text-sm border border-navy-200 hover:bg-navy-50 transition">
+            className="px-4 py-2.5 bg-white dark:bg-zinc-900 text-navy-700 dark:text-zinc-300 rounded-xl text-sm border border-navy-200 dark:border-zinc-800 hover:bg-navy-50 dark:hover:bg-zinc-800 transition">
             Ajustes fiscales
           </Link>
           <button onClick={() => setShowForm(!showForm)}
-            className="px-5 py-2.5 bg-brand-green text-navy-900 rounded-xl font-semibold text-sm hover:opacity-90 transition">
+            className="px-5 py-2.5 bg-brand-green text-navy-900 dark:text-white rounded-xl font-semibold text-sm hover:opacity-90 transition">
             + Nueva factura
           </button>
         </div>
@@ -203,68 +203,68 @@ export default function IssuedInvoicesPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-2xl p-4 text-center border border-navy-100 shadow-sm">
+        <div className="bg-white rounded-2xl p-4 text-center border border-navy-100 dark:border-zinc-800 dark:bg-zinc-900 shadow-sm dark:shadow-none">
           <p className="text-lg font-bold text-blue-600">{eur(totalEmitido)}</p>
-          <p className="text-xs text-navy-600">Total emitido</p>
+          <p className="text-xs text-navy-600 dark:text-zinc-400">Total emitido</p>
         </div>
-        <div className="bg-white rounded-2xl p-4 text-center border border-navy-100 shadow-sm">
+        <div className="bg-white rounded-2xl p-4 text-center border border-navy-100 dark:border-zinc-800 dark:bg-zinc-900 shadow-sm dark:shadow-none">
           <p className="text-lg font-bold text-green-600">{eur(totalCobrado)}</p>
-          <p className="text-xs text-navy-600">Total cobrado</p>
+          <p className="text-xs text-navy-600 dark:text-zinc-400">Total cobrado</p>
         </div>
-        <div className="bg-white rounded-2xl p-4 text-center border border-navy-100 shadow-sm">
+        <div className="bg-white rounded-2xl p-4 text-center border border-navy-100 dark:border-zinc-800 dark:bg-zinc-900 shadow-sm dark:shadow-none">
           <p className="text-lg font-bold text-yellow-600">{eur(pendienteCobro)}</p>
-          <p className="text-xs text-navy-600">Pendiente cobro</p>
+          <p className="text-xs text-navy-600 dark:text-zinc-400">Pendiente cobro</p>
         </div>
-        <div className="bg-white rounded-2xl p-4 text-center border border-navy-100 shadow-sm">
+        <div className="bg-white rounded-2xl p-4 text-center border border-navy-100 dark:border-zinc-800 dark:bg-zinc-900 shadow-sm dark:shadow-none">
           <p className={`text-lg font-bold ${vencidas > 0 ? "text-red-600" : "text-green-600"}`}>{vencidas}</p>
-          <p className="text-xs text-navy-600">Facturas vencidas</p>
+          <p className="text-xs text-navy-600 dark:text-zinc-400">Facturas vencidas</p>
         </div>
       </div>
 
       {/* Alerta de vencidas */}
       {vencidas > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
-          <p className="text-sm font-medium text-red-900">Tienes {vencidas} factura{vencidas > 1 ? "s" : ""} vencida{vencidas > 1 ? "s" : ""} sin cobrar</p>
-          <p className="text-xs text-red-700 mt-1">Revisa las facturas con fecha de vencimiento pasada y gestiona el cobro.</p>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 dark:bg-red-950/30 dark:border-red-900/50">
+          <p className="text-sm font-medium text-red-900 dark:text-red-200">Tienes {vencidas} factura{vencidas > 1 ? "s" : ""} vencida{vencidas > 1 ? "s" : ""} sin cobrar</p>
+          <p className="text-xs text-red-700 mt-1 dark:text-red-300/90">Revisa las facturas con fecha de vencimiento pasada y gestiona el cobro.</p>
         </div>
       )}
 
       {/* Form */}
       {showForm && (
-        <div className="bg-white rounded-2xl p-5 mb-6 border border-navy-100 shadow-sm">
-          <h3 className="text-sm font-semibold text-navy-900 mb-4">Nueva factura emitida</h3>
+        <div className="bg-white rounded-2xl p-5 mb-6 border border-navy-100 dark:border-zinc-800 dark:bg-zinc-900 shadow-sm dark:shadow-none">
+          <h3 className="text-sm font-semibold text-navy-900 dark:text-white mb-4">Nueva factura emitida</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs text-navy-600 mb-1">Cliente *</label>
+              <label className="block text-xs text-navy-600 dark:text-zinc-400 mb-1">Cliente *</label>
               <select value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })} className={inputCls}>
                 <option value="">Seleccionar...</option>
                 {clients.map((c) => <option key={c.id} value={c.id}>{c.name}{c.nif ? ` (${c.nif})` : ""}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs text-navy-600 mb-1">Obra</label>
+              <label className="block text-xs text-navy-600 dark:text-zinc-400 mb-1">Obra</label>
               <select value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })} className={inputCls}>
                 <option value="">Sin asignar</option>
                 {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs text-navy-600 mb-1">Fecha emisión</label>
+              <label className="block text-xs text-navy-600 dark:text-zinc-400 mb-1">Fecha emisión</label>
               <input type="date" value={form.issue_date} onChange={(e) => setForm({ ...form, issue_date: e.target.value })} className={inputCls} />
             </div>
             <div>
-              <label className="block text-xs text-navy-600 mb-1">Fecha vencimiento</label>
+              <label className="block text-xs text-navy-600 dark:text-zinc-400 mb-1">Fecha vencimiento</label>
               <input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} className={inputCls} />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-xs text-navy-600 mb-1">Notas</label>
+              <label className="block text-xs text-navy-600 dark:text-zinc-400 mb-1">Notas</label>
               <input type="text" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className={inputCls} placeholder="Concepto / observaciones" />
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-4">
-            <button onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-navy-600 hover:text-navy-900">Cancelar</button>
+            <button onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-navy-600 dark:text-zinc-400 hover:text-navy-900">Cancelar</button>
             <button onClick={handleCreate} disabled={saving}
-              className="px-5 py-2 bg-brand-green text-navy-900 rounded-lg text-sm font-medium hover:opacity-90 transition disabled:opacity-50">
+              className="px-5 py-2 bg-brand-green text-navy-900 dark:text-white rounded-lg text-sm font-medium hover:opacity-90 transition disabled:opacity-50">
               {saving ? "Creando..." : "Crear factura"}
             </button>
           </div>
@@ -274,9 +274,9 @@ export default function IssuedInvoicesPage() {
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-4">
         <input type="text" placeholder="Buscar por nº o cliente..." value={search} onChange={(e) => setSearch(e.target.value)}
-          className="bg-white text-navy-900 rounded-lg px-4 py-2 text-sm border border-navy-200 focus:border-brand-green focus:outline-none w-64" />
+          className="bg-white text-navy-900 dark:text-white dark:bg-zinc-900 rounded-lg px-4 py-2 text-sm border border-navy-200 dark:border-zinc-800 dark:placeholder:text-zinc-500 focus:border-brand-green focus:outline-none w-64" />
         <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
-          className="bg-white text-navy-900 rounded-lg px-3 py-2 text-sm border border-navy-200">
+          className="bg-white text-navy-900 dark:text-white dark:bg-zinc-900 rounded-lg px-3 py-2 text-sm border border-navy-200 dark:border-zinc-800">
           <option value="all">Todos los estados</option>
           {Object.entries(statusMap).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           <option value="overdue">Solo vencidas</option>
@@ -284,21 +284,21 @@ export default function IssuedInvoicesPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl overflow-hidden border border-navy-100 shadow-sm">
+      <div className="bg-white rounded-2xl overflow-hidden border border-navy-100 dark:border-zinc-800 dark:bg-zinc-900 shadow-sm dark:shadow-none">
         {filtered.length === 0 ? (
-          <div className="p-8 text-center"><p className="text-navy-500">No hay facturas emitidas{search || filterStatus !== "all" ? " con esos filtros" : ""}.</p></div>
+          <div className="p-8 text-center"><p className="text-navy-500 dark:text-zinc-400">No hay facturas emitidas{search || filterStatus !== "all" ? " con esos filtros" : ""}.</p></div>
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-navy-200 bg-navy-50">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-navy-700 uppercase">Factura</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-navy-700 uppercase">Cliente</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-navy-700 uppercase">Fecha</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-navy-700 uppercase">Vto.</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-navy-700 uppercase">Total</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-navy-700 uppercase">Estado</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-navy-700 uppercase">VF</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-navy-700 uppercase">Acc.</th>
+              <tr className="border-b border-navy-200 dark:border-zinc-800 bg-navy-50 dark:bg-zinc-950/40">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">Factura</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">Cliente</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">Fecha</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">Vto.</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">Total</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">Estado</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">VF</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">Acc.</th>
               </tr>
             </thead>
             <tbody>
@@ -307,27 +307,27 @@ export default function IssuedInvoicesPage() {
                 const isOverdue = inv.due_date && inv.payment_status !== "paid" && inv.status !== "cancelled" && new Date(inv.due_date) < new Date();
                 const days = inv.due_date && isOverdue ? daysSince(inv.due_date) : 0;
                 return (
-                  <tr key={inv.id} className={`border-b border-navy-100 hover:bg-navy-50 transition ${isOverdue ? "bg-red-50" : ""}`}>
+                  <tr key={inv.id} className={`border-b border-navy-100 dark:border-zinc-800 hover:bg-navy-50 dark:hover:bg-zinc-800/50 transition ${isOverdue ? "bg-red-50 dark:bg-red-950/30" : ""}`}>
                     <td className="px-4 py-3">
                       <Link href={`/dashboard/issued-invoices/${inv.id}`} className="text-navy-900 hover:text-brand-green font-mono font-medium transition">
                         {inv.invoice_number}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-navy-700">{inv.client_name}</td>
-                    <td className="px-4 py-3 text-navy-600">{fmtDate(inv.issue_date)}</td>
+                    <td className="px-4 py-3 text-navy-700 dark:text-zinc-300">{inv.client_name}</td>
+                    <td className="px-4 py-3 text-navy-600 dark:text-zinc-400">{fmtDate(inv.issue_date)}</td>
                     <td className="px-4 py-3">
                       <span className={isOverdue ? "text-red-600 font-medium" : "text-navy-600"}>
                         {fmtDate(inv.due_date)}
                       </span>
                       {isOverdue && <span className="ml-1 text-xs text-red-600">({days}d)</span>}
                     </td>
-                    <td className="px-4 py-3 text-right font-medium text-navy-900">{eur(inv.total)}</td>
+                    <td className="px-4 py-3 text-right font-medium text-navy-900 dark:text-white">{eur(inv.total)}</td>
                     <td className="px-4 py-3"><Badge variant={st.variant}>{st.label}</Badge></td>
                     <td className="px-4 py-3 text-center">
                       {inv.verifactu_registered ? (
                         <span className="text-xs text-green-600 font-medium" title="Hash Verifactu registrado">Sí</span>
                       ) : (
-                        <span className="text-xs text-navy-400">No</span>
+                        <span className="text-xs text-navy-400 dark:text-zinc-500">No</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">

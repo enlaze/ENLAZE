@@ -29,15 +29,15 @@ export default function DataTable<T>({
     a === "right" ? "text-right" : a === "center" ? "text-center" : "text-left";
 
   return (
-    <div className="rounded-2xl border border-navy-100 bg-white shadow-sm overflow-hidden">
+    <div className="rounded-2xl border border-navy-100 bg-white shadow-sm overflow-hidden dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-navy-100 bg-navy-50/60">
+            <tr className="border-b border-navy-100 bg-navy-50/60 dark:border-zinc-800 dark:bg-zinc-950/40">
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={`px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-navy-500 ${alignClass(
+                  className={`px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-navy-500 dark:text-zinc-400 ${alignClass(
                     col.align
                   )} ${col.hidden || ""}`}
                 >
@@ -51,14 +51,14 @@ export default function DataTable<T>({
               <tr
                 key={rowKey(row)}
                 onClick={() => onRowClick?.(row)}
-                className={`border-b border-navy-50 transition-colors hover:bg-navy-50/50 ${
+                className={`border-b border-navy-50 transition-colors hover:bg-navy-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/50 ${
                   onRowClick ? "cursor-pointer" : ""
                 }`}
               >
                 {columns.map((col) => (
                   <td
                     key={col.key}
-                    className={`px-5 py-3.5 text-sm ${alignClass(
+                    className={`px-5 py-3.5 text-sm dark:text-zinc-300 ${alignClass(
                       col.align
                     )} ${col.hidden || ""}`}
                   >

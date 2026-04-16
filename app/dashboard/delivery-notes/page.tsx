@@ -159,7 +159,7 @@ export default function DeliveryNotesPage() {
 
       {showForm && (
         <Card className="mb-8">
-          <h3 className="text-base font-semibold text-navy-900 mb-5">Nuevo albarán</h3>
+          <h3 className="text-base font-semibold text-navy-900 dark:text-white mb-5">Nuevo albarán</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-4">
             <FormField label="N.º Albarán">
               <Input type="text" value={form.note_number} onChange={(e) => setForm({ ...form, note_number: e.target.value })} placeholder="ALB-001" />
@@ -210,36 +210,36 @@ export default function DeliveryNotesPage() {
           description="Crea tu primer albarán para registrar recepciones de material"
         />
       ) : (
-        <div className="rounded-2xl border border-navy-100 bg-white shadow-sm overflow-hidden">
+        <div className="rounded-2xl border border-navy-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-navy-100 bg-navy-50/60">
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 uppercase tracking-wider">N.º Albarán</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 uppercase tracking-wider">Proveedor</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 uppercase tracking-wider hidden md:table-cell">Obra</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 uppercase tracking-wider hidden lg:table-cell">Pedido</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 uppercase tracking-wider">Fecha</th>
-                  <th className="px-5 py-3 text-right text-[11px] font-semibold text-navy-500 uppercase tracking-wider">Total</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 uppercase tracking-wider">Estado</th>
-                  <th className="px-5 py-3 text-right text-[11px] font-semibold text-navy-500 uppercase tracking-wider">Acciones</th>
+                <tr className="border-b border-navy-100 dark:border-zinc-800 bg-navy-50 dark:bg-zinc-900/60">
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider">N.º Albarán</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider">Proveedor</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider hidden md:table-cell">Obra</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider hidden lg:table-cell">Pedido</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider">Fecha</th>
+                  <th className="px-5 py-3 text-right text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider">Total</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider">Estado</th>
+                  <th className="px-5 py-3 text-right text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((n) => {
                   const st = statusConfig[n.status] || { label: n.status, variant: "gray" as const };
                   return (
-                    <tr key={n.id} className="border-b border-navy-50 hover:bg-navy-50/40 transition-colors">
+                    <tr key={n.id} className="border-b border-navy-50 hover:bg-navy-50 dark:hover:bg-zinc-800/50 transition-colors">
                       <td className="px-5 py-3.5">
                         <Link href={`/dashboard/delivery-notes/${n.id}`} className="text-navy-900 hover:text-brand-green font-medium font-mono transition-colors">
                           {n.note_number || "Sin n.º"}
                         </Link>
                       </td>
-                      <td className="px-5 py-3.5 text-navy-600">{supplierName(n.supplier_id)}</td>
-                      <td className="px-5 py-3.5 text-navy-600 hidden md:table-cell">{projectName(n.project_id)}</td>
-                      <td className="px-5 py-3.5 text-navy-500 hidden lg:table-cell">{orderLabel(n.order_id)}</td>
-                      <td className="px-5 py-3.5 text-navy-500">{fmtDate(n.reception_date)}</td>
-                      <td className="px-5 py-3.5 text-right font-medium text-navy-900">{eur(n.total)}</td>
+                      <td className="px-5 py-3.5 text-navy-600 dark:text-zinc-400">{supplierName(n.supplier_id)}</td>
+                      <td className="px-5 py-3.5 text-navy-600 dark:text-zinc-400 hidden md:table-cell">{projectName(n.project_id)}</td>
+                      <td className="px-5 py-3.5 text-navy-500 dark:text-zinc-500 hidden lg:table-cell">{orderLabel(n.order_id)}</td>
+                      <td className="px-5 py-3.5 text-navy-500 dark:text-zinc-500">{fmtDate(n.reception_date)}</td>
+                      <td className="px-5 py-3.5 text-right font-medium text-navy-900 dark:text-white">{eur(n.total)}</td>
                       <td className="px-5 py-3.5"><Badge variant={st.variant}>{st.label}</Badge></td>
                       <td className="px-5 py-3.5 text-right">
                         <Link href={`/dashboard/delivery-notes/${n.id}`} className="text-xs text-brand-green hover:underline font-medium mr-3">Detalle</Link>

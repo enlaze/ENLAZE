@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import Link from "next/link";
 import OnboardingChecklist from "@/components/OnboardingChecklist";
+import { logError, formatErrorForUI } from "@/lib/error-handler";
+import ErrorAlert from "@/components/ErrorAlert";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 /* ─────────────────────────────────────────────────────────────────────
  *  Icons — Lucide-style (stroke 1.75, 24×24, rounded)
@@ -142,32 +145,36 @@ export default function DashboardHome() {
   const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
   const [complianceChecks, setComplianceChecks] = useState<ComplianceStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     async function loadDashboard() {
-      /* ── User ─────────────────────────────────────────────── */
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const full = user.user_metadata?.full_name || user.user_metadata?.name || "";
-      setUserName(full ? full.split(" ")[0] : (user.email?.split("@")[0] ?? ""));
+      try {
+        setError(null);
 
-      const months = getLast6Months();
-      const now = new Date();
-      const thisM = now.getMonth();
-      const thisY = now.getFullYear();
-      const prevM = new Date(thisY, thisM - 1, 1);
+        /* ── User ─────────────────────────────────────────────── */
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const full = user.user_metadata?.full_name || user.user_metadata?.name || "";
+        setUserName(full ? full.split(" ")[0] : (user.email?.split("@")[0] ?? ""));
 
-      /* ── Parallel data fetch ────────────────────────────── */
-      const [clientsRes, budgetsRes, invoicesRes, activityRes, legalRes, aiRunsRes, incidentsRes, receivedInvRes] = await Promise.all([
-        supabase.from("clients").select("id, status, created_at"),
-        supabase.from("budgets").select("id, status, total, created_at"),
-        supabase.from("issued_invoices").select("id, status, total, invoice_date, payment_status"),
-        supabase.from("activity_log").select("id, action, entity_type, created_at, metadata").eq("user_id", user.id).order("created_at", { ascending: false }).limit(8),
-        supabase.from("legal_acceptances").select("id").eq("user_id", user.id),
-        supabase.from("ai_runs").select("id, human_reviewed").eq("user_id", user.id),
-        supabase.from("security_incidents").select("id, status"),
-        supabase.from("received_invoices").select("id, status, total, amount_paid, due_date, payment_status"),
-      ]);
+        const months = getLast6Months();
+        const now = new Date();
+        const thisM = now.getMonth();
+        const thisY = now.getFullYear();
+        const prevM = new Date(thisY, thisM - 1, 1);
+
+        /* ── Parallel data fetch ────────────────────────────── */
+        const [clientsRes, budgetsRes, invoicesRes, activityRes, legalRes, aiRunsRes, incidentsRes, receivedInvRes] = await Promise.all([
+          supabase.from("clients").select("id, status, created_at"),
+          supabase.from("budgets").select("id, status, total, created_at"),
+          supabase.from("issued_invoices").select("id, status, total, invoice_date, payment_status"),
+          supabase.from("activity_log").select("id, action, entity_type, created_at, metadata").eq("user_id", user.id).order("created_at", { ascending: false }).limit(8),
+          supabase.from("legal_acceptances").select("id").eq("user_id", user.id),
+          supabase.from("ai_runs").select("id, human_reviewed").eq("user_id", user.id),
+          supabase.from("security_incidents").select("id, status"),
+          supabase.from("received_invoices").select("id, status, total, amount_paid, due_date, payment_status"),
+        ]);
 
       const allC = clientsRes.data ?? [];
       const allB = budgetsRes.data ?? [];
@@ -300,6 +307,15 @@ export default function DashboardHome() {
 
       setComplianceChecks(checks);
       setLoading(false);
+    } catch (err) {
+      // Log error and show friendly message to user
+      logError(err, {
+        component: "DashboardHome",
+        action: "loadDashboard",
+      });
+      setError(err instanceof Error ? err : new Error(String(err)));
+      setLoading(false);
+    }
     }
 
     loadDashboard();
@@ -309,13 +325,38 @@ export default function DashboardHome() {
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-navy-200 border-t-brand-green" />
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-navy-200 dark:border-zinc-800 border-t-brand-green" />
+      </div>
+    );
+  }
+
+  // Show error state if data loading failed
+  if (error) {
+    const formatted = formatErrorForUI(error);
+    return (
+      <div className="space-y-4">
+        <ErrorAlert
+          title={formatted.title}
+          message={formatted.message}
+          variant={formatted.icon === "error" ? "error" : formatted.icon === "warning" ? "warning" : "info"}
+          action={{
+            label: "Recargar dashboard",
+            onClick: () => window.location.reload(),
+          }}
+        />
+        <div className="text-sm text-navy-600 dark:text-zinc-400 p-4 rounded-lg bg-navy-50 border border-navy-100 dark:border-zinc-800">
+          Si el problema persiste, contacta con{" "}
+          <a href="mailto:support@enlaze.es" className="text-brand-green font-medium hover:underline">
+            soporte
+          </a>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
+    <ErrorBoundary name="dashboard-home">
+      <div className="space-y-8">
       {/* ── 1. Header / Greeting ─────────────────────────────────── */}
       <div>
         <div className="flex items-center gap-2">
@@ -323,14 +364,14 @@ export default function DashboardHome() {
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-green/60" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-brand-green" />
           </span>
-          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-400">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-400 dark:text-zinc-500">
             Centro de control
           </span>
         </div>
-        <h1 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 md:text-[2.5rem]">
+        <h1 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 dark:text-white md:text-[2.5rem]">
           {greeting()}, {userName}
         </h1>
-        <p className="mt-1.5 text-[15px] text-navy-500">
+        <p className="mt-1.5 text-[15px] text-navy-500 dark:text-zinc-500">
           Esto es lo que necesita tu atención hoy.
         </p>
       </div>
@@ -349,9 +390,9 @@ export default function DashboardHome() {
       {/* ── 3. Revenue Chart + Budget Breakdown ──────────────────── */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Revenue Chart (2 cols) */}
-        <section className="lg:col-span-2 overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-[0_1px_2px_rgba(10,25,41,0.04)]">
-          <div className="flex items-center justify-between border-b border-navy-100 px-6 py-4">
-            <h2 className="text-[14px] font-semibold text-navy-900">Evolución de ingresos</h2>
+        <section className="lg:col-span-2 overflow-hidden rounded-2xl border border-navy-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-[0_1px_2px_rgba(10,25,41,0.04)]">
+          <div className="flex items-center justify-between border-b border-navy-100 dark:border-zinc-800 px-6 py-4">
+            <h2 className="text-[14px] font-semibold text-navy-900 dark:text-white">Evolución de ingresos</h2>
             <div className="flex items-center gap-4 text-[11px]">
               <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-brand-green" /> Aceptados</span>
               <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-sky-400" /> Facturado</span>
@@ -363,9 +404,9 @@ export default function DashboardHome() {
         </section>
 
         {/* Budget Breakdown (1 col) */}
-        <section className="overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-[0_1px_2px_rgba(10,25,41,0.04)]">
-          <div className="border-b border-navy-100 px-6 py-4">
-            <h2 className="text-[14px] font-semibold text-navy-900">Presupuestos por estado</h2>
+        <section className="overflow-hidden rounded-2xl border border-navy-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-[0_1px_2px_rgba(10,25,41,0.04)]">
+          <div className="border-b border-navy-100 dark:border-zinc-800 px-6 py-4">
+            <h2 className="text-[14px] font-semibold text-navy-900 dark:text-white">Presupuestos por estado</h2>
           </div>
           <div className="px-6 py-6">
             <DonutChart data={budgetBreakdown} />
@@ -374,9 +415,9 @@ export default function DashboardHome() {
                 <div key={b.status} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="h-3 w-3 rounded-full" style={{ backgroundColor: b.color }} />
-                    <span className="text-[13px] text-navy-700">{b.label}</span>
+                    <span className="text-[13px] text-navy-700 dark:text-zinc-300">{b.label}</span>
                   </div>
-                  <span className="text-[13px] font-semibold tabular-nums text-navy-900">{b.count}</span>
+                  <span className="text-[13px] font-semibold tabular-nums text-navy-900 dark:text-white">{b.count}</span>
                 </div>
               ))}
             </div>
@@ -387,10 +428,10 @@ export default function DashboardHome() {
       {/* ── 4. Alerts + Outstanding + Compliance ─────────────────── */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Alerts */}
-        <section className="overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-[0_1px_2px_rgba(10,25,41,0.04)]">
-          <div className="flex items-center gap-2 border-b border-navy-100 px-6 py-4">
+        <section className="overflow-hidden rounded-2xl border border-navy-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-[0_1px_2px_rgba(10,25,41,0.04)]">
+          <div className="flex items-center gap-2 border-b border-navy-100 dark:border-zinc-800 px-6 py-4">
             <IcoAlert size={16} className="text-amber-500" />
-            <h2 className="text-[14px] font-semibold text-navy-900">Requiere atención</h2>
+            <h2 className="text-[14px] font-semibold text-navy-900 dark:text-white">Requiere atención</h2>
           </div>
           <ul className="divide-y divide-navy-50">
             <AlertRow label="Facturas por cobrar" count={kpi.invoicesUnpaid} href="/dashboard/issued-invoices" severity="danger" />
@@ -407,11 +448,11 @@ export default function DashboardHome() {
         </section>
 
         {/* Compliance Summary */}
-        <section className="overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-[0_1px_2px_rgba(10,25,41,0.04)]">
-          <div className="flex items-center gap-2 border-b border-navy-100 px-6 py-4">
+        <section className="overflow-hidden rounded-2xl border border-navy-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-[0_1px_2px_rgba(10,25,41,0.04)]">
+          <div className="flex items-center gap-2 border-b border-navy-100 dark:border-zinc-800 px-6 py-4">
             <IcoShield size={16} className="text-brand-green" />
-            <h2 className="text-[14px] font-semibold text-navy-900">Compliance</h2>
-            <Link href="/dashboard/compliance" className="ml-auto text-[11px] text-navy-500 hover:text-brand-green">
+            <h2 className="text-[14px] font-semibold text-navy-900 dark:text-white">Compliance</h2>
+            <Link href="/dashboard/compliance" className="ml-auto text-[11px] text-navy-500 dark:text-zinc-500 hover:text-brand-green">
               Ver todo →
             </Link>
           </div>
@@ -423,7 +464,7 @@ export default function DashboardHome() {
                 }`} />
                 <div className="min-w-0 flex-1">
                   <p className="text-[13px] font-medium text-navy-800">{c.label}</p>
-                  <p className="text-[11px] text-navy-400 truncate">{c.detail}</p>
+                  <p className="text-[11px] text-navy-400 dark:text-zinc-500 truncate">{c.detail}</p>
                 </div>
               </li>
             ))}
@@ -431,28 +472,28 @@ export default function DashboardHome() {
         </section>
 
         {/* Recent Activity */}
-        <section className="overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-[0_1px_2px_rgba(10,25,41,0.04)]">
-          <div className="flex items-center gap-2 border-b border-navy-100 px-6 py-4">
-            <IcoClock size={16} className="text-navy-500" />
-            <h2 className="text-[14px] font-semibold text-navy-900">Actividad reciente</h2>
-            <Link href="/dashboard/audit-log" className="ml-auto text-[11px] text-navy-500 hover:text-brand-green">
+        <section className="overflow-hidden rounded-2xl border border-navy-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-[0_1px_2px_rgba(10,25,41,0.04)]">
+          <div className="flex items-center gap-2 border-b border-navy-100 dark:border-zinc-800 px-6 py-4">
+            <IcoClock size={16} className="text-navy-500 dark:text-zinc-500" />
+            <h2 className="text-[14px] font-semibold text-navy-900 dark:text-white">Actividad reciente</h2>
+            <Link href="/dashboard/audit-log" className="ml-auto text-[11px] text-navy-500 dark:text-zinc-500 hover:text-brand-green">
               Ver todo →
             </Link>
           </div>
           {recentActivity.length === 0 ? (
-            <div className="px-6 py-10 text-center text-[13px] text-navy-400">
+            <div className="px-6 py-10 text-center text-[13px] text-navy-400 dark:text-zinc-500">
               No hay actividad registrada aún.
             </div>
           ) : (
             <ul className="divide-y divide-navy-50">
               {recentActivity.slice(0, 6).map(a => (
                 <li key={a.id} className="px-6 py-3">
-                  <p className="text-[13px] text-navy-700">{actionLabel(a.action)}</p>
-                  <p className="text-[11px] text-navy-400 mt-0.5">
+                  <p className="text-[13px] text-navy-700 dark:text-zinc-300">{actionLabel(a.action)}</p>
+                  <p className="text-[11px] text-navy-400 dark:text-zinc-500 mt-0.5">
                     {new Date(a.created_at).toLocaleDateString("es-ES", {
                       day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
                     })}
-                    {a.entity_type && <span className="ml-2 rounded bg-navy-50 px-1 py-0.5 text-[10px] uppercase">{a.entity_type}</span>}
+                    {a.entity_type && <span className="ml-2 rounded bg-navy-50 dark:bg-zinc-900/50 px-1 py-0.5 text-[10px] uppercase text-navy-600 dark:text-zinc-400">{a.entity_type}</span>}
                   </p>
                 </li>
               ))}
@@ -463,7 +504,7 @@ export default function DashboardHome() {
 
       {/* ── 5. Quick links ───────────────────────────────────────── */}
       <section>
-        <h2 className="mb-4 text-[12px] font-semibold uppercase tracking-[0.12em] text-navy-400">
+        <h2 className="mb-4 text-[12px] font-semibold uppercase tracking-[0.12em] text-navy-400 dark:text-zinc-500">
           Accesos rápidos
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -473,7 +514,8 @@ export default function DashboardHome() {
           <QuickLink icon={<IcoCalendar size={18} />} label="Ver calendario" href="/dashboard/calendar" />
         </div>
       </section>
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }
 
@@ -482,7 +524,7 @@ export default function DashboardHome() {
  * ──────────────────────────────────────────────────────────────────── */
 
 function BarChart({ data }: { data: MonthlyRevenue[] }) {
-  if (data.length === 0) return <p className="text-[13px] text-navy-400 text-center py-8">Sin datos</p>;
+  if (data.length === 0) return <p className="text-[13px] text-navy-400 dark:text-zinc-500 text-center py-8">Sin datos</p>;
 
   const maxVal = Math.max(...data.flatMap(d => [d.income, d.invoiced]), 1);
   const chartH = 160;
@@ -536,7 +578,7 @@ function BarChart({ data }: { data: MonthlyRevenue[] }) {
 
 function DonutChart({ data }: { data: BudgetBreakdown[] }) {
   const total = data.reduce((s, d) => s + d.count, 0);
-  if (total === 0) return <p className="text-[13px] text-navy-400 text-center py-4">Sin presupuestos</p>;
+  if (total === 0) return <p className="text-[13px] text-navy-400 dark:text-zinc-500 text-center py-4">Sin presupuestos</p>;
 
   const size = 120;
   const strokeW = 20;
@@ -569,8 +611,8 @@ function DonutChart({ data }: { data: BudgetBreakdown[] }) {
         ))}
       </svg>
       <div className="absolute text-center">
-        <p className="text-2xl font-bold text-navy-900">{total}</p>
-        <p className="text-[10px] text-navy-400">Total</p>
+        <p className="text-2xl font-bold text-navy-900 dark:text-white">{total}</p>
+        <p className="text-[10px] text-navy-400 dark:text-zinc-500">Total</p>
       </div>
     </div>
   );
@@ -588,25 +630,25 @@ function KpiCard({
 }) {
   return (
     <div className={`
-      relative overflow-hidden rounded-2xl border bg-white p-6
+      relative overflow-hidden rounded-2xl border bg-white dark:bg-zinc-900 p-6
       shadow-[0_1px_2px_rgba(10,25,41,0.04)]
       transition-all duration-300 hover:-translate-y-[2px]
       hover:shadow-[0_12px_32px_-16px_rgba(10,25,41,0.18)]
       ${featured
         ? "border-brand-green/20 shadow-[0_1px_2px_rgba(10,25,41,0.04),0_20px_48px_-24px_rgba(0,200,150,0.2)]"
-        : "border-navy-100"
+        : "border-navy-100 dark:border-zinc-800"
       }
     `}>
       {featured && <div aria-hidden className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-green/60 to-transparent" />}
       <div className={`
         flex h-10 w-10 items-center justify-center rounded-xl ring-1 ring-inset
-        ${featured ? "bg-brand-green/10 text-brand-green ring-brand-green/20" : "bg-navy-50 text-navy-600 ring-navy-100"}
+        ${featured ? "bg-brand-green/10 text-brand-green ring-brand-green/20" : "bg-navy-50 text-navy-600 dark:text-zinc-400 ring-navy-100"}
       `}>
         {icon}
       </div>
-      <p className="mt-5 text-[12.5px] font-medium text-navy-500">{label}</p>
+      <p className="mt-5 text-[12.5px] font-medium text-navy-500 dark:text-zinc-500">{label}</p>
       <div className="mt-1 flex items-end gap-2.5">
-        <p className="text-[2rem] font-semibold tabular-nums tracking-[-0.02em] text-navy-900">{value}</p>
+        <p className="text-[2rem] font-semibold tabular-nums tracking-[-0.02em] text-navy-900 dark:text-white">{value}</p>
         {trend !== undefined && trend !== 0 && (
           <span className={`
             mb-1 inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums
@@ -621,7 +663,7 @@ function KpiCard({
           </span>
         )}
       </div>
-      {sub && <p className="mt-0.5 text-[11.5px] text-navy-400">{sub}</p>}
+      {sub && <p className="mt-0.5 text-[11.5px] text-navy-400 dark:text-zinc-500">{sub}</p>}
     </div>
   );
 }
@@ -639,8 +681,8 @@ function AlertRow({
   };
   return (
     <li>
-      <Link href={href} className="group flex items-center justify-between px-6 py-4 transition-colors hover:bg-navy-50/60">
-        <span className="text-[13.5px] font-medium text-navy-700 group-hover:text-navy-900">{label}</span>
+      <Link href={href} className="group flex items-center justify-between px-6 py-4 transition-colors hover:bg-navy-50 dark:hover:bg-zinc-800/50/60">
+        <span className="text-[13.5px] font-medium text-navy-700 dark:text-zinc-300 group-hover:text-navy-900 dark:text-white">{label}</span>
         <span className={`flex h-6 min-w-6 items-center justify-center rounded-full px-2 text-[11px] font-bold tabular-nums ring-1 ring-inset ${colors[severity]}`}>
           {customValue || count}
         </span>
@@ -652,14 +694,14 @@ function AlertRow({
 function QuickLink({ icon, label, href }: { icon: React.ReactNode; label: string; href: string }) {
   return (
     <Link href={href} className="
-      group flex items-center gap-3 rounded-2xl border border-navy-100 bg-white px-5 py-4
+      group flex items-center gap-3 rounded-2xl border border-navy-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-5 py-4
       shadow-[0_1px_2px_rgba(10,25,41,0.04)] transition-all duration-200
       hover:-translate-y-[1px] hover:border-brand-green/30 hover:shadow-[0_8px_24px_-12px_rgba(0,200,150,0.2)]
     ">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-navy-50 text-navy-600 ring-1 ring-inset ring-navy-100 transition-colors group-hover:bg-brand-green/10 group-hover:text-brand-green group-hover:ring-brand-green/20">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-navy-50 text-navy-600 dark:text-zinc-400 ring-1 ring-inset ring-navy-100 transition-colors group-hover:bg-brand-green/10 group-hover:text-brand-green group-hover:ring-brand-green/20">
         {icon}
       </span>
-      <span className="text-[13.5px] font-medium text-navy-700 group-hover:text-navy-900">{label}</span>
+      <span className="text-[13.5px] font-medium text-navy-700 dark:text-zinc-300 group-hover:text-navy-900 dark:text-white">{label}</span>
     </Link>
   );
 }

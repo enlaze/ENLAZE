@@ -366,7 +366,7 @@ export default function GenerateBudgetPage() {
                         <p className="text-sm font-medium text-[var(--color-navy-100)]">{p.concept}</p>
                         {p.description && <p className="text-xs text-[var(--color-navy-400)]">{p.description}</p>}
                       </td>
-                      <td className="px-3 py-3 text-center"><span className={"text-xs px-2 py-1 rounded-full " + (p.category === "material" ? "bg-blue-900/30 text-blue-300" : p.category === "mano_obra" ? "bg-orange-900/30 text-orange-300" : "bg-gray-700 text-gray-300")}>{(() => { const cats = budgetCategories(); const catMap = Object.fromEntries(cats.map(c => [c.value, c.label])); return (catMap[p.category] || fallbackCategoryLabels[p.category] || p.category); })()}</span></td>
+                      <td className="px-3 py-3 text-center"><span className={"text-xs px-2 py-1 rounded-full " + (p.category === "material" ? "bg-blue-900/30 text-blue-300" : p.category === "mano_obra" ? "bg-orange-900/30 text-orange-300" : "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400")}>{(() => { const cats = budgetCategories(); const catMap = Object.fromEntries(cats.map(c => [c.value, c.label])); return (catMap[p.category] || fallbackCategoryLabels[p.category] || p.category); })()}</span></td>
                       <td className="px-3 py-3 text-center text-sm text-[var(--color-navy-200)]">{p.quantity} {unitLabel[p.unit] || p.unit}</td>
                       <td className="px-3 py-3 text-right text-sm text-[var(--color-navy-400)]">{p.unit_price.toFixed(2)}</td>
                       <td className="px-3 py-3 text-right text-sm text-[var(--color-navy-200)]">{p.unit_price_client.toFixed(2)}</td>

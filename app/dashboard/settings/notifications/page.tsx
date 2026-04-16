@@ -130,7 +130,7 @@ export default function NotificationPreferencesPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-navy-200 border-t-brand-green" />
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-navy-200 dark:border-zinc-800 border-t-brand-green" />
       </div>
     );
   }
@@ -140,28 +140,28 @@ export default function NotificationPreferencesPage() {
       <div className="mb-6">
         <Link
           href="/dashboard/settings"
-          className="text-sm text-navy-500 hover:text-navy-700 mb-2 inline-block"
+          className="text-sm text-navy-500 dark:text-zinc-500 hover:text-navy-700 mb-2 inline-block"
         >
           &larr; Volver a Ajustes
         </Link>
-        <h1 className="text-2xl font-bold text-navy-900">
+        <h1 className="text-2xl font-bold text-navy-900 dark:text-white">
           Preferencias de notificaciones
         </h1>
-        <p className="text-sm text-navy-500 mt-1">
+        <p className="text-sm text-navy-500 dark:text-zinc-500 mt-1">
           Elige cómo y cuándo quieres recibir alertas
         </p>
       </div>
 
-      <div className="rounded-2xl border border-navy-100 bg-white shadow-sm overflow-hidden">
+      <div className="rounded-2xl border border-navy-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden">
         {/* Table header */}
-        <div className="grid grid-cols-[1fr,80px,80px] items-center gap-4 border-b border-navy-100 bg-navy-50/50 px-6 py-3">
-          <span className="text-xs font-semibold text-navy-500 uppercase tracking-wider">
+        <div className="grid grid-cols-[1fr,80px,80px] items-center gap-4 border-b border-navy-100 dark:border-zinc-800 bg-navy-50 dark:bg-zinc-900/50 px-6 py-3">
+          <span className="text-xs font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider">
             Categoría
           </span>
-          <span className="text-xs font-semibold text-navy-500 uppercase tracking-wider text-center">
+          <span className="text-xs font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider text-center">
             In-App
           </span>
-          <span className="text-xs font-semibold text-navy-500 uppercase tracking-wider text-center">
+          <span className="text-xs font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider text-center">
             Email
           </span>
         </div>
@@ -179,10 +179,10 @@ export default function NotificationPreferencesPage() {
               <div className="flex items-center gap-3">
                 <span className="text-xl">{cat.icon}</span>
                 <div>
-                  <p className="text-sm font-medium text-navy-900">
+                  <p className="text-sm font-medium text-navy-900 dark:text-white">
                     {cat.label}
                   </p>
-                  <p className="text-xs text-navy-500">{cat.description}</p>
+                  <p className="text-xs text-navy-500 dark:text-zinc-500">{cat.description}</p>
                 </div>
               </div>
 
@@ -197,7 +197,7 @@ export default function NotificationPreferencesPage() {
                   }`}
                 >
                   <span
-                    className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white dark:bg-zinc-900 shadow transition-transform ${
                       pref?.in_app ? "translate-x-5" : ""
                     }`}
                   />
@@ -215,7 +215,7 @@ export default function NotificationPreferencesPage() {
                   }`}
                 >
                   <span
-                    className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white dark:bg-zinc-900 shadow transition-transform ${
                       pref?.email ? "translate-x-5" : ""
                     }`}
                   />
@@ -241,8 +241,8 @@ export default function NotificationPreferencesPage() {
       </div>
 
       {/* Info */}
-      <div className="mt-6 rounded-xl bg-navy-50 p-4">
-        <p className="text-xs text-navy-500">
+      <div className="mt-6 rounded-xl bg-navy-50 dark:bg-zinc-900 p-4">
+        <p className="text-xs text-navy-500 dark:text-zinc-500">
           <strong>Nota:</strong> Las notificaciones in-app aparecen en la
           campana del menú superior. Las notificaciones por email se envían a tu
           dirección de correo registrada. Puedes desactivar categorías

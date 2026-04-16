@@ -26,7 +26,7 @@ interface ProjectMin { id: string; name: string; }
 /* ═══════════════ Labels ═══════════════ */
 
 const statusMap: Record<string, { label: string; color: string }> = {
-  draft: { label: "Borrador", color: "bg-gray-700 text-gray-300" },
+  draft: { label: "Borrador", color: "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400" },
   sent: { label: "Enviado", color: "bg-blue-900/30 text-blue-300" },
   confirmed: { label: "Confirmado", color: "bg-emerald-900/30 text-emerald-300" },
   partial: { label: "Parcial", color: "bg-yellow-900/30 text-yellow-300" },
@@ -166,7 +166,7 @@ export default function OrderDetailPage() {
   }
   if (!order) return null;
 
-  const st = statusMap[order.status] || { label: order.status, color: "bg-gray-700 text-gray-300" };
+  const st = statusMap[order.status] || { label: order.status, color: "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400" };
 
   return (
     <div className="max-w-5xl mx-auto">

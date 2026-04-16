@@ -215,7 +215,7 @@ export default function DeliveryNoteDetailPage() {
   }
   if (!note) return null;
 
-  const st = statusMap[note.status] || { label: note.status, color: "bg-gray-700 text-gray-300" };
+  const st = statusMap[note.status] || { label: note.status, color: "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400" };
 
   return (
     <div className="max-w-5xl mx-auto">

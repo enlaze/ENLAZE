@@ -167,9 +167,9 @@ export default function SearchCommand() {
 
       {/* Modal */}
       <div className="relative mx-auto mt-[15vh] w-full max-w-lg px-4">
-        <div className="overflow-hidden rounded-2xl border border-navy-200 bg-white shadow-2xl">
+        <div className="overflow-hidden rounded-2xl border border-navy-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
           {/* Search input */}
-          <div className="flex items-center gap-3 border-b border-navy-100 px-4 py-3">
+          <div className="flex items-center gap-3 border-b border-navy-100 px-4 py-3 dark:border-zinc-800">
             <svg
               width="18"
               height="18"
@@ -179,7 +179,7 @@ export default function SearchCommand() {
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="shrink-0 text-navy-400"
+              className="shrink-0 text-navy-400 dark:text-zinc-500"
             >
               <circle cx="11" cy="11" r="8" />
               <path d="m21 21-4.3-4.3" />
@@ -191,29 +191,29 @@ export default function SearchCommand() {
               onChange={(e) => handleQueryChange(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Buscar clientes, presupuestos, facturas…"
-              className="flex-1 bg-transparent text-sm text-navy-900 placeholder:text-navy-400 focus:outline-none"
+              className="flex-1 bg-transparent text-sm text-navy-900 placeholder:text-navy-400 focus:outline-none dark:text-white dark:placeholder:text-zinc-500"
             />
             {loading && (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-navy-200 border-t-brand-green" />
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-navy-200 border-t-brand-green dark:border-zinc-800 dark:border-t-brand-green" />
             )}
-            <kbd className="hidden sm:inline-flex h-5 items-center rounded border border-navy-200 bg-navy-50 px-1.5 text-[10px] font-medium text-navy-400">
+            <kbd className="hidden sm:inline-flex h-5 items-center rounded border border-navy-200 bg-navy-50 px-1.5 text-[10px] font-medium text-navy-400 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-400">
               ESC
             </kbd>
           </div>
 
           {/* Results */}
-          <div className="max-h-[50vh] overflow-y-auto">
+          <div className="max-h-[50vh] overflow-y-auto dark:bg-zinc-900">
             {query.length >= 2 ? (
               results.length === 0 && !loading ? (
                 <div className="px-4 py-8 text-center">
-                  <p className="text-sm text-navy-400">
+                  <p className="text-sm text-navy-400 dark:text-zinc-500">
                     No se encontraron resultados para &quot;{query}&quot;
                   </p>
                 </div>
               ) : (
                 Object.entries(grouped).map(([type, groupItems]) => (
                   <div key={type}>
-                    <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-navy-400">
+                    <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-navy-400 dark:text-zinc-500">
                       {typeLabels[type] || type}
                     </p>
                     {groupItems.map((item) => {
@@ -226,24 +226,24 @@ export default function SearchCommand() {
                           onClick={() => navigate(item.href)}
                           onMouseEnter={() => setSelectedIndex(idx)}
                           className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                            isSelected ? "bg-brand-green/10" : "hover:bg-navy-50"
+                            isSelected ? "bg-brand-green/10 dark:bg-brand-green/20" : "hover:bg-navy-50 dark:hover:bg-zinc-800"
                           }`}
                         >
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-navy-50 text-sm">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-navy-50 text-sm dark:bg-zinc-800">
                             {item.icon}
                           </span>
                           <div className="min-w-0 flex-1">
                             <p
                               className={`truncate text-sm ${
                                 isSelected
-                                  ? "font-semibold text-navy-900"
-                                  : "font-medium text-navy-800"
+                                  ? "font-semibold text-navy-900 dark:text-white"
+                                  : "font-medium text-navy-800 dark:text-zinc-300"
                               }`}
                             >
                               {item.label}
                             </p>
                             {item.subtitle && (
-                              <p className="truncate text-[11px] text-navy-400">
+                              <p className="truncate text-[11px] text-navy-400 dark:text-zinc-500">
                                 {item.subtitle}
                               </p>
                             )}
@@ -270,7 +270,7 @@ export default function SearchCommand() {
             ) : (
               /* Quick actions when no query */
               <div>
-                <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-navy-400">
+                <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-navy-400 dark:text-zinc-500">
                   Acciones rápidas
                 </p>
                 {quickActions.map((a, i) => {
@@ -281,22 +281,22 @@ export default function SearchCommand() {
                       onClick={() => navigate(a.href)}
                       onMouseEnter={() => setSelectedIndex(i)}
                       className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                        isSelected ? "bg-brand-green/10" : "hover:bg-navy-50"
+                        isSelected ? "bg-brand-green/10 dark:bg-brand-green/20" : "hover:bg-navy-50 dark:hover:bg-zinc-800"
                       }`}
                     >
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-navy-50 text-sm">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-navy-50 text-sm dark:bg-zinc-800">
                         {a.icon}
                       </span>
                       <span
                         className={`flex-1 text-sm ${
                           isSelected
-                            ? "font-semibold text-navy-900"
-                            : "font-medium text-navy-700"
+                            ? "font-semibold text-navy-900 dark:text-white"
+                            : "font-medium text-navy-700 dark:text-zinc-300"
                         }`}
                       >
                         {a.label}
                       </span>
-                      <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-navy-200 bg-navy-50 px-1.5 py-0.5 text-[10px] font-mono text-navy-400">
+                      <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-navy-200 bg-navy-50 px-1.5 py-0.5 text-[10px] font-mono text-navy-400 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-400">
                         {a.keys}
                       </kbd>
                     </button>
@@ -307,18 +307,18 @@ export default function SearchCommand() {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between border-t border-navy-100 px-4 py-2">
-            <div className="flex items-center gap-3 text-[10px] text-navy-400">
+          <div className="flex items-center justify-between border-t border-navy-100 px-4 py-2 dark:border-zinc-800">
+            <div className="flex items-center gap-3 text-[10px] text-navy-400 dark:text-zinc-500">
               <span className="flex items-center gap-1">
-                <kbd className="rounded border border-navy-200 bg-navy-50 px-1 py-0.5 font-mono">↑↓</kbd>
+                <kbd className="rounded border border-navy-200 bg-navy-50 px-1 py-0.5 font-mono dark:border-zinc-800 dark:bg-zinc-800">↑↓</kbd>
                 Navegar
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="rounded border border-navy-200 bg-navy-50 px-1 py-0.5 font-mono">↵</kbd>
+                <kbd className="rounded border border-navy-200 bg-navy-50 px-1 py-0.5 font-mono dark:border-zinc-800 dark:bg-zinc-800">↵</kbd>
                 Abrir
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="rounded border border-navy-200 bg-navy-50 px-1 py-0.5 font-mono">esc</kbd>
+                <kbd className="rounded border border-navy-200 bg-navy-50 px-1 py-0.5 font-mono dark:border-zinc-800 dark:bg-zinc-800">esc</kbd>
                 Cerrar
               </span>
             </div>

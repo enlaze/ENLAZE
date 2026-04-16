@@ -156,7 +156,7 @@ export default function OrdersPage() {
 
       {showForm && (
         <Card className="mb-8">
-          <h3 className="text-base font-semibold text-navy-900 mb-5">Nuevo pedido</h3>
+          <h3 className="text-base font-semibold text-navy-900 dark:text-white mb-5">Nuevo pedido</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-4">
             <FormField label="Título" required className="md:col-span-2">
               <Input type="text" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Ej: Material fontanería planta 2" />
@@ -211,35 +211,35 @@ export default function OrdersPage() {
           description="Crea tu primer pedido para empezar a gestionar compras"
         />
       ) : (
-        <div className="rounded-2xl border border-navy-100 bg-white shadow-sm overflow-hidden">
+        <div className="rounded-2xl border border-navy-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-navy-100 bg-navy-50/60">
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 uppercase tracking-wider">Pedido</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 uppercase tracking-wider">Proveedor</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 uppercase tracking-wider hidden md:table-cell">Obra</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 uppercase tracking-wider">Fecha</th>
-                  <th className="px-5 py-3 text-right text-[11px] font-semibold text-navy-500 uppercase tracking-wider">Total</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 uppercase tracking-wider">Estado</th>
-                  <th className="px-5 py-3 text-right text-[11px] font-semibold text-navy-500 uppercase tracking-wider">Acciones</th>
+                <tr className="border-b border-navy-100 dark:border-zinc-800 bg-navy-50 dark:bg-zinc-900/60">
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider">Pedido</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider">Proveedor</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider hidden md:table-cell">Obra</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider">Fecha</th>
+                  <th className="px-5 py-3 text-right text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider">Total</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider">Estado</th>
+                  <th className="px-5 py-3 text-right text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((o) => {
                   const st = statusConfig[o.status] || { label: o.status, variant: "gray" as const };
                   return (
-                    <tr key={o.id} className="border-b border-navy-50 hover:bg-navy-50/40 transition-colors">
+                    <tr key={o.id} className="border-b border-navy-50 hover:bg-navy-50 dark:hover:bg-zinc-800/50 transition-colors">
                       <td className="px-5 py-3.5">
                         <Link href={`/dashboard/orders/${o.id}`} className="text-navy-900 hover:text-brand-green font-medium transition-colors">
                           {o.title}
                         </Link>
-                        {o.order_number && <p className="text-xs text-navy-400 font-mono">{o.order_number}</p>}
+                        {o.order_number && <p className="text-xs text-navy-400 dark:text-zinc-500 font-mono">{o.order_number}</p>}
                       </td>
-                      <td className="px-5 py-3.5 text-navy-600">{supplierName(o.supplier_id)}</td>
-                      <td className="px-5 py-3.5 text-navy-600 hidden md:table-cell">{projectName(o.project_id)}</td>
-                      <td className="px-5 py-3.5 text-navy-500">{fmtDate(o.order_date)}</td>
-                      <td className="px-5 py-3.5 text-right font-medium text-navy-900">{eur(o.total)}</td>
+                      <td className="px-5 py-3.5 text-navy-600 dark:text-zinc-400">{supplierName(o.supplier_id)}</td>
+                      <td className="px-5 py-3.5 text-navy-600 dark:text-zinc-400 hidden md:table-cell">{projectName(o.project_id)}</td>
+                      <td className="px-5 py-3.5 text-navy-500 dark:text-zinc-500">{fmtDate(o.order_date)}</td>
+                      <td className="px-5 py-3.5 text-right font-medium text-navy-900 dark:text-white">{eur(o.total)}</td>
                       <td className="px-5 py-3.5"><Badge variant={st.variant}>{st.label}</Badge></td>
                       <td className="px-5 py-3.5 text-right">
                         <Link href={`/dashboard/orders/${o.id}`} className="text-xs text-brand-green hover:underline font-medium mr-3">Detalle</Link>

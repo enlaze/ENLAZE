@@ -43,16 +43,17 @@ export default function KpiCard({
     <div
       className={`
         group relative flex flex-col justify-between overflow-hidden
-        rounded-2xl border bg-white
+        rounded-2xl border bg-white dark:bg-zinc-900
         p-7 lg:p-8
-        shadow-[0_1px_2px_rgba(10,25,41,0.04)]
+        shadow-[0_1px_2px_rgba(10,25,41,0.04)] dark:shadow-none
         transition-all duration-300 ease-out
         hover:-translate-y-[2px]
         hover:shadow-[0_12px_32px_-16px_rgba(10,25,41,0.18)]
+        dark:hover:shadow-none
         ${
           isFeatured
-            ? "border-brand-green/20 hover:border-brand-green/30"
-            : "border-navy-100 hover:border-navy-200"
+            ? "border-brand-green/20 hover:border-brand-green/30 dark:border-brand-green/30 dark:hover:border-brand-green/50"
+            : "border-navy-100 hover:border-navy-200 dark:border-zinc-800 dark:hover:border-zinc-700"
         }
       `}
     >
@@ -74,7 +75,7 @@ export default function KpiCard({
       <div className="relative flex items-center justify-between gap-4">
         <p
           className={`text-[11px] font-semibold uppercase tracking-[0.1em] ${
-            isFeatured ? "text-brand-green" : "text-navy-500"
+            isFeatured ? "text-brand-green" : "text-navy-500 dark:text-zinc-500"
           }`}
         >
           {label}
@@ -88,7 +89,7 @@ export default function KpiCard({
               ${
                 isFeatured
                   ? "bg-brand-green/10 text-brand-green ring-1 ring-inset ring-brand-green/15"
-                  : "bg-navy-50 text-navy-600 ring-1 ring-inset ring-navy-100 group-hover:bg-navy-100/80"
+                  : "bg-navy-50 text-navy-600 ring-1 ring-inset ring-navy-100 group-hover:bg-navy-100/80 dark:bg-zinc-800 dark:text-zinc-300 dark:ring-zinc-800 dark:group-hover:bg-zinc-800/70"
               }
             `}
           >
@@ -103,7 +104,7 @@ export default function KpiCard({
           relative mt-8
           text-[2.75rem] lg:text-[3rem]
           font-semibold leading-none tracking-[-0.02em]
-          text-navy-900
+          text-navy-900 dark:text-white
           tabular-nums
         "
       >
@@ -120,7 +121,7 @@ export default function KpiCard({
                 ${
                   trendPositive
                     ? "bg-brand-green/10 text-brand-green"
-                    : "bg-red-50 text-red-600"
+                    : "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400"
                 }
               `}
             >
@@ -140,10 +141,10 @@ export default function KpiCard({
               </svg>
               {Math.abs(trend.value).toFixed(1)}%
             </span>
-            {trend.label && <span className="text-navy-500">{trend.label}</span>}
+            {trend.label && <span className="text-navy-500 dark:text-zinc-500">{trend.label}</span>}
           </>
         ) : (
-          hint && <span className="text-navy-500">{hint}</span>
+          hint && <span className="text-navy-500 dark:text-zinc-500">{hint}</span>
         )}
       </div>
     </div>

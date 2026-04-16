@@ -506,7 +506,7 @@ export default function BudgetDetailPage() {
                     <span className={`text-xs px-2 py-1 rounded-full ${
                       item.category === "material" ? "bg-blue-900/30 text-blue-300" :
                       item.category === "mano_obra" ? "bg-orange-900/30 text-orange-300" :
-                      "bg-gray-700 text-gray-300"
+                      "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400"
                     }`}>
                       {(() => { const cats = budgetCategories(); const categoryLabels = Object.fromEntries(cats.map(c => [c.value, c.label])); return categoryLabels[item.category] || fallbackCategoryLabels[item.category] || item.category; })()}
                     </span>

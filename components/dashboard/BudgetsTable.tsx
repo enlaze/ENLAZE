@@ -37,32 +37,33 @@ export default function BudgetsTable({
       className="
         overflow-hidden rounded-2xl border border-navy-100 bg-white
         shadow-[0_1px_2px_rgba(10,25,41,0.04)]
+        dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none
       "
     >
       {/* Header de la sección */}
       <header className="flex items-start justify-between gap-4 px-8 pt-7 pb-6">
         <div>
-          <h2 className="text-[17px] font-semibold tracking-tight text-navy-900">
+          <h2 className="text-[17px] font-semibold tracking-tight text-navy-900 dark:text-white">
             {title}
           </h2>
-          <p className="mt-1 text-sm text-navy-500">{description}</p>
+          <p className="mt-1 text-sm text-navy-500 dark:text-zinc-400">{description}</p>
         </div>
       </header>
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-y border-navy-100/80 bg-navy-50/40 text-left">
-              <th className="px-8 py-3.5 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-navy-500">
+            <tr className="border-y border-navy-100/80 bg-navy-50/40 text-left dark:border-zinc-800 dark:bg-zinc-950/40">
+              <th className="px-8 py-3.5 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-navy-500 dark:text-zinc-500">
                 Cliente
               </th>
-              <th className="px-8 py-3.5 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-navy-500">
+              <th className="px-8 py-3.5 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-navy-500 dark:text-zinc-500">
                 Fecha
               </th>
-              <th className="px-8 py-3.5 text-right text-[10.5px] font-semibold uppercase tracking-[0.1em] text-navy-500">
+              <th className="px-8 py-3.5 text-right text-[10.5px] font-semibold uppercase tracking-[0.1em] text-navy-500 dark:text-zinc-500">
                 Importe
               </th>
-              <th className="px-8 py-3.5 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-navy-500">
+              <th className="px-8 py-3.5 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-navy-500 dark:text-zinc-500">
                 Estado
               </th>
             </tr>
@@ -75,6 +76,7 @@ export default function BudgetsTable({
                   group border-b border-navy-50 last:border-0
                   transition-colors duration-200 ease-out
                   hover:bg-navy-50/60
+                  dark:border-zinc-800 dark:hover:bg-zinc-800/50
                 "
               >
                 {/* Cliente */}
@@ -87,6 +89,8 @@ export default function BudgetsTable({
                         ring-1 ring-inset ring-navy-100
                         transition-colors duration-200
                         group-hover:bg-white group-hover:ring-navy-200
+                        dark:bg-zinc-800 dark:text-zinc-200 dark:ring-zinc-800
+                        dark:group-hover:bg-zinc-800 dark:group-hover:ring-zinc-600
                       "
                     >
                       {row.clientInitials ??
@@ -98,11 +102,11 @@ export default function BudgetsTable({
                           .toUpperCase()}
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-[14px] font-medium text-navy-900">
+                      <p className="truncate text-[14px] font-medium text-navy-900 dark:text-white">
                         {row.client}
                       </p>
                       {row.reference && (
-                        <p className="truncate text-[12px] text-navy-500">
+                        <p className="truncate text-[12px] text-navy-500 dark:text-zinc-500">
                           {row.reference}
                         </p>
                       )}
@@ -111,12 +115,12 @@ export default function BudgetsTable({
                 </td>
 
                 {/* Fecha */}
-                <td className="px-8 py-6 text-[13.5px] text-navy-600 tabular-nums">
+                <td className="px-8 py-6 text-[13.5px] text-navy-600 tabular-nums dark:text-zinc-400">
                   {row.date}
                 </td>
 
                 {/* Importe */}
-                <td className="px-8 py-6 text-right text-[14px] font-semibold tabular-nums text-navy-900">
+                <td className="px-8 py-6 text-right text-[14px] font-semibold tabular-nums text-navy-900 dark:text-white">
                   {row.amount}
                 </td>
 
@@ -131,12 +135,13 @@ export default function BudgetsTable({
       </div>
 
       {footerHref && (
-        <footer className="flex justify-end border-t border-navy-100 bg-navy-50/30 px-8 py-4">
+        <footer className="flex justify-end border-t border-navy-100 bg-navy-50/30 px-8 py-4 dark:border-zinc-800 dark:bg-zinc-950/40">
           <a
             href={footerHref}
             className="
               group/link inline-flex items-center gap-1.5 text-sm font-medium
               text-navy-600 transition-colors hover:text-brand-green
+              dark:text-zinc-300 dark:hover:text-brand-green
             "
           >
             {footerLabel}

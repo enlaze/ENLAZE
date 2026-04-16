@@ -189,22 +189,22 @@ export default function ClientsPage() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-navy-100 bg-navy-50/60">
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 uppercase tracking-wider">Nombre</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 uppercase tracking-wider hidden md:table-cell">Email</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 uppercase tracking-wider hidden lg:table-cell">Teléfono</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 uppercase tracking-wider hidden md:table-cell">Empresa</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 uppercase tracking-wider">Estado</th>
-                  <th className="text-right px-6 py-3 text-xs font-semibold text-navy-500 uppercase tracking-wider">Acciones</th>
+                <tr className="border-b border-navy-100 dark:border-zinc-800 bg-navy-50/60 dark:bg-zinc-900/50">
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase tracking-wider">Nombre</th>
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase tracking-wider hidden md:table-cell">Email</th>
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase tracking-wider hidden lg:table-cell">Teléfono</th>
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase tracking-wider hidden md:table-cell">Empresa</th>
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase tracking-wider">Estado</th>
+                  <th className="text-right px-6 py-3 text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase tracking-wider">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(client => (
-                  <tr key={client.id} className="border-b border-navy-50 hover:bg-navy-50/40 transition-colors">
-                    <td className="px-6 py-4 text-sm font-medium text-navy-900">{client.name}</td>
-                    <td className="px-6 py-4 text-sm text-navy-600 hidden md:table-cell">{client.email || "—"}</td>
-                    <td className="px-6 py-4 text-sm text-navy-600 hidden lg:table-cell">{client.phone || "—"}</td>
-                    <td className="px-6 py-4 text-sm text-navy-600 hidden md:table-cell">{client.company || "—"}</td>
+                  <tr key={client.id} className="border-b border-navy-50 dark:border-zinc-800/60 hover:bg-navy-50/40 dark:hover:bg-zinc-800/50 transition-colors">
+                    <td className="px-6 py-4 text-sm font-medium text-navy-900 dark:text-white">{client.name}</td>
+                    <td className="px-6 py-4 text-sm text-navy-600 dark:text-zinc-400 hidden md:table-cell">{client.email || "—"}</td>
+                    <td className="px-6 py-4 text-sm text-navy-600 dark:text-zinc-400 hidden lg:table-cell">{client.phone || "—"}</td>
+                    <td className="px-6 py-4 text-sm text-navy-600 dark:text-zinc-400 hidden md:table-cell">{client.company || "—"}</td>
                     <td className="px-6 py-4">
                       <Badge variant={statusVariant(client.status)}>
                         {statusLabel(client.status)}
