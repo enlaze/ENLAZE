@@ -215,9 +215,9 @@ if (!userId) return;
 
       const { data: currentItems } = await supabase
         .from("price_items")
-        .select("name");
-  .eq("user_id", userId)
-  .eq("sector", sectorConfig.sector);
+        .select("name")
+        .eq("user_id", userId)
+        .eq("sector", sectorConfig.sector);
       const existingNames = new Set((currentItems || []).map(i => i.name.toLowerCase()));
 
       let added = 0;
@@ -467,4 +467,5 @@ if (!userId) return;
     </div>
   );
 }
+
 
