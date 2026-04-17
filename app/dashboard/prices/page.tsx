@@ -57,7 +57,8 @@ export default function PricesPage() {
   }
 
   const [items, setItems] = useState<PriceItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [contextLoaded, setContextLoaded] = useState(false);
+  const [loadingItems, setLoadingItems] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -65,8 +66,7 @@ export default function PricesPage() {
   const [filterCat, setFilterCat] = useState("all");
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-const [sectorConfig, setSectorConfig] = useState(getSectorConfig("construccion"));
-
+  const [sectorConfig, setSectorConfig] = useState(getSectorConfig("construccion"));
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -74,47 +74,65 @@ const [sectorConfig, setSectorConfig] = useState(getSectorConfig("construccion")
   const [subcategory, setSubcategory] = useState("");
   const [unit, setUnit] = useState("ud");
   const [unitPrice, setUnitPrice] = useState(0);
-useEffect(() => {
-  const loadContext = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
 
-    if (!user) return;
+  // 1. Load user context (auth + sector)
+  useEffect(() => {
+    let cancelled = false;
+    const loadContext = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user || cancelled) {
+          setContextLoaded(true);
+          return;
+        }
+        setUserId(user.id);
 
-    setUserId(user.id);
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("business_sector")
+          .eq("id", user.id)
+          .single();
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("business_sector")
-      .eq("id", user.id)
-      .single();
+        if (!cancelled) {
+          setSectorConfig(getSectorConfig(profile?.business_sector));
+        }
+      } catch (err) {
+        console.error("[prices] loadContext error:", err);
+      } finally {
+        if (!cancelled) setContextLoaded(true);
+      }
+    };
+    loadContext();
+    return () => { cancelled = true; };
+  }, []);
 
-    setSectorConfig(getSectorConfig(profile?.business_sector));
-  };
-
-  loadContext();
-}, []);
-
+  // 2. Load items only when userId + sector are ready
   async function loadItems() {
     if (!userId) return;
+    setLoadingItems(true);
+    try {
+      const { data } = await supabase
+        .from("price_items")
+        .select("id, name, description, category, subcategory, unit, unit_price")
+        .eq("user_id", userId)
+        .eq("sector", sectorConfig.sector)
+        .order("category")
+        .order("subcategory")
+        .order("name")
+        .limit(500);
 
-  const { data } = await supabase
-    .from("price_items")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("sector", sectorConfig.sector)
-    .order("category")
-    .order("subcategory")
-    .order("name");
-
-  setItems(data || []);
+      setItems(data || []);
+    } catch (err) {
+      console.error("[prices] loadItems error:", err);
+    } finally {
+      setLoadingItems(false);
+    }
   }
 
   useEffect(() => {
-  if (!userId) return;
-  loadItems();
-}, [userId, sectorConfig.sector]);
+    if (!userId) return;
+    loadItems();
+  }, [userId, sectorConfig.sector]);
 
   function resetForm() {
     setName(""); setDescription(""); setCategory("material");
@@ -325,7 +343,7 @@ if (!userId) return;
   const kpiCats = categories.slice(0, 3);
   const kpiColors = ["text-blue-400", "text-orange-400", "text-zinc-400"];
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-brand-green)]"></div></div>;
+  if (!contextLoaded || loadingItems) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-brand-green)]"></div></div>;
 
   return (
     <div className="max-w-5xl mx-auto">
