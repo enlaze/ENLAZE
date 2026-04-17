@@ -104,38 +104,35 @@ await syncModuleState(supabase, userId, "gmail", {
   status: "active",
   error_message: null,
 });
-} catch (error) {
-  try {
-    await syncModuleState(supabase, userId, "gmail", {
-      connected: true,
-      status: "error",
-      error_message:
-        error instanceof Error ? error.message.slice(0, 500) : "Unknown error",
-    });
-  } catch {}
-    return NextResponse.json({
-      ok: true,
-      connected: true,
-      unread_count: 0,
-      priority_threads: [],
-      awaiting_reply: [],
-      supplier_messages: [],
-      customer_messages: [],
-      invoice_messages: [],
-      suggested_replies: [],
-      action_items: [],
-      summary: "Gmail conectado — sin datos nuevos. La integración completa con Gmail API se activará cuando configures OAuth.",
-      last_sync_at: connection.last_sync_at,
-    });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error("[agent/gmail/summary] Error:", message);
-    return NextResponse.json(
-      { error: "Internal server error", detail: message },
-      { status: 500 },
-    );
-  }
-}
+await syncModuleState(supabase, userId, "gmail", {
+  connected: true,
+  status: "active",
+  error_message: null,
+});
 
+return NextResponse.json({
+  ok: true,
+  connected: true,
+  unread_count: 0,
+  priority_threads: [],
+  awaiting_reply: [],
+  supplier_messages: [],
+  customer_messages: [],
+  invoice_messages: [],
+  suggested_replies: [],
+  action_items: [],
+  summary:
+    "Gmail conectado — sin datos nuevos. La integración completa con Gmail API se activará cuando configures credenciales.",
+  last_sync_at: new Date().toISOString(),
+});
+
+} catch (err: unknown) {
+  const message = err instanceof Error ? err.message : String(err);
+  console.error("[Agent/gmail/summary] Error:", message);
+  return NextResponse.json(
+    { error: "Internal server error", detail: message },
+    { status: 500 }
+  );
+}
 
 
