@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { useSector } from "@/lib/sector-context";
+import { getSectorConfig } from "@/lib/sector-config";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 
@@ -33,6 +34,8 @@ interface PriceItem {
 
 export default function PricesPage() {
   const supabase = createBrowserClient(
+
+
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
@@ -62,6 +65,8 @@ export default function PricesPage() {
   const [filterCat, setFilterCat] = useState("all");
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+const [sectorConfig, setSectorConfig] = useState(getSectorConfig("construccion"));
+
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -69,26 +74,47 @@ export default function PricesPage() {
   const [subcategory, setSubcategory] = useState("");
   const [unit, setUnit] = useState("ud");
   const [unitPrice, setUnitPrice] = useState(0);
+useEffect(() => {
+  const loadContext = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return;
+
+    setUserId(user.id);
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("business_sector")
+      .eq("id", user.id)
+      .single();
+
+    setSectorConfig(getSectorConfig(profile?.business_sector));
+  };
+
+  loadContext();
+}, []);
 
   async function loadItems() {
-    const { data } = await supabase
-      .from("price_items")
-      .select("*")
-      .order("category")
-      .order("subcategory")
-      .order("name");
-    setItems(data || []);
-    setLoading(false);
+    if (!userId) return;
+
+  const { data } = await supabase
+    .from("price_items")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("sector", sectorConfig.sector)
+    .order("category")
+    .order("subcategory")
+    .order("name");
+
+  setItems(data || []);
   }
 
   useEffect(() => {
-    async function init() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) setUserId(user.id);
-      loadItems();
-    }
-    init();
-  }, []);
+  if (!userId) return;
+  loadItems();
+}, [userId, sectorConfig.sector]);
 
   function resetForm() {
     setName(""); setDescription(""); setCategory("material");
@@ -104,10 +130,33 @@ export default function PricesPage() {
   }
 
   async function handleSave() {
+    if (!userId) return; 
     if (!name || unitPrice <= 0) { alert("Completa nombre y precio válido."); return; }
-    const payload = { name, description, category, subcategory, unit, unit_price: unitPrice, user_id: userId };
+    const payload = {
+  name,
+  description,
+  category,
+  subcategory,
+  unit,
+  unit_price: unitPrice,
+  user_id: userId,
+  sector: sectorConfig.sector,
+};
     if (editingId) {
-      await supabase.from("price_items").update({ name, description, category, subcategory, unit, unit_price: unitPrice }).eq("id", editingId);
+      await supabase
+  .from("price_items")
+  .update({
+    name,
+    description,
+    category,
+    subcategory,
+    unit,
+    unit_price: unitPrice,
+  })
+  .eq("id", editingId)
+  .eq("user_id", userId)
+  .eq("sector", sectorConfig.sector);
+
     } else {
       await supabase.from("price_items").insert(payload);
     }
@@ -116,6 +165,7 @@ export default function PricesPage() {
   }
 
   async function handleDelete(id: string) {
+if (!userId) return;
     const ok = await confirm({
       title: "Eliminar precio",
       description: "¿Eliminar este precio?",
@@ -124,7 +174,13 @@ export default function PricesPage() {
     });
     if (!ok) return;
     try {
-      await supabase.from("price_items").delete().eq("id", id);
+      await supabase
+  .from("price_items")
+  .delete()
+  .eq("id", id)
+  .eq("user_id", userId)
+  .eq("sector", sectorConfig.sector);
+
       await loadItems();
       toast.success("Precio eliminado");
     } catch (error) {
@@ -160,6 +216,8 @@ export default function PricesPage() {
       const { data: currentItems } = await supabase
         .from("price_items")
         .select("name");
+  .eq("user_id", userId)
+  .eq("sector", sectorConfig.sector);
       const existingNames = new Set((currentItems || []).map(i => i.name.toLowerCase()));
 
       let added = 0;
@@ -184,17 +242,21 @@ export default function PricesPage() {
               description: `Precio de mercado · ${mp.source || "n8n"} · ${new Date(mp.last_updated).toLocaleDateString("es-ES")}`,
             })
             .ilike("name", itemName);
+            .eq("user_id", userId)
+            .eq("sector", sectorConfig.sector);
+
           updated++;
         } else {
           const { error } = await supabase.from("price_items").insert({
-            user_id: userId,
-            name: itemName,
-            description: `Precio de mercado · ${mp.source || "n8n"} · ${new Date(mp.last_updated).toLocaleDateString("es-ES")}`,
-            category: mp.category || "material",
-            subcategory: subcat,
-            unit: mp.unit || "ud",
-            unit_price: priceValue,
-          });
+  user_id: userId,
+  sector: sectorConfig.sector,
+  name: itemName,
+  description: `Precio de mercado · ${mp.source || "n8n"} · ${new Date(mp.last_updated).toLocaleDateString("es-ES")}`,
+  category: mp.category || "material",
+  subcategory: subcat,
+  unit: mp.unit || "ud",
+  unit_price: priceValue,
+});
           if (error) console.error("Error insertando:", itemName, error);
           else added++;
         }
@@ -238,6 +300,7 @@ export default function PricesPage() {
           unit_price: item.price,
           description: "",
           user_id: userId,
+          sector: sectorConfig.sector,
         });
       }
       await loadItems();
@@ -268,11 +331,12 @@ export default function PricesPage() {
     <div className="max-w-5xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">Banco de precios</h1>
+          <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">{sectorConfig.priceLabel}</h1>
           <p className="text-[var(--color-navy-400)] text-sm mt-1">
-            Configura tus precios base para materiales, mano de obra y otros gastos
-            {lastSync && <span className="ml-2 text-[var(--color-brand-green)]">· Sincronizado: {lastSync}</span>}
-          </p>
+            {sectorConfig.sector === "comercio_local"
+             ? "Configura tus tarifas, productos y precios base de tu negocio"
+             : "Configura tus precios base para materiales, mano de obra y otros gastos"}
+           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <button onClick={syncFromMarket} disabled={syncing} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-500 transition disabled:opacity-50 disabled:cursor-not-allowed">
@@ -403,3 +467,4 @@ export default function PricesPage() {
     </div>
   );
 }
+
