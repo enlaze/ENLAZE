@@ -7,6 +7,8 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { FormField, Input, Select } from "@/components/ui/form-fields";
 import { Button } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 type Client = { id: string; name: string };
 type Event = { id: string; title: string; description: string; event_date: string; event_time: string; duration_minutes: number; status: string; client_id: string; clients: { name: string } | null };
@@ -22,6 +24,8 @@ export default function CalendarPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", event_date: "", event_time: "10:00", duration_minutes: 30, client_id: "" });
   const supabase = createClient();
+  const confirm = useConfirm();
+  const toast = useToast();
 
   const fetchClients = async () => {
     const { data } = await supabase.from("clients").select("id, name").order("name");
@@ -49,9 +53,19 @@ export default function CalendarPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("¿Eliminar esta cita?")) {
+    const ok = await confirm({
+      title: "Eliminar cita",
+      description: "¿Eliminar esta cita?",
+      variant: "danger",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    try {
       await supabase.from("events").delete().eq("id", id);
       await fetchEvents();
+      toast.success("Cita eliminada");
+    } catch (error) {
+      toast.error("Error al eliminar la cita");
     }
   };
 

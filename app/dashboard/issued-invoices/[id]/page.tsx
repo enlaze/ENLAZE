@@ -10,6 +10,8 @@ import type { FiscalEventType } from "@/lib/fiscal-events";
 import { logActivity } from "@/lib/activity-log";
 import { notify } from "@/lib/notifications";
 import { registerPayment, getInvoicePayments, paymentMethodLabels, type Payment } from "@/lib/payments";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 /* ═══════════════ Types ═══════════════ */
 
@@ -166,6 +168,8 @@ export default function IssuedInvoiceDetailPage() {
   const router = useRouter();
   const invoiceId = params.id as string;
   const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+  const confirm = useConfirm();
+  const toast = useToast();
 
   const [invoice, setInvoice] = useState<IssuedInvoice | null>(null);
   const [lines, setLines] = useState<InvoiceLine[]>([]);
@@ -273,11 +277,22 @@ export default function IssuedInvoiceDetailPage() {
   }
 
   async function handleDeleteLine(id: string) {
-    if (!confirm("¿Eliminar esta línea?")) return;
-    await supabase.from("issued_invoice_lines").delete().eq("id", id);
-    const newLines = lines.filter((l) => l.id !== id);
-    setLines(newLines);
-    await recalcTotals(newLines);
+    const ok = await confirm({
+      title: "Eliminar línea",
+      description: "¿Eliminar esta línea?",
+      variant: "danger",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    try {
+      await supabase.from("issued_invoice_lines").delete().eq("id", id);
+      const newLines = lines.filter((l) => l.id !== id);
+      setLines(newLines);
+      await recalcTotals(newLines);
+      toast.success("Línea eliminada");
+    } catch (error) {
+      toast.error("Error al eliminar la línea");
+    }
   }
 
   /* ── Status / actions ── */

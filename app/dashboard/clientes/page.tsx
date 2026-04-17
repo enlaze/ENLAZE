@@ -7,6 +7,8 @@ import { Button, LinkButton } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
 import { FormField, Input, Select, Textarea, SearchInput } from "@/components/ui/form-fields";
 import EmptyState from "@/components/ui/empty-state";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 type Client = {
   id: string;
@@ -26,6 +28,8 @@ export default function ClientsPage() {
   const [search, setSearch] = useState("");
   const [form, setForm] = useState({ name: "", email: "", phone: "", company: "", notes: "", status: "lead" });
   const supabase = createClient();
+  const confirm = useConfirm();
+  const toast = useToast();
 
   useEffect(() => { fetchClients(); }, []);
 
@@ -55,9 +59,19 @@ export default function ClientsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Estás seguro de eliminar este cliente?")) {
+    const ok = await confirm({
+      title: "Eliminar cliente",
+      description: "Estás seguro de eliminar este cliente?",
+      variant: "danger",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    try {
       await supabase.from("clients").delete().eq("id", id);
       await fetchClients();
+      toast.success("Cliente eliminado");
+    } catch (error) {
+      toast.error("Error al eliminar el cliente");
     }
   };
 

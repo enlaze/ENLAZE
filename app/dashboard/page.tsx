@@ -7,6 +7,7 @@ import OnboardingChecklist from "@/components/OnboardingChecklist";
 import { logError, formatErrorForUI } from "@/lib/error-handler";
 import ErrorAlert from "@/components/ErrorAlert";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { SkeletonCard, SkeletonKpi, SkeletonTable } from "@/components/ui/skeleton";
 
 /* ─────────────────────────────────────────────────────────────────────
  *  Icons — Lucide-style (stroke 1.75, 24×24, rounded)
@@ -324,8 +325,25 @@ export default function DashboardHome() {
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-navy-200 dark:border-zinc-800 border-t-brand-green" />
+      <div className="space-y-8" aria-busy="true" aria-live="polite">
+        {/* KPI grid skeleton */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <SkeletonKpi />
+          <SkeletonKpi />
+          <SkeletonKpi />
+          <SkeletonKpi />
+        </div>
+        {/* Two-column content skeleton */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-4">
+            <SkeletonCard />
+            <SkeletonTable rows={4} cols={3} />
+          </div>
+          <div className="space-y-4">
+            <SkeletonCard />
+            <SkeletonCard />
+          </div>
+        </div>
       </div>
     );
   }

@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
 import EmptyState from "@/components/ui/empty-state";
 import Loading from "@/components/ui/loading";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 interface Invoice {
   id: string;
@@ -64,6 +66,8 @@ function eur(n: number) { return Number(n || 0).toLocaleString("es-ES", { style:
 
 export default function FacturasPage() {
   const supabase = createClient();
+  const confirm = useConfirm();
+  const toast = useToast();
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [clients, setClients] = useState<ClientOption[]>([]);
@@ -234,10 +238,21 @@ export default function FacturasPage() {
   }
 
   async function deleteInvoice(id: string) {
-    if (!confirm("¿Eliminar esta factura?")) return;
-    await supabase.from("invoices").delete().eq("id", id);
-    if (selectedInvoice?.id === id) setSelectedInvoice(null);
-    loadInvoices();
+    const ok = await confirm({
+      title: "Eliminar factura",
+      description: "¿Eliminar esta factura?",
+      variant: "danger",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    try {
+      await supabase.from("invoices").delete().eq("id", id);
+      if (selectedInvoice?.id === id) setSelectedInvoice(null);
+      await loadInvoices();
+      toast.success("Factura eliminada");
+    } catch (error) {
+      toast.error("Error al eliminar la factura");
+    }
   }
 
   async function markAsPaid(id: string) {

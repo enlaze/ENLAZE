@@ -6,6 +6,7 @@ import Link from "next/link";
 import Logo from "@/components/Logo";
 import NotificationCenter from "@/components/NotificationCenter";
 import SearchCommand from "@/components/SearchCommand";
+import ShortcutsOverlay from "@/components/ShortcutsOverlay";
 import ThemeToggle from "@/components/ThemeToggle";
 import { SectorProvider, useSector } from "@/lib/sector-context";
 
@@ -291,6 +292,8 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
 
       {/* Global search modal */}
       <SearchCommand />
+      {/* Keyboard shortcuts help (press ?) */}
+      <ShortcutsOverlay />
     </div>
   );
 }

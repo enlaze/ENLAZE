@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
 import EmptyState from "@/components/ui/empty-state";
 import Loading from "@/components/ui/loading";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 interface Supplier {
   id: string;
@@ -57,6 +59,8 @@ const emptyForm = {
 export default function SuppliersPage() {
   const supabase = createClient();
   const { label, options } = useSector();
+  const confirm = useConfirm();
+  const toast = useToast();
 
   const [userId, setUserId] = useState<string | null>(null);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -128,9 +132,20 @@ export default function SuppliersPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("¿Eliminar este proveedor/subcontrata?")) return;
-    await supabase.from("suppliers").delete().eq("id", id);
-    await loadSuppliers();
+    const ok = await confirm({
+      title: "Eliminar proveedor",
+      description: "¿Eliminar este proveedor/subcontrata?",
+      variant: "danger",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    try {
+      await supabase.from("suppliers").delete().eq("id", id);
+      await loadSuppliers();
+      toast.success("Proveedor eliminado");
+    } catch (error) {
+      toast.error("Error al eliminar el proveedor");
+    }
   }
 
   const filtered = useMemo(() => {

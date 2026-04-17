@@ -5,6 +5,8 @@ import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 /* ═══════════════ Types ═══════════════ */
 
@@ -55,6 +57,8 @@ export default function DeliveryNoteDetailPage() {
   const router = useRouter();
   const noteId = params.id as string;
   const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+  const confirm = useConfirm();
+  const toast = useToast();
 
   const [note, setNote] = useState<DeliveryNote | null>(null);
   const [lines, setLines] = useState<DeliveryNoteLine[]>([]);
@@ -119,9 +123,18 @@ export default function DeliveryNoteDetailPage() {
 
   async function importFromOrder() {
     if (!note || orderLines.length === 0) return;
-    if (lines.length > 0 && !confirm("Ya hay líneas. ¿Importar líneas del pedido? (no se borran las existentes)")) return;
+    if (lines.length > 0) {
+      const ok = await confirm({
+        title: "Importar líneas",
+        description: "Ya hay líneas. ¿Importar líneas del pedido? (no se borran las existentes)",
+        variant: "warning",
+        confirmLabel: "Importar",
+      });
+      if (!ok) return;
+    }
 
-    const inserts = orderLines.map((ol, idx) => ({
+    try {
+      const inserts = orderLines.map((ol, idx) => ({
       delivery_note_id: note.id, order_line_id: ol.id,
       description: ol.description, unit: ol.unit,
       quantity_expected: ol.quantity, quantity_received: 0,
@@ -129,13 +142,20 @@ export default function DeliveryNoteDetailPage() {
       sort_order: lines.length + idx,
     }));
 
-    const { error } = await supabase.from("delivery_note_lines").insert(inserts);
-    if (error) { alert("Error: " + error.message); return; }
+      const { error } = await supabase.from("delivery_note_lines").insert(inserts);
+      if (error) {
+        toast.error("Error al importar líneas del pedido");
+        return;
+      }
 
-    const { data } = await supabase.from("delivery_note_lines").select("*").eq("delivery_note_id", note.id).order("sort_order");
-    const newLines = (data as DeliveryNoteLine[]) || [];
-    setLines(newLines);
-    await recalcTotals(newLines);
+      const { data } = await supabase.from("delivery_note_lines").select("*").eq("delivery_note_id", note.id).order("sort_order");
+      const newLines = (data as DeliveryNoteLine[]) || [];
+      setLines(newLines);
+      await recalcTotals(newLines);
+      toast.success("Líneas del pedido importadas");
+    } catch (error) {
+      toast.error("Error al importar líneas del pedido");
+    }
   }
 
   /* ── CRUD Lines ── */
@@ -185,11 +205,22 @@ export default function DeliveryNoteDetailPage() {
   }
 
   async function handleDeleteLine(id: string) {
-    if (!confirm("¿Eliminar esta línea?")) return;
-    await supabase.from("delivery_note_lines").delete().eq("id", id);
-    const newLines = lines.filter((l) => l.id !== id);
-    setLines(newLines);
-    await recalcTotals(newLines);
+    const ok = await confirm({
+      title: "Eliminar línea",
+      description: "¿Eliminar esta línea?",
+      variant: "danger",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    try {
+      await supabase.from("delivery_note_lines").delete().eq("id", id);
+      const newLines = lines.filter((l) => l.id !== id);
+      setLines(newLines);
+      await recalcTotals(newLines);
+      toast.success("Línea eliminada");
+    } catch (error) {
+      toast.error("Error al eliminar la línea");
+    }
   }
 
   async function handleStatusChange(newStatus: string) {

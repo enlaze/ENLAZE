@@ -3,6 +3,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import Link from "next/link";
 import Logo from "@/components/Logo";
+import PasswordStrength from "@/components/PasswordStrength";
 
 export default function RegisterPage() {
   const [fullName, setFullName] = useState("");
@@ -93,7 +94,19 @@ export default function RegisterPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-navy-700 mb-1">Contrasena</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green" placeholder="Minimo 6 caracteres" />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={8}
+              className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green"
+              placeholder="Minimo 8 caracteres"
+              aria-describedby="password-strength"
+            />
+            <div id="password-strength">
+              <PasswordStrength password={password} />
+            </div>
           </div>
           {error && <p className="text-red-500 text-sm">{error}</p>}
           <button type="submit" disabled={loading} className="w-full py-3 rounded-xl bg-brand-green text-white font-semibold shadow-lg shadow-brand-green/25 hover:bg-brand-green-dark transition-colors disabled:opacity-50">

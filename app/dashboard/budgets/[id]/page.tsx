@@ -9,6 +9,8 @@ import AcceptanceTimeline from "@/components/AcceptanceTimeline";
 import { saveDocumentVersion, getNextVersion } from "@/lib/document-versions";
 import { logActivity } from "@/lib/activity-log";
 import { notify } from "@/lib/notifications";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 interface BudgetItem {
   id: string;
@@ -84,6 +86,8 @@ export default function BudgetDetailPage() {
   const router = useRouter();
   const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
   const { serviceTypes, budgetCategories } = useSector();
+  const confirm = useConfirm();
+  const toast = useToast();
   const [budget, setBudget] = useState<Budget | null>(null);
   const [items, setItems] = useState<BudgetItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -177,11 +181,22 @@ export default function BudgetDetailPage() {
 
   async function deleteBudget() {
     if (!budget) return;
-    if (!confirm("¿Estás seguro de eliminar este presupuesto? Esta acción no se puede deshacer.")) return;
+    const ok = await confirm({
+      title: "Eliminar presupuesto",
+      description: "¿Estás seguro de eliminar este presupuesto? Esta acción no se puede deshacer.",
+      variant: "danger",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
 
-    await supabase.from("budget_items").delete().eq("budget_id", budget.id);
-    await supabase.from("budgets").delete().eq("id", budget.id);
-    router.push("/dashboard/budgets");
+    try {
+      await supabase.from("budget_items").delete().eq("budget_id", budget.id);
+      await supabase.from("budgets").delete().eq("id", budget.id);
+      toast.success("Presupuesto eliminado");
+      router.push("/dashboard/budgets");
+    } catch (error) {
+      toast.error("Error al eliminar el presupuesto");
+    }
   }
 
   async function duplicateBudget() {

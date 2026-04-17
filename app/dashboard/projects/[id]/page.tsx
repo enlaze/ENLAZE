@@ -8,6 +8,8 @@ import { useSector } from "@/lib/sector-context";
 import AcceptanceTimeline from "@/components/AcceptanceTimeline";
 import { saveDocumentVersion, getNextVersion } from "@/lib/document-versions";
 import { logActivity } from "@/lib/activity-log";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 /* ═══════════════════════════ Types ═══════════════════════════ */
 
@@ -256,6 +258,8 @@ export default function ProjectDetailPage() {
   );
 
   const { label, serviceTypes, options } = useSector();
+  const confirm = useConfirm();
+  const toast = useToast();
 
   const [userId, setUserId] = useState<string | null>(null);
   const [project, setProject] = useState<Project | null>(null);
@@ -397,9 +401,20 @@ export default function ProjectDetailPage() {
   }
 
   async function handleDeletePayment(id: string) {
-    if (!confirm("¿Eliminar este cobro?")) return;
-    await supabase.from("payments").delete().eq("id", id);
-    setPayments((prev) => prev.filter((p) => p.id !== id));
+    const ok = await confirm({
+      title: "Eliminar cobro",
+      description: "¿Eliminar este cobro?",
+      variant: "danger",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    try {
+      await supabase.from("payments").delete().eq("id", id);
+      setPayments((prev) => prev.filter((p) => p.id !== id));
+      toast.success("Cobro eliminado");
+    } catch (error) {
+      toast.error("Error al eliminar el cobro");
+    }
   }
 
   /* ── CRUD: Changes ── */
@@ -474,9 +489,20 @@ export default function ProjectDetailPage() {
   }
 
   async function handleDeleteChange(id: string) {
-    if (!confirm("¿Eliminar este cambio?")) return;
-    await supabase.from("project_changes").delete().eq("id", id);
-    setChanges((prev) => prev.filter((c) => c.id !== id));
+    const ok = await confirm({
+      title: "Eliminar cambio",
+      description: "¿Eliminar este cambio?",
+      variant: "danger",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    try {
+      await supabase.from("project_changes").delete().eq("id", id);
+      setChanges((prev) => prev.filter((c) => c.id !== id));
+      toast.success("Cambio eliminado");
+    } catch (error) {
+      toast.error("Error al eliminar el cambio");
+    }
   }
 
   /* ── CRUD: Milestones ── */
@@ -520,9 +546,20 @@ export default function ProjectDetailPage() {
   }
 
   async function handleDeleteMilestone(id: string) {
-    if (!confirm("¿Eliminar este hito?")) return;
-    await supabase.from("project_milestones").delete().eq("id", id);
-    setMilestones((prev) => prev.filter((m) => m.id !== id));
+    const ok = await confirm({
+      title: "Eliminar hito",
+      description: "¿Eliminar este hito?",
+      variant: "danger",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    try {
+      await supabase.from("project_milestones").delete().eq("id", id);
+      setMilestones((prev) => prev.filter((m) => m.id !== id));
+      toast.success("Hito eliminado");
+    } catch (error) {
+      toast.error("Error al eliminar el hito");
+    }
   }
 
   async function toggleMilestoneComplete(m: Milestone) {
@@ -556,9 +593,20 @@ export default function ProjectDetailPage() {
   }
 
   async function handleRemoveSupplier(id: string) {
-    if (!confirm(`¿Quitar este proveedor de la ${label("project")}?`)) return;
-    await supabase.from("project_suppliers").delete().eq("id", id);
-    setProjectSuppliers((prev) => prev.filter((ps) => ps.id !== id));
+    const ok = await confirm({
+      title: "Quitar proveedor",
+      description: `¿Quitar este proveedor de la ${label("project")}?`,
+      variant: "warning",
+      confirmLabel: "Quitar",
+    });
+    if (!ok) return;
+    try {
+      await supabase.from("project_suppliers").delete().eq("id", id);
+      setProjectSuppliers((prev) => prev.filter((ps) => ps.id !== id));
+      toast.success("Proveedor eliminado de la obra");
+    } catch (error) {
+      toast.error("Error al eliminar el proveedor");
+    }
   }
 
   const assignedSupplierIds = projectSuppliers.map((ps) => ps.supplier_id);
@@ -568,7 +616,13 @@ export default function ProjectDetailPage() {
 
   async function generateInvoiceFromBudget(b: Budget) {
     if (!userId || !project) return;
-    if (!confirm(`¿Generar factura emitida desde el presupuesto "${b.title}"?`)) return;
+    const ok = await confirm({
+      title: "Generar factura",
+      description: `¿Generar factura emitida desde el presupuesto "${b.title}"?`,
+      variant: "default",
+      confirmLabel: "Generar",
+    });
+    if (!ok) return;
 
     // Load fiscal settings
     const { data: fiscal } = await supabase.from("fiscal_settings").select("*").eq("user_id", userId).single();
@@ -642,8 +696,12 @@ export default function ProjectDetailPage() {
       await supabase.from("issued_invoice_lines").insert(invoiceLines);
     }
 
-    alert(`Factura ${invoice_number} creada. Redirigiendo...`);
-    if (newInv) window.location.href = `/dashboard/issued-invoices/${newInv.id}`;
+    if (error) {
+      toast.error("Error al generar la factura");
+    } else {
+      toast.success(`Factura ${invoice_number} creada`);
+      if (newInv) window.location.href = `/dashboard/issued-invoices/${newInv.id}`;
+    }
   }
 
   /* ═══════════════════════════ KPIs ═══════════════════════════ */

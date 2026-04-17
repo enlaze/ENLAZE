@@ -11,6 +11,8 @@ import { Card, StatCard } from "@/components/ui/card";
 import { FormField, Input, Select, SearchInput } from "@/components/ui/form-fields";
 import { Button, LinkButton } from "@/components/ui/button";
 import Loading from "@/components/ui/loading";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 /* ═══════════════ Types ═══════════════ */
 
@@ -54,6 +56,8 @@ const inputCls = "w-full bg-white dark:bg-zinc-900 text-navy-900 dark:text-white
 export default function IssuedInvoicesPage() {
   const router = useRouter();
   const supabase = createClient();
+  const confirm = useConfirm();
+  const toast = useToast();
 
   const [userId, setUserId] = useState<string | null>(null);
   const [invoices, setInvoices] = useState<IssuedInvoice[]>([]);
@@ -154,9 +158,20 @@ export default function IssuedInvoicesPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("¿Eliminar esta factura emitida?")) return;
-    await supabase.from("issued_invoices").delete().eq("id", id);
-    setInvoices((prev) => prev.filter((i) => i.id !== id));
+    const ok = await confirm({
+      title: "Eliminar factura emitida",
+      description: "¿Eliminar esta factura emitida?",
+      variant: "danger",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    try {
+      await supabase.from("issued_invoices").delete().eq("id", id);
+      setInvoices((prev) => prev.filter((i) => i.id !== id));
+      toast.success("Factura emitida eliminada");
+    } catch (error) {
+      toast.error("Error al eliminar la factura emitida");
+    }
   }
 
   useEffect(() => { load(); }, []);

@@ -5,6 +5,8 @@ import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 /* ═══════════════ Types ═══════════════ */
 
@@ -48,6 +50,8 @@ const inputCls = "w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] 
 export default function OrderDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const confirm = useConfirm();
+  const toast = useToast();
   const orderId = params.id as string;
   const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
 
@@ -140,11 +144,22 @@ export default function OrderDetailPage() {
   }
 
   async function handleDeleteLine(id: string) {
-    if (!confirm("¿Eliminar esta línea?")) return;
-    await supabase.from("order_lines").delete().eq("id", id);
-    const newLines = lines.filter((l) => l.id !== id);
-    setLines(newLines);
-    await recalcTotals(newLines);
+    const ok = await confirm({
+      title: "Eliminar línea",
+      description: "¿Eliminar esta línea?",
+      variant: "danger",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    try {
+      await supabase.from("order_lines").delete().eq("id", id);
+      const newLines = lines.filter((l) => l.id !== id);
+      setLines(newLines);
+      await recalcTotals(newLines);
+      toast.success("Línea eliminada");
+    } catch (error) {
+      toast.error("Error al eliminar la línea");
+    }
   }
 
   /* ── Status change ── */

@@ -1,9 +1,51 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import SplashScreen from "@/components/SplashScreen";
 import { ClientThemeProvider } from "./theme-provider";
+import { ToastProvider } from "@/components/ui/toast";
+import { ConfirmProvider } from "@/components/ui/confirm-dialog";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+  preload: true,
+});
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://enlaze.es";
+
+const organizationJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "Enlaze",
+  url: siteUrl,
+  logo: `${siteUrl}/icon.png`,
+  description:
+    "CRM y operaciones para empresas de servicios: clientes, presupuestos, facturas, proyectos y cobros en un solo lugar.",
+  sameAs: [],
+  contactPoint: [
+    {
+      "@type": "ContactPoint",
+      contactType: "customer support",
+      email: "hola@enlaze.es",
+      availableLanguage: ["Spanish"],
+    },
+  ],
+  areaServed: "ES",
+};
+
+const websiteJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: "Enlaze",
+  url: siteUrl,
+  potentialAction: {
+    "@type": "SearchAction",
+    target: `${siteUrl}/?q={search_term_string}`,
+    "query-input": "required name=search_term_string",
+  },
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -66,7 +108,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es" suppressHydrationWarning data-theme="light">
+    <html
+      lang="es"
+      suppressHydrationWarning
+      data-theme="light"
+      className={inter.variable}
+    >
       <head>
         {/* Prevent flash of wrong theme by reading theme preference before React hydrates */}
         <script
@@ -86,11 +133,22 @@ export default function RootLayout({
             `,
           }}
         />
+        {/* JSON-LD structured data — Organization + WebSite */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify([organizationJsonLd, websiteJsonLd]),
+          }}
+        />
       </head>
       <body className="bg-white text-navy-900 transition-colors dark:bg-zinc-950 dark:text-zinc-200 antialiased">
         <ClientThemeProvider>
-          <SplashScreen />
-          {children}
+          <ToastProvider>
+            <ConfirmProvider>
+              <SplashScreen />
+              {children}
+            </ConfirmProvider>
+          </ToastProvider>
         </ClientThemeProvider>
       </body>
     </html>

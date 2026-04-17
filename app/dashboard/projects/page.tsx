@@ -12,6 +12,8 @@ import { FormField, Input, Select, Textarea, SearchInput } from "@/components/ui
 import { Button } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
 import Loading from "@/components/ui/loading";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 interface ClientOption {
   id: string;
@@ -87,6 +89,8 @@ function getStatusBadgeVariant(status: string): "yellow" | "blue" | "green" | "g
 export default function ProjectsPage() {
   const supabase = createClient();
   const { label } = useSector();
+  const confirm = useConfirm();
+  const toast = useToast();
 
   const [userId, setUserId] = useState<string | null>(null);
   const [clients, setClients] = useState<ClientOption[]>([]);
@@ -195,9 +199,20 @@ export default function ProjectsPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("¿Eliminar esta obra?")) return;
-    await supabase.from("projects").delete().eq("id", id);
-    await loadProjects();
+    const ok = await confirm({
+      title: "Eliminar obra",
+      description: "¿Eliminar esta obra?",
+      variant: "danger",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    try {
+      await supabase.from("projects").delete().eq("id", id);
+      await loadProjects();
+      toast.success("Obra eliminada");
+    } catch (error) {
+      toast.error("Error al eliminar la obra");
+    }
   }
 
   const clientMap = useMemo(

@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
 import EmptyState from "@/components/ui/empty-state";
 import Loading from "@/components/ui/loading";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 interface Order {
   id: string;
@@ -50,6 +52,8 @@ export default function OrdersPage() {
   const router = useRouter();
   const supabase = createClient();
   const { label } = useSector();
+  const confirm = useConfirm();
+  const toast = useToast();
 
   const [userId, setUserId] = useState<string | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -114,9 +118,20 @@ export default function OrdersPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("¿Eliminar este pedido y todas sus líneas?")) return;
-    await supabase.from("orders").delete().eq("id", id);
-    setOrders((prev) => prev.filter((o) => o.id !== id));
+    const ok = await confirm({
+      title: "Eliminar pedido",
+      description: "¿Eliminar este pedido y todas sus líneas?",
+      variant: "danger",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    try {
+      await supabase.from("orders").delete().eq("id", id);
+      setOrders((prev) => prev.filter((o) => o.id !== id));
+      toast.success("Pedido eliminado");
+    } catch (error) {
+      toast.error("Error al eliminar el pedido");
+    }
   }
 
   useEffect(() => { load(); }, []);

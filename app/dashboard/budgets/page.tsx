@@ -10,6 +10,8 @@ import { Button, LinkButton } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
 import { SearchInput, Select } from "@/components/ui/form-fields";
 import EmptyState from "@/components/ui/empty-state";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 type Budget = {
   id: string;
@@ -30,6 +32,8 @@ export default function BudgetsPage() {
   const [filterStatus, setFilterStatus] = useState("all");
   const supabase = createClient();
   const { label, serviceTypes } = useSector();
+  const confirm = useConfirm();
+  const toast = useToast();
 
   const fetchBudgets = async () => {
     const { data } = await supabase.from("budgets").select("*, clients(name, company)").order("created_at", { ascending: false });
@@ -39,9 +43,19 @@ export default function BudgetsPage() {
   useEffect(() => { fetchBudgets(); }, []);
 
   const handleDelete = async (id: string) => {
-    if (confirm("¿Eliminar este presupuesto?")) {
+    const ok = await confirm({
+      title: "Eliminar presupuesto",
+      description: "¿Eliminar este presupuesto?",
+      variant: "danger",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    try {
       await supabase.from("budgets").delete().eq("id", id);
       await fetchBudgets();
+      toast.success("Presupuesto eliminado");
+    } catch (error) {
+      toast.error("Error al eliminar el presupuesto");
     }
   };
 

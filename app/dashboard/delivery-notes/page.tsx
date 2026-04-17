@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
 import EmptyState from "@/components/ui/empty-state";
 import Loading from "@/components/ui/loading";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 interface DeliveryNote {
   id: string;
@@ -49,6 +51,8 @@ export default function DeliveryNotesPage() {
   const router = useRouter();
   const supabase = createClient();
   const { label } = useSector();
+  const confirm = useConfirm();
+  const toast = useToast();
 
   const [userId, setUserId] = useState<string | null>(null);
   const [notes, setNotes] = useState<DeliveryNote[]>([]);
@@ -112,9 +116,20 @@ export default function DeliveryNotesPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("¿Eliminar este albarán y todas sus líneas?")) return;
-    await supabase.from("delivery_notes").delete().eq("id", id);
-    setNotes((prev) => prev.filter((n) => n.id !== id));
+    const ok = await confirm({
+      title: "Eliminar albarán",
+      description: "¿Eliminar este albarán y todas sus líneas?",
+      variant: "danger",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    try {
+      await supabase.from("delivery_notes").delete().eq("id", id);
+      setNotes((prev) => prev.filter((n) => n.id !== id));
+      toast.success("Albarán eliminado");
+    } catch (error) {
+      toast.error("Error al eliminar el albarán");
+    }
   }
 
   useEffect(() => { load(); }, []);

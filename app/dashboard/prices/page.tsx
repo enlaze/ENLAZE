@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { useSector } from "@/lib/sector-context";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 /* Fallback constants (only used if sector config hasn't loaded) */
 const fallbackCategories = [
@@ -35,6 +37,8 @@ export default function PricesPage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
   const { budgetCategories, subcategories: getSectorSubcats, options, defaultPrices } = useSector();
+  const confirm = useConfirm();
+  const toast = useToast();
 
   // Dynamic categories, subcategories and units from sector config
   const sectorCats = budgetCategories();
@@ -112,15 +116,32 @@ export default function PricesPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("¿Eliminar este precio?")) return;
-    await supabase.from("price_items").delete().eq("id", id);
-    loadItems();
+    const ok = await confirm({
+      title: "Eliminar precio",
+      description: "¿Eliminar este precio?",
+      variant: "danger",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    try {
+      await supabase.from("price_items").delete().eq("id", id);
+      await loadItems();
+      toast.success("Precio eliminado");
+    } catch (error) {
+      toast.error("Error al eliminar el precio");
+    }
   }
 
   // Importar precios REALES desde sector_data (datos de n8n)
   async function syncFromMarket() {
     if (!userId) { alert("Error: no se pudo obtener tu usuario. Recarga la página."); return; }
-    if (!confirm("¿Importar precios actualizados del mercado (n8n)? Se añadirán los nuevos y se actualizarán los existentes.")) return;
+    const ok = await confirm({
+      title: "Importar precios actualizados",
+      description: "¿Importar precios actualizados del mercado (n8n)? Se añadirán los nuevos y se actualizarán los existentes.",
+      variant: "default",
+      confirmLabel: "Importar",
+    });
+    if (!ok) return;
     setSyncing(true);
 
     try {
@@ -180,10 +201,10 @@ export default function PricesPage() {
       }
 
       setLastSync(new Date().toLocaleTimeString("es-ES"));
-      alert(`Sincronización completada: ${added} nuevos, ${updated} actualizados.`);
+      toast.success(`Precios importados: ${added} nuevos, ${updated} actualizados.`);
     } catch (err) {
       console.error("Error sincronizando:", err);
-      alert("Error al sincronizar. Revisa la consola.");
+      toast.error("Error al sincronizar precios");
     }
 
     setSyncing(false);
@@ -192,27 +213,38 @@ export default function PricesPage() {
 
   async function importDefaults() {
     if (!userId) { alert("Error: no se pudo obtener tu usuario. Recarga la página."); return; }
-    if (!confirm("¿Importar precios por defecto del sector? Se añadirán a tu banco de precios actual.")) return;
+    const ok = await confirm({
+      title: "Importar precios del sector",
+      description: "¿Importar precios por defecto del sector? Se añadirán a tu banco de precios actual.",
+      variant: "default",
+      confirmLabel: "Importar",
+    });
+    if (!ok) return;
 
     const sectorDefaults = defaultPrices();
 
     if (sectorDefaults.length === 0) {
-      alert("No hay precios por defecto configurados para tu sector.");
+      toast.error("No hay precios por defecto configurados para tu sector");
       return;
     }
 
-    for (const item of sectorDefaults) {
-      await supabase.from("price_items").insert({
-        name: item.name,
-        category: item.category,
-        subcategory: item.subcategory,
-        unit: item.unit,
-        unit_price: item.price,
-        description: "",
-        user_id: userId,
-      });
+    try {
+      for (const item of sectorDefaults) {
+        await supabase.from("price_items").insert({
+          name: item.name,
+          category: item.category,
+          subcategory: item.subcategory,
+          unit: item.unit,
+          unit_price: item.price,
+          description: "",
+          user_id: userId,
+        });
+      }
+      await loadItems();
+      toast.success(`Precios del sector importados (${sectorDefaults.length})`);
+    } catch (error) {
+      toast.error("Error al importar precios del sector");
     }
-    loadItems();
   }
 
   const filtered = items.filter((item) => {

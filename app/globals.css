@@ -27,9 +27,19 @@
   --color-brand-green-dark: #00a67a;
   --color-brand-green-light: #00e6ac;
 
-  /* Typography */
-  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  /* Typography — Inter is loaded via next/font in app/layout.tsx.
+     The `--font-inter` variable is set on <html> by next/font; we wire it
+     through to Tailwind's `font-sans` utility via `--font-sans`. */
+  --font-sans: var(--font-inter), "Inter", system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
+
+/* Apply Inter to the whole document so inline elements that don't use
+   `font-sans` utility still inherit it (e.g., tables, forms, kbd). */
+html {
+  font-family: var(--font-sans);
+}
+
 
 /* ─────────────────────────────────────────────────────────────
    Base document colors
