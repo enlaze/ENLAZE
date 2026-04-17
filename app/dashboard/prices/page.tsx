@@ -241,7 +241,7 @@ if (!userId) return;
               unit_price: priceValue,
               description: `Precio de mercado · ${mp.source || "n8n"} · ${new Date(mp.last_updated).toLocaleDateString("es-ES")}`,
             })
-            .ilike("name", itemName);
+            .ilike("name", itemName)
             .eq("user_id", userId)
             .eq("sector", sectorConfig.sector);
 
