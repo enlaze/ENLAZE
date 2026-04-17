@@ -1,20 +1,54 @@
-import { NextRequest, NextResponse } from "next/server";
+ import { NextRequest, NextResponse } from "next/server";
 import { verifyAgentRequest, isErrorResponse } from "../../_lib/auth";
 
-/**
- * GET /api/agent/market/summary?user_id=xxx
- *
- * Returns market / competitor intelligence with automation-ready data:
- * - Price signals (trending up/down, anomalies)
- * - Competitor activity signals
- * - Market trends and local events
- * - Supplier alerts (delays, price changes)
- * - Price analysis with recommendations
- * - Actionable items for the business owner
- *
- * This module is always "available" (uses public/stored data).
- * Returns richer data when competitors and products are configured.
- */
+async function syncModuleState(
+  supabase: any,
+  userId: string,
+  moduleName: string,
+  data: {
+    connected: boolean;
+    status: string;
+    error_message?: string | null;
+  }
+) {
+  const now = new Date().toISOString();
+
+  const { data: existing } = await supabase
+    .from("agent_connections")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("module", moduleName)
+    .maybeSingle();
+
+  if (existing?.id) {
+    await supabase
+      .from("agent_connections")
+      .update({
+        connected: data.connected,
+        status: data.status,
+        last_sync_at: now,
+        error_message: data.error_message ?? null,
+        updated_at: now,
+      })
+      .eq("id", existing.id);
+  } else {
+    await supabase
+      .from("agent_connections")
+      .insert({
+        user_id: userId,
+        module: moduleName,
+        connected: data.connected,
+        status: data.status,
+        last_sync_at: now,
+        error_message: data.error_message ?? null,
+        config: {},
+        created_at: now,
+        updated_at: now,
+      });
+  }
+}
+
+
 export async function GET(req: NextRequest) {
   try {
     const auth = verifyAgentRequest(req);
@@ -156,6 +190,11 @@ export async function GET(req: NextRequest) {
         description: "Eventos locales que pueden generar tráfico para tu negocio.",
       });
     }
+await syncModuleState(supabase, userId, "market", {
+  connected: true,
+  status: "active",
+  error_message: null,
+});
 
     return NextResponse.json({
       ok: true,
@@ -185,3 +224,4 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
