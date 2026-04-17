@@ -1,5 +1,51 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAgentRequest, isErrorResponse } from "../../_lib/auth";
+async function syncModuleState(
+  supabase: any,
+  userId: string,
+  moduleName: string,
+  data: {
+    connected: boolean;
+    status: string;
+    error_message?: string | null;
+  }
+) {
+  const now = new Date().toISOString();
+
+  const { data: existing } = await supabase
+    .from("agent_connections")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("module", moduleName)
+    .maybeSingle();
+
+  if (existing?.id) {
+    await supabase
+      .from("agent_connections")
+      .update({
+        connected: data.connected,
+        status: data.status,
+        last_sync_at: now,
+        error_message: data.error_message ?? null,
+        updated_at: now,
+      })
+      .eq("id", existing.id);
+  } else {
+    await supabase
+      .from("agent_connections")
+      .insert({
+        user_id: userId,
+        module: moduleName,
+        connected: data.connected,
+        status: data.status,
+        last_sync_at: now,
+        error_message: data.error_message ?? null,
+        config: {},
+        created_at: now,
+        updated_at: now,
+      });
+  }
+}
 
 /**
  * GET /api/agent/gmail/summary?user_id=xxx
@@ -53,7 +99,19 @@ export async function GET(req: NextRequest) {
     //   - invoice_messages: containing "factura", "invoice", "pago" keywords
     //   - priority_threads: starred or from important contacts
     //   - awaiting_reply: sent by user > 48h ago with no response
-
+await syncModuleState(supabase, userId, "gmail", {
+  connected: true,
+  status: "active",
+  error_message: null,
+});
+try {
+  await syncModuleState(supabase, userId, "gmail", {
+    connected: true,
+    status: "error",
+    error_message:
+      error instanceof Error ? error.message.slice(0, 500) : "Unknown error",
+  });
+} catch {}
     return NextResponse.json({
       ok: true,
       connected: true,
@@ -77,3 +135,4 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
