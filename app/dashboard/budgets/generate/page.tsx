@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
 import { useSector } from "@/lib/sector-context";
+import { normalizeSector } from "@/lib/sector-config";
 
 interface Partida {
   concept: string;
@@ -39,16 +40,25 @@ interface ProjectOption {
   client_id: string | null;
 }
 
-const fallbackServiceTypes = [
-  { value: "reforma", label: "Reforma integral" },
-  { value: "fontaneria", label: "Fontaneria" },
-  { value: "electricidad", label: "Electricidad" },
-  { value: "climatizacion", label: "Climatizacion" },
-  { value: "multiservicios", label: "Multiservicios" },
-  { value: "general", label: "General" },
-];
+const fallbackServiceTypesBySector: Record<string, { value: string; label: string }[]> = {
+  construccion: [
+    { value: "reforma", label: "Reforma integral" },
+    { value: "fontaneria", label: "Fontaneria" },
+    { value: "electricidad", label: "Electricidad" },
+    { value: "climatizacion", label: "Climatizacion" },
+    { value: "multiservicios", label: "Multiservicios" },
+    { value: "general", label: "General" },
+  ],
+  comercio_local: [
+    { value: "venta", label: "Venta de productos" },
+    { value: "servicio", label: "Servicio al cliente" },
+    { value: "marketing", label: "Marketing y publicidad" },
+    { value: "logistica", label: "Logistica y transporte" },
+    { value: "general", label: "General" },
+  ],
+};
 
-const fallbackCategoryLabels: Record<string, string> = { material: "Material", mano_obra: "Mano de obra", otros: "Otros" };
+const fallbackCategoryLabels: Record<string, string> = { material: "Material", mano_obra: "Mano de obra", otros: "Otros", producto: "Producto", personal: "Personal", marketing: "Marketing", local: "Local/Espacio", servicio: "Servicio" };
 
 const unitLabel: Record<string, string> = { ud: "ud", m2: "m2", ml: "ml", h: "h", kg: "kg", global: "global", m3: "m3", l: "l" };
 
@@ -57,7 +67,9 @@ export default function GenerateBudgetPage() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
-  const { serviceTypes, budgetCategories } = useSector();
+  const { serviceTypes, budgetCategories, sectorKey } = useSector();
+  const normalizedSector = normalizeSector(sectorKey);
+  const fallbackServiceTypes = fallbackServiceTypesBySector[normalizedSector] || fallbackServiceTypesBySector.construccion;
 
   const [userId, setUserId] = useState("");
   const [clients, setClients] = useState<ClientOption[]>([]);
@@ -65,7 +77,7 @@ export default function GenerateBudgetPage() {
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [description, setDescription] = useState("");
-  const [serviceType, setServiceType] = useState("reforma");
+  const [serviceType, setServiceType] = useState("");
   const [clientName, setClientName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
   const [clientPhone, setClientPhone] = useState("");
@@ -108,6 +120,15 @@ export default function GenerateBudgetPage() {
     }
     init();
   }, []);
+
+  // Set default serviceType based on sector (runs when sector loads)
+  useEffect(() => {
+    const sTypes = serviceTypes();
+    const activeTypes = sTypes.length > 0 ? sTypes : fallbackServiceTypes;
+    if (!serviceType || !activeTypes.some(s => s.value === serviceType)) {
+      setServiceType(activeTypes[0]?.value || "general");
+    }
+  }, [sectorKey]);
 
   // Validate that the selected project belongs to the selected client
   useEffect(() => {
@@ -247,7 +268,9 @@ export default function GenerateBudgetPage() {
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={4}
-          placeholder="Ej: Reforma de bano de 4m2 con plato de ducha, alicatado completo, cambio de inodoro y lavabo, instalacion electrica nueva con 3 puntos de luz LED..."
+          placeholder={normalizedSector === "comercio_local"
+            ? "Ej: Propuesta de aprovisionamiento de 50 camisetas basicas, etiquetado personalizado, packaging y envio a tienda..."
+            : "Ej: Reforma de bano de 4m2 con plato de ducha, alicatado completo, cambio de inodoro y lavabo, instalacion electrica nueva con 3 puntos de luz LED..."}
           className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-3 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none resize-none text-sm"
         />
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">

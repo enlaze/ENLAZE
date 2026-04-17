@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { getSectorConfig } from "@/lib/agent-prompts";
+import { normalizeSector } from "@/lib/sector-config";
 import { logAiRun, hashText } from "@/lib/ai-logger";
 
 const anthropic = new Anthropic({
@@ -73,14 +74,16 @@ export async function POST(request: Request) {
       .eq("id", userId)
       .single();
 
-    const sector = profile?.business_sector || "otro";
+    const rawSector = profile?.business_sector || "otro";
     const businessName = profile?.business_name || "";
-    const sectorConfig = getSectorConfig(sector);
+    const sectorConfig = getSectorConfig(rawSector);
+    const priceSector = normalizeSector(rawSector);
 
     const { data: priceItems } = await supabase
       .from("price_items")
       .select("*")
       .eq("user_id", userId)
+      .eq("sector", priceSector)
       .order("category");
 
     const { data: margins } = await supabase
@@ -96,7 +99,7 @@ export async function POST(request: Request) {
     const { data: sectorData } = await supabase
       .from("sector_data")
       .select("*")
-      .eq("sector", sector);
+      .eq("sector", rawSector);
 
     const regulations = sectorData?.filter((d) => d.data_type === "regulation") || [];
     const refPrices = sectorData?.filter((d) => d.data_type === "price") || [];
@@ -280,7 +283,7 @@ export async function POST(request: Request) {
       total_cost: Math.round(totalCost * 100) / 100,
       total_client: Math.round(totalClient * 100) / 100,
       profit: Math.round((totalClient - totalCost) * 100) / 100,
-      sector: sector,
+      sector: rawSector,
       agent_name: sectorConfig.agent_name,
     });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAgentRequest, isErrorResponse } from "../../_lib/auth";
+import { normalizeSector } from "@/lib/sector-config";
 
 /**
  * GET /api/agent/market/prices?user_id=xxx
@@ -26,21 +27,23 @@ export async function GET(req: NextRequest) {
       .eq("id", userId)
       .maybeSingle();
 
-    const sector = profile?.business_sector || "comercio";
+    const rawSector = profile?.business_sector || "comercio";
+    const priceSector = normalizeSector(rawSector);
 
     // Get sector reference prices
     const { data: sectorPrices } = await supabase
       .from("sector_data")
       .select("*")
-      .eq("sector", sector)
+      .eq("sector", rawSector)
       .eq("data_type", "price")
       .order("last_updated", { ascending: false });
 
-    // Get user's own price items
+    // Get user's own price items (filtered by normalized sector)
     const { data: userPrices } = await supabase
       .from("price_items")
       .select("*")
       .eq("user_id", userId)
+      .eq("sector", priceSector)
       .order("category");
 
     // Get recent margin signals
@@ -144,7 +147,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      sector,
+      sector: rawSector,
       business_type: profile?.business_type || "comercio",
       city: profile?.city || "",
       benchmarks: benchmarks.slice(0, 50),

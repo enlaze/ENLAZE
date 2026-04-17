@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAgentRequest, isErrorResponse } from "../../_lib/auth";
 import Anthropic from "@anthropic-ai/sdk";
 import { getSectorConfig } from "@/lib/agent-prompts";
+import { normalizeSector } from "@/lib/sector-config";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -55,15 +56,17 @@ export async function POST(req: NextRequest) {
       .eq("id", userId)
       .maybeSingle();
 
-    const sector = profile?.business_sector || "comercio";
+    const rawSector = profile?.business_sector || "comercio";
     const businessName = profile?.business_name || "";
-    const sectorConfig = getSectorConfig(sector);
+    const sectorConfig = getSectorConfig(rawSector);
+    const priceSector = normalizeSector(rawSector);
 
-    // Get user's price items if available
+    // Get user's price items if available (filtered by normalized sector)
     const { data: priceItems } = await supabase
       .from("price_items")
       .select("*")
       .eq("user_id", userId)
+      .eq("sector", priceSector)
       .order("category");
 
     // Get margin config
@@ -83,7 +86,7 @@ export async function POST(req: NextRequest) {
     const { data: sectorData } = await supabase
       .from("sector_data")
       .select("*")
-      .eq("sector", sector);
+      .eq("sector", rawSector);
 
     const regulations =
       sectorData?.filter((d) => d.data_type === "regulation") || [];
@@ -247,7 +250,7 @@ RESPONDE ÚNICAMENTE con un JSON válido:
       total_cost: Math.round(totalCost * 100) / 100,
       total_client: Math.round(totalClient * 100) / 100,
       profit: Math.round((totalClient - totalCost) * 100) / 100,
-      sector,
+      sector: rawSector,
       business_name: businessName,
       agent_name: sectorConfig.agent_name,
     });

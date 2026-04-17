@@ -397,7 +397,12 @@ Cada partida debe ser específica y cuantificable.`,
 };
 
 export function getSectorConfig(sector: string): SectorConfig {
-  return sectorConfigs[sector] || sectorConfigs["otro"];
+  if (sectorConfigs[sector]) return sectorConfigs[sector];
+  // Handle aliases: "comercio_local" and "retail" → use "comercio" config
+  if (sector === "comercio_local" || sector === "retail") {
+    return sectorConfigs["comercio"];
+  }
+  return sectorConfigs["otro"];
 }
 
 /**

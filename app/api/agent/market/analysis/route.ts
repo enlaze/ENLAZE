@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAgentRequest, isErrorResponse } from "../../_lib/auth";
+import { normalizeSector } from "@/lib/sector-config";
 import Anthropic from "@anthropic-ai/sdk";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -36,14 +37,16 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const sector = profile.business_sector || "comercio";
+    const rawSector = profile.business_sector || "comercio";
+    const priceSector = normalizeSector(rawSector);
     const competitors = profile.competitors || [];
 
-    // Get user's products/prices
+    // Get user's products/prices (filtered by normalized sector)
     const { data: priceItems } = await supabase
       .from("price_items")
       .select("*")
       .eq("user_id", userId)
+      .eq("sector", priceSector)
       .order("category")
       .limit(100);
 
@@ -51,7 +54,7 @@ export async function GET(req: NextRequest) {
     const { data: sectorData } = await supabase
       .from("sector_data")
       .select("*")
-      .eq("sector", sector);
+      .eq("sector", rawSector);
 
     // Get recent agent signals
     const { data: recentSignals } = await supabase
@@ -120,7 +123,7 @@ export async function GET(req: NextRequest) {
 
 DATOS DEL NEGOCIO:
 - Nombre: ${profile.business_name || "No especificado"}
-- Sector: ${sector}
+- Sector: ${rawSector}
 - Tipo: ${profile.business_type || "comercio"}
 - Ciudad: ${profile.city || "España"}
 - Competidores conocidos: ${competitorList}
@@ -239,7 +242,7 @@ Sé concreto, práctico y orientado a acción. No generes contenido genérico. R
       ok: true,
       parsed: true,
       business_name: profile.business_name,
-      sector,
+      sector: rawSector,
       city: profile.city,
       generated_at: new Date().toISOString(),
       analysis,
