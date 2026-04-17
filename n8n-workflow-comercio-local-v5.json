@@ -14,8 +14,7 @@
         "rule": {
           "interval": [
             {
-              "field": "hours",
-              "value": 6
+              "triggerAtHour": 6
             }
           ]
         }
@@ -28,10 +27,8 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.ENLAZE_BASE_URL || 'https://enlaze.vercel.app' }}/api/agent/users?sector=comercio_local",
         "method": "GET",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": "httpHeaderAuth",
+        "url": "={{ $env.ENLAZE_BASE_URL || 'https://enlaze.vercel.app' }}/api/agent/users?sector=comercio_local",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -41,7 +38,13 @@
             }
           ]
         },
-        "responseFormat": "json"
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
       },
       "id": "n03",
       "name": "List Active Users",
@@ -55,7 +58,7 @@
           "number": [
             {
               "value1": "={{ $json.count }}",
-              "operation": "gt",
+              "operation": "larger",
               "value2": 0
             }
           ]
@@ -64,7 +67,7 @@
       "id": "n04",
       "name": "Check Users Exist",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
+      "typeVersion": 1,
       "position": [480, 330]
     },
     {
@@ -89,10 +92,17 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.ENLAZE_BASE_URL || 'https://enlaze.vercel.app' }}/api/agent/config",
         "method": "GET",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": "httpHeaderAuth",
+        "url": "={{ $env.ENLAZE_BASE_URL || 'https://enlaze.vercel.app' }}/api/agent/config",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "user_id",
+              "value": "={{ $json.user_id }}"
+            }
+          ]
+        },
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -102,15 +112,13 @@
             }
           ]
         },
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "user_id",
-              "value": "={{ $json.user_id }}"
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
             }
-          ]
-        },
-        "responseFormat": "json"
+          }
+        }
       },
       "id": "n07",
       "name": "Get User Config",
@@ -144,7 +152,7 @@
       "id": "n08",
       "name": "Inject Auth",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
+      "typeVersion": 3.3,
       "position": [1360, 330]
     },
     {
@@ -159,10 +167,8 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.ENLAZE_BASE_URL || 'https://enlaze.vercel.app' }}/api/agent/ingest",
         "method": "POST",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": "httpHeaderAuth",
+        "url": "={{ $env.ENLAZE_BASE_URL || 'https://enlaze.vercel.app' }}/api/agent/ingest",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -177,11 +183,15 @@
           ]
         },
         "sendBody": true,
-        "bodyParameters": {
-          "parameterListName": "body"
-        },
-        "body": "={{ JSON.stringify($json) }}",
-        "responseFormat": "json"
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
       },
       "id": "n10",
       "name": "Send to ENLAZE",
