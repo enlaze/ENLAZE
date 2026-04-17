@@ -6,13 +6,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase-browser";
 import Badge from "@/components/ui/badge";
-import PageHeader from "@/components/ui/page-header";
-import { Card, StatCard } from "@/components/ui/card";
-import { FormField, Input, Select, SearchInput } from "@/components/ui/form-fields";
-import { Button, LinkButton } from "@/components/ui/button";
 import Loading from "@/components/ui/loading";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
+import DataTable, { type Column, type FilterDef } from "@/components/ui/data-table";
 
 /* ═══════════════ Types ═══════════════ */
 
@@ -65,8 +62,6 @@ export default function IssuedInvoicesPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -176,18 +171,135 @@ export default function IssuedInvoicesPage() {
 
   useEffect(() => { load(); }, []);
 
-  // Filtering
-  const filtered = invoices.filter((inv) => {
-    if (filterStatus !== "all" && filterStatus === "overdue") {
-      if (inv.payment_status === "paid" || !inv.due_date) return false;
-      if (new Date(inv.due_date) >= new Date()) return false;
-    } else if (filterStatus !== "all" && inv.status !== filterStatus) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      if (!inv.invoice_number.toLowerCase().includes(q) && !inv.client_name.toLowerCase().includes(q)) return false;
-    }
-    return true;
-  });
+  function isOverdueInvoice(inv: IssuedInvoice): boolean {
+    return !!(
+      inv.due_date &&
+      inv.payment_status !== "paid" &&
+      inv.status !== "cancelled" &&
+      new Date(inv.due_date) < new Date()
+    );
+  }
+
+  const columns: Column<IssuedInvoice>[] = [
+    {
+      key: "invoice_number",
+      header: "Factura",
+      sortable: true,
+      alwaysVisible: true,
+      exportValue: (inv) => inv.invoice_number,
+      render: (inv) => (
+        <Link
+          href={`/dashboard/issued-invoices/${inv.id}`}
+          className="text-navy-900 dark:text-white hover:text-brand-green font-mono font-medium transition"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {inv.invoice_number}
+        </Link>
+      ),
+    },
+    {
+      key: "client_name",
+      header: "Cliente",
+      sortable: true,
+      exportValue: (inv) => inv.client_name,
+      render: (inv) => (
+        <span className="text-navy-700 dark:text-zinc-300">{inv.client_name}</span>
+      ),
+    },
+    {
+      key: "issue_date",
+      header: "Fecha",
+      sortable: true,
+      hidden: "hidden md:table-cell",
+      exportValue: (inv) => (inv.issue_date ? new Date(inv.issue_date) : null),
+      render: (inv) => (
+        <span className="text-navy-600 dark:text-zinc-400">{fmtDate(inv.issue_date)}</span>
+      ),
+    },
+    {
+      key: "due_date",
+      header: "Vto.",
+      sortable: true,
+      hidden: "hidden lg:table-cell",
+      exportValue: (inv) => (inv.due_date ? new Date(inv.due_date) : null),
+      render: (inv) => {
+        const overdue = isOverdueInvoice(inv);
+        const days = overdue && inv.due_date ? daysSince(inv.due_date) : 0;
+        return (
+          <span className={overdue ? "text-red-600 font-medium" : "text-navy-600 dark:text-zinc-400"}>
+            {fmtDate(inv.due_date)}
+            {overdue && <span className="ml-1 text-xs">({days}d)</span>}
+          </span>
+        );
+      },
+    },
+    {
+      key: "total",
+      header: "Total",
+      align: "right",
+      sortable: true,
+      exportValue: (inv) => Number(inv.total || 0),
+      render: (inv) => (
+        <span className="font-medium text-navy-900 dark:text-white tabular-nums">
+          {eur(inv.total)}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Estado",
+      sortable: true,
+      exportValue: (inv) => statusMap[inv.status]?.label || inv.status,
+      render: (inv) => {
+        const st = statusMap[inv.status] || { label: inv.status, variant: "gray" as const };
+        return <Badge variant={st.variant}>{st.label}</Badge>;
+      },
+    },
+    {
+      key: "verifactu",
+      header: "VF",
+      align: "center",
+      defaultHidden: true,
+      hidden: "hidden xl:table-cell",
+      exportValue: (inv) => (inv.verifactu_registered ? "Sí" : "No"),
+      render: (inv) =>
+        inv.verifactu_registered ? (
+          <span className="text-xs text-green-600 font-medium" title="Hash Verifactu registrado">Sí</span>
+        ) : (
+          <span className="text-xs text-navy-400 dark:text-zinc-500">No</span>
+        ),
+    },
+    {
+      key: "actions",
+      header: "Acc.",
+      align: "right",
+      alwaysVisible: true,
+      render: (inv) => (
+        <div className="flex justify-end gap-3" onClick={(e) => e.stopPropagation()}>
+          <Link href={`/dashboard/issued-invoices/${inv.id}`} className="text-xs text-brand-green hover:underline">
+            Detalle
+          </Link>
+          {inv.status === "draft" && (
+            <button onClick={() => handleDelete(inv.id)} className="text-xs text-red-600 hover:underline">
+              Eliminar
+            </button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  const filters: FilterDef<IssuedInvoice>[] = [
+    {
+      key: "status",
+      label: "Estado",
+      options: [
+        ...Object.entries(statusMap).map(([k, v]) => ({ label: v.label, value: k })),
+        { label: "Solo vencidas", value: "__overdue__" },
+      ],
+      matches: (inv, v) => (v === "__overdue__" ? isOverdueInvoice(inv) : inv.status === v),
+    },
+  ];
 
   // KPIs
   const totalEmitido = invoices.reduce((s, i) => s + Number(i.total || 0), 0);
@@ -286,80 +398,28 @@ export default function IssuedInvoicesPage() {
         </div>
       )}
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-4">
-        <input type="text" placeholder="Buscar por nº o cliente..." value={search} onChange={(e) => setSearch(e.target.value)}
-          className="bg-white text-navy-900 dark:text-white dark:bg-zinc-900 rounded-lg px-4 py-2 text-sm border border-navy-200 dark:border-zinc-800 dark:placeholder:text-zinc-500 focus:border-brand-green focus:outline-none w-64" />
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
-          className="bg-white text-navy-900 dark:text-white dark:bg-zinc-900 rounded-lg px-3 py-2 text-sm border border-navy-200 dark:border-zinc-800">
-          <option value="all">Todos los estados</option>
-          {Object.entries(statusMap).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-          <option value="overdue">Solo vencidas</option>
-        </select>
-      </div>
-
       {/* Table */}
-      <div className="bg-white rounded-2xl overflow-hidden border border-navy-100 dark:border-zinc-800 dark:bg-zinc-900 shadow-sm dark:shadow-none">
-        {filtered.length === 0 ? (
-          <div className="p-8 text-center"><p className="text-navy-500 dark:text-zinc-400">No hay facturas emitidas{search || filterStatus !== "all" ? " con esos filtros" : ""}.</p></div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-navy-200 dark:border-zinc-800 bg-navy-50 dark:bg-zinc-950/40">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">Factura</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">Cliente</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">Fecha</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">Vto.</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">Total</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">Estado</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">VF</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">Acc.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((inv) => {
-                const st = statusMap[inv.status] || { label: inv.status, variant: "gray" as const };
-                const isOverdue = inv.due_date && inv.payment_status !== "paid" && inv.status !== "cancelled" && new Date(inv.due_date) < new Date();
-                const days = inv.due_date && isOverdue ? daysSince(inv.due_date) : 0;
-                return (
-                  <tr key={inv.id} className={`border-b border-navy-100 dark:border-zinc-800 hover:bg-navy-50 dark:hover:bg-zinc-800/50 transition ${isOverdue ? "bg-red-50 dark:bg-red-950/30" : ""}`}>
-                    <td className="px-4 py-3">
-                      <Link href={`/dashboard/issued-invoices/${inv.id}`} className="text-navy-900 hover:text-brand-green font-mono font-medium transition">
-                        {inv.invoice_number}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-navy-700 dark:text-zinc-300">{inv.client_name}</td>
-                    <td className="px-4 py-3 text-navy-600 dark:text-zinc-400">{fmtDate(inv.issue_date)}</td>
-                    <td className="px-4 py-3">
-                      <span className={isOverdue ? "text-red-600 font-medium" : "text-navy-600"}>
-                        {fmtDate(inv.due_date)}
-                      </span>
-                      {isOverdue && <span className="ml-1 text-xs text-red-600">({days}d)</span>}
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium text-navy-900 dark:text-white">{eur(inv.total)}</td>
-                    <td className="px-4 py-3"><Badge variant={st.variant}>{st.label}</Badge></td>
-                    <td className="px-4 py-3 text-center">
-                      {inv.verifactu_registered ? (
-                        <span className="text-xs text-green-600 font-medium" title="Hash Verifactu registrado">Sí</span>
-                      ) : (
-                        <span className="text-xs text-navy-400 dark:text-zinc-500">No</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end gap-2">
-                        <Link href={`/dashboard/issued-invoices/${inv.id}`} className="text-xs text-brand-green hover:underline">Detalle</Link>
-                        {inv.status === "draft" && (
-                          <button onClick={() => handleDelete(inv.id)} className="text-xs text-red-600 hover:underline">Eliminar</button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+      {invoices.length === 0 ? (
+        <div className="p-8 text-center bg-white dark:bg-zinc-900 rounded-2xl border border-navy-100 dark:border-zinc-800">
+          <p className="text-navy-500 dark:text-zinc-400">No hay facturas emitidas.</p>
+        </div>
+      ) : (
+        <DataTable<IssuedInvoice>
+          columns={columns}
+          data={invoices}
+          rowKey={(inv) => inv.id}
+          searchable
+          searchPlaceholder="Buscar por nº, cliente o NIF..."
+          searchFields={(inv) => [inv.invoice_number, inv.client_name, inv.client_nif]}
+          filters={filters}
+          initialSort={{ key: "issue_date", dir: "desc" }}
+          pageSize={25}
+          exportable
+          exportFileName="facturas-emitidas"
+          toggleableColumns
+          emptyMessage="Sin facturas con esos filtros."
+        />
+      )}
     </div>
   );
 }

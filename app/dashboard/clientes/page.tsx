@@ -3,12 +3,13 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import PageHeader from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
-import { Button, LinkButton } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
-import { FormField, Input, Select, Textarea, SearchInput } from "@/components/ui/form-fields";
+import { FormField, Input, Select, Textarea } from "@/components/ui/form-fields";
 import EmptyState from "@/components/ui/empty-state";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
+import DataTable, { type Column } from "@/components/ui/data-table";
 
 type Client = {
   id: string;
@@ -25,7 +26,6 @@ export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const [search, setSearch] = useState("");
   const [form, setForm] = useState({ name: "", email: "", phone: "", company: "", notes: "", status: "lead" });
   const supabase = createClient();
   const confirm = useConfirm();
@@ -50,6 +50,7 @@ export default function ClientsPage() {
     setShowForm(false);
     setEditingClient(null);
     await fetchClients();
+    toast.success(editingClient ? "Cliente actualizado" : "Cliente creado");
   };
 
   const handleEdit = (client: Client) => {
@@ -75,15 +76,113 @@ export default function ClientsPage() {
     }
   };
 
-  const filtered = clients.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    (c.email && c.email.toLowerCase().includes(search.toLowerCase())) ||
-    (c.company && c.company.toLowerCase().includes(search.toLowerCase()))
-  );
+  const handleBulkDelete = async (rows: Client[]) => {
+    const ok = await confirm({
+      title: `Eliminar ${rows.length} cliente${rows.length === 1 ? "" : "s"}`,
+      description: "Esta acción no se puede deshacer.",
+      variant: "danger",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    try {
+      const ids = rows.map((r) => r.id);
+      await supabase.from("clients").delete().in("id", ids);
+      await fetchClients();
+      toast.success(`${rows.length} cliente${rows.length === 1 ? "" : "s"} eliminado${rows.length === 1 ? "" : "s"}`);
+    } catch {
+      toast.error("Error al eliminar los clientes");
+    }
+  };
 
   const statusVariant = (s: string): "green" | "blue" | "gray" =>
     s === "active" ? "green" : s === "lead" ? "blue" : "gray";
   const statusLabel = (s: string) => s === "active" ? "Activo" : s === "lead" ? "Lead" : "Inactivo";
+
+  const columns: Column<Client>[] = [
+    {
+      key: "name",
+      header: "Nombre",
+      sortable: true,
+      exportValue: (c) => c.name,
+      alwaysVisible: true,
+      render: (c) => (
+        <span className="font-medium text-navy-900 dark:text-white">{c.name}</span>
+      ),
+    },
+    {
+      key: "email",
+      header: "Email",
+      sortable: true,
+      hidden: "hidden md:table-cell",
+      exportValue: (c) => c.email,
+      render: (c) => (
+        <span className="text-navy-600 dark:text-zinc-400">{c.email || "—"}</span>
+      ),
+    },
+    {
+      key: "phone",
+      header: "Teléfono",
+      hidden: "hidden lg:table-cell",
+      exportValue: (c) => c.phone,
+      render: (c) => (
+        <span className="text-navy-600 dark:text-zinc-400">{c.phone || "—"}</span>
+      ),
+    },
+    {
+      key: "company",
+      header: "Empresa",
+      sortable: true,
+      hidden: "hidden md:table-cell",
+      exportValue: (c) => c.company,
+      render: (c) => (
+        <span className="text-navy-600 dark:text-zinc-400">{c.company || "—"}</span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Estado",
+      sortable: true,
+      exportValue: (c) => statusLabel(c.status),
+      render: (c) => (
+        <Badge variant={statusVariant(c.status)}>{statusLabel(c.status)}</Badge>
+      ),
+    },
+    {
+      key: "created_at",
+      header: "Creado",
+      sortable: true,
+      defaultHidden: true,
+      hidden: "hidden lg:table-cell",
+      exportValue: (c) => c.created_at,
+      render: (c) => (
+        <span className="text-navy-500 dark:text-zinc-500 tabular-nums">
+          {c.created_at ? new Date(c.created_at).toLocaleDateString("es-ES") : "—"}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Acciones",
+      align: "right",
+      alwaysVisible: true,
+      render: (c) => (
+        <div className="space-x-3" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => handleEdit(c)}
+            className="text-sm text-brand-green hover:text-brand-green-dark font-medium transition-colors"
+          >
+            Editar
+          </button>
+          <button
+            onClick={() => handleDelete(c.id)}
+            className="text-sm text-red-600 hover:text-red-700 font-medium transition-colors"
+          >
+            Eliminar
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <>
@@ -106,7 +205,7 @@ export default function ClientsPage() {
 
       {showForm && (
         <Card className="mb-8">
-          <h2 className="text-lg font-bold text-navy-900 mb-6">{editingClient ? "Editar cliente" : "Nuevo cliente"}</h2>
+          <h2 className="text-lg font-bold text-navy-900 mb-6 dark:text-white">{editingClient ? "Editar cliente" : "Nuevo cliente"}</h2>
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <FormField label="Nombre" required>
@@ -184,56 +283,46 @@ export default function ClientsPage() {
         </Card>
       )}
 
-      <div className="mb-6">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="Buscar por nombre, email o empresa..."
-          className="max-w-md"
-        />
-      </div>
-
-      {filtered.length === 0 ? (
+      {clients.length === 0 ? (
         <EmptyState
-          title={search ? "Sin resultados" : "Sin clientes todavía"}
-          description={search ? "Prueba con otro término" : "Agrega tu primer cliente para empezar"}
+          title="Sin clientes todavía"
+          description="Agrega tu primer cliente para empezar"
         />
       ) : (
-        <Card padding={false} className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-navy-100 dark:border-zinc-800 bg-navy-50/60 dark:bg-zinc-900/50">
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase tracking-wider">Nombre</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase tracking-wider hidden md:table-cell">Email</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase tracking-wider hidden lg:table-cell">Teléfono</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase tracking-wider hidden md:table-cell">Empresa</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase tracking-wider">Estado</th>
-                  <th className="text-right px-6 py-3 text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase tracking-wider">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(client => (
-                  <tr key={client.id} className="border-b border-navy-50 dark:border-zinc-800/60 hover:bg-navy-50/40 dark:hover:bg-zinc-800/50 transition-colors">
-                    <td className="px-6 py-4 text-sm font-medium text-navy-900 dark:text-white">{client.name}</td>
-                    <td className="px-6 py-4 text-sm text-navy-600 dark:text-zinc-400 hidden md:table-cell">{client.email || "—"}</td>
-                    <td className="px-6 py-4 text-sm text-navy-600 dark:text-zinc-400 hidden lg:table-cell">{client.phone || "—"}</td>
-                    <td className="px-6 py-4 text-sm text-navy-600 dark:text-zinc-400 hidden md:table-cell">{client.company || "—"}</td>
-                    <td className="px-6 py-4">
-                      <Badge variant={statusVariant(client.status)}>
-                        {statusLabel(client.status)}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4 text-right space-x-2">
-                      <button onClick={() => handleEdit(client)} className="text-sm text-brand-green hover:text-brand-green-dark font-medium transition-colors">Editar</button>
-                      <button onClick={() => handleDelete(client.id)} className="text-sm text-red-600 hover:text-red-700 font-medium transition-colors">Eliminar</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <DataTable<Client>
+          columns={columns}
+          data={clients}
+          rowKey={(c) => c.id}
+          searchable
+          searchPlaceholder="Buscar por nombre, email o empresa..."
+          searchFields={(c) => [c.name, c.email, c.company, c.phone]}
+          filters={[
+            {
+              key: "status",
+              label: "Estado",
+              options: [
+                { label: "Leads", value: "lead" },
+                { label: "Activos", value: "active" },
+                { label: "Inactivos", value: "inactive" },
+              ],
+              matches: (c, v) => c.status === v,
+            },
+          ]}
+          initialSort={{ key: "created_at", dir: "desc" }}
+          pageSize={25}
+          selectable
+          bulkActions={[
+            {
+              label: "Eliminar",
+              variant: "danger",
+              onClick: handleBulkDelete,
+            },
+          ]}
+          exportable
+          exportFileName="clientes"
+          toggleableColumns
+          emptyMessage="Sin resultados. Prueba con otro término."
+        />
       )}
     </>
   );

@@ -8,13 +8,14 @@ import { createClient } from "@/lib/supabase-browser";
 import { useSector } from "@/lib/sector-context";
 import PageHeader from "@/components/ui/page-header";
 import { Card, StatCard } from "@/components/ui/card";
-import { FormField, Input, Select, SearchInput } from "@/components/ui/form-fields";
+import { FormField, Input, Select } from "@/components/ui/form-fields";
 import { Button } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
 import EmptyState from "@/components/ui/empty-state";
 import Loading from "@/components/ui/loading";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
+import DataTable, { type Column, type FilterDef } from "@/components/ui/data-table";
 
 interface DeliveryNote {
   id: string;
@@ -60,9 +61,6 @@ export default function DeliveryNotesPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [orders, setOrders] = useState<OrderMin[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [search, setSearch] = useState("");
 
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -134,21 +132,113 @@ export default function DeliveryNotesPage() {
 
   useEffect(() => { load(); }, []);
 
-  const filtered = notes.filter((n) => {
-    if (filterStatus !== "all" && n.status !== filterStatus) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      if (!n.note_number.toLowerCase().includes(q)) return false;
-    }
-    return true;
-  });
-
   const supplierName = (id: string | null) => suppliers.find((s) => s.id === id)?.name || "—";
   const projectName = (id: string | null) => projects.find((p) => p.id === id)?.name || "—";
   const orderLabel = (id: string | null) => {
     const o = orders.find((ord) => ord.id === id);
     return o ? (o.order_number || o.title) : "—";
   };
+
+  const columns: Column<DeliveryNote>[] = [
+    {
+      key: "note_number",
+      header: "N.º Albarán",
+      sortable: true,
+      alwaysVisible: true,
+      exportValue: (n) => n.note_number,
+      render: (n) => (
+        <Link
+          href={`/dashboard/delivery-notes/${n.id}`}
+          className="font-mono font-medium text-navy-900 dark:text-white hover:text-brand-green"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {n.note_number || "Sin n.º"}
+        </Link>
+      ),
+    },
+    {
+      key: "supplier",
+      header: "Proveedor",
+      sortable: true,
+      exportValue: (n) => supplierName(n.supplier_id),
+      render: (n) => (
+        <span className="text-navy-600 dark:text-zinc-400">{supplierName(n.supplier_id)}</span>
+      ),
+    },
+    {
+      key: "project",
+      header: "Obra",
+      hidden: "hidden md:table-cell",
+      sortable: true,
+      exportValue: (n) => projectName(n.project_id),
+      render: (n) => (
+        <span className="text-navy-600 dark:text-zinc-400">{projectName(n.project_id)}</span>
+      ),
+    },
+    {
+      key: "order",
+      header: "Pedido",
+      hidden: "hidden lg:table-cell",
+      exportValue: (n) => orderLabel(n.order_id),
+      render: (n) => (
+        <span className="text-navy-500 dark:text-zinc-500">{orderLabel(n.order_id)}</span>
+      ),
+    },
+    {
+      key: "reception_date",
+      header: "Fecha",
+      sortable: true,
+      exportValue: (n) => (n.reception_date ? new Date(n.reception_date) : null),
+      render: (n) => (
+        <span className="text-navy-500 dark:text-zinc-500 tabular-nums">{fmtDate(n.reception_date)}</span>
+      ),
+    },
+    {
+      key: "total",
+      header: "Total",
+      align: "right",
+      sortable: true,
+      exportValue: (n) => Number(n.total || 0),
+      render: (n) => (
+        <span className="font-medium text-navy-900 dark:text-white tabular-nums">{eur(n.total)}</span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Estado",
+      sortable: true,
+      exportValue: (n) => statusConfig[n.status]?.label || n.status,
+      render: (n) => {
+        const st = statusConfig[n.status] || { label: n.status, variant: "yellow" as const };
+        return <Badge variant={st.variant}>{st.label}</Badge>;
+      },
+    },
+    {
+      key: "actions",
+      header: "Acciones",
+      align: "right",
+      alwaysVisible: true,
+      render: (n) => (
+        <div className="flex justify-end gap-3" onClick={(e) => e.stopPropagation()}>
+          <Link href={`/dashboard/delivery-notes/${n.id}`} className="text-xs text-brand-green hover:underline font-medium">
+            Detalle
+          </Link>
+          <button onClick={() => handleDelete(n.id)} className="text-xs text-red-600 hover:underline font-medium">
+            Eliminar
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  const filters: FilterDef<DeliveryNote>[] = [
+    {
+      key: "status",
+      label: "Estado",
+      options: Object.entries(statusConfig).map(([k, v]) => ({ label: v.label, value: k })),
+      matches: (n, v) => n.status === v,
+    },
+  ];
 
   const totalAlbaranes = notes.length;
   const pendientes = notes.filter((n) => n.status === "pending" || n.status === "received").length;
@@ -211,62 +301,32 @@ export default function DeliveryNotesPage() {
         </Card>
       )}
 
-      <div className="flex flex-wrap gap-3 mb-6">
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por n.º albarán..." className="w-64" />
-        <Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-auto">
-          <option value="all">Todos los estados</option>
-          {Object.entries(statusConfig).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-        </Select>
-      </div>
-
-      {filtered.length === 0 ? (
+      {notes.length === 0 ? (
         <EmptyState
-          title={search || filterStatus !== "all" ? "Sin resultados" : "Sin albaranes todavía"}
+          title="Sin albaranes todavía"
           description="Crea tu primer albarán para registrar recepciones de material"
         />
       ) : (
-        <div className="rounded-2xl border border-navy-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-navy-100 dark:border-zinc-800 bg-navy-50 dark:bg-zinc-900/60">
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider">N.º Albarán</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider">Proveedor</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider hidden md:table-cell">Obra</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider hidden lg:table-cell">Pedido</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider">Fecha</th>
-                  <th className="px-5 py-3 text-right text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider">Total</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider">Estado</th>
-                  <th className="px-5 py-3 text-right text-[11px] font-semibold text-navy-500 dark:text-zinc-500 uppercase tracking-wider">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((n) => {
-                  const st = statusConfig[n.status] || { label: n.status, variant: "gray" as const };
-                  return (
-                    <tr key={n.id} className="border-b border-navy-50 hover:bg-navy-50 dark:hover:bg-zinc-800/50 transition-colors">
-                      <td className="px-5 py-3.5">
-                        <Link href={`/dashboard/delivery-notes/${n.id}`} className="text-navy-900 hover:text-brand-green font-medium font-mono transition-colors">
-                          {n.note_number || "Sin n.º"}
-                        </Link>
-                      </td>
-                      <td className="px-5 py-3.5 text-navy-600 dark:text-zinc-400">{supplierName(n.supplier_id)}</td>
-                      <td className="px-5 py-3.5 text-navy-600 dark:text-zinc-400 hidden md:table-cell">{projectName(n.project_id)}</td>
-                      <td className="px-5 py-3.5 text-navy-500 dark:text-zinc-500 hidden lg:table-cell">{orderLabel(n.order_id)}</td>
-                      <td className="px-5 py-3.5 text-navy-500 dark:text-zinc-500">{fmtDate(n.reception_date)}</td>
-                      <td className="px-5 py-3.5 text-right font-medium text-navy-900 dark:text-white">{eur(n.total)}</td>
-                      <td className="px-5 py-3.5"><Badge variant={st.variant}>{st.label}</Badge></td>
-                      <td className="px-5 py-3.5 text-right">
-                        <Link href={`/dashboard/delivery-notes/${n.id}`} className="text-xs text-brand-green hover:underline font-medium mr-3">Detalle</Link>
-                        <button onClick={() => handleDelete(n.id)} className="text-xs text-red-600 hover:underline font-medium">Eliminar</button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <DataTable<DeliveryNote>
+          columns={columns}
+          data={notes}
+          rowKey={(n) => n.id}
+          searchable
+          searchPlaceholder="Buscar por n.º albarán, proveedor u obra..."
+          searchFields={(n) => [
+            n.note_number,
+            supplierName(n.supplier_id),
+            projectName(n.project_id),
+            orderLabel(n.order_id),
+          ]}
+          filters={filters}
+          initialSort={{ key: "reception_date", dir: "desc" }}
+          pageSize={25}
+          exportable
+          exportFileName="albaranes"
+          toggleableColumns
+          emptyMessage="Sin resultados. Prueba con otro término."
+        />
       )}
     </>
   );

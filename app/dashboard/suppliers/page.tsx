@@ -1,18 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { useSector } from "@/lib/sector-context";
 import Link from "next/link";
 import PageHeader from "@/components/ui/page-header";
 import { Card, StatCard } from "@/components/ui/card";
-import { FormField, Input, Select, SearchInput } from "@/components/ui/form-fields";
+import { FormField, Input, Select } from "@/components/ui/form-fields";
 import { Button } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
 import EmptyState from "@/components/ui/empty-state";
 import Loading from "@/components/ui/loading";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
+import DataTable, { type Column, type FilterDef } from "@/components/ui/data-table";
 
 interface Supplier {
   id: string;
@@ -68,10 +69,6 @@ export default function SuppliersPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
-  const [search, setSearch] = useState("");
-  const [filterTrade, setFilterTrade] = useState("all");
-  const [filterType, setFilterType] = useState("all");
-
   // Dynamic trade/specialty options from sector config
   const sectorTrades = options("trades");
   const sectorSpecialties = options("specialties");
@@ -148,24 +145,163 @@ export default function SuppliersPage() {
     }
   }
 
-  const filtered = useMemo(() => {
-    return suppliers.filter((s) => {
-      const matchSearch =
-        s.name.toLowerCase().includes(search.toLowerCase()) ||
-        (s.nif || "").toLowerCase().includes(search.toLowerCase()) ||
-        (s.contact_person || "").toLowerCase().includes(search.toLowerCase()) ||
-        (s.specialty || "").toLowerCase().includes(search.toLowerCase());
-      const matchTrade = filterTrade === "all" || s.trade === filterTrade;
-      const matchType = filterType === "all" || s.type === filterType;
-      return matchSearch && matchTrade && matchType;
-    });
-  }, [suppliers, search, filterTrade, filterType]);
-
   const totalProveedores = suppliers.filter((s) => s.type === "proveedor").length;
   const totalSubcontratas = suppliers.filter((s) => s.type === "subcontrata").length;
 
   const fmtMoney = (n: number) =>
     new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(n || 0);
+
+  const columns: Column<Supplier>[] = [
+    {
+      key: "name",
+      header: "Nombre",
+      sortable: true,
+      alwaysVisible: true,
+      exportValue: (s) => s.name,
+      render: (s) => (
+        <div>
+          <p className="text-sm font-medium text-navy-900 dark:text-white">{s.name}</p>
+          {s.nif && <p className="text-xs text-navy-600 dark:text-zinc-400">{s.nif}</p>}
+          {s.specialty && <p className="text-xs text-navy-500 dark:text-zinc-500">{s.specialty}</p>}
+        </div>
+      ),
+    },
+    {
+      key: "type",
+      header: "Tipo",
+      align: "center",
+      sortable: true,
+      exportValue: (s) => s.type,
+      render: (s) =>
+        s.type === "subcontrata" ? (
+          <Badge variant="orange">Subcontrata</Badge>
+        ) : (
+          <Badge variant="blue">Proveedor</Badge>
+        ),
+    },
+    {
+      key: "trade",
+      header: "Oficio",
+      align: "center",
+      hidden: "hidden md:table-cell",
+      sortable: true,
+      exportValue: (s) => tradeMap[s.trade] || s.trade,
+      render: (s) => (
+        <span className="text-xs text-navy-600 dark:text-zinc-400">
+          {tradeMap[s.trade] || s.trade}
+        </span>
+      ),
+    },
+    {
+      key: "contact",
+      header: "Contacto",
+      hidden: "hidden lg:table-cell",
+      exportValue: (s) => [s.contact_person, s.phone, s.email].filter(Boolean).join(" · "),
+      render: (s) => (
+        <div>
+          {s.contact_person && <p className="text-sm text-navy-800 dark:text-zinc-200">{s.contact_person}</p>}
+          {s.phone && <p className="text-xs text-navy-600 dark:text-zinc-400">{s.phone}</p>}
+          {s.email && <p className="text-xs text-navy-600 dark:text-zinc-400">{s.email}</p>}
+        </div>
+      ),
+    },
+    {
+      key: "hourly_rate",
+      header: "€/h",
+      align: "center",
+      sortable: true,
+      hidden: "hidden sm:table-cell",
+      exportValue: (s) => Number(s.hourly_rate || 0),
+      render: (s) => (
+        <span className="text-sm text-navy-700 dark:text-zinc-300">
+          {Number(s.hourly_rate || 0) > 0 ? `${Number(s.hourly_rate).toFixed(0)}€` : "—"}
+        </span>
+      ),
+    },
+    {
+      key: "total_invoiced",
+      header: "Facturado",
+      align: "right",
+      sortable: true,
+      hidden: "hidden md:table-cell",
+      exportValue: (s) => Number(s.total_invoiced || 0),
+      render: (s) => (
+        <div>
+          <p className="text-sm font-medium text-navy-900 dark:text-white">
+            {fmtMoney(Number(s.total_invoiced || 0))}
+          </p>
+          {Number(s.total_invoiced || 0) > Number(s.total_paid || 0) && (
+            <p className="text-xs text-orange-600">
+              Pdte: {fmtMoney(Number(s.total_invoiced || 0) - Number(s.total_paid || 0))}
+            </p>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "rating",
+      header: "Valoración",
+      align: "center",
+      sortable: true,
+      defaultHidden: true,
+      exportValue: (s) => s.rating,
+      render: (s) =>
+        s.rating > 0 ? (
+          <span className="text-sm text-yellow-600">
+            {"★".repeat(s.rating)}
+            {"☆".repeat(5 - s.rating)}
+          </span>
+        ) : (
+          <span className="text-xs text-navy-400 dark:text-zinc-500">—</span>
+        ),
+    },
+    {
+      key: "actions",
+      header: "Acciones",
+      align: "right",
+      alwaysVisible: true,
+      render: (s) => (
+        <div className="space-x-3" onClick={(e) => e.stopPropagation()}>
+          <Link
+            href={`/dashboard/suppliers/${s.id}`}
+            className="text-xs text-brand-green hover:underline"
+          >
+            Ver
+          </Link>
+          <button
+            onClick={() => startEdit(s)}
+            className="text-xs text-navy-600 dark:text-zinc-400 hover:underline"
+          >
+            Editar
+          </button>
+          <button
+            onClick={() => handleDelete(s.id)}
+            className="text-xs text-red-600 hover:underline"
+          >
+            Eliminar
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  const filters: FilterDef<Supplier>[] = [
+    {
+      key: "type",
+      label: "Tipo",
+      options: [
+        { label: "Proveedores", value: "proveedor" },
+        { label: "Subcontratas", value: "subcontrata" },
+      ],
+      matches: (s, v) => s.type === v,
+    },
+    {
+      key: "trade",
+      label: "Oficio",
+      options: tradeOptions.map((t) => ({ label: t.label, value: t.value })),
+      matches: (s, v) => s.trade === v,
+    },
+  ];
 
   if (loading) {
     return <Loading />;
@@ -189,30 +325,6 @@ export default function SuppliersPage() {
         <StatCard label="Total" value={suppliers.length} accent="blue" />
         <StatCard label={label("suppliers")} value={totalProveedores} accent="green" />
         <StatCard label="Subcontratas" value={totalSubcontratas} accent="yellow" />
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <SearchInput
-          placeholder="Buscar por nombre, NIF, contacto, especialidad..."
-          value={search}
-          onChange={setSearch}
-          className="flex-1"
-        />
-        <Select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-        >
-          <option value="all">Todos los tipos</option>
-          {typeOptions.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </Select>
-        <Select
-          value={filterTrade}
-          onChange={(e) => setFilterTrade(e.target.value)}
-        >
-          <option value="all">Todos los oficios</option>
-          {tradeOptions.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </Select>
       </div>
 
       {/* Form */}
@@ -361,75 +473,27 @@ export default function SuppliersPage() {
       )}
 
       {/* Table */}
-      {filtered.length === 0 ? (
+      {suppliers.length === 0 ? (
         <EmptyState
           title="Sin proveedores todavía"
           description="Pulsa 'Nuevo proveedor' para empezar."
         />
       ) : (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-navy-100 dark:border-zinc-800 bg-navy-50 dark:bg-zinc-900/60">
-                  <th className="text-left text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase tracking-wider px-5 py-3">Nombre</th>
-                  <th className="text-center text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase tracking-wider px-3 py-3">Tipo</th>
-                  <th className="text-center text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase tracking-wider px-3 py-3">Oficio</th>
-                  <th className="text-left text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase tracking-wider px-3 py-3">Contacto</th>
-                  <th className="text-center text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase tracking-wider px-3 py-3">€/h</th>
-                  <th className="text-right text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase tracking-wider px-3 py-3">Facturado</th>
-                  <th className="text-center text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase tracking-wider px-3 py-3">Valoración</th>
-                  <th className="text-right text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase tracking-wider px-5 py-3">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((s) => (
-                  <tr key={s.id} className="border-b border-navy-100 dark:border-zinc-800 hover:bg-navy-50 dark:hover:bg-zinc-800/50 transition">
-                    <td className="px-5 py-3">
-                      <p className="text-sm font-medium text-navy-900 dark:text-white">{s.name}</p>
-                      {s.nif && <p className="text-xs text-navy-600 dark:text-zinc-400">{s.nif}</p>}
-                      {s.specialty && <p className="text-xs text-navy-500 dark:text-zinc-500">{s.specialty}</p>}
-                    </td>
-                    <td className="px-3 py-3 text-center">
-                      {s.type === "subcontrata" ? (
-                        <Badge variant="orange">Subcontrata</Badge>
-                      ) : (
-                        <Badge variant="blue">Proveedor</Badge>
-                      )}
-                    </td>
-                    <td className="px-3 py-3 text-center text-xs text-navy-600 dark:text-zinc-400">{tradeMap[s.trade] || s.trade}</td>
-                    <td className="px-3 py-3">
-                      {s.contact_person && <p className="text-sm text-navy-800">{s.contact_person}</p>}
-                      {s.phone && <p className="text-xs text-navy-600 dark:text-zinc-400">{s.phone}</p>}
-                      {s.email && <p className="text-xs text-navy-600 dark:text-zinc-400">{s.email}</p>}
-                    </td>
-                    <td className="px-3 py-3 text-center text-sm text-navy-700 dark:text-zinc-300">
-                      {Number(s.hourly_rate || 0) > 0 ? `${Number(s.hourly_rate).toFixed(0)}€` : "—"}
-                    </td>
-                    <td className="px-3 py-3 text-right">
-                      <p className="text-sm font-medium text-navy-900 dark:text-white">{fmtMoney(Number(s.total_invoiced || 0))}</p>
-                      {Number(s.total_invoiced || 0) > Number(s.total_paid || 0) && (
-                        <p className="text-xs text-orange-600">Pdte: {fmtMoney(Number(s.total_invoiced || 0) - Number(s.total_paid || 0))}</p>
-                      )}
-                    </td>
-                    <td className="px-3 py-3 text-center">
-                      {s.rating > 0 ? (
-                        <span className="text-sm text-yellow-600">{"★".repeat(s.rating)}{"☆".repeat(5 - s.rating)}</span>
-                      ) : (
-                        <span className="text-xs text-navy-400 dark:text-zinc-500">—</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      <Link href={`/dashboard/suppliers/${s.id}`} className="text-xs text-brand-green hover:underline mr-3">Ver</Link>
-                      <button onClick={() => startEdit(s)} className="text-xs text-navy-600 dark:text-zinc-400 hover:underline mr-3">Editar</button>
-                      <button onClick={() => handleDelete(s.id)} className="text-xs text-red-600 hover:underline">Eliminar</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <DataTable<Supplier>
+          columns={columns}
+          data={suppliers}
+          rowKey={(s) => s.id}
+          searchable
+          searchPlaceholder="Buscar por nombre, NIF, contacto, especialidad..."
+          searchFields={(s) => [s.name, s.nif, s.contact_person, s.specialty, s.email, s.phone]}
+          filters={filters}
+          initialSort={{ key: "name", dir: "asc" }}
+          pageSize={25}
+          exportable
+          exportFileName="proveedores"
+          toggleableColumns
+          emptyMessage="Sin resultados. Prueba con otro término."
+        />
       )}
     </div>
   );

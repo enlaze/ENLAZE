@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import Logo from "@/components/Logo";
 import NotificationCenter from "@/components/NotificationCenter";
-import SearchCommand from "@/components/SearchCommand";
+import { SearchCommandProvider, useSearchCommand } from "@/components/SearchCommand";
 import ShortcutsOverlay from "@/components/ShortcutsOverlay";
 import ThemeToggle from "@/components/ThemeToggle";
 import { SectorProvider, useSector } from "@/lib/sector-context";
@@ -36,8 +36,31 @@ const fallbackNavItems = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <SectorProvider>
-      <DashboardInner>{children}</DashboardInner>
+      <SearchCommandProvider>
+        <DashboardInner>{children}</DashboardInner>
+      </SearchCommandProvider>
     </SectorProvider>
+  );
+}
+
+/* Topbar button that opens the global command palette via the hook. */
+function SearchTriggerButton() {
+  const { open } = useSearchCommand();
+  return (
+    <div className="relative hidden max-w-md flex-1 md:block">
+      <button
+        type="button"
+        onClick={open}
+        className="flex h-10 w-full items-center gap-2 rounded-xl border border-navy-100 bg-navy-50/60 pl-3 pr-3 text-sm text-navy-400 transition-colors hover:border-navy-200 hover:bg-navy-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-800 dark:hover:bg-zinc-800"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </svg>
+        <span className="flex-1 text-left">Buscar clientes, presupuestos…</span>
+        <kbd className="hidden sm:inline-flex h-5 items-center rounded border border-navy-200 bg-white px-1.5 text-[10px] font-medium text-navy-400 dark:border-zinc-800 dark:bg-zinc-900/80 dark:text-zinc-400">⌘K</kbd>
+      </button>
+    </div>
   );
 }
 
@@ -133,20 +156,7 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Search trigger */}
-          <div className="relative hidden max-w-md flex-1 md:block">
-            <button
-              type="button"
-              onClick={() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}
-              className="flex h-10 w-full items-center gap-2 rounded-xl border border-navy-100 bg-navy-50/60 pl-3 pr-3 text-sm text-navy-400 transition-colors hover:border-navy-200 hover:bg-navy-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-800 dark:hover:bg-zinc-800"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8" />
-                <path d="m21 21-4.3-4.3" />
-              </svg>
-              <span className="flex-1 text-left">Buscar clientes, presupuestos…</span>
-              <kbd className="hidden sm:inline-flex h-5 items-center rounded border border-navy-200 bg-white px-1.5 text-[10px] font-medium text-navy-400 dark:border-zinc-800 dark:bg-zinc-900/80 dark:text-zinc-400">⌘K</kbd>
-            </button>
-          </div>
+          <SearchTriggerButton />
 
           <div className="flex flex-1 items-center justify-end gap-2 sm:gap-3">
             {/* Theme toggle */}
@@ -290,8 +300,6 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
         <div className="px-6 py-10 md:px-12 md:py-14">{children}</div>
       </main>
 
-      {/* Global search modal */}
-      <SearchCommand />
       {/* Keyboard shortcuts help (press ?) */}
       <ShortcutsOverlay />
     </div>

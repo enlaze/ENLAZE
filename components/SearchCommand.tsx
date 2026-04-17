@@ -1,12 +1,29 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 
+/* ─── Types ──────────────────────────────────────────────────────────── */
+
 interface SearchResult {
   id: string;
-  type: "client" | "budget" | "invoice" | "project" | "payment" | "supplier" | "received_invoice";
+  type:
+    | "client"
+    | "budget"
+    | "invoice"
+    | "project"
+    | "payment"
+    | "supplier"
+    | "received_invoice";
   title: string;
   subtitle: string;
   icon: string;
@@ -35,10 +52,80 @@ const quickActions = [
   { label: "Ajustes", href: "/dashboard/settings", icon: "⚙️", keys: "G S" },
 ];
 
-export default function SearchCommand() {
+/* ─── Context + hook ─────────────────────────────────────────────────── */
+
+interface SearchCommandContextValue {
+  isOpen: boolean;
+  open: () => void;
+  close: () => void;
+  toggle: () => void;
+}
+
+const SearchCommandContext = createContext<SearchCommandContextValue | null>(null);
+
+/**
+ * Hook for triggering the global command palette (Cmd+K) from anywhere.
+ * Usage: `const { open } = useSearchCommand(); <button onClick={open}>...</button>`
+ *
+ * When called outside the provider, returns a safe no-op value (prevents crashes
+ * during SSR or if the component is mounted in a tree without the provider).
+ */
+export function useSearchCommand(): SearchCommandContextValue {
+  const ctx = useContext(SearchCommandContext);
+  if (ctx) return ctx;
+  return {
+    isOpen: false,
+    open: () => {},
+    close: () => {},
+    toggle: () => {},
+  };
+}
+
+/* ─── Provider ───────────────────────────────────────────────────────── */
+
+/**
+ * Wrap your app (or the dashboard subtree) with this provider to enable the
+ * Cmd+K command palette globally. Renders the modal internally when open.
+ */
+export function SearchCommandProvider({ children }: { children: React.ReactNode }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const open = useCallback(() => setIsOpen(true), []);
+  const close = useCallback(() => setIsOpen(false), []);
+  const toggle = useCallback(() => setIsOpen((v) => !v), []);
+
+  // Global Cmd+K / Ctrl+K listener
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setIsOpen((v) => !v);
+      } else if (e.key === "Escape") {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  const value = useMemo<SearchCommandContextValue>(
+    () => ({ isOpen, open, close, toggle }),
+    [isOpen, open, close, toggle],
+  );
+
+  return (
+    <SearchCommandContext.Provider value={value}>
+      {children}
+      {isOpen && <SearchCommandModal onClose={close} />}
+    </SearchCommandContext.Provider>
+  );
+}
+
+/* ─── Modal (internal) ──────────────────────────────────────────────── */
+
+function SearchCommandModal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const supabase = createClient();
-  const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -46,30 +133,11 @@ export default function SearchCommand() {
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // Cmd+K / Ctrl+K to open
+  // Focus input on mount
   useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        setOpen((v) => !v);
-      }
-      if (e.key === "Escape") {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    const t = setTimeout(() => inputRef.current?.focus(), 50);
+    return () => clearTimeout(t);
   }, []);
-
-  // Focus input when modal opens
-  useEffect(() => {
-    if (open) {
-      setTimeout(() => inputRef.current?.focus(), 50);
-      setQuery("");
-      setResults([]);
-      setSelectedIndex(0);
-    }
-  }, [open]);
 
   // Debounced search
   const search = useCallback(
@@ -83,11 +151,14 @@ export default function SearchCommand() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
       try {
         const res = await fetch(
-          `/api/search?q=${encodeURIComponent(q)}&user_id=${user.id}`
+          `/api/search?q=${encodeURIComponent(q)}&user_id=${user.id}`,
         );
         const data = await res.json();
         setResults(data.results || []);
@@ -96,7 +167,7 @@ export default function SearchCommand() {
       }
       setLoading(false);
     },
-    [supabase]
+    [supabase],
   );
 
   function handleQueryChange(value: string) {
@@ -109,7 +180,13 @@ export default function SearchCommand() {
   }
 
   // All navigable items: results + quick actions (when no query)
-  const items: { label: string; subtitle?: string; icon: string; href: string; type?: string }[] =
+  const items: {
+    label: string;
+    subtitle?: string;
+    icon: string;
+    href: string;
+    type?: string;
+  }[] =
     query.length >= 2
       ? results.map((r) => ({
           label: r.title,
@@ -124,13 +201,16 @@ export default function SearchCommand() {
           href: a.href,
         }));
 
-  function navigate(href: string) {
-    setOpen(false);
-    router.push(href);
-  }
+  const navigate = useCallback(
+    (href: string) => {
+      onClose();
+      router.push(href);
+    },
+    [onClose, router],
+  );
 
-  // Keyboard navigation
-  function handleKeyDown(e: React.KeyboardEvent) {
+  // Keyboard navigation on input
+  function handleInputKeyDown(e: React.KeyboardEvent) {
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setSelectedIndex((i) => Math.min(i + 1, items.length - 1));
@@ -153,8 +233,6 @@ export default function SearchCommand() {
     }
   }
 
-  if (!open) return null;
-
   let flatIndex = -1;
 
   return (
@@ -162,7 +240,7 @@ export default function SearchCommand() {
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={() => setOpen(false)}
+        onClick={onClose}
       />
 
       {/* Modal */}
@@ -189,7 +267,7 @@ export default function SearchCommand() {
               type="text"
               value={query}
               onChange={(e) => handleQueryChange(e.target.value)}
-              onKeyDown={handleKeyDown}
+              onKeyDown={handleInputKeyDown}
               placeholder="Buscar clientes, presupuestos, facturas…"
               className="flex-1 bg-transparent text-sm text-navy-900 placeholder:text-navy-400 focus:outline-none dark:text-white dark:placeholder:text-zinc-500"
             />
@@ -226,7 +304,9 @@ export default function SearchCommand() {
                           onClick={() => navigate(item.href)}
                           onMouseEnter={() => setSelectedIndex(idx)}
                           className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                            isSelected ? "bg-brand-green/10 dark:bg-brand-green/20" : "hover:bg-navy-50 dark:hover:bg-zinc-800"
+                            isSelected
+                              ? "bg-brand-green/10 dark:bg-brand-green/20"
+                              : "hover:bg-navy-50 dark:hover:bg-zinc-800"
                           }`}
                         >
                           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-navy-50 text-sm dark:bg-zinc-800">
@@ -281,7 +361,9 @@ export default function SearchCommand() {
                       onClick={() => navigate(a.href)}
                       onMouseEnter={() => setSelectedIndex(i)}
                       className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                        isSelected ? "bg-brand-green/10 dark:bg-brand-green/20" : "hover:bg-navy-50 dark:hover:bg-zinc-800"
+                        isSelected
+                          ? "bg-brand-green/10 dark:bg-brand-green/20"
+                          : "hover:bg-navy-50 dark:hover:bg-zinc-800"
                       }`}
                     >
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-navy-50 text-sm dark:bg-zinc-800">
@@ -310,15 +392,21 @@ export default function SearchCommand() {
           <div className="flex items-center justify-between border-t border-navy-100 px-4 py-2 dark:border-zinc-800">
             <div className="flex items-center gap-3 text-[10px] text-navy-400 dark:text-zinc-500">
               <span className="flex items-center gap-1">
-                <kbd className="rounded border border-navy-200 bg-navy-50 px-1 py-0.5 font-mono dark:border-zinc-800 dark:bg-zinc-800">↑↓</kbd>
+                <kbd className="rounded border border-navy-200 bg-navy-50 px-1 py-0.5 font-mono dark:border-zinc-800 dark:bg-zinc-800">
+                  ↑↓
+                </kbd>
                 Navegar
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="rounded border border-navy-200 bg-navy-50 px-1 py-0.5 font-mono dark:border-zinc-800 dark:bg-zinc-800">↵</kbd>
+                <kbd className="rounded border border-navy-200 bg-navy-50 px-1 py-0.5 font-mono dark:border-zinc-800 dark:bg-zinc-800">
+                  ↵
+                </kbd>
                 Abrir
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="rounded border border-navy-200 bg-navy-50 px-1 py-0.5 font-mono dark:border-zinc-800 dark:bg-zinc-800">esc</kbd>
+                <kbd className="rounded border border-navy-200 bg-navy-50 px-1 py-0.5 font-mono dark:border-zinc-800 dark:bg-zinc-800">
+                  esc
+                </kbd>
                 Cerrar
               </span>
             </div>
@@ -327,4 +415,17 @@ export default function SearchCommand() {
       </div>
     </div>
   );
+}
+
+/* ─── Back-compat default export ────────────────────────────────────── */
+
+/**
+ * Deprecated. Prefer wrapping your tree with `<SearchCommandProvider>` and
+ * using the `useSearchCommand()` hook. This default export is kept for
+ * backward compatibility and simply renders an empty provider.
+ *
+ * @deprecated Use SearchCommandProvider + useSearchCommand instead.
+ */
+export default function SearchCommand() {
+  return null;
 }
