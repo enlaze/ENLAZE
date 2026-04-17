@@ -4,23 +4,9 @@ import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { useSector } from "@/lib/sector-context";
 import { getSectorConfig } from "@/lib/sector-config";
+import { getSectorPriceConfig, getSectorAliases } from "@/lib/price-defaults";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
-
-/* Fallback constants (only used if sector config hasn't loaded) */
-const fallbackCategories = [
-  { value: "material", label: "Material" },
-  { value: "mano_obra", label: "Mano de obra" },
-  { value: "otros", label: "Otros" },
-];
-
-const fallbackUnits = ["ud", "m2", "ml", "h", "kg", "global", "m3", "l"];
-
-const fallbackSubcategories: Record<string, string[]> = {
-  material: ["Fontanería", "Electricidad", "Albañilería", "Pintura", "Carpintería", "Climatización", "Cristalería", "Cerrajería", "Otros"],
-  mano_obra: ["Oficial 1ª", "Oficial 2ª", "Peón", "Especialista", "Subcontrata", "Otros"],
-  otros: ["Transporte", "Alquiler maquinaria", "Gestión residuos", "Permisos", "Otros"],
-};
 
 interface PriceItem {
   id: string;
@@ -43,19 +29,6 @@ export default function PricesPage() {
   const confirm = useConfirm();
   const toast = useToast();
 
-  // Dynamic categories, subcategories and units from sector config
-  const sectorCats = budgetCategories();
-  const categories = sectorCats.length > 0 ? sectorCats : fallbackCategories;
-  const sectorUnits = options("units");
-  const units = sectorUnits.length > 0 ? sectorUnits : fallbackUnits;
-
-  // Dynamic subcategories: try sector config, fallback to hardcoded
-  function getSubcats(cat: string): string[] {
-    const fromSector = getSectorSubcats(cat);
-    if (fromSector.length > 0) return fromSector;
-    return fallbackSubcategories[cat] || [];
-  }
-
   const [items, setItems] = useState<PriceItem[]>([]);
   const [contextLoaded, setContextLoaded] = useState(false);
   const [loadingItems, setLoadingItems] = useState(false);
@@ -68,9 +41,22 @@ export default function PricesPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [sectorConfig, setSectorConfig] = useState(getSectorConfig("construccion"));
 
+  // Sector-aware fallbacks from lib/price-defaults.ts
+  const priceConfig = getSectorPriceConfig(sectorConfig.sector);
+  const sectorCats = budgetCategories();
+  const categories = sectorCats.length > 0 ? sectorCats : priceConfig.categories;
+  const sectorUnits = options("units");
+  const units = sectorUnits.length > 0 ? sectorUnits : priceConfig.units;
+
+  function getSubcats(cat: string): string[] {
+    const fromSector = getSectorSubcats(cat);
+    if (fromSector.length > 0) return fromSector;
+    return priceConfig.subcategories[cat] || [];
+  }
+
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState(categories[0]?.value || "material");
+  const [category, setCategory] = useState(categories[0]?.value || "producto");
   const [subcategory, setSubcategory] = useState("");
   const [unit, setUnit] = useState("ud");
   const [unitPrice, setUnitPrice] = useState(0);
@@ -135,8 +121,8 @@ export default function PricesPage() {
   }, [userId, sectorConfig.sector]);
 
   function resetForm() {
-    setName(""); setDescription(""); setCategory("material");
-    setSubcategory(""); setUnit("ud"); setUnitPrice(0);
+    setName(""); setDescription(""); setCategory(categories[0]?.value || "producto");
+    setSubcategory(""); setUnit(units[0] || "ud"); setUnitPrice(0);
     setEditingId(null); setShowForm(false);
   }
 
@@ -219,14 +205,17 @@ if (!userId) return;
     setSyncing(true);
 
     try {
+      // Filter by sector aliases to match both "comercio" and "comercio_local" etc.
+      const sectorAliases = getSectorAliases(sectorConfig.sector);
       const { data: marketPrices } = await supabase
         .from("sector_data")
         .select("*")
         .eq("data_type", "price")
+        .in("sector", sectorAliases)
         .order("last_updated", { ascending: false });
 
       if (!marketPrices || marketPrices.length === 0) {
-        alert("No hay precios de mercado disponibles todavía. Ejecuta el workflow de n8n primero.");
+        alert("No hay precios de mercado disponibles para tu sector. Ejecuta el workflow de n8n o usa 'Importar por defecto'.");
         setSyncing(false);
         return;
       }
@@ -270,7 +259,7 @@ if (!userId) return;
   sector: sectorConfig.sector,
   name: itemName,
   description: `Precio de mercado · ${mp.source || "n8n"} · ${new Date(mp.last_updated).toLocaleDateString("es-ES")}`,
-  category: mp.category || "material",
+  category: mp.category || categories[0]?.value || "producto",
   subcategory: subcat,
   unit: mp.unit || "ud",
   unit_price: priceValue,
@@ -301,7 +290,17 @@ if (!userId) return;
     });
     if (!ok) return;
 
-    const sectorDefaults = defaultPrices();
+    // Try DB defaults first, then hardcoded fallback from price-defaults.ts
+    let sectorDefaults = defaultPrices();
+    if (sectorDefaults.length === 0) {
+      sectorDefaults = priceConfig.defaults.map(d => ({
+        name: d.name,
+        category: d.category,
+        subcategory: d.subcategory,
+        unit: d.unit,
+        price: d.price,
+      }));
+    }
 
     if (sectorDefaults.length === 0) {
       toast.error("No hay precios por defecto configurados para tu sector");
@@ -394,7 +393,7 @@ if (!userId) return;
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="md:col-span-2">
               <label className="block text-xs text-[var(--color-navy-400)] mb-1">Nombre *</label>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej: Azulejo porcelánico 30x60" className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm" />
+              <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={priceConfig.placeholder} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm" />
             </div>
             <div>
               <label className="block text-xs text-[var(--color-navy-400)] mb-1">Precio unitario *</label>
@@ -463,10 +462,12 @@ if (!userId) return;
                     </td>
                     <td className="px-3 py-3 text-center">
                       <span className={`text-xs px-2 py-1 rounded-full ${
-                        item.category === "material" ? "bg-blue-900/30 text-blue-300" :
-                        item.category === "mano_obra" ? "bg-orange-900/30 text-orange-300" :
+                        item.category === "material" || item.category === "producto" ? "bg-blue-900/30 text-blue-300" :
+                        item.category === "mano_obra" || item.category === "servicio" ? "bg-orange-900/30 text-orange-300" :
+                        item.category === "logistica" || item.category === "maquinaria" ? "bg-purple-900/30 text-purple-300" :
+                        item.category === "packaging" || item.category === "marketing" ? "bg-emerald-900/30 text-emerald-300" :
                         "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400"
-                      }`}>{catLabel[item.category]}</span>
+                      }`}>{catLabel[item.category] || item.category}</span>
                     </td>
                     <td className="px-3 py-3 text-center text-xs text-[var(--color-navy-300)]">{item.subcategory || "—"}</td>
                     <td className="px-3 py-3 text-center text-sm text-[var(--color-navy-200)]">{unitLabel[item.unit] || item.unit}</td>
