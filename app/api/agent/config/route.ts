@@ -139,9 +139,8 @@ export async function GET(req: NextRequest) {
       google_calendar_connected: connMap["google_calendar"] || false,
       google_business_connected: connMap["google_business"] || Boolean(profile.google_place_id),
       agent_modules_enabled: modulesEnabled,
-      // Base URL & API key for Code-node fetch calls (avoids $env in n8n Code nodes)
+      // Base URL for reference (auth is injected by n8n Set node, NOT here)
       ENLAZE_BASE_URL: resolveBaseUrl(),
-      AGENT_API_KEY: process.env.AGENT_API_KEY || "",
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

@@ -1,0 +1,562 @@
+{
+  "name": "Comercio local — MVP diario",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger_manual",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 6
+            }
+          ]
+        }
+      },
+      "id": "trigger_schedule",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$json.ENLAZE_BASE_URL || '{{ENLAZE_BASE_URL}}'}}/api/agent/config",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "user_id",
+              "value": "={{$json.user_id || '{{USER_ID}}'}}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{AGENT_API_KEY}}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "get_config",
+      "name": "Get Config",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/economia/portada",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "fetch_rss_elpais",
+      "name": "RSS El País",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.europapress.es/rss/rss.aspx?ch=136",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "fetch_rss_europapress",
+      "name": "RSS Europa Press",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://cincodias.elpais.com/rss/feed.html?feedId=17066",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "fetch_rss_cincodias",
+      "name": "RSS Cinco Días",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.boe.es/rss/canal.php?c=ayudas",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "fetch_boe_ayudas",
+      "name": "RSS BOE Ayudas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// parse_news — Filtra y normaliza noticias de los 3 RSS\nconst keywords = [\n  'comercio local', 'pyme', 'autónomo', 'subvención', 'digitalización',\n  'hostelería', 'comercio minorista', 'iva', 'seguridad social',\n  'licencia apertura', 'kit digital', 'empleo', 'inflación',\n  'turismo', 'consumo', 'alquiler', 'energía', 'impuesto'\n];\n\nfunction parseRSSItems(xmlText, sourceName) {\n  const items = [];\n  // Match <item>...</item> blocks\n  const itemRegex = /<item[^>]*>([\\s\\S]*?)<\\/item>/gi;\n  let match;\n  while ((match = itemRegex.exec(xmlText)) !== null) {\n    const block = match[1];\n    const title = (block.match(/<title[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/title>/s) || [])[1] || '';\n    const link = (block.match(/<link[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/link>/s) || [])[1] || '';\n    const description = (block.match(/<description[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/description>/s) || [])[1] || '';\n    const pubDate = (block.match(/<pubDate[^>]*>(.*?)<\\/pubDate>/s) || [])[1] || '';\n    items.push({ title: title.trim(), link: link.trim(), description: description.trim(), pubDate: pubDate.trim(), source: sourceName });\n  }\n  return items;\n}\n\nfunction scoreRelevance(title, description) {\n  const text = (title + ' ' + description).toLowerCase();\n  let score = 0;\n  for (const kw of keywords) {\n    if (text.includes(kw)) score += 3;\n  }\n  return Math.min(score, 10);\n}\n\nfunction stripHTML(str) {\n  return str.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/gi, ' ').trim();\n}\n\n// Get RSS inputs from the 3 feeds\nconst input0 = $input.all();\nconst allRawItems = [];\n\nfor (const item of input0) {\n  const data = item.json.data || item.json.body || item.json;\n  const text = typeof data === 'string' ? data : JSON.stringify(data);\n  \n  let sourceName = 'Desconocido';\n  if (text.includes('elpais.com')) sourceName = 'El País';\n  else if (text.includes('europapress')) sourceName = 'Europa Press';\n  else if (text.includes('cincodias')) sourceName = 'Cinco Días';\n  \n  allRawItems.push(...parseRSSItems(text, sourceName));\n}\n\n// Filter by relevance\nconst news = allRawItems\n  .map(item => {\n    const relevance = scoreRelevance(item.title, item.description);\n    return {\n      id: 'news_' + Buffer.from(item.link || item.title).toString('base64').slice(0, 12),\n      title: stripHTML(item.title),\n      summary: stripHTML(item.description).slice(0, 300),\n      source: item.source,\n      url: item.link,\n      date: item.pubDate ? new Date(item.pubDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],\n      category: 'noticias',\n      relevance,\n      tags: keywords.filter(kw => (item.title + ' ' + item.description).toLowerCase().includes(kw))\n    };\n  })\n  .filter(n => n.relevance >= 3)\n  .sort((a, b) => b.relevance - a.relevance)\n  .slice(0, 15);\n\nreturn [{ json: { news } }];"
+      },
+      "id": "parse_news",
+      "name": "Parse News",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// parse_ayudas — Filtra y normaliza ayudas del BOE RSS\nconst keywords = [\n  'pyme', 'comercio', 'digitalización', 'kit digital', 'autónomo',\n  'empleo', 'formación', 'subvención', 'ayuda', 'bonificación',\n  'pequeña empresa', 'microempresa', 'hostelería', 'turismo'\n];\n\nfunction parseRSSItems(xmlText) {\n  const items = [];\n  const itemRegex = /<item[^>]*>([\\s\\S]*?)<\\/item>/gi;\n  let match;\n  while ((match = itemRegex.exec(xmlText)) !== null) {\n    const block = match[1];\n    const title = (block.match(/<title[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/title>/s) || [])[1] || '';\n    const link = (block.match(/<link[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/link>/s) || [])[1] || '';\n    const description = (block.match(/<description[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/description>/s) || [])[1] || '';\n    const pubDate = (block.match(/<pubDate[^>]*>(.*?)<\\/pubDate>/s) || [])[1] || '';\n    items.push({ title: title.trim(), link: link.trim(), description: description.trim(), pubDate: pubDate.trim() });\n  }\n  return items;\n}\n\nfunction stripHTML(str) {\n  return str.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/gi, ' ').trim();\n}\n\nfunction classifyType(title, description) {\n  const text = (title + ' ' + description).toLowerCase();\n  if (text.includes('subvención') || text.includes('subvencion')) return 'subvención';\n  if (text.includes('bonificación') || text.includes('bonificacion')) return 'bonificación';\n  if (text.includes('formación') || text.includes('formacion')) return 'formación';\n  return 'ayuda';\n}\n\nconst input0 = $input.all();\nlet xmlText = '';\nfor (const item of input0) {\n  const data = item.json.data || item.json.body || item.json;\n  xmlText += typeof data === 'string' ? data : JSON.stringify(data);\n}\n\nconst rawItems = parseRSSItems(xmlText);\n\nconst subsidies = [];\nconst regulations = [];\n\nfor (const item of rawItems) {\n  const text = (item.title + ' ' + item.description).toLowerCase();\n  const isRelevant = keywords.some(kw => text.includes(kw));\n  if (!isRelevant) continue;\n\n  const cleanTitle = stripHTML(item.title);\n  const cleanDesc = stripHTML(item.description);\n\n  // Detect if it's a regulation or a subsidy/aid\n  if (text.includes('normativa') || text.includes('reglamento') || text.includes('obligación') || text.includes('ley ')) {\n    regulations.push({\n      id: 'reg_' + Buffer.from(item.link || item.title).toString('base64').slice(0, 12),\n      title: cleanTitle,\n      type: 'normativa',\n      summary: cleanDesc.slice(0, 300),\n      url: item.link,\n      impact: text.includes('obligat') || text.includes('sanción') ? 'high' : 'medium',\n      action_required: 'Revisar requisitos y plazos de cumplimiento'\n    });\n  } else {\n    subsidies.push({\n      id: 'sub_' + Buffer.from(item.link || item.title).toString('base64').slice(0, 12),\n      title: cleanTitle,\n      type: classifyType(item.title, item.description),\n      amount_range: '',\n      deadline: '',\n      target: 'Pymes y autónomos',\n      url: item.link,\n      status: 'abierta'\n    });\n  }\n}\n\nreturn [{ json: { subsidies: subsidies.slice(0, 10), regulations: regulations.slice(0, 10) } }];"
+      },
+      "id": "parse_ayudas",
+      "name": "Parse Ayudas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// build_radar_output — Combina noticias y ayudas en un objeto radar\nconst items = $input.all();\n\nlet news = [];\nlet subsidies = [];\nlet regulations = [];\n\nfor (const item of items) {\n  if (item.json.news) news = item.json.news;\n  if (item.json.subsidies) subsidies = item.json.subsidies;\n  if (item.json.regulations) regulations = item.json.regulations;\n}\n\nreturn [{\n  json: {\n    radar: {\n      news,\n      regulations,\n      subsidies,\n      competitor_signals: [],\n      local_events: []\n    }\n  }\n}];"
+      },
+      "id": "build_radar",
+      "name": "Build Radar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://places.googleapis.com/v1/places/{{$node['Get Config'].json.google_place_id}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Goog-Api-Key",
+              "value": "{{GOOGLE_PLACES_API_KEY}}"
+            },
+            {
+              "name": "X-Goog-FieldMask",
+              "value": "id,displayName,rating,userRatingCount,reviews"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch_google_place",
+      "name": "Google Place Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// analyze_reviews_basic — Analiza reseñas de Google Places (new API)\nconst placeData = $input.first().json;\n\nconst reviews = placeData.reviews || [];\nconst currentRating = placeData.rating || 0;\nconst totalReviews = placeData.userRatingCount || 0;\n\n// Theme keywords\nconst themeKeywords = {\n  espera: ['espera', 'tardaron', 'lento', 'rápido', 'rapidez', 'demora'],\n  trato: ['trato', 'amable', 'simpático', 'maleducado', 'atención', 'servicio'],\n  precio: ['precio', 'caro', 'barato', 'económico', 'relación calidad'],\n  limpieza: ['limpio', 'sucio', 'limpieza', 'higiene'],\n  calidad: ['calidad', 'bueno', 'malo', 'fresco', 'rico', 'delicioso', 'mediocre'],\n  ambiente: ['ambiente', 'acogedor', 'ruidoso', 'tranquilo', 'decoración'],\n};\n\nfunction detectThemes(text) {\n  if (!text) return [];\n  const lower = text.toLowerCase();\n  const found = [];\n  for (const [theme, kws] of Object.entries(themeKeywords)) {\n    if (kws.some(kw => lower.includes(kw))) found.push(theme);\n  }\n  return found;\n}\n\nfunction generateResponse(review) {\n  const name = review.authorAttribution?.displayName || 'cliente';\n  const rating = review.rating || 0;\n  if (rating <= 2) {\n    return `Estimado/a ${name}, lamentamos que su experiencia no haya sido satisfactoria. Nos gustaría conocer más detalles para poder mejorar. ¿Podría contactarnos directamente? Estamos comprometidos con ofrecer el mejor servicio.`;\n  }\n  if (rating === 3) {\n    return `Gracias por su visita, ${name}. Tomamos nota de su valoración y trabajaremos para mejorar su próxima experiencia.`;\n  }\n  return null;\n}\n\nconst now = new Date();\nconst sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);\n\nlet positive = 0, neutral = 0, negative = 0;\nconst urgentReviews = [];\nconst allThemes = [];\n\nfor (const review of reviews) {\n  const rating = review.rating || 3;\n  if (rating >= 4) positive++;\n  else if (rating === 3) neutral++;\n  else negative++;\n\n  const themes = detectThemes(review.text?.text || review.originalText?.text || '');\n  allThemes.push(...themes);\n\n  // Urgent: negative + recent\n  if (rating <= 2) {\n    const publishTime = review.publishTime ? new Date(review.publishTime) : null;\n    const isRecent = publishTime ? publishTime >= sevenDaysAgo : false;\n\n    urgentReviews.push({\n      author: review.authorAttribution?.displayName || 'Anónimo',\n      rating,\n      text: (review.text?.text || review.originalText?.text || '').slice(0, 500),\n      date: review.publishTime || null,\n      themes,\n      responded: false,\n      recent: isRecent,\n      suggested_response: generateResponse(review)\n    });\n  }\n}\n\n// Count themes\nconst themeCounts = {};\nfor (const t of allThemes) {\n  themeCounts[t] = (themeCounts[t] || 0) + 1;\n}\nconst recurringThemes = Object.entries(themeCounts)\n  .filter(([, c]) => c >= 2)\n  .sort((a, b) => b[1] - a[1])\n  .map(([t]) => t);\n\nreturn [{\n  json: {\n    reputation: {\n      reviews: {\n        current_rating: currentRating,\n        total_reviews: totalReviews,\n        new_reviews_count: reviews.length,\n        sentiment_breakdown: { positive, neutral, negative },\n        recurring_themes: recurringThemes,\n        urgent: urgentReviews.slice(0, 5),\n        trend: positive > negative ? 'improving' : negative > positive ? 'declining' : 'stable'\n      }\n    }\n  }\n}];"
+      },
+      "id": "analyze_reviews",
+      "name": "Analyze Reviews",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// generate_marketing_ideas — Genera ideas de marketing basadas en calendario y tipo de negocio\nconst config = $node['Get Config'].json;\nconst businessType = (config.business_type || 'comercio').toLowerCase();\nconst city = config.city || 'Madrid';\nconst businessName = config.business_name || 'Mi Negocio';\n\nconst now = new Date();\nconst dayOfWeek = now.getDay(); // 0=Sun\nconst month = now.getMonth() + 1;\nconst day = now.getDate();\n\n// Calendario comercial España\nconst upcomingDates = [];\nconst campaigns = [];\n\n// Check notable dates in the next 30 days\nconst dates30 = [];\nfor (let i = 0; i < 30; i++) {\n  const d = new Date(now.getTime() + i * 86400000);\n  dates30.push({ date: d, m: d.getMonth() + 1, d: d.getDate(), dow: d.getDay() });\n}\n\nconst calendar = [\n  { m: 1, d: 6, name: 'Reyes', applicable: ['tienda', 'comercio'] },\n  { m: 2, d: 14, name: 'San Valentín', applicable: ['restaurante', 'bar', 'estética', 'peluquería', 'floristería'] },\n  { m: 3, d: 8, name: 'Día de la Mujer', applicable: ['estética', 'peluquería'] },\n  { m: 3, d: 19, name: 'Día del Padre', applicable: ['tienda', 'restaurante', 'bar', 'peluquería'] },\n  { m: 5, d: 1, name: 'Día del Trabajador', applicable: ['todos'] },\n  { m: 5, d: 4, name: 'Día de la Madre', applicable: ['tienda', 'restaurante', 'estética', 'peluquería', 'floristería'] },\n  { m: 6, d: 21, name: 'Inicio del Verano', applicable: ['todos'] },\n  { m: 9, d: 1, name: 'Vuelta al cole', applicable: ['tienda', 'peluquería'] },\n  { m: 10, d: 31, name: 'Halloween', applicable: ['bar', 'restaurante', 'tienda'] },\n  { m: 11, d: 25, name: 'Black Friday', applicable: ['todos'] },\n  { m: 12, d: 25, name: 'Navidad', applicable: ['todos'] },\n  { m: 12, d: 31, name: 'Nochevieja', applicable: ['restaurante', 'bar'] },\n];\n\nfor (const entry of calendar) {\n  for (const d of dates30) {\n    if (d.m === entry.m && d.d === entry.d) {\n      const isApplicable = entry.applicable.includes('todos') || entry.applicable.some(t => businessType.includes(t));\n      if (isApplicable) {\n        const dateStr = `${d.date.getFullYear()}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;\n        upcomingDates.push({ name: entry.name, date: dateStr });\n        campaigns.push({\n          title: `Campaña ${entry.name}`,\n          type: 'promotion',\n          channel: ['whatsapp', 'instagram'],\n          target_audience: 'clientes_recurrentes',\n          suggested_date: dateStr,\n          message_draft: `¡${entry.name} se acerca! En ${businessName} tenemos algo especial preparado para ti. ¡No te lo pierdas!`,\n          reason: `Fecha señalada: ${entry.name}`\n        });\n      }\n    }\n  }\n}\n\n// Día valle (martes/miércoles para hostelería)\nif (['bar', 'restaurante', 'cafetería', 'café'].some(t => businessType.includes(t))) {\n  const nextTuesday = dates30.find(d => d.dow === 2);\n  if (nextTuesday) {\n    const dateStr = nextTuesday.date.toISOString().split('T')[0];\n    campaigns.push({\n      title: 'Promo día valle — Martes especial',\n      type: 'promotion',\n      channel: ['whatsapp', 'instagram'],\n      target_audience: 'clientes_recurrentes',\n      suggested_date: dateStr,\n      message_draft: `¡Este martes en ${businessName} tenemos oferta especial! Ven a disfrutar de nuestro menú/promoción exclusiva de entre semana.`,\n      reason: 'Martes detectado como día de baja afluencia en hostelería'\n    });\n  }\n}\n\n// Generic seasonal idea\nlet seasonalIdea = '';\nif (month >= 6 && month <= 8) seasonalIdea = 'Campaña de verano: terraza, refrescos, horario extendido';\nelse if (month >= 11 || month <= 1) seasonalIdea = 'Campaña navideña: cestas, menús especiales, tarjetas regalo';\nelse if (month >= 3 && month <= 5) seasonalIdea = 'Campaña de primavera: renovación, escaparates, productos de temporada';\nelse seasonalIdea = 'Campaña de otoño: vuelta a la rutina, ofertas de reenganche';\n\nif (campaigns.length === 0) {\n  campaigns.push({\n    title: seasonalIdea,\n    type: 'content',\n    channel: ['instagram'],\n    target_audience: 'todos',\n    suggested_date: dates30[3]?.date.toISOString().split('T')[0] || '',\n    message_draft: `¡Novedades en ${businessName}! Ven a descubrir lo que tenemos preparado esta temporada.`,\n    reason: 'No hay fechas señaladas próximas — se sugiere campaña estacional'\n  });\n}\n\nreturn [{\n  json: {\n    campaigns,\n    upcoming_dates: upcomingDates\n  }\n}];"
+      },
+      "id": "generate_marketing",
+      "name": "Marketing Ideas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        1080
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// build_reputation_output — Combina reviews + marketing\nconst items = $input.all();\n\nlet reputation = { reviews: {} };\nlet campaigns = [];\n\nfor (const item of items) {\n  if (item.json.reputation) reputation = item.json.reputation;\n  if (item.json.campaigns) campaigns = item.json.campaigns;\n}\n\nreputation.campaigns = campaigns;\n\nreturn [{ json: { reputation } }];"
+      },
+      "id": "build_reputation",
+      "name": "Build Reputation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        940
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge_modules",
+      "name": "Merge Modules",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1300,
+        680
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// build_payload — Ensambla el payload final para /api/agent/ingest\nconst items = $input.all();\nconst config = $node['Get Config'].json;\n\nlet radar = { news: [], regulations: [], subsidies: [], competitor_signals: [], local_events: [] };\nlet reputation = { reviews: {}, campaigns: [] };\n\nfor (const item of items) {\n  if (item.json.radar) {\n    radar = { ...radar, ...item.json.radar };\n  }\n  if (item.json.reputation) {\n    reputation = { ...reputation, ...item.json.reputation };\n  }\n}\n\n// Build daily summary\nconst newsCount = (radar.news || []).length;\nconst subsidyCount = (radar.subsidies || []).length;\nconst regCount = (radar.regulations || []).length;\nconst urgentReviews = reputation.reviews?.urgent?.length || 0;\nconst campaignCount = (reputation.campaigns || []).length;\n\nconst opportunities = subsidyCount + campaignCount;\nconst risks = regCount + urgentReviews;\n\nlet headline = `Hoy tienes ${newsCount} noticias relevantes`;\nif (subsidyCount > 0) headline += `, ${subsidyCount} ayudas disponibles`;\nif (urgentReviews > 0) headline += `, ${urgentReviews} reseñas que requieren atención`;\nheadline += '.';\n\nconst priorityActions = [];\nif (urgentReviews > 0) {\n  priorityActions.push(`Responder a ${urgentReviews} reseña(s) negativa(s) urgentes`);\n}\nif (subsidyCount > 0) {\n  priorityActions.push(`Revisar ${subsidyCount} ayuda(s)/subvención(es) disponibles`);\n}\nif (regCount > 0) {\n  priorityActions.push(`Revisar ${regCount} cambio(s) normativo(s) que pueden afectarte`);\n}\nif (campaignCount > 0) {\n  priorityActions.push(`Considerar ${campaignCount} idea(s) de campaña de marketing`);\n}\n\nconst score = Math.min(100, 40 + newsCount * 3 + subsidyCount * 8 + campaignCount * 5 - urgentReviews * 10 - regCount * 5);\n\nconst payload = {\n  user_id: config.user_id,\n  agent: 'comercio_local',\n  version: '1.0',\n  business_id: config.business_id || null,\n  timestamp: new Date().toISOString(),\n\n  daily_summary: {\n    headline,\n    priority_actions: priorityActions,\n    opportunities_count: opportunities,\n    risks_count: risks,\n    score: Math.max(0, score)\n  },\n\n  radar,\n  reputation\n};\n\nreturn [{ json: payload }];"
+      },
+      "id": "build_payload",
+      "name": "Build Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        680
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$node['Get Config'].json.ENLAZE_BASE_URL || '{{ENLAZE_BASE_URL}}'}}/api/agent/ingest",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{AGENT_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "send_to_enlaze",
+      "name": "Send to ENLAZE",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1820,
+        680
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Config": {
+      "main": [
+        [
+          {
+            "node": "RSS El País",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "RSS Europa Press",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "RSS Cinco Días",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "RSS BOE Ayudas",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Google Place Details",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Marketing Ideas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS El País": {
+      "main": [
+        [
+          {
+            "node": "Parse News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Europa Press": {
+      "main": [
+        [
+          {
+            "node": "Parse News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Cinco Días": {
+      "main": [
+        [
+          {
+            "node": "Parse News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS BOE Ayudas": {
+      "main": [
+        [
+          {
+            "node": "Parse Ayudas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse News": {
+      "main": [
+        [
+          {
+            "node": "Build Radar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Ayudas": {
+      "main": [
+        [
+          {
+            "node": "Build Radar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Radar": {
+      "main": [
+        [
+          {
+            "node": "Merge Modules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Place Details": {
+      "main": [
+        [
+          {
+            "node": "Analyze Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Reviews": {
+      "main": [
+        [
+          {
+            "node": "Build Reputation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marketing Ideas": {
+      "main": [
+        [
+          {
+            "node": "Build Reputation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Reputation": {
+      "main": [
+        [
+          {
+            "node": "Merge Modules",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Modules": {
+      "main": [
+        [
+          {
+            "node": "Build Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Payload": {
+      "main": [
+        [
+          {
+            "node": "Send to ENLAZE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "enlaze",
+      "id": "1"
+    },
+    {
+      "name": "comercio-local",
+      "id": "2"
+    },
+    {
+      "name": "mvp",
+      "id": "3"
+    }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2026-04-16T06:00:00.000Z",
+  "versionId": "1"
+}

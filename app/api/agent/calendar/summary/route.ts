@@ -4,8 +4,14 @@ import { verifyAgentRequest, isErrorResponse } from "../../_lib/auth";
 /**
  * GET /api/agent/calendar/summary?user_id=xxx
  *
- * Returns Google Calendar summary for a user.
- * If Calendar is not connected, returns connected:false with empty structures.
+ * Returns Google Calendar summary with automation-ready data:
+ * - Today's events and upcoming events
+ * - Free slots for the day (useful for marketing campaigns)
+ * - Reminders and preparation items
+ * - Daily agenda overview (total events, busy/free hours)
+ * - Action items derived from calendar context
+ *
+ * Graceful degradation: if not connected → connected:false + empty structures.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -13,13 +19,14 @@ export async function GET(req: NextRequest) {
     if (isErrorResponse(auth)) return auth;
     const { supabase, userId } = auth;
 
-    // Check if Calendar module is connected
     const { data: connection } = await supabase
       .from("agent_connections")
       .select("connected, status, config, last_sync_at")
       .eq("user_id", userId)
       .eq("module", "google_calendar")
       .maybeSingle();
+
+    const today = new Date().toISOString().split("T")[0];
 
     if (!connection || !connection.connected) {
       return NextResponse.json({
@@ -29,12 +36,29 @@ export async function GET(req: NextRequest) {
         next_events: [],
         free_slots: [],
         reminders: [],
-        summary: "Google Calendar no conectado — conecta tu cuenta para ver tu agenda.",
+        daily_agenda: {
+          date: today,
+          total_events: 0,
+          busy_hours: 0,
+          free_hours: 8,
+          next_important: null,
+        },
+        action_items: [],
+        summary:
+          "Google Calendar no conectado — conecta tu cuenta para ver tu agenda diaria, huecos libres y recordatorios automáticos.",
       });
     }
 
-    // ── Calendar IS connected: fetch real data ──
-    // TODO: Implement actual Google Calendar API integration when OAuth is set up.
+    // ── Calendar IS connected ──
+    // TODO: Replace with real Google Calendar API calls when OAuth is configured.
+    // When implementing:
+    //   - today_events: events for today with start/end times
+    //   - next_events: next 7 days events
+    //   - free_slots: gaps between events > 1h (for promos like "huecos libres")
+    //   - reminders: events marked as reminders or with specific keywords
+    //   - action_items: preparation tasks derived from upcoming events
+    //     e.g. "Preparar pedido para evento de catering mañana"
+
     return NextResponse.json({
       ok: true,
       connected: true,
@@ -42,7 +66,15 @@ export async function GET(req: NextRequest) {
       next_events: [],
       free_slots: [],
       reminders: [],
-      summary: "Google Calendar conectado — sin eventos nuevos por ahora.",
+      daily_agenda: {
+        date: today,
+        total_events: 0,
+        busy_hours: 0,
+        free_hours: 8,
+        next_important: null,
+      },
+      action_items: [],
+      summary: "Google Calendar conectado — sin eventos. La integración completa se activará con OAuth.",
       last_sync_at: connection.last_sync_at,
     });
   } catch (err: unknown) {

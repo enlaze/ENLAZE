@@ -184,9 +184,15 @@ export async function POST(req: NextRequest) {
       results.reviews = { inserted: error ? 0 : rows.length, errors: error ? 1 : 0 };
     }
 
-    // 5. Campaigns
-    if (payload.reputation?.campaigns?.length) {
-      const rows = payload.reputation.campaigns.map((c: Record<string, unknown>) => ({
+    // 5. Campaigns (v4: reputation.campaigns, v5: marketing.campaigns)
+    const campaignSource =
+      payload.marketing?.campaigns?.length
+        ? payload.marketing.campaigns
+        : payload.reputation?.campaigns?.length
+          ? payload.reputation.campaigns
+          : null;
+    if (campaignSource) {
+      const rows = campaignSource.map((c: Record<string, unknown>) => ({
         user_id: userId,
         title: c.title,
         type: c.type || null,
@@ -241,12 +247,18 @@ export async function POST(req: NextRequest) {
       results.leads = { inserted: payload.crm.leads.length, errors: 0 };
     }
 
-    // 7. Tasks
-    if (payload.crm?.tasks?.length) {
-      const rows = payload.crm.tasks.map((t: Record<string, unknown>) => ({
+    // 7. Tasks (v4: crm.tasks, v5: top-level tasks array)
+    const taskSource =
+      payload.tasks?.length
+        ? payload.tasks
+        : payload.crm?.tasks?.length
+          ? payload.crm.tasks
+          : null;
+    if (taskSource) {
+      const rows = taskSource.map((t: Record<string, unknown>) => ({
         user_id: userId,
         type: t.type || "follow_up",
-        entity_type: t.entity_type || null,
+        entity_type: t.entity_type || t.source || null,
         entity_id: t.entity_id || null,
         title: t.title,
         description: t.description || null,
