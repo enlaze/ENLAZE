@@ -104,14 +104,15 @@ await syncModuleState(supabase, userId, "gmail", {
   status: "active",
   error_message: null,
 });
-try {
-  await syncModuleState(supabase, userId, "gmail", {
-    connected: true,
-    status: "error",
-    error_message:
-      error instanceof Error ? error.message.slice(0, 500) : "Unknown error",
-  });
-} catch {}
+} catch (error) {
+  try {
+    await syncModuleState(supabase, userId, "gmail", {
+      connected: true,
+      status: "error",
+      error_message:
+        error instanceof Error ? error.message.slice(0, 500) : "Unknown error",
+    });
+  } catch {}
     return NextResponse.json({
       ok: true,
       connected: true,
@@ -135,4 +136,6 @@ try {
     );
   }
 }
+
+
 
