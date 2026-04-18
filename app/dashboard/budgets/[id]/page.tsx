@@ -11,6 +11,10 @@ import { logActivity } from "@/lib/activity-log";
 import { notify } from "@/lib/notifications";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import Badge from "@/components/ui/badge";
+import Loading from "@/components/ui/loading";
 
 interface BudgetItem {
   id: string;
@@ -55,6 +59,19 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
   enviado: { label: "Enviado", color: "text-blue-700", bg: "bg-blue-100" },
   aceptado: { label: "Aceptado", color: "text-green-700", bg: "bg-green-100" },
   rechazado: { label: "Rechazado", color: "text-red-700", bg: "bg-red-100" },
+};
+
+const statusBadgeVariant: Record<string, "yellow" | "blue" | "green" | "red"> = {
+  pendiente: "yellow",
+  enviado: "blue",
+  aceptado: "green",
+  rechazado: "red",
+};
+
+const categoryBadgeVariant = (cat: string): "blue" | "orange" | "gray" => {
+  if (cat === "material") return "blue";
+  if (cat === "mano_obra") return "orange";
+  return "gray";
 };
 
 const fallbackServiceLabels: Record<string, string> = {
@@ -226,7 +243,10 @@ export default function BudgetDetailPage() {
       .select()
       .single();
 
-    if (error || !newB) return alert("Error al duplicar");
+    if (error || !newB) {
+      toast.error("Error al duplicar");
+      return;
+    }
 
     for (const item of items) {
       await supabase.from("budget_items").insert({
@@ -393,68 +413,86 @@ export default function BudgetDetailPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-brand-green)]"></div>
-      </div>
-    );
-  }
-
+  if (loading) return <Loading />;
   if (!budget) return null;
 
-  const st = statusConfig[budget.status] || statusConfig.pendiente;
+  const sTypes = serviceTypes();
+  const serviceLabel = (() => {
+    const map = Object.fromEntries(sTypes.map((s) => [s.value, s.label]));
+    return map[budget.service_type] || fallbackServiceLabels[budget.service_type] || budget.service_type;
+  })();
+
+  const cats = budgetCategories();
+  const categoryLabelMap = Object.fromEntries(cats.map((c) => [c.value, c.label]));
+  const categoryLabel = (cat: string) =>
+    categoryLabelMap[cat] || fallbackCategoryLabels[cat] || cat;
 
   return (
     <div className="max-w-5xl mx-auto">
+      {/* Back link */}
+      <Link
+        href="/dashboard/budgets"
+        className="mb-3 inline-flex items-center text-sm text-navy-500 hover:text-brand-green dark:text-zinc-400"
+      >
+        ← Volver a presupuestos
+      </Link>
+
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <Link href="/dashboard/budgets" className="text-sm text-[var(--color-navy-400)] hover:text-[var(--color-brand-green)] mb-2 inline-block">
-            ← Volver a presupuestos
-          </Link>
-          <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">{budget.budget_number}</h1>
-          <p className="text-[var(--color-navy-400)]">{budget.title}</p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold tracking-tight text-navy-900 dark:text-white">
+              {budget.budget_number}
+            </h1>
+            <Badge variant={statusBadgeVariant[budget.status] || "gray"}>
+              {statusConfig[budget.status]?.label || budget.status}
+            </Badge>
+            {budget.version > 1 && (
+              <span className="rounded-md bg-navy-50 px-2 py-0.5 text-xs font-medium text-navy-600 dark:bg-zinc-800 dark:text-zinc-300">
+                v{budget.version}
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-sm text-navy-500 dark:text-zinc-400">
+            {budget.title}
+          </p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${st.bg} ${st.color}`}>
-            {st.label}
-          </span>
-          <button onClick={generatePDF} className="px-4 py-2 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-lg font-medium hover:opacity-90 transition text-sm">
-            📄 Generar PDF
-          </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button onClick={generatePDF}>Generar PDF</Button>
         </div>
       </div>
 
       {/* Status Actions */}
-      <div className="bg-[var(--color-navy-800)] rounded-xl p-4 mb-6 flex flex-wrap gap-2 items-center">
-        <span className="text-sm text-[var(--color-navy-300)] mr-2">Cambiar estado:</span>
-        {Object.entries(statusConfig).map(([key, val]) => (
-          <button
-            key={key}
-            onClick={() => updateStatus(key)}
-            disabled={updating || budget.status === key}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-              budget.status === key
-                ? "bg-[var(--color-navy-600)] text-[var(--color-navy-300)] cursor-default"
-                : "bg-[var(--color-navy-700)] text-[var(--color-navy-100)] hover:bg-[var(--color-navy-600)]"
-            }`}
-          >
-            {val.label}
-          </button>
-        ))}
-      </div>
+      <Card className="mb-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-xs font-medium uppercase tracking-wider text-navy-500 dark:text-zinc-400">
+            Cambiar estado
+          </span>
+          {Object.entries(statusConfig).map(([key, val]) => {
+            const isCurrent = budget.status === key;
+            return (
+              <button
+                key={key}
+                onClick={() => updateStatus(key)}
+                disabled={updating || isCurrent}
+                className={
+                  isCurrent
+                    ? "cursor-default rounded-lg border border-brand-green/30 bg-brand-green/10 px-3 py-1.5 text-xs font-semibold text-brand-green"
+                    : "rounded-lg border border-navy-200 bg-white px-3 py-1.5 text-xs font-medium text-navy-700 transition-colors hover:border-navy-300 hover:bg-navy-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                }
+              >
+                {val.label}
+              </button>
+            );
+          })}
+        </div>
+      </Card>
 
       {/* Acceptance Timeline */}
-      <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider">Timeline de aceptación</h3>
-          {budget.version > 1 && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-navy-700)] text-[var(--color-navy-400)]">
-              v{budget.version}
-            </span>
-          )}
-        </div>
+      <Card className="mb-6">
+        <h3 className="mb-3 text-base font-semibold text-navy-900 dark:text-white">
+          Timeline de aceptación
+        </h3>
         <AcceptanceTimeline
           mode="inline"
           events={[
@@ -466,112 +504,158 @@ export default function BudgetDetailPage() {
               : { label: "Aceptado", date: budget.accepted_at, status: "positive", detail: budget.accepted_by_name ? `por ${budget.accepted_by_name}` : undefined },
           ]}
         />
-      </div>
+      </Card>
 
       {/* Info Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        {/* Client Info */}
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-5">
-          <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-3">Datos del cliente</h3>
-          <div className="space-y-2 text-sm">
-            <p className="text-[var(--color-navy-100)] font-medium text-base">{budget.client_name || "Sin nombre"}</p>
-            {budget.client_email && <p className="text-[var(--color-navy-300)]">📧 {budget.client_email}</p>}
-            {budget.client_phone && <p className="text-[var(--color-navy-300)]">📱 {budget.client_phone}</p>}
-            {budget.client_address && <p className="text-[var(--color-navy-300)]">📍 {budget.client_address}</p>}
+      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Card>
+          <h3 className="mb-3 text-base font-semibold text-navy-900 dark:text-white">
+            Datos del cliente
+          </h3>
+          <div className="space-y-1.5 text-sm">
+            <p className="text-base font-medium text-navy-900 dark:text-white">
+              {budget.client_name || "Sin nombre"}
+            </p>
+            {budget.client_email && (
+              <p className="text-navy-600 dark:text-zinc-400">
+                <span className="text-navy-400 dark:text-zinc-500">Email:</span> {budget.client_email}
+              </p>
+            )}
+            {budget.client_phone && (
+              <p className="text-navy-600 dark:text-zinc-400">
+                <span className="text-navy-400 dark:text-zinc-500">Teléfono:</span> {budget.client_phone}
+              </p>
+            )}
+            {budget.client_address && (
+              <p className="text-navy-600 dark:text-zinc-400">
+                <span className="text-navy-400 dark:text-zinc-500">Dirección:</span> {budget.client_address}
+              </p>
+            )}
           </div>
-        </div>
+        </Card>
 
-        {/* Budget Info */}
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-5">
-          <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-3">Información del presupuesto</h3>
-          <div className="space-y-2 text-sm">
-            <p className="text-[var(--color-navy-300)]">Tipo de servicio: <span className="text-[var(--color-navy-100)] font-medium">{(() => { const sTypes = serviceTypes(); const serviceLabels = Object.fromEntries(sTypes.map(s => [s.value, s.label])); return serviceLabels[budget.service_type] || fallbackServiceLabels[budget.service_type] || budget.service_type; })()}</span></p>
-            <p className="text-[var(--color-navy-300)]">Fecha creación: <span className="text-[var(--color-navy-100)]">{new Date(budget.created_at).toLocaleDateString("es-ES")}</span></p>
-            <p className="text-[var(--color-navy-300)]">Válido hasta: <span className="text-[var(--color-navy-100)]">{budget.valid_until ? new Date(budget.valid_until).toLocaleDateString("es-ES") : "Sin fecha"}</span></p>
-          </div>
-        </div>
+        <Card>
+          <h3 className="mb-3 text-base font-semibold text-navy-900 dark:text-white">
+            Información del presupuesto
+          </h3>
+          <dl className="space-y-1.5 text-sm">
+            <div className="flex justify-between gap-4">
+              <dt className="text-navy-500 dark:text-zinc-500">Tipo de servicio</dt>
+              <dd className="font-medium text-navy-900 dark:text-white">{serviceLabel}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-navy-500 dark:text-zinc-500">Fecha creación</dt>
+              <dd className="text-navy-700 dark:text-zinc-200">
+                {new Date(budget.created_at).toLocaleDateString("es-ES")}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-navy-500 dark:text-zinc-500">Válido hasta</dt>
+              <dd className="text-navy-700 dark:text-zinc-200">
+                {budget.valid_until ? new Date(budget.valid_until).toLocaleDateString("es-ES") : "Sin fecha"}
+              </dd>
+            </div>
+          </dl>
+        </Card>
       </div>
 
       {/* Partidas Table */}
-      <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden mb-6">
-        <div className="p-5 border-b border-[var(--color-navy-700)]">
-          <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider">Partidas ({items.length})</h3>
+      <Card className="mb-6" padding={false}>
+        <div className="border-b border-navy-100 px-6 py-4 dark:border-zinc-800">
+          <h3 className="text-base font-semibold text-navy-900 dark:text-white">
+            Partidas <span className="text-navy-400 dark:text-zinc-500">({items.length})</span>
+          </h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="bg-[var(--color-navy-750)]">
-                <th className="text-left text-xs font-semibold text-[var(--color-navy-300)] uppercase tracking-wider px-5 py-3">#</th>
-                <th className="text-left text-xs font-semibold text-[var(--color-navy-300)] uppercase tracking-wider px-5 py-3">Concepto</th>
-                <th className="text-center text-xs font-semibold text-[var(--color-navy-300)] uppercase tracking-wider px-5 py-3">Categoría</th>
-                <th className="text-center text-xs font-semibold text-[var(--color-navy-300)] uppercase tracking-wider px-5 py-3">Cantidad</th>
-                <th className="text-right text-xs font-semibold text-[var(--color-navy-300)] uppercase tracking-wider px-5 py-3">Precio ud.</th>
-                <th className="text-right text-xs font-semibold text-[var(--color-navy-300)] uppercase tracking-wider px-5 py-3">Importe</th>
+              <tr className="border-b border-navy-100 bg-navy-50/40 dark:border-zinc-800 dark:bg-zinc-800/30">
+                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-navy-500 dark:text-zinc-400">#</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-navy-500 dark:text-zinc-400">Concepto</th>
+                <th className="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wider text-navy-500 dark:text-zinc-400">Categoría</th>
+                <th className="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wider text-navy-500 dark:text-zinc-400">Cantidad</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-navy-500 dark:text-zinc-400">Precio ud.</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-navy-500 dark:text-zinc-400">Importe</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item, i) => (
-                <tr key={item.id} className="border-t border-[var(--color-navy-700)] hover:bg-[var(--color-navy-750)] transition">
-                  <td className="px-5 py-3 text-sm text-[var(--color-navy-400)]">{i + 1}</td>
+                <tr
+                  key={item.id}
+                  className="border-t border-navy-100 transition hover:bg-navy-50/40 dark:border-zinc-800 dark:hover:bg-zinc-800/30"
+                >
+                  <td className="px-5 py-3 text-sm text-navy-400 dark:text-zinc-500 tabular-nums">{i + 1}</td>
                   <td className="px-5 py-3">
-                    <p className="text-sm font-medium text-[var(--color-navy-100)]">{item.concept}</p>
-                    {item.description && <p className="text-xs text-[var(--color-navy-400)] mt-0.5">{item.description}</p>}
+                    <p className="text-sm font-medium text-navy-900 dark:text-white">{item.concept}</p>
+                    {item.description && (
+                      <p className="mt-0.5 text-xs text-navy-500 dark:text-zinc-500">{item.description}</p>
+                    )}
                   </td>
                   <td className="px-5 py-3 text-center">
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      item.category === "material" ? "bg-blue-900/30 text-blue-300" :
-                      item.category === "mano_obra" ? "bg-orange-900/30 text-orange-300" :
-                      "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400"
-                    }`}>
-                      {(() => { const cats = budgetCategories(); const categoryLabels = Object.fromEntries(cats.map(c => [c.value, c.label])); return categoryLabels[item.category] || fallbackCategoryLabels[item.category] || item.category; })()}
-                    </span>
+                    <Badge variant={categoryBadgeVariant(item.category)}>
+                      {categoryLabel(item.category)}
+                    </Badge>
                   </td>
-                  <td className="px-5 py-3 text-center text-sm text-[var(--color-navy-200)]">
+                  <td className="px-5 py-3 text-center text-sm text-navy-700 dark:text-zinc-200 tabular-nums">
                     {item.quantity} {unitLabels[item.unit] || item.unit}
                   </td>
-                  <td className="px-5 py-3 text-right text-sm text-[var(--color-navy-200)]">{item.unit_price.toFixed(2)} €</td>
-                  <td className="px-5 py-3 text-right text-sm font-semibold text-[var(--color-navy-100)]">{item.subtotal.toFixed(2)} €</td>
+                  <td className="px-5 py-3 text-right text-sm text-navy-700 dark:text-zinc-200 tabular-nums">
+                    {item.unit_price.toFixed(2)} €
+                  </td>
+                  <td className="px-5 py-3 text-right text-sm font-semibold text-navy-900 dark:text-white tabular-nums">
+                    {item.subtotal.toFixed(2)} €
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
 
       {/* Totals */}
-      <div className="flex justify-end mb-6">
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-5 w-full max-w-xs">
-          <div className="flex justify-between text-sm text-[var(--color-navy-300)] mb-2">
-            <span>Subtotal</span>
-            <span className="text-[var(--color-navy-100)]">{budget.subtotal.toFixed(2)} €</span>
+      <div className="mb-6 flex justify-end">
+        <Card className="w-full max-w-xs">
+          <div className="mb-2 flex justify-between text-sm">
+            <span className="text-navy-500 dark:text-zinc-400">Subtotal</span>
+            <span className="text-navy-900 dark:text-white tabular-nums">
+              {budget.subtotal.toFixed(2)} €
+            </span>
           </div>
-          <div className="flex justify-between text-sm text-[var(--color-navy-300)] mb-3">
-            <span>IVA ({budget.iva_percent}%)</span>
-            <span className="text-[var(--color-navy-100)]">{budget.iva_amount.toFixed(2)} €</span>
+          <div className="mb-3 flex justify-between text-sm">
+            <span className="text-navy-500 dark:text-zinc-400">IVA ({budget.iva_percent}%)</span>
+            <span className="text-navy-900 dark:text-white tabular-nums">
+              {budget.iva_amount.toFixed(2)} €
+            </span>
           </div>
-          <div className="flex justify-between text-lg font-bold border-t border-[var(--color-navy-700)] pt-3">
-            <span className="text-[var(--color-navy-100)]">TOTAL</span>
-            <span className="text-[var(--color-brand-green)]">{budget.total.toFixed(2)} €</span>
+          <div className="flex justify-between border-t border-navy-100 pt-3 text-lg font-bold dark:border-zinc-800">
+            <span className="text-navy-900 dark:text-white">TOTAL</span>
+            <span className="text-brand-green tabular-nums">
+              {budget.total.toFixed(2)} €
+            </span>
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* Notes */}
       {budget.notes && (
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-6">
-          <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-2">Notas</h3>
-          <p className="text-sm text-[var(--color-navy-300)] whitespace-pre-wrap">{budget.notes}</p>
-        </div>
+        <Card className="mb-6">
+          <h3 className="mb-2 text-base font-semibold text-navy-900 dark:text-white">
+            Notas
+          </h3>
+          <p className="whitespace-pre-wrap text-sm text-navy-600 dark:text-zinc-300">
+            {budget.notes}
+          </p>
+        </Card>
       )}
 
       {/* Actions */}
-      <div className="flex flex-wrap gap-3 mb-10">
-        <button onClick={duplicateBudget} className="px-4 py-2 bg-[var(--color-navy-700)] text-[var(--color-navy-100)] rounded-lg hover:bg-[var(--color-navy-600)] transition text-sm font-medium">
-          📋 Duplicar presupuesto
-        </button>
-        <button onClick={deleteBudget} className="px-4 py-2 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600/30 transition text-sm font-medium">
-          🗑 Eliminar presupuesto
-        </button>
+      <div className="mb-10 flex flex-wrap gap-3">
+        <Button variant="secondary" onClick={duplicateBudget}>
+          Duplicar presupuesto
+        </Button>
+        <Button variant="danger" onClick={deleteBudget}>
+          Eliminar presupuesto
+        </Button>
       </div>
     </div>
   );

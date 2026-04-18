@@ -2,6 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
+import PageHeader from "@/components/ui/page-header";
+import { Card } from "@/components/ui/card";
+import { FormField, Select, SearchInput } from "@/components/ui/form-fields";
+import { Button } from "@/components/ui/button";
+import Badge from "@/components/ui/badge";
+import EmptyState from "@/components/ui/empty-state";
+import Loading from "@/components/ui/loading";
 
 interface ActivityLog {
   id: string;
@@ -30,6 +37,18 @@ const entityLabels: Record<string, string> = {
   project: "Proyecto",
   project_change: "Cambio de Proyecto",
   client: "Cliente",
+};
+
+const entityVariant: Record<
+  string,
+  "green" | "blue" | "yellow" | "red" | "gray" | "purple" | "orange"
+> = {
+  budget: "green",
+  invoice: "blue",
+  issued_invoice: "purple",
+  project: "orange",
+  project_change: "yellow",
+  client: "gray",
 };
 
 export default function AuditLogPage() {
@@ -116,13 +135,11 @@ export default function AuditLogPage() {
     loadActivities(selectedEntityType, searchQuery, ITEMS_PER_PAGE); // eslint-disable-line react-hooks/set-state-in-effect
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const getEntityIcon = (entityType: string): string => {
-    return entityIcons[entityType] || "📌";
-  };
+  const getEntityIcon = (entityType: string): string =>
+    entityIcons[entityType] || "📌";
 
-  const getEntityLabel = (entityType: string): string => {
-    return entityLabels[entityType] || entityType;
-  };
+  const getEntityLabel = (entityType: string): string =>
+    entityLabels[entityType] || entityType;
 
   const formatTimestamp = (timestamp: string): string => {
     const date = new Date(timestamp);
@@ -147,32 +164,24 @@ export default function AuditLogPage() {
   };
 
   const getMetadataPreview = (metadata: Record<string, unknown>): string => {
+    if (!metadata || Object.keys(metadata).length === 0) return "—";
     const preview = JSON.stringify(metadata);
-    return preview.length > 100 ? preview.substring(0, 100) + "..." : preview;
+    return preview.length > 140 ? preview.substring(0, 140) + "…" : preview;
   };
 
   return (
     <>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-[var(--color-navy-900)]">
-          Registro de Actividad
-        </h1>
-        <p className="mt-1 text-[var(--color-navy-600)]">
-          Historial de cambios en tu cuenta
-        </p>
-      </div>
+      <PageHeader
+        title="Registro de Actividad"
+        description="Historial de cambios en tu cuenta"
+      />
 
-      <div className="space-y-6">
-        {/* Filters */}
+      <Card className="mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-[var(--color-navy-700)] mb-2">
-              Filtrar por tipo
-            </label>
-            <select
+          <FormField label="Filtrar por tipo">
+            <Select
               value={selectedEntityType}
               onChange={(e) => handleFilterChange(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-[var(--color-navy-200)] bg-[var(--color-navy-50)] text-[var(--color-navy-900)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-green)]/50"
             >
               <option value="all">Todos los tipos</option>
               <option value="budget">Presupuesto</option>
@@ -181,92 +190,81 @@ export default function AuditLogPage() {
               <option value="project">Proyecto</option>
               <option value="project_change">Cambio de Proyecto</option>
               <option value="client">Cliente</option>
-            </select>
-          </div>
+            </Select>
+          </FormField>
 
-          <div>
-            <label className="block text-sm font-medium text-[var(--color-navy-700)] mb-2">
-              Buscar acción
-            </label>
-            <input
-              type="text"
-              placeholder="Escribe para buscar..."
+          <FormField label="Buscar acción">
+            <SearchInput
               value={searchQuery}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-[var(--color-navy-200)] bg-[var(--color-navy-50)] text-[var(--color-navy-900)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-green)]/50 placeholder-[var(--color-navy-500)]"
+              onChange={handleSearchChange}
+              placeholder="Escribe para buscar..."
             />
-          </div>
+          </FormField>
         </div>
+      </Card>
 
-        {/* Loading state */}
-        {loading && activities.length === 0 ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-brand-green)]"></div>
-          </div>
-        ) : activities.length === 0 ? (
-          <div className="rounded-2xl border border-[var(--color-navy-100)] bg-[var(--color-navy-800)] p-8 text-center">
-            <p className="text-[var(--color-navy-400)]">
-              No hay actividad registrada que coincida con los filtros
-            </p>
-          </div>
-        ) : (
-          <>
-            {/* Activity list */}
-            <div className="space-y-3">
-              {activities.map((activity) => (
-                <div
-                  key={activity.id}
-                  className="rounded-xl border border-[var(--color-navy-100)] bg-[var(--color-navy-800)] p-4 hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="text-2xl flex-shrink-0 mt-0.5">
-                      {getEntityIcon(activity.entity_type)}
+      {loading && activities.length === 0 ? (
+        <Loading />
+      ) : activities.length === 0 ? (
+        <EmptyState
+          title="Sin actividad"
+          description="No hay actividad registrada que coincida con los filtros"
+        />
+      ) : (
+        <>
+          <div className="space-y-3">
+            {activities.map((activity) => (
+              <div
+                key={activity.id}
+                className="rounded-2xl border border-navy-100 bg-white p-4 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="mt-0.5 flex-shrink-0 text-2xl leading-none">
+                    {getEntityIcon(activity.entity_type)}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <h3 className="text-sm font-semibold text-navy-900 dark:text-white">
+                        {activity.action}
+                      </h3>
+                      <Badge variant={entityVariant[activity.entity_type] || "gray"}>
+                        {getEntityLabel(activity.entity_type)}
+                      </Badge>
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-2">
-                        <h3 className="text-sm font-semibold text-[var(--color-navy-100)]">
-                          {activity.action}
-                        </h3>
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[var(--color-brand-green)]/20 text-[var(--color-brand-green)]">
-                          {getEntityLabel(activity.entity_type)}
-                        </span>
-                      </div>
+                    <p className="mb-2 font-mono text-xs text-navy-500 dark:text-zinc-500">
+                      ID: {activity.entity_id}
+                    </p>
 
-                      <p className="text-xs text-[var(--color-navy-500)] mb-2">
-                        ID: {activity.entity_id}
-                      </p>
-
-                      <div className="bg-[var(--color-navy-900)] rounded-lg p-2 mb-2">
-                        <code className="text-xs text-[var(--color-navy-400)] font-mono break-all">
-                          {getMetadataPreview(activity.metadata)}
-                        </code>
-                      </div>
-
-                      <p className="text-xs text-[var(--color-navy-500)]">
-                        {formatTimestamp(activity.created_at)}
-                      </p>
+                    <div className="mb-2 rounded-lg border border-navy-100 bg-navy-50/60 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-800/40">
+                      <code className="block break-all font-mono text-xs text-navy-700 dark:text-zinc-300">
+                        {getMetadataPreview(activity.metadata)}
+                      </code>
                     </div>
+
+                    <p className="text-xs text-navy-500 dark:text-zinc-500">
+                      {formatTimestamp(activity.created_at)}
+                    </p>
                   </div>
                 </div>
-              ))}
-            </div>
-
-            {/* Load More button */}
-            {hasMore && (
-              <div className="flex justify-center pt-6">
-                <button
-                  onClick={handleLoadMore}
-                  disabled={loading}
-                  className="px-6 py-2.5 rounded-xl bg-[var(--color-brand-green)] text-white text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
-                >
-                  {loading ? "Cargando..." : "Cargar más"}
-                </button>
               </div>
-            )}
-          </>
-        )}
-      </div>
+            ))}
+          </div>
+
+          {hasMore && (
+            <div className="flex justify-center pt-6">
+              <Button
+                onClick={handleLoadMore}
+                disabled={loading}
+                variant="secondary"
+              >
+                {loading ? "Cargando..." : "Cargar más"}
+              </Button>
+            </div>
+          )}
+        </>
+      )}
     </>
   );
 }
