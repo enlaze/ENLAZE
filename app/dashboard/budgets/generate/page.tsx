@@ -6,6 +6,8 @@ import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
 import { useSector } from "@/lib/sector-context";
 import { normalizeSector } from "@/lib/sector-config";
+import PageHeader from "@/components/ui/page-header";
+import { Card, StatCard } from "@/components/ui/card";
 
 interface Partida {
   concept: string;
@@ -61,6 +63,10 @@ const fallbackServiceTypesBySector: Record<string, { value: string; label: strin
 const fallbackCategoryLabels: Record<string, string> = { material: "Material", mano_obra: "Mano de obra", otros: "Otros", producto: "Producto", personal: "Personal", marketing: "Marketing", local: "Local/Espacio", servicio: "Servicio" };
 
 const unitLabel: Record<string, string> = { ud: "ud", m2: "m2", ml: "ml", h: "h", kg: "kg", global: "global", m3: "m3", l: "l" };
+
+const inputCls =
+  "w-full bg-white text-navy-900 rounded-lg px-4 py-2.5 border border-navy-200 focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 focus:outline-none text-sm dark:bg-zinc-900 dark:text-white dark:border-zinc-700";
+const labelCls = "block text-xs font-medium text-navy-500 dark:text-zinc-400 mb-1";
 
 export default function GenerateBudgetPage() {
   const supabase = createBrowserClient(
@@ -121,7 +127,6 @@ export default function GenerateBudgetPage() {
     init();
   }, []);
 
-  // Set default serviceType based on sector (runs when sector loads)
   useEffect(() => {
     const sTypes = serviceTypes();
     const activeTypes = sTypes.length > 0 ? sTypes : fallbackServiceTypes;
@@ -130,7 +135,6 @@ export default function GenerateBudgetPage() {
     }
   }, [sectorKey]);
 
-  // Validate that the selected project belongs to the selected client
   useEffect(() => {
     const isProjectInvalid =
       selectedClientId &&
@@ -158,6 +162,7 @@ export default function GenerateBudgetPage() {
       const data = await res.json();
       if (data.error) { setError(data.error); setGenerating(false); return; }
       setResult(data);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setError("Error de conexion: " + err.message);
     }
@@ -253,88 +258,125 @@ export default function GenerateBudgetPage() {
 
   return (
     <div className="max-w-5xl mx-auto">
-      <div className="mb-6">
-        <Link href="/dashboard/budgets" className="text-sm text-[var(--color-navy-400)] hover:text-[var(--color-brand-green)] mb-2 inline-block">
-          ← Volver a presupuestos
-        </Link>
-        <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">Generador IA de presupuestos</h1>
-        <p className="text-[var(--color-navy-400)] text-sm mt-1">Describe el trabajo y el agente IA generara el presupuesto completo automaticamente</p>
-      </div>
+      <Link
+        href="/dashboard/budgets"
+        className="text-sm text-navy-500 hover:text-brand-green mb-3 inline-block dark:text-zinc-400"
+      >
+        ← Volver a presupuestos
+      </Link>
+      <PageHeader
+        title="Generador IA de presupuestos"
+        description="Describe el trabajo y el agente IA generará el presupuesto completo automáticamente."
+      />
 
       {/* Input Section */}
-      <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-6">
-        <h2 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-4">Describe el trabajo</h2>
+      <Card className="mb-6">
+        <h2 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-4">
+          Describe el trabajo
+        </h2>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={4}
-          placeholder={normalizedSector === "comercio_local"
-            ? "Ej: Propuesta de aprovisionamiento de 50 camisetas basicas, etiquetado personalizado, packaging y envio a tienda..."
-            : "Ej: Reforma de bano de 4m2 con plato de ducha, alicatado completo, cambio de inodoro y lavabo, instalacion electrica nueva con 3 puntos de luz LED..."}
-          className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-3 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none resize-none text-sm"
+          placeholder={
+            normalizedSector === "comercio_local"
+              ? "Ej: Propuesta de aprovisionamiento de 50 camisetas básicas, etiquetado personalizado, packaging y envío a tienda..."
+              : "Ej: Reforma de baño de 4m² con plato de ducha, alicatado completo, cambio de inodoro y lavabo, instalación eléctrica nueva con 3 puntos de luz LED..."
+          }
+          className={`${inputCls} resize-none`}
         />
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
           <div>
-            <label className="block text-xs text-[var(--color-navy-400)] mb-1">Tipo de servicio</label>
-            <select value={serviceType} onChange={(e) => setServiceType(e.target.value)} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm">
-              {(() => { const sTypes = serviceTypes(); const activeServiceTypes = sTypes.length > 0 ? sTypes : fallbackServiceTypes; return activeServiceTypes.map((s) => <option key={s.value} value={s.value}>{s.label}</option>); })()}
+            <label className={labelCls}>Tipo de servicio</label>
+            <select value={serviceType} onChange={(e) => setServiceType(e.target.value)} className={inputCls}>
+              {(() => {
+                const sTypes = serviceTypes();
+                const activeServiceTypes = sTypes.length > 0 ? sTypes : fallbackServiceTypes;
+                return activeServiceTypes.map((s) => <option key={s.value} value={s.value}>{s.label}</option>);
+              })()}
             </select>
           </div>
           <div>
-            <label className="block text-xs text-[var(--color-navy-400)] mb-1">IVA</label>
-            <select value={ivaPercent} onChange={(e) => setIvaPercent(Number(e.target.value))} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm">
+            <label className={labelCls}>IVA</label>
+            <select value={ivaPercent} onChange={(e) => setIvaPercent(Number(e.target.value))} className={inputCls}>
               <option value={0}>0%</option><option value={4}>4%</option><option value={10}>10%</option><option value={21}>21%</option>
             </select>
           </div>
           <div>
-            <label className="block text-xs text-[var(--color-navy-400)] mb-1">Valido hasta</label>
-            <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm" />
+            <label className={labelCls}>Válido hasta</label>
+            <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} className={inputCls} />
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
           <div>
-            <label className="block text-xs text-[var(--color-navy-400)] mb-1">Cliente asociado (opcional)</label>
-            <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm">
+            <label className={labelCls}>Cliente asociado (opcional)</label>
+            <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className={inputCls}>
               <option value="">Sin asignar</option>
               {clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs text-[var(--color-navy-400)] mb-1">Obra asociada (opcional)</label>
-            <select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2.5 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm">
+            <label className={labelCls}>Obra asociada (opcional)</label>
+            <select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} className={inputCls}>
               <option value="">Sin asignar</option>
               {visibleProjects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
             </select>
           </div>
         </div>
 
-        <button onClick={handleGenerate} disabled={generating} className="mt-4 w-full bg-[var(--color-brand-green)] text-[var(--color-navy-900)] font-bold py-3 rounded-xl hover:opacity-90 transition disabled:opacity-50 text-sm">
-          {generating ? "El agente IA esta generando el presupuesto..." : "Generar presupuesto con IA"}
+        <button
+          onClick={handleGenerate}
+          disabled={generating}
+          className="mt-4 w-full bg-brand-green text-navy-900 font-bold py-3 rounded-xl hover:opacity-90 transition disabled:opacity-50 text-sm"
+        >
+          {generating ? "El agente IA está generando el presupuesto..." : "Generar presupuesto con IA"}
         </button>
-      </div>
+      </Card>
 
       {/* Client Data (collapsible) */}
-      <details className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-6">
-        <summary className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider cursor-pointer">Datos del cliente (opcional)</summary>
+      <details className="rounded-2xl border border-navy-100 bg-white shadow-sm p-5 mb-6 dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
+        <summary className="text-sm font-semibold text-brand-green uppercase tracking-wider cursor-pointer">
+          Datos del cliente (opcional)
+        </summary>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-          <div><label className="block text-xs text-[var(--color-navy-400)] mb-1">Nombre</label><input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Nombre del cliente" className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm" /></div>
-          <div><label className="block text-xs text-[var(--color-navy-400)] mb-1">Email</label><input type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="email@cliente.com" className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm" /></div>
-          <div><label className="block text-xs text-[var(--color-navy-400)] mb-1">Telefono</label><input type="tel" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="600 000 000" className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm" /></div>
-          <div><label className="block text-xs text-[var(--color-navy-400)] mb-1">Direccion</label><input type="text" value={clientAddress} onChange={(e) => setClientAddress(e.target.value)} placeholder="Direccion de la obra" className="w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm" /></div>
+          <div>
+            <label className={labelCls}>Nombre</label>
+            <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Nombre del cliente" className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Email</label>
+            <input type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="email@cliente.com" className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Teléfono</label>
+            <input type="tel" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="600 000 000" className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Dirección</label>
+            <input type="text" value={clientAddress} onChange={(e) => setClientAddress(e.target.value)} placeholder="Dirección de la obra" className={inputCls} />
+          </div>
         </div>
       </details>
 
       {/* Error */}
-      {error && <div className="bg-red-900/20 border border-red-700 text-red-300 rounded-xl p-4 mb-6 text-sm">{error}</div>}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 mb-6 text-sm dark:bg-red-950/30 dark:border-red-900 dark:text-red-300">
+          {error}
+        </div>
+      )}
 
       {/* Loading */}
       {generating && (
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-10 text-center mb-6">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[var(--color-brand-green)] mx-auto mb-4"></div>
-          <p className="text-[var(--color-navy-200)] font-medium">El agente IA esta analizando el trabajo...</p>
-          <p className="text-[var(--color-navy-400)] text-sm mt-1">Desglosando partidas, calculando cantidades y asignando precios</p>
-        </div>
+        <Card className="text-center mb-6">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-green mx-auto mb-4"></div>
+          <p className="text-navy-900 dark:text-white font-medium">
+            El agente IA está analizando el trabajo...
+          </p>
+          <p className="text-navy-500 dark:text-zinc-400 text-sm mt-1">
+            Desglosando partidas, calculando cantidades y asignando precios
+          </p>
+        </Card>
       )}
 
       {/* Results */}
@@ -342,85 +384,110 @@ export default function GenerateBudgetPage() {
         <>
           {/* Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-              <p className="text-xs text-[var(--color-navy-400)]">Tu coste</p>
-              <p className="text-xl font-bold text-[var(--color-navy-100)]">{result.total_cost.toFixed(2)} EUR</p>
-            </div>
-            <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-              <p className="text-xs text-[var(--color-navy-400)]">Precio cliente</p>
-              <p className="text-xl font-bold text-[var(--color-brand-green)]">{result.total_client.toFixed(2)} EUR</p>
-            </div>
-            <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-              <p className="text-xs text-[var(--color-navy-400)]">Tu beneficio</p>
-              <p className="text-xl font-bold text-green-400">+{result.profit.toFixed(2)} EUR</p>
-            </div>
-            <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-              <p className="text-xs text-[var(--color-navy-400)]">Margen aplicado</p>
-              <p className="text-xl font-bold text-orange-400">{result.margin_percent}%</p>
-            </div>
+            <StatCard label="Tu coste" value={`${result.total_cost.toFixed(2)} €`} />
+            <StatCard label="Precio cliente" value={`${result.total_client.toFixed(2)} €`} accent="green" />
+            <StatCard label="Tu beneficio" value={`+${result.profit.toFixed(2)} €`} accent="green" />
+            <StatCard label="Margen aplicado" value={`${result.margin_percent}%`} accent="yellow" />
           </div>
 
           {/* Title */}
-          <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-6">
-            <h2 className="text-lg font-bold text-[var(--color-navy-50)]">{result.title}</h2>
-            <p className="text-sm text-[var(--color-navy-400)] mt-1">{result.partidas.length} partidas generadas</p>
-          </div>
+          <Card className="mb-6">
+            <h2 className="text-lg font-bold text-navy-900 dark:text-white">{result.title}</h2>
+            <p className="text-sm text-navy-500 dark:text-zinc-400 mt-1">{result.partidas.length} partidas generadas</p>
+          </Card>
 
           {/* Partidas Table */}
-          <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden mb-6">
+          <Card padding={false} className="mb-6 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead>
-                  <tr className="border-b border-[var(--color-navy-700)]">
-                    <th className="text-left text-xs font-semibold text-[var(--color-navy-400)] uppercase px-4 py-3">#</th>
-                    <th className="text-left text-xs font-semibold text-[var(--color-navy-400)] uppercase px-4 py-3">Concepto</th>
-                    <th className="text-center text-xs font-semibold text-[var(--color-navy-400)] uppercase px-3 py-3">Cat.</th>
-                    <th className="text-center text-xs font-semibold text-[var(--color-navy-400)] uppercase px-3 py-3">Cant.</th>
-                    <th className="text-right text-xs font-semibold text-[var(--color-navy-400)] uppercase px-3 py-3">Coste ud.</th>
-                    <th className="text-right text-xs font-semibold text-[var(--color-navy-400)] uppercase px-3 py-3">Precio cl.</th>
-                    <th className="text-right text-xs font-semibold text-[var(--color-navy-400)] uppercase px-4 py-3">Total cl.</th>
+                <thead className="bg-gray-50 border-b border-navy-100 dark:bg-zinc-800/50 dark:border-zinc-800">
+                  <tr>
+                    <th className="text-left text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase px-4 py-3">#</th>
+                    <th className="text-left text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase px-4 py-3">Concepto</th>
+                    <th className="text-center text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase px-3 py-3">Cat.</th>
+                    <th className="text-center text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase px-3 py-3">Cant.</th>
+                    <th className="text-right text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase px-3 py-3">Coste ud.</th>
+                    <th className="text-right text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase px-3 py-3">Precio cl.</th>
+                    <th className="text-right text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase px-4 py-3">Total cl.</th>
                   </tr>
                 </thead>
                 <tbody>
                   {result.partidas.map((p, i) => (
-                    <tr key={i} className="border-t border-[var(--color-navy-700)] hover:bg-[var(--color-navy-750)] transition">
-                      <td className="px-4 py-3 text-sm text-[var(--color-navy-400)]">{i + 1}</td>
+                    <tr
+                      key={i}
+                      className="border-t border-navy-100 hover:bg-gray-50 transition dark:border-zinc-800 dark:hover:bg-zinc-800/50"
+                    >
+                      <td className="px-4 py-3 text-sm text-navy-500 dark:text-zinc-400">{i + 1}</td>
                       <td className="px-4 py-3">
-                        <p className="text-sm font-medium text-[var(--color-navy-100)]">{p.concept}</p>
-                        {p.description && <p className="text-xs text-[var(--color-navy-400)]">{p.description}</p>}
+                        <p className="text-sm font-medium text-navy-900 dark:text-white">{p.concept}</p>
+                        {p.description && <p className="text-xs text-navy-500 dark:text-zinc-400">{p.description}</p>}
                       </td>
-                      <td className="px-3 py-3 text-center"><span className={"text-xs px-2 py-1 rounded-full " + (p.category === "material" ? "bg-blue-900/30 text-blue-300" : p.category === "mano_obra" ? "bg-orange-900/30 text-orange-300" : "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400")}>{(() => { const cats = budgetCategories(); const catMap = Object.fromEntries(cats.map(c => [c.value, c.label])); return (catMap[p.category] || fallbackCategoryLabels[p.category] || p.category); })()}</span></td>
-                      <td className="px-3 py-3 text-center text-sm text-[var(--color-navy-200)]">{p.quantity} {unitLabel[p.unit] || p.unit}</td>
-                      <td className="px-3 py-3 text-right text-sm text-[var(--color-navy-400)]">{p.unit_price.toFixed(2)}</td>
-                      <td className="px-3 py-3 text-right text-sm text-[var(--color-navy-200)]">{p.unit_price_client.toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right text-sm font-semibold text-[var(--color-navy-100)]">{p.subtotal_client.toFixed(2)} EUR</td>
+                      <td className="px-3 py-3 text-center">
+                        <span className={
+                          "text-xs px-2 py-1 rounded-full border " +
+                          (p.category === "material" || p.category === "producto"
+                            ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-900"
+                            : p.category === "mano_obra" || p.category === "servicio" || p.category === "personal"
+                            ? "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-900"
+                            : "bg-gray-100 text-gray-700 border-gray-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700")
+                        }>
+                          {(() => {
+                            const cats = budgetCategories();
+                            const catMap = Object.fromEntries(cats.map(c => [c.value, c.label]));
+                            return (catMap[p.category] || fallbackCategoryLabels[p.category] || p.category);
+                          })()}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 text-center text-sm text-navy-800 dark:text-zinc-200">
+                        {p.quantity} {unitLabel[p.unit] || p.unit}
+                      </td>
+                      <td className="px-3 py-3 text-right text-sm text-navy-500 dark:text-zinc-400">{p.unit_price.toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right text-sm text-navy-800 dark:text-zinc-200">{p.unit_price_client.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right text-sm font-semibold text-navy-900 dark:text-white">
+                        {p.subtotal_client.toFixed(2)} €
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </div>
+          </Card>
 
           {/* Notes */}
           {result.notes && (
-            <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-6">
-              <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-2">Notas del agente</h3>
-              <p className="text-sm text-[var(--color-navy-300)]">{result.notes}</p>
-            </div>
+            <Card className="mb-6">
+              <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-2">
+                Notas del agente
+              </h3>
+              <p className="text-sm text-navy-700 dark:text-zinc-300">{result.notes}</p>
+            </Card>
           )}
 
           {/* Actions */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-10">
-            <button onClick={handleSave} disabled={saving} className="px-4 py-3 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-xl font-bold hover:opacity-90 transition disabled:opacity-50 text-sm">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="px-4 py-3 bg-brand-green text-navy-900 rounded-xl font-bold hover:opacity-90 transition disabled:opacity-50 text-sm"
+            >
               {saving ? "Guardando..." : "Guardar presupuesto"}
             </button>
-            <button onClick={() => generatePDF("client")} className="px-4 py-3 bg-[var(--color-navy-700)] text-[var(--color-navy-100)] rounded-xl font-medium hover:bg-[var(--color-navy-600)] transition text-sm">
+            <button
+              onClick={() => generatePDF("client")}
+              className="px-4 py-3 bg-white text-navy-800 border border-navy-200 rounded-xl font-medium hover:bg-gray-50 transition text-sm dark:bg-zinc-900 dark:text-zinc-200 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            >
               PDF Cliente
             </button>
-            <button onClick={() => generatePDF("internal")} className="px-4 py-3 bg-[var(--color-navy-700)] text-[var(--color-navy-100)] rounded-xl font-medium hover:bg-[var(--color-navy-600)] transition text-sm">
+            <button
+              onClick={() => generatePDF("internal")}
+              className="px-4 py-3 bg-white text-navy-800 border border-navy-200 rounded-xl font-medium hover:bg-gray-50 transition text-sm dark:bg-zinc-900 dark:text-zinc-200 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            >
               PDF Interno
             </button>
-            <button onClick={() => { setResult(null); setDescription(""); }} className="px-4 py-3 bg-[var(--color-navy-700)] text-[var(--color-navy-300)] rounded-xl font-medium hover:bg-[var(--color-navy-600)] transition text-sm">
+            <button
+              onClick={() => { setResult(null); setDescription(""); }}
+              className="px-4 py-3 bg-white text-navy-700 border border-navy-200 rounded-xl font-medium hover:bg-gray-50 transition text-sm dark:bg-zinc-900 dark:text-zinc-300 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            >
               Nuevo presupuesto
             </button>
           </div>

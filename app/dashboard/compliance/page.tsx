@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
+import PageHeader from "@/components/ui/page-header";
+import { Card } from "@/components/ui/card";
+import Loading from "@/components/ui/loading";
 
 interface ComplianceCheck {
   area: string;
@@ -26,7 +29,6 @@ export default function ComplianceDashboardPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Load data for checks in parallel
     const [
       { data: legalAcceptances },
       { data: invoices },
@@ -92,7 +94,7 @@ export default function ComplianceDashboardPage() {
           : `${openIncidents} incidente(s) sin resolver.`,
       },
       {
-        area: "audit", label: "Audit Trail", href: "/dashboard/audit-log",
+        area: "audit", label: "Historial de actividad", href: "/dashboard/audit-log",
         icon: "📋",
         status: hasAuditLog ? "green" : "yellow",
         detail: hasAuditLog
@@ -105,23 +107,17 @@ export default function ComplianceDashboardPage() {
     setLoading(false);
   }
 
-  useEffect(() => { loadChecks(); }, []); // eslint-disable-line react-hooks/set-state-in-effect
+  useEffect(() => { loadChecks(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-brand-green)]"></div>
-      </div>
-    );
-  }
+  if (loading) return <Loading />;
 
   const greens = checks.filter(c => c.status === "green").length;
   const yellows = checks.filter(c => c.status === "yellow").length;
   const reds = checks.filter(c => c.status === "red").length;
 
-  const statusColors = {
+  const statusDot = {
     green: "bg-emerald-500",
-    yellow: "bg-yellow-500",
+    yellow: "bg-amber-500",
     red: "bg-red-500",
   };
 
@@ -131,51 +127,53 @@ export default function ComplianceDashboardPage() {
     red: "Acción requerida",
   };
 
+  const statusBadge = {
+    green: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-900",
+    yellow: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-900",
+    red: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-900",
+  };
+
   const overallStatus = reds > 0 ? "red" : yellows > 0 ? "yellow" : "green";
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold text-[var(--color-navy-50)] mb-2">Compliance</h1>
-      <p className="text-[var(--color-navy-400)] text-sm mb-6">
-        Estado de cumplimiento legal, fiscal, privacidad y seguridad de tu cuenta.
-      </p>
+      <PageHeader
+        title="Cumplimiento"
+        description="Estado de cumplimiento legal, fiscal, privacidad y seguridad de tu cuenta."
+      />
 
       {/* Overall status */}
-      <div className="bg-[var(--color-navy-800)] rounded-xl p-6 mb-6 flex items-center gap-4">
-        <div className={`w-12 h-12 rounded-full ${statusColors[overallStatus]} flex items-center justify-center text-white text-xl`}>
+      <Card className="mb-6 flex items-center gap-4">
+        <div className={`w-12 h-12 rounded-full ${statusDot[overallStatus]} flex items-center justify-center text-white text-xl font-bold shrink-0`}>
           {overallStatus === "green" ? "✓" : overallStatus === "yellow" ? "!" : "✕"}
         </div>
         <div>
-          <p className="text-lg font-bold text-[var(--color-navy-50)]">
+          <p className="text-lg font-bold text-navy-900 dark:text-white">
             {overallStatus === "green" ? "Todo en orden" : overallStatus === "yellow" ? "Algunos puntos requieren atención" : "Hay acciones requeridas"}
           </p>
-          <p className="text-sm text-[var(--color-navy-400)]">
+          <p className="text-sm text-navy-500 dark:text-zinc-400">
             {greens} cumple · {yellows} atención · {reds} acción requerida
           </p>
         </div>
-      </div>
+      </Card>
 
-      {/* Checks grid */}
+      {/* Checks list */}
       <div className="space-y-3">
         {checks.map((check) => (
-          <Link key={check.area} href={check.href}>
-            <div className="bg-[var(--color-navy-800)] rounded-xl p-5 hover:bg-[var(--color-navy-750)] transition cursor-pointer flex items-center gap-4 mb-3">
-              <div className="text-2xl">{check.icon}</div>
+          <Link key={check.area} href={check.href} className="block">
+            <div className="rounded-2xl border border-navy-100 bg-white p-5 shadow-sm hover:border-brand-green/40 hover:shadow-md transition cursor-pointer flex items-center gap-4 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-brand-green/40 dark:shadow-none">
+              <div className="text-2xl shrink-0">{check.icon}</div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="text-sm font-semibold text-[var(--color-navy-100)]">{check.label}</h3>
-                  <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${
-                    check.status === "green" ? "bg-emerald-900/30 text-emerald-300" :
-                    check.status === "yellow" ? "bg-yellow-900/30 text-yellow-300" :
-                    "bg-red-900/30 text-red-300"
-                  }`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${statusColors[check.status]}`} />
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <h3 className="text-sm font-semibold text-navy-900 dark:text-white">{check.label}</h3>
+                  <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-medium border ${statusBadge[check.status]}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${statusDot[check.status]}`} />
                     {statusLabels[check.status]}
                   </span>
                 </div>
-                <p className="text-xs text-[var(--color-navy-400)]">{check.detail}</p>
+                <p className="text-xs text-navy-500 dark:text-zinc-400">{check.detail}</p>
               </div>
-              <span className="text-[var(--color-navy-600)]">→</span>
+              <span className="text-navy-300 dark:text-zinc-600 text-lg shrink-0">→</span>
             </div>
           </Link>
         ))}

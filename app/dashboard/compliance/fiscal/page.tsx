@@ -7,6 +7,9 @@ import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
 import { eventLabels, eventIcons } from "@/lib/fiscal-events";
 import type { FiscalEventType } from "@/lib/fiscal-events";
+import PageHeader from "@/components/ui/page-header";
+import { Card, StatCard } from "@/components/ui/card";
+import Loading from "@/components/ui/loading";
 
 interface FiscalSummary {
   totalInvoices: number;
@@ -52,7 +55,6 @@ export default function FiscalCompliancePage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Load all issued invoices
     const { data: invoices } = await supabase
       .from("issued_invoices")
       .select("id, invoice_number, status, total, verifactu_registered, verifactu_hash, facturae_xml, payment_status")
@@ -71,7 +73,6 @@ export default function FiscalCompliancePage() {
     const withXml = inv.filter((i) => i.facturae_xml).length;
     const withHash = inv.filter((i) => i.verifactu_hash).length;
 
-    // Software version
     const { data: sv } = await supabase
       .from("software_versions")
       .select("version")
@@ -86,7 +87,6 @@ export default function FiscalCompliancePage() {
       softwareVersion: sv?.version || "—",
     });
 
-    // Recent fiscal events
     const invoiceIds = inv.map((i) => i.id);
     if (invoiceIds.length > 0) {
       const { data: events } = await supabase
@@ -110,15 +110,8 @@ export default function FiscalCompliancePage() {
     loadData();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-brand-green)]"></div>
-      </div>
-    );
-  }
+  if (loading) return <Loading />;
 
-  // Compliance checks
   const checks = [
     {
       label: "Facturas con hash Verifactu",
@@ -148,79 +141,100 @@ export default function FiscalCompliancePage() {
 
   return (
     <div className="max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">Compliance Fiscal</h1>
-          <p className="text-[var(--color-navy-400)] text-sm">Trazabilidad fiscal, Verifactu y Facturae</p>
-        </div>
-        <div className="text-right">
-          <span className="text-xs text-[var(--color-navy-500)]">Software version</span>
-          <p className="text-sm font-mono text-[var(--color-brand-green)]">{summary.softwareVersion}</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Cumplimiento fiscal"
+        description="Trazabilidad fiscal, Verifactu y Facturae."
+        actions={
+          <div className="text-right">
+            <span className="text-xs text-navy-400 dark:text-zinc-500">Software version</span>
+            <p className="text-sm font-mono text-brand-green">{summary.softwareVersion}</p>
+          </div>
+        }
+      />
 
       {/* KPI Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <KpiCard label="Total facturas" value={String(summary.totalInvoices)} color="text-[var(--color-navy-100)]" />
-        <KpiCard label="Emitidas" value={String(summary.totalIssued)} color="text-blue-400" />
-        <KpiCard label="Cobradas" value={String(summary.totalPaid)} color="text-emerald-400" sub={eur(summary.totalPaidAmount)} />
-        <KpiCard label="Importe total" value={eur(summary.totalAmount)} color="text-[var(--color-brand-green)]" />
+        <StatCard label="Total facturas" value={summary.totalInvoices} />
+        <StatCard label="Emitidas" value={summary.totalIssued} accent="blue" />
+        <StatCard label="Cobradas" value={summary.totalPaid} accent="green" detail={eur(summary.totalPaidAmount)} />
+        <StatCard label="Importe total" value={eur(summary.totalAmount)} accent="green" />
       </div>
 
       {/* Compliance Checks */}
-      <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-6">
-        <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-4">Controles de cumplimiento</h3>
-        <div className="space-y-3">
+      <Card className="mb-6">
+        <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-4">
+          Controles de cumplimiento
+        </h3>
+        <div className="space-y-2">
           {checks.map((check, idx) => (
-            <div key={idx} className="flex items-center justify-between p-3 rounded-lg bg-[var(--color-navy-750)]">
+            <div
+              key={idx}
+              className="flex items-center justify-between p-3 rounded-xl border border-navy-100 bg-gray-50 dark:border-zinc-800 dark:bg-zinc-800/50"
+            >
               <div className="flex items-center gap-3">
-                <div className={`w-3 h-3 rounded-full flex-shrink-0 ${check.ok ? "bg-[var(--color-brand-green)]" : "bg-yellow-500"}`} />
-                <span className="text-sm text-[var(--color-navy-200)]">{check.label}</span>
+                <div
+                  className={`w-3 h-3 rounded-full flex-shrink-0 ${
+                    check.ok ? "bg-emerald-500" : "bg-amber-500"
+                  }`}
+                />
+                <span className="text-sm text-navy-800 dark:text-zinc-200">{check.label}</span>
               </div>
-              <span className={`text-sm font-medium ${check.ok ? "text-[var(--color-brand-green)]" : "text-yellow-400"}`}>
+              <span
+                className={`text-sm font-semibold ${
+                  check.ok ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
+                }`}
+              >
                 {check.current}/{check.total}
               </span>
             </div>
           ))}
         </div>
-      </div>
+      </Card>
 
       {/* Verifactu & Facturae summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-5 text-center">
-          <p className="text-3xl font-bold text-[var(--color-brand-green)]">{summary.withHash}</p>
-          <p className="text-xs text-[var(--color-navy-400)] mt-1">Con hash SHA-256</p>
+        <div className="rounded-2xl border border-navy-100 bg-white p-5 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
+          <p className="text-3xl font-bold text-brand-green">{summary.withHash}</p>
+          <p className="text-xs text-navy-500 dark:text-zinc-400 mt-1">Con hash SHA-256</p>
         </div>
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-5 text-center">
-          <p className="text-3xl font-bold text-blue-400">{summary.withXml}</p>
-          <p className="text-xs text-[var(--color-navy-400)] mt-1">Con XML Facturae 3.2.2</p>
+        <div className="rounded-2xl border border-navy-100 bg-white p-5 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
+          <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">{summary.withXml}</p>
+          <p className="text-xs text-navy-500 dark:text-zinc-400 mt-1">Con XML Facturae 3.2.2</p>
         </div>
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-5 text-center">
-          <p className="text-3xl font-bold text-purple-400">{summary.verifactuEnabled}</p>
-          <p className="text-xs text-[var(--color-navy-400)] mt-1">Registradas Verifactu</p>
+        <div className="rounded-2xl border border-navy-100 bg-white p-5 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
+          <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">{summary.verifactuEnabled}</p>
+          <p className="text-xs text-navy-500 dark:text-zinc-400 mt-1">Registradas Verifactu</p>
         </div>
       </div>
 
       {/* Recent Fiscal Events */}
-      <div className="bg-[var(--color-navy-800)] rounded-xl p-5">
-        <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-4">
+      <Card>
+        <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-4">
           Eventos fiscales recientes
         </h3>
         {recentEvents.length === 0 ? (
-          <p className="text-sm text-[var(--color-navy-500)]">No hay eventos fiscales registrados todavía. Se registrarán automáticamente al emitir, enviar o cobrar facturas.</p>
+          <p className="text-sm text-navy-500 dark:text-zinc-400">
+            No hay eventos fiscales registrados todavía. Se registrarán automáticamente al emitir, enviar o cobrar facturas.
+          </p>
         ) : (
           <div className="space-y-2">
             {recentEvents.map((ev) => {
               const evType = ev.event_type as FiscalEventType;
               return (
-                <div key={ev.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-[var(--color-navy-750)] transition">
+                <div
+                  key={ev.id}
+                  className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 transition dark:hover:bg-zinc-800/50"
+                >
                   <span className="text-lg">{eventIcons[evType] || "📋"}</span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-[var(--color-navy-200)]">
+                    <p className="text-sm text-navy-800 dark:text-zinc-200">
                       {eventLabels[evType] || ev.event_type}
                     </p>
-                    <p className="text-xs text-[var(--color-navy-500)]">
-                      <Link href={`/dashboard/issued-invoices/${ev.invoice_id}`} className="text-[var(--color-brand-green)] hover:underline">
+                    <p className="text-xs text-navy-500 dark:text-zinc-400">
+                      <Link
+                        href={`/dashboard/issued-invoices/${ev.invoice_id}`}
+                        className="text-brand-green hover:underline"
+                      >
                         {ev.invoice_number}
                       </Link>
                       {" · "}
@@ -234,17 +248,7 @@ export default function FiscalCompliancePage() {
             })}
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-function KpiCard({ label, value, color, sub }: { label: string; value: string; color: string; sub?: string }) {
-  return (
-    <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-      <p className={`text-lg font-bold ${color}`}>{value}</p>
-      <p className="text-xs text-[var(--color-navy-400)] mt-1">{label}</p>
-      {sub && <p className="text-xs text-[var(--color-navy-500)] mt-0.5">{sub}</p>}
+      </Card>
     </div>
   );
 }

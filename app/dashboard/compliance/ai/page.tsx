@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { SupabaseClient } from "@supabase/supabase-js";
+import PageHeader from "@/components/ui/page-header";
+import { Card, StatCard } from "@/components/ui/card";
+import Loading from "@/components/ui/loading";
 
 interface AiRun {
   id: string;
@@ -113,13 +116,7 @@ export default function AiCompliancePage() {
     setReviewingId(null);
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-brand-green)]"></div>
-      </div>
-    );
-  }
+  if (loading) return <Loading />;
 
   const runTypeLabels: Record<string, string> = {
     budget_generation: "Generación de Presupuestos",
@@ -130,87 +127,99 @@ export default function AiCompliancePage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">Compliance de IA</h1>
-        <p className="text-[var(--color-navy-400)] text-sm">Auditoría de ejecuciones de IA y supervisión humana</p>
-      </div>
+      <PageHeader
+        title="Cumplimiento de IA"
+        description="Auditoría de ejecuciones de IA y supervisión humana."
+      />
 
       {/* KPI Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCard label="Total Ejecuciones" value={String(summary.totalRuns)} color="text-[var(--color-navy-100)]" />
-        <KpiCard
-          label="Por Revisar"
-          value={String(notReviewedCount)}
-          color={notReviewedCount > 0 ? "text-yellow-400" : "text-emerald-400"}
+        <StatCard label="Total ejecuciones" value={summary.totalRuns} />
+        <StatCard
+          label="Por revisar"
+          value={notReviewedCount}
+          accent={notReviewedCount > 0 ? "yellow" : "green"}
         />
-        <KpiCard label="Duración Promedio" value={`${summary.avgDuration}ms`} color="text-blue-400" />
-        <KpiCard label="Tokens Totales" value={String(summary.totalTokens)} color="text-[var(--color-brand-green)]" />
+        <StatCard label="Duración promedio" value={`${summary.avgDuration}ms`} accent="blue" />
+        <StatCard label="Tokens totales" value={summary.totalTokens} accent="green" />
       </div>
 
       {/* Run Types Summary */}
       {Object.keys(summary.runsByType).length > 0 && (
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-6">
-          <h2 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-4">
-            Ejecuciones por Tipo
+        <Card>
+          <h2 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-4">
+            Ejecuciones por tipo
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {Object.entries(summary.runsByType).map(([type, count]) => (
-              <div key={type} className="p-4 rounded-lg bg-[var(--color-navy-750)] text-center">
-                <p className="text-lg font-bold text-[var(--color-brand-green)]">{count}</p>
-                <p className="text-xs text-[var(--color-navy-400)] mt-1">{runTypeLabels[type] || type}</p>
+              <div
+                key={type}
+                className="p-4 rounded-xl border border-navy-100 bg-gray-50 text-center dark:border-zinc-800 dark:bg-zinc-800"
+              >
+                <p className="text-lg font-bold text-brand-green">{count}</p>
+                <p className="text-xs text-navy-500 dark:text-zinc-400 mt-1">{runTypeLabels[type] || type}</p>
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* AI Runs Table */}
-      <div className="bg-[var(--color-navy-800)] rounded-xl p-6">
-        <h2 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-4">
-          Ejecuciones Recientes
-        </h2>
+      <Card padding={false}>
+        <div className="p-6 pb-4">
+          <h2 className="text-sm font-semibold text-brand-green uppercase tracking-wider">
+            Ejecuciones recientes
+          </h2>
+        </div>
 
         {aiRuns.length === 0 ? (
-          <p className="text-[var(--color-navy-400)] text-sm">No hay ejecuciones de IA registradas.</p>
+          <p className="px-6 pb-6 text-navy-500 dark:text-zinc-400 text-sm">
+            No hay ejecuciones de IA registradas.
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="border-b border-[var(--color-navy-700)]">
+              <thead className="bg-gray-50 border-y border-navy-100 dark:bg-zinc-800/50 dark:border-zinc-800">
                 <tr>
-                  <th className="text-left px-4 py-3 text-[var(--color-navy-300)] font-semibold">Tipo</th>
-                  <th className="text-left px-4 py-3 text-[var(--color-navy-300)] font-semibold">Modelo</th>
-                  <th className="text-left px-4 py-3 text-[var(--color-navy-300)] font-semibold">Entidad</th>
-                  <th className="text-right px-4 py-3 text-[var(--color-navy-300)] font-semibold">Tokens</th>
-                  <th className="text-right px-4 py-3 text-[var(--color-navy-300)] font-semibold">Duración</th>
-                  <th className="text-center px-4 py-3 text-[var(--color-navy-300)] font-semibold">Revisado</th>
-                  <th className="text-left px-4 py-3 text-[var(--color-navy-300)] font-semibold">Fecha</th>
-                  <th className="text-center px-4 py-3 text-[var(--color-navy-300)] font-semibold">Acción</th>
+                  <th className="text-left px-4 py-3 text-navy-700 dark:text-zinc-300 font-semibold">Tipo</th>
+                  <th className="text-left px-4 py-3 text-navy-700 dark:text-zinc-300 font-semibold">Modelo</th>
+                  <th className="text-left px-4 py-3 text-navy-700 dark:text-zinc-300 font-semibold">Entidad</th>
+                  <th className="text-right px-4 py-3 text-navy-700 dark:text-zinc-300 font-semibold">Tokens</th>
+                  <th className="text-right px-4 py-3 text-navy-700 dark:text-zinc-300 font-semibold">Duración</th>
+                  <th className="text-center px-4 py-3 text-navy-700 dark:text-zinc-300 font-semibold">Revisado</th>
+                  <th className="text-left px-4 py-3 text-navy-700 dark:text-zinc-300 font-semibold">Fecha</th>
+                  <th className="text-center px-4 py-3 text-navy-700 dark:text-zinc-300 font-semibold">Acción</th>
                 </tr>
               </thead>
               <tbody>
                 {aiRuns.map((run) => (
-                  <tr key={run.id} className="border-b border-[var(--color-navy-700)] hover:bg-[var(--color-navy-750)] transition">
-                    <td className="px-4 py-3 text-[var(--color-navy-200)]">
+                  <tr
+                    key={run.id}
+                    className="border-b border-navy-100 last:border-0 hover:bg-gray-50 transition dark:border-zinc-800 dark:hover:bg-zinc-800/50"
+                  >
+                    <td className="px-4 py-3 text-navy-800 dark:text-zinc-200">
                       {runTypeLabels[run.run_type] || run.run_type}
                     </td>
-                    <td className="px-4 py-3 text-[var(--color-navy-300)] font-mono text-xs">{run.model}</td>
-                    <td className="px-4 py-3 text-[var(--color-navy-300)]">{run.entity_type}</td>
-                    <td className="px-4 py-3 text-right text-[var(--color-navy-200)]">
+                    <td className="px-4 py-3 text-navy-600 dark:text-zinc-400 font-mono text-xs">{run.model}</td>
+                    <td className="px-4 py-3 text-navy-600 dark:text-zinc-400">{run.entity_type}</td>
+                    <td className="px-4 py-3 text-right text-navy-800 dark:text-zinc-200">
                       {run.tokens_in + run.tokens_out}
                     </td>
-                    <td className="px-4 py-3 text-right text-[var(--color-navy-200)]">
+                    <td className="px-4 py-3 text-right text-navy-800 dark:text-zinc-200">
                       {run.duration_ms}ms
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        run.human_reviewed
-                          ? "bg-emerald-500/20 text-emerald-300"
-                          : "bg-yellow-500/20 text-yellow-300"
-                      }`}>
+                      <span
+                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${
+                          run.human_reviewed
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-900"
+                            : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-900"
+                        }`}
+                      >
                         {run.human_reviewed ? "✓" : "—"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-xs text-[var(--color-navy-400)]">
+                    <td className="px-4 py-3 text-xs text-navy-500 dark:text-zinc-400">
                       {new Date(run.created_at).toLocaleDateString("es-ES", {
                         day: "numeric",
                         month: "short",
@@ -223,7 +232,7 @@ export default function AiCompliancePage() {
                         <button
                           onClick={() => handleMarkReviewed(run.id)}
                           disabled={reviewingId === run.id}
-                          className="text-xs px-2 py-1 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded font-medium hover:opacity-90 transition disabled:opacity-50"
+                          className="text-xs px-3 py-1 bg-brand-green text-navy-900 rounded-lg font-medium hover:opacity-90 transition disabled:opacity-50"
                         >
                           {reviewingId === run.id ? "..." : "Revisar"}
                         </button>
@@ -235,25 +244,20 @@ export default function AiCompliancePage() {
             </table>
           </div>
         )}
-      </div>
+      </Card>
 
       {/* Human Review Alert */}
       {notReviewedCount > 0 && (
-        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4">
-          <p className="text-sm text-yellow-300">
-            <span className="font-semibold">{notReviewedCount} ejecución{notReviewedCount !== 1 ? "es" : ""} pendiente{notReviewedCount !== 1 ? "s" : ""} de revisar humanamente.</span> La supervisión humana es obligatoria para garantizar la conformidad con la normativa de IA.
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 dark:bg-amber-950/30 dark:border-amber-900">
+          <p className="text-sm text-amber-800 dark:text-amber-300">
+            <span className="font-semibold">
+              {notReviewedCount} ejecución{notReviewedCount !== 1 ? "es" : ""} pendiente
+              {notReviewedCount !== 1 ? "s" : ""} de revisar humanamente.
+            </span>{" "}
+            La supervisión humana es obligatoria para garantizar la conformidad con la normativa de IA.
           </p>
         </div>
       )}
-    </div>
-  );
-}
-
-function KpiCard({ label, value, color }: { label: string; value: string; color: string }) {
-  return (
-    <div className="bg-[var(--color-navy-800)] rounded-xl p-4 text-center">
-      <p className={`text-lg font-bold ${color}`}>{value}</p>
-      <p className="text-xs text-[var(--color-navy-400)] mt-1">{label}</p>
     </div>
   );
 }

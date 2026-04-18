@@ -10,27 +10,57 @@ import ShortcutsOverlay from "@/components/ShortcutsOverlay";
 import ThemeToggle from "@/components/ThemeToggle";
 import { SectorProvider, useSector } from "@/lib/sector-context";
 
-/* Fallback nav items used while sector config loads */
-const fallbackNavItems = [
-  { href: "/dashboard", label: "Dashboard", icon: "📊" },
-  { href: "/dashboard/clientes", label: "Clientes", icon: "👥" },
-  { href: "/dashboard/budgets", label: "Presupuestos", icon: "📋" },
-  { href: "/dashboard/messages", label: "WhatsApp", icon: "💬" },
-  { href: "/dashboard/emails", label: "Emails", icon: "📧" },
-  { href: "/dashboard/prices", label: "Banco precios", icon: "💰" },
-  { href: "/dashboard/projects", label: "Obras", icon: "🏗️" },
-  { href: "/dashboard/suppliers", label: "Proveedores", icon: "🔧" },
-  { href: "/dashboard/orders", label: "Pedidos", icon: "📦" },
-  { href: "/dashboard/delivery-notes", label: "Albaranes", icon: "📄" },
-  { href: "/dashboard/suppliers/invoices", label: "Facturas recibidas", icon: "🧾" },
-  { href: "/dashboard/issued-invoices", label: "Facturas emitidas", icon: "📑" },
-  { href: "/dashboard/payments", label: "Pagos y Tesorería", icon: "💵" },
-  { href: "/dashboard/margins", label: "Márgenes", icon: "📊" },
-  { href: "/dashboard/calendar", label: "Calendario", icon: "📅" },
-  { href: "/dashboard/agent", label: "Asistente IA", icon: "🤖" },
-  { href: "/dashboard/compliance", label: "Compliance", icon: "🛡️" },
-  { href: "/dashboard/audit-log", label: "Audit Log", icon: "📋" },
-  { href: "/dashboard/settings", label: "Ajustes", icon: "⚙️" },
+/* ─────────────────────────────────────────────────────────────────────
+ *  Curated sidebar — single source of truth.
+ *  Labels 100% Spanish. "Centro de control" is always the top entry and
+ *  routes to /dashboard (home). Sector visibility is applied on top via
+ *  `visibleModules()` from SectorContext.
+ * ──────────────────────────────────────────────────────────────────── */
+
+type NavItem = { href: string; label: string; icon: string };
+type NavSection = { section: string | null; items: NavItem[] };
+
+const sidebarSections: NavSection[] = [
+  {
+    section: null,
+    items: [{ href: "/dashboard", label: "Centro de control", icon: "🏠" }],
+  },
+  {
+    section: "General",
+    items: [
+      { href: "/dashboard/clientes", label: "Clientes", icon: "👥" },
+      { href: "/dashboard/messages", label: "WhatsApp", icon: "💬" },
+      { href: "/dashboard/emails", label: "Emails", icon: "📧" },
+    ],
+  },
+  {
+    section: "Negocio",
+    items: [
+      { href: "/dashboard/budgets", label: "Presupuestos", icon: "📋" },
+      { href: "/dashboard/prices", label: "Banco de precios", icon: "💰" },
+      { href: "/dashboard/projects", label: "Obras", icon: "🏗️" },
+      { href: "/dashboard/suppliers", label: "Proveedores", icon: "🔧" },
+      { href: "/dashboard/orders", label: "Pedidos", icon: "📦" },
+      { href: "/dashboard/delivery-notes", label: "Albaranes", icon: "📄" },
+    ],
+  },
+  {
+    section: "Finanzas",
+    items: [
+      { href: "/dashboard/suppliers/invoices", label: "Facturas recibidas", icon: "🧾" },
+      { href: "/dashboard/issued-invoices", label: "Facturas emitidas", icon: "📑" },
+      { href: "/dashboard/margins", label: "Márgenes", icon: "📊" },
+    ],
+  },
+  {
+    section: "Sistema",
+    items: [
+      { href: "/dashboard/calendar", label: "Calendario", icon: "📅" },
+      { href: "/dashboard/settings", label: "Ajustes", icon: "⚙️" },
+      { href: "/dashboard/compliance", label: "Cumplimiento", icon: "🛡️" },
+      { href: "/dashboard/audit-log", label: "Registro de actividad", icon: "📋" },
+    ],
+  },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -108,15 +138,29 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
 
   const emailVerified = user?.user_metadata?.email_verified === true;
 
-  // Build nav items from sector config or fallback
+  // Apply sector visibility on top of the curated structure.
+  // If sector config returns modules, only show items whose href is in
+  // that allow-list. Centro de control / Ajustes / Cumplimiento /
+  // Registro de actividad are always shown regardless of sector.
   const sectorModules = visibleModules();
-  const complianceItems = [
-    { href: "/dashboard/compliance", label: "Compliance", icon: "🛡️" },
-    { href: "/dashboard/audit-log", label: "Audit Log", icon: "📋" },
-  ];
-  const navItems = sectorModules.length > 0
-    ? [...sectorModules.map(m => ({ href: m.href, label: m.label, icon: m.icon })), ...complianceItems, { href: "/dashboard/settings", label: "Ajustes", icon: "⚙️" }]
-    : fallbackNavItems;
+  const sectorHrefs = new Set(sectorModules.map((m) => m.href));
+  const alwaysVisible = new Set([
+    "/dashboard",
+    "/dashboard/settings",
+    "/dashboard/compliance",
+    "/dashboard/audit-log",
+  ]);
+  const navSections: NavSection[] = sidebarSections
+    .map((sec) => ({
+      section: sec.section,
+      items: sec.items.filter(
+        (it) =>
+          alwaysVisible.has(it.href) ||
+          sectorHrefs.size === 0 ||
+          sectorHrefs.has(it.href)
+      ),
+    }))
+    .filter((sec) => sec.items.length > 0);
 
   // User initials for the avatar
   const initials = (() => {
@@ -226,51 +270,57 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
         }`}
       >
         <nav className="h-full overflow-y-auto px-4 py-6">
-          <p className="px-3 pb-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-navy-400 dark:text-zinc-500">
-            General
-          </p>
-          <ul className="space-y-0.5">
-            {navItems.map(item => {
-              const active =
-                item.href === "/dashboard"
-                  ? pathname === "/dashboard"
-                  : pathname === item.href || pathname.startsWith(item.href + "/");
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    onClick={() => setSidebarOpen(false)}
-                    className={`
-                      group relative flex items-center gap-3 rounded-xl
-                      px-3 py-2.5 text-[13.5px] font-medium
-                      transition-all duration-150
-                      ${
-                        active
-                          ? "bg-navy-900 text-white shadow-[0_4px_16px_-8px_rgba(10,25,41,0.4)] dark:bg-zinc-900 dark:text-white dark:shadow-none dark:ring-1 dark:ring-zinc-800"
-                          : "text-navy-600 hover:bg-navy-50 hover:text-navy-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
-                      }
-                    `}
-                  >
-                    <span
-                      className={`
-                        text-base transition-transform duration-150
-                        ${active ? "" : "opacity-70 group-hover:opacity-100 group-hover:scale-105"}
-                      `}
-                    >
-                      {item.icon}
-                    </span>
-                    <span className="truncate">{item.label}</span>
-                    {active && (
-                      <span
-                        aria-hidden
-                        className="ml-auto h-1.5 w-1.5 rounded-full bg-brand-green shadow-[0_0_0_3px_rgba(0,200,150,0.2)]"
-                      />
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          {navSections.map((sec, idx) => (
+            <div key={sec.section ?? `top-${idx}`} className={idx === 0 ? "" : "mt-5"}>
+              {sec.section && (
+                <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-navy-400 dark:text-zinc-500">
+                  {sec.section}
+                </p>
+              )}
+              <ul className="space-y-0.5">
+                {sec.items.map((item) => {
+                  const active =
+                    item.href === "/dashboard"
+                      ? pathname === "/dashboard"
+                      : pathname === item.href || pathname.startsWith(item.href + "/");
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        onClick={() => setSidebarOpen(false)}
+                        className={`
+                          group relative flex items-center gap-3 rounded-xl
+                          px-3 py-2.5 text-[13.5px] font-medium
+                          transition-all duration-150
+                          ${
+                            active
+                              ? "bg-navy-900 text-white shadow-[0_4px_16px_-8px_rgba(10,25,41,0.4)] dark:bg-zinc-900 dark:text-white dark:shadow-none dark:ring-1 dark:ring-zinc-800"
+                              : "text-navy-600 hover:bg-navy-50 hover:text-navy-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
+                          }
+                        `}
+                      >
+                        <span
+                          className={`
+                            text-base transition-transform duration-150
+                            ${active ? "" : "opacity-70 group-hover:opacity-100 group-hover:scale-105"}
+                          `}
+                        >
+                          {item.icon}
+                        </span>
+                        <span className="truncate">{item.label}</span>
+                        {active && (
+                          <span
+                            aria-hidden
+                            className="ml-auto h-1.5 w-1.5 rounded-full bg-brand-green shadow-[0_0_0_3px_rgba(0,200,150,0.2)]"
+                          />
+                        )}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
         </nav>
       </aside>
 
