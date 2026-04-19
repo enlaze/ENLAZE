@@ -51,7 +51,7 @@ export default function FeatureCard({
   return (
     <article
       className={`
-        group relative overflow-hidden rounded-2xl border border-navy-100 bg-white ${padding}
+        group relative flex h-full flex-col overflow-hidden rounded-2xl border border-navy-100 bg-white ${padding}
         shadow-[0_1px_2px_rgba(10,25,41,0.04)]
         transition-all duration-300 ease-out
         hover:-translate-y-[2px] hover:border-navy-200

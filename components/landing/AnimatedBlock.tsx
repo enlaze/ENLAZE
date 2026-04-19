@@ -8,6 +8,8 @@ type AnimatedBlockProps = {
   delay?: number;
   /** Vertical offset in px before entering (slide-up distance) */
   y?: number;
+  /** Horizontal offset in px before entering (slide-in distance) */
+  x?: number;
   /** Duration in ms */
   duration?: number;
   /** Tailwind class overrides or additions for the wrapper */
@@ -28,6 +30,7 @@ export default function AnimatedBlock({
   children,
   delay = 0,
   y = 40,
+  x = 0,
   duration = 650,
   className = "",
   as: Tag = "div",
@@ -47,6 +50,7 @@ export default function AnimatedBlock({
       "(prefers-reduced-motion: reduce)"
     ).matches;
     if (prefersReduced) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setVisible(true);
       return;
     }
@@ -75,7 +79,9 @@ export default function AnimatedBlock({
     transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
     transitionDelay: `${delay}ms`,
     opacity: visible ? 1 : 0,
-    transform: visible ? "translate3d(0,0,0)" : `translate3d(0,${y}px,0)`,
+    transform: visible
+      ? "translate3d(0,0,0)"
+      : `translate3d(${x}px,${y}px,0)`,
     willChange: "opacity, transform",
   };
 

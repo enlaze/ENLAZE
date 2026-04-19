@@ -1,7 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
+import {
+  motion,
+  useReducedMotion,
+  useScroll,
+  useSpring,
+  useTransform,
+} from "framer-motion";
 import Logo from "@/components/Logo";
 import AnimatedBlock from "@/components/landing/AnimatedBlock";
 import Section from "@/components/landing/Section";
@@ -216,17 +223,60 @@ function Navbar() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────
- *  HERO
+ *  HERO — HeroMotion: animaciones solo en capa decorativa
+ *
+ *  Arquitectura:
+ *  - El layout del hero (texto, CTAs, mockup) es 100 % ESTÁTICO. Cero
+ *    transforms sobre cards, grids o contenedores. Las cajas no cambian
+ *    de tamaño ni se desalinean al hacer scroll.
+ *  - Las animaciones de entrada (fade-in + slide-up) las hace AnimatedBlock
+ *    con IntersectionObserver — se disparan una sola vez al entrar en
+ *    viewport y dejan de tocar el elemento.
+ *  - Solo se animan elementos puramente decorativos posicionados en
+ *    `absolute`, fuera del flujo: la nube radial superior y el halo de
+ *    profundidad detrás del mockup. Estos no afectan al layout.
+ *  - Spring "pesado" Apple-style: stiffness 80 / damping 25 / mass 0.6.
+ *  - useReducedMotion: si el sistema lo pide, se desactivan los efectos.
  * ──────────────────────────────────────────────────────────────────── */
 
-function Hero() {
+function HeroMotion() {
+  const ref = useRef<HTMLElement>(null);
+  const reduced = useReducedMotion();
+
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    offset: ["start start", "end start"],
+  });
+
+  // Suavizado "pesado" tipo Apple: sin rebote, con inercia.
+  const smooth = useSpring(scrollYProgress, {
+    stiffness: 80,
+    damping: 25,
+    mass: 0.6,
+  });
+
+  // Parallax MUY sutil sobre la nube radial superior (decorativa, absolute).
+  const bgY = useTransform(smooth, [0, 1], [0, -40]);
+
+  // Halo de profundidad detrás del mockup (decorativo, absolute, no layout).
+  const glowOpacity = useTransform(smooth, [0, 0.5, 1], [0, 0.45, 0.7]);
+
+  const bgStyle = reduced ? undefined : { y: bgY };
+  const glowStyle = reduced ? undefined : { opacity: glowOpacity };
+
   return (
-    <section className="relative overflow-hidden pt-36 pb-24 md:pt-44 md:pb-32">
-      <div
+    <section
+      ref={ref}
+      className="relative overflow-hidden pt-36 pb-24 md:pt-44 md:pb-32"
+    >
+      {/* Capa decorativa — parallax SUTIL, absolute, fuera del flujo */}
+      <motion.div
         aria-hidden
+        style={bgStyle}
         className="
           pointer-events-none absolute inset-x-0 top-0 h-[720px] -z-10
           bg-[radial-gradient(ellipse_at_top,rgba(0,200,150,0.10),transparent_55%),radial-gradient(ellipse_at_bottom,rgba(10,25,41,0.05),transparent_60%)]
+          will-change-transform
         "
       />
       <div
@@ -326,9 +376,23 @@ function Hero() {
           </p>
         </AnimatedBlock>
 
-        <AnimatedBlock delay={400} y={50} duration={800}>
-          <ProductPreview />
-        </AnimatedBlock>
+        <div className="relative">
+          {/* Halo de profundidad — decorativo, absolute, NO afecta al layout */}
+          <motion.div
+            aria-hidden
+            style={glowStyle}
+            className="
+              pointer-events-none absolute inset-x-8 -bottom-12 top-20 -z-10
+              rounded-[40px]
+              bg-[radial-gradient(ellipse_at_center,rgba(0,200,150,0.18),transparent_65%)]
+              blur-3xl
+              will-change-[opacity]
+            "
+          />
+          <AnimatedBlock delay={400} y={50} duration={800}>
+            <ProductPreview />
+          </AnimatedBlock>
+        </div>
       </div>
     </section>
   );
@@ -522,7 +586,7 @@ function PainSection() {
 
       <div className="mt-16 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {pains.map((p, i) => (
-          <AnimatedBlock key={i} delay={i * 80} y={36} duration={650}>
+          <AnimatedBlock key={i} delay={i * 80} y={36} duration={650} className="h-full">
             <FeatureCard
               icon={<IconAlert size={18} />}
               iconVariant="red"
@@ -582,7 +646,7 @@ function Benefits() {
 
       <div className="mt-16 grid grid-cols-1 gap-5 md:grid-cols-2">
         {benefits.map(({ Icon, title, desc }, i) => (
-          <AnimatedBlock key={i} delay={i * 100} y={40} duration={700}>
+          <AnimatedBlock key={i} delay={i * 100} y={40} duration={700} className="h-full">
             <FeatureCard
               icon={<Icon size={20} />}
               iconVariant="navy"
@@ -659,10 +723,10 @@ function HowItWorks() {
 
         <div className="mt-16 grid grid-cols-1 gap-6 md:grid-cols-3">
           {steps.map(({ n, Icon, title, desc }, i) => (
-            <AnimatedBlock key={i} delay={i * 120} y={40} duration={700}>
+            <AnimatedBlock key={i} delay={i * 120} y={40} duration={700} className="h-full">
               <article
                 className="
-                  group relative overflow-hidden rounded-2xl
+                  group relative h-full overflow-hidden rounded-2xl
                   border border-white/10 bg-white/[0.04] p-8
                   backdrop-blur-sm
                   transition-all duration-300
@@ -734,78 +798,185 @@ function BeforeAfter() {
         </div>
       </AnimatedBlock>
 
-      <div className="mt-16 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <AnimatedBlock delay={80} y={40} duration={700}>
-          {/* Antes */}
-          <div
-            className="
-              relative overflow-hidden rounded-2xl
-              border border-navy-100 bg-white p-8 transition-colors md:p-10
-              shadow-[0_1px_2px_rgba(10,25,41,0.04)]
-            "
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-500 ring-1 ring-inset ring-red-100">
-                <IconX size={18} />
-              </div>
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-400 transition-colors">
-                  Antes
-                </p>
-                <p className="text-[17px] font-semibold text-navy-900 transition-colors">Sin Enlaze</p>
-              </div>
-            </div>
+      {/* Contenedor principal con glow central que conecta ambos lados */}
+      <div className="relative mt-16">
+        {/* Tinte horizontal sutil que une ambos lados — solo desktop */}
+        <div
+          aria-hidden
+          className="
+            pointer-events-none absolute inset-y-8 inset-x-0 -z-10 hidden lg:block
+            bg-[linear-gradient(to_right,rgba(239,68,68,0.05)_0%,transparent_35%,transparent_65%,rgba(0,200,150,0.05)_100%)]
+            rounded-3xl
+          "
+        />
 
-            <ul className="mt-7 space-y-4">
-              {beforeItems.map((t, i) => (
-                <li key={i} className="flex items-start gap-3">
-                  <span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-500">
-                    <IconX size={10} />
-                  </span>
-                  <span className="text-[14.5px] leading-relaxed text-navy-600 transition-colors">{t}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </AnimatedBlock>
-
-        <AnimatedBlock delay={180} y={40} duration={700}>
-          {/* Después */}
-          <div
-            className="
-              relative overflow-hidden rounded-2xl
-              border border-brand-green/20 bg-white p-8 transition-colors md:p-10
-              shadow-[0_1px_2px_rgba(10,25,41,0.04),0_24px_56px_-28px_rgba(0,200,150,0.25)]
-            "
+        {/* Glow verde central — decorativo, se expande al entrar en viewport */}
+        <div
+          aria-hidden
+          className="
+            pointer-events-none absolute left-1/2 top-1/2 -z-10 hidden lg:block
+            h-[320px] w-[420px] -translate-x-1/2 -translate-y-1/2
+          "
+        >
+          <AnimatedBlock
+            delay={260}
+            y={0}
+            duration={1100}
+            className="h-full w-full"
           >
             <div
-              aria-hidden
-              className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-green/60 to-transparent"
+              className="
+                h-full w-full rounded-full
+                bg-[radial-gradient(ellipse_at_center,rgba(0,200,150,0.22),transparent_65%)]
+                blur-3xl
+              "
             />
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-green/10 text-brand-green ring-1 ring-inset ring-brand-green/20">
-                <IconCheck size={18} />
-              </div>
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
-                  Después
-                </p>
-                <p className="text-[17px] font-semibold text-navy-900 transition-colors">Con Enlaze</p>
-              </div>
-            </div>
+          </AnimatedBlock>
+        </div>
 
-            <ul className="mt-7 space-y-4">
-              {afterItems.map((t, i) => (
-                <li key={i} className="flex items-start gap-3">
-                  <span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-green/15 text-brand-green">
-                    <IconCheck size={10} />
-                  </span>
-                  <span className="text-[14.5px] leading-relaxed text-navy-700 transition-colors">{t}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </AnimatedBlock>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* ANTES — slide desde la IZQUIERDA */}
+          <AnimatedBlock
+            delay={80}
+            x={-48}
+            y={0}
+            duration={750}
+            className="h-full"
+          >
+            <div
+              className="
+                relative h-full overflow-hidden rounded-2xl
+                border border-red-100 bg-red-50/40 p-8 transition-colors md:p-10
+                shadow-[0_1px_2px_rgba(10,25,41,0.04)]
+              "
+            >
+              <div
+                aria-hidden
+                className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-300/50 to-transparent"
+              />
+
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100/80 text-red-500 ring-1 ring-inset ring-red-200/60">
+                  <IconX size={18} />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-red-500/90">
+                    Antes
+                  </p>
+                  <p className="text-[17px] font-semibold text-navy-900 transition-colors">
+                    Sin Enlaze
+                  </p>
+                </div>
+              </div>
+
+              <ul className="mt-7 space-y-1">
+                {beforeItems.map((t, i) => (
+                  <AnimatedBlock
+                    as="li"
+                    key={i}
+                    delay={220 + i * 55}
+                    x={-16}
+                    y={0}
+                    duration={500}
+                  >
+                    <div
+                      className="
+                        group flex items-start gap-3 rounded-xl px-3 py-2.5
+                        transition-all duration-200 ease-out
+                        hover:-translate-y-1 hover:bg-white
+                        hover:shadow-[0_10px_24px_-12px_rgba(239,68,68,0.22)]
+                      "
+                    >
+                      <span
+                        className="
+                          mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full
+                          bg-red-100/80 text-red-500 transition-colors
+                          group-hover:bg-red-500 group-hover:text-white
+                        "
+                      >
+                        <IconX size={10} />
+                      </span>
+                      <span className="text-[14.5px] leading-relaxed text-navy-700 transition-colors">
+                        {t}
+                      </span>
+                    </div>
+                  </AnimatedBlock>
+                ))}
+              </ul>
+            </div>
+          </AnimatedBlock>
+
+          {/* DESPUÉS — slide desde la DERECHA, con delay para crear contraste */}
+          <AnimatedBlock
+            delay={340}
+            x={48}
+            y={0}
+            duration={750}
+            className="h-full"
+          >
+            <div
+              className="
+                relative h-full overflow-hidden rounded-2xl
+                border border-brand-green/25 bg-brand-green/[0.04] p-8 transition-colors md:p-10
+                shadow-[0_1px_2px_rgba(10,25,41,0.04),0_24px_56px_-28px_rgba(0,200,150,0.25)]
+              "
+            >
+              <div
+                aria-hidden
+                className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-green/60 to-transparent"
+              />
+
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-green/10 text-brand-green ring-1 ring-inset ring-brand-green/20">
+                  <IconCheck size={18} />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
+                    Después
+                  </p>
+                  <p className="text-[17px] font-semibold text-navy-900 transition-colors">
+                    Con Enlaze
+                  </p>
+                </div>
+              </div>
+
+              <ul className="mt-7 space-y-1">
+                {afterItems.map((t, i) => (
+                  <AnimatedBlock
+                    as="li"
+                    key={i}
+                    delay={480 + i * 55}
+                    x={16}
+                    y={0}
+                    duration={500}
+                  >
+                    <div
+                      className="
+                        group flex items-start gap-3 rounded-xl px-3 py-2.5
+                        transition-all duration-200 ease-out
+                        hover:-translate-y-1 hover:bg-white
+                        hover:shadow-[0_10px_24px_-12px_rgba(0,200,150,0.3)]
+                      "
+                    >
+                      <span
+                        className="
+                          mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full
+                          bg-brand-green/15 text-brand-green transition-colors
+                          group-hover:bg-brand-green group-hover:text-white
+                        "
+                      >
+                        <IconCheck size={10} />
+                      </span>
+                      <span className="text-[14.5px] leading-relaxed text-navy-700 transition-colors">
+                        {t}
+                      </span>
+                    </div>
+                  </AnimatedBlock>
+                ))}
+              </ul>
+            </div>
+          </AnimatedBlock>
+        </div>
       </div>
     </Section>
   );
@@ -868,10 +1039,10 @@ function SocialProof() {
 
       <div className="mt-14 grid grid-cols-2 gap-5 md:grid-cols-4">
         {metrics.map(({ value, label, Icon }, i) => (
-          <AnimatedBlock key={i} delay={i * 80} y={30} duration={650}>
+          <AnimatedBlock key={i} delay={i * 80} y={30} duration={650} className="h-full">
             <div
               className="
-                rounded-2xl border border-navy-100 bg-white p-6 transition-colors
+                h-full rounded-2xl border border-navy-100 bg-white p-6 transition-colors
                 shadow-[0_1px_2px_rgba(10,25,41,0.04)]
               "
             >
@@ -894,10 +1065,10 @@ function SocialProof() {
 
       <div className="mt-14 grid grid-cols-1 gap-5 md:grid-cols-3">
         {testimonials.map((t, i) => (
-          <AnimatedBlock key={i} delay={i * 120} y={40} duration={700}>
+          <AnimatedBlock key={i} delay={i * 120} y={40} duration={700} className="h-full">
             <figure
               className="
-                relative overflow-hidden rounded-2xl
+                relative flex h-full flex-col overflow-hidden rounded-2xl
                 border border-navy-100 bg-white p-7
                 shadow-[0_1px_2px_rgba(10,25,41,0.04)]
                 transition-all duration-300
@@ -914,7 +1085,7 @@ function SocialProof() {
                   <IconStar key={i} size={13} className="fill-current" />
                 ))}
               </div>
-              <blockquote className="mt-5 text-[15px] leading-relaxed text-navy-700">
+              <blockquote className="mt-5 flex-1 text-[15px] leading-relaxed text-navy-700">
                 «{t.quote}»
               </blockquote>
               <figcaption className="mt-6 flex items-center gap-3 border-t border-navy-100 pt-5">
@@ -973,7 +1144,7 @@ function ForWhom() {
       </AnimatedBlock>
 
       <div className="mt-16 grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <AnimatedBlock delay={80} y={40} duration={700} className="lg:col-span-3">
+        <AnimatedBlock delay={80} y={40} duration={700} className="h-full lg:col-span-3">
           {/* Sí */}
           <div
             className="
@@ -1013,7 +1184,7 @@ function ForWhom() {
           </div>
         </AnimatedBlock>
 
-        <AnimatedBlock delay={180} y={40} duration={700} className="lg:col-span-2">
+        <AnimatedBlock delay={180} y={40} duration={700} className="h-full lg:col-span-2">
           {/* No */}
           <div
             className="
@@ -1238,7 +1409,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-white text-navy-900 transition-colors antialiased">
       <Navbar />
-      <Hero />
+      <HeroMotion />
       <PainSection />
       <Benefits />
       <HowItWorks />
