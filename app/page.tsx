@@ -3,6 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import Logo from "@/components/Logo";
+import AnimatedBlock from "@/components/landing/AnimatedBlock";
+import Section from "@/components/landing/Section";
+import FeatureCard from "@/components/landing/FeatureCard";
 
 /* ─────────────────────────────────────────────────────────────────────
  *  Icons — estilo Lucide (stroke 1.75, rounded, 24x24)
@@ -213,7 +216,7 @@ function Navbar() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────
- *  Hero  (Variante A aplicada — pain-driven)
+ *  HERO
  * ──────────────────────────────────────────────────────────────────── */
 
 function Hero() {
@@ -223,7 +226,7 @@ function Hero() {
         aria-hidden
         className="
           pointer-events-none absolute inset-x-0 top-0 h-[720px] -z-10
-          bg-[radial-gradient(ellipse_at_top,rgba(0,200,150,0.10),transparent_55%),radial-gradient(ellipse_at_bottom,rgba(10,25,41,0.05),transparent_60%)]]
+          bg-[radial-gradient(ellipse_at_top,rgba(0,200,150,0.10),transparent_55%),radial-gradient(ellipse_at_bottom,rgba(10,25,41,0.05),transparent_60%)]
         "
       />
       <div
@@ -232,90 +235,100 @@ function Hero() {
           pointer-events-none absolute inset-0 -z-10 opacity-[0.22]
           [background-image:linear-gradient(to_right,#e8eef4_1px,transparent_1px),linear-gradient(to_bottom,#e8eef4_1px,transparent_1px)]
           [background-size:64px_64px]
-          [mask-image:radial-gradient(ellipse_at_top,black_45%,transparent_75%)]]]
+          [mask-image:radial-gradient(ellipse_at_top,black_45%,transparent_75%)]
         "
       />
 
       <div className="relative mx-auto max-w-6xl px-6">
-        <div className="flex justify-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-navy-100 bg-white/80 px-3.5 py-1.5 shadow-[0_1px_2px_rgba(10,25,41,0.04)] backdrop-blur transition-colors]">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-green/60" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-brand-green" />
-            </span>
-            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-600 transition-colors">
-              Automatización para empresas de servicios
-            </span>
+        <AnimatedBlock y={20} duration={600}>
+          <div className="flex justify-center">
+            <div className="inline-flex items-center gap-2 rounded-full border border-navy-100 bg-white/80 px-3.5 py-1.5 shadow-[0_1px_2px_rgba(10,25,41,0.04)] backdrop-blur transition-colors">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-green/60" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-brand-green" />
+              </span>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-600 transition-colors">
+                Automatización para empresas de servicios
+              </span>
+            </div>
           </div>
-        </div>
+        </AnimatedBlock>
 
-        {/* Headline */}
-        <h1 className="mx-auto mt-8 max-w-4xl text-center text-[2.5rem] font-semibold leading-[1.05] tracking-[-0.025em] text-navy-900 transition-colors md:text-[4rem] lg:text-[4.5rem]">
-          Cierra más clientes{" "}
-          <span className="relative inline-block whitespace-nowrap">
-            <span className="relative z-10 text-brand-green">sin trabajar más horas</span>
-            <svg
-              aria-hidden
-              viewBox="0 0 300 12"
-              className="absolute -bottom-2 left-0 h-2.5 w-full text-brand-green/30 transition-colors"
-              preserveAspectRatio="none"
+        <AnimatedBlock delay={80} y={30} duration={700}>
+          <h1 className="mx-auto mt-8 max-w-4xl text-center text-[2.5rem] font-semibold leading-[1.05] tracking-[-0.025em] text-navy-900 transition-colors md:text-[4rem] lg:text-[4.5rem]">
+            Cierra más clientes{" "}
+            <span className="relative inline-block whitespace-nowrap">
+              <span className="relative z-10 text-brand-green">sin trabajar más horas</span>
+              <svg
+                aria-hidden
+                viewBox="0 0 300 12"
+                className="absolute -bottom-2 left-0 h-2.5 w-full text-brand-green/30 transition-colors"
+                preserveAspectRatio="none"
+              >
+                <path
+                  d="M2 8 Q 75 2, 150 6 T 298 5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </span>
+          </h1>
+        </AnimatedBlock>
+
+        <AnimatedBlock delay={160} y={28} duration={700}>
+          <p className="mx-auto mt-7 max-w-2xl text-center text-[17px] leading-relaxed text-navy-500 transition-colors md:text-[18px]">
+            ENLAZE centraliza clientes, presupuestos, seguimiento y operaciones en un solo lugar para empresas de servicios que quieren responder más rápido, vender mejor y tener más control del negocio.
+          </p>
+        </AnimatedBlock>
+
+        <AnimatedBlock delay={240} y={24} duration={700}>
+          <div className="mt-10 flex flex-wrap justify-center gap-3">
+            <Link
+              href="/register"
+              className="
+                group inline-flex items-center gap-2
+                rounded-xl bg-brand-green px-6 py-3.5 text-[14px] font-semibold text-white
+                shadow-[0_10px_28px_-10px_rgba(0,200,150,0.55),0_2px_4px_-2px_rgba(0,200,150,0.4),inset_0_1px_0_rgba(255,255,255,0.18)]
+                ring-1 ring-inset ring-white/10
+                transition-all duration-200 ease-out
+                hover:-translate-y-[1.5px] hover:bg-brand-green-dark
+                hover:shadow-[0_16px_36px_-12px_rgba(0,200,150,0.65),0_2px_4px_-2px_rgba(0,200,150,0.4),inset_0_1px_0_rgba(255,255,255,0.22)]
+                focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:ring-offset-2
+              "
             >
-              <path
-                d="M2 8 Q 75 2, 150 6 T 298 5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="3"
-                strokeLinecap="round"
-              />
-            </svg>
-          </span>
-        </h1>
+              Solicitar demo
+              <IconArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
+            </Link>
+            <a
+              href="#como-funciona"
+              className="
+                group inline-flex items-center gap-2
+                rounded-xl border border-navy-200 bg-white px-6 py-3.5 text-[14px] font-semibold text-navy-800
+                transition-all duration-200
+                hover:-translate-y-[1px] hover:border-navy-300 hover:bg-navy-50
+              "
+            >
+              <IconPlay size={14} />
+              Ver cómo funciona
+            </a>
+          </div>
+        </AnimatedBlock>
 
-        {/* Subheadline */}
-        <p className="mx-auto mt-7 max-w-2xl text-center text-[17px] leading-relaxed text-navy-500 transition-colors md:text-[18px]">
-          ENLAZE centraliza clientes, presupuestos, seguimiento y operaciones en un solo lugar para empresas de servicios que quieren responder más rápido, vender mejor y tener más control del negocio.
-        </p>
+        <AnimatedBlock delay={320} y={18} duration={700}>
+          <p className="mx-auto mt-6 max-w-xl text-center text-[14px] leading-relaxed text-navy-400 transition-colors">
+            Menos WhatsApp perdido, menos Excel disperso y menos tiempo apagando fuegos. Más orden, más seguimiento y más ventas.
+          </p>
 
-        <div className="mt-10 flex flex-wrap justify-center gap-3">
-          <Link
-            href="/register"
-            className="
-              group inline-flex items-center gap-2
-              rounded-xl bg-brand-green px-6 py-3.5 text-[14px] font-semibold text-white
-              shadow-[0_10px_28px_-10px_rgba(0,200,150,0.55),0_2px_4px_-2px_rgba(0,200,150,0.4),inset_0_1px_0_rgba(255,255,255,0.18)]
-              ring-1 ring-inset ring-white/10
-              transition-all duration-200 ease-out
-              hover:-translate-y-[1.5px] hover:bg-brand-green-dark
-              hover:shadow-[0_16px_36px_-12px_rgba(0,200,150,0.65),0_2px_4px_-2px_rgba(0,200,150,0.4),inset_0_1px_0_rgba(255,255,255,0.22)]
-              focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:ring-offset-2
-            "
-          >
-            Solicitar demo
-            <IconArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
-          </Link>
-          <a
-            href="#como-funciona"
-            className="
-              group inline-flex items-center gap-2
-              rounded-xl border border-navy-200 bg-white px-6 py-3.5 text-[14px] font-semibold text-navy-800
-              transition-all duration-200
-              hover:-translate-y-[1px] hover:border-navy-300 hover:bg-navy-50
-            "
-          >
-            <IconPlay size={14} />
-            Ver cómo funciona
-          </a>
-        </div>
+          <p className="mt-4 text-center text-[13px] text-navy-500 transition-colors">
+            Sin tarjeta · Configuración en 2 minutos · Cancela cuando quieras
+          </p>
+        </AnimatedBlock>
 
-        <p className="mx-auto mt-6 max-w-xl text-center text-[14px] leading-relaxed text-navy-400 transition-colors">
-          Menos WhatsApp perdido, menos Excel disperso y menos tiempo apagando fuegos. Más orden, más seguimiento y más ventas.
-        </p>
-
-        <p className="mt-4 text-center text-[13px] text-navy-500 transition-colors">
-          Sin tarjeta · Configuración en 2 minutos · Cancela cuando quieras
-        </p>
-
-        <ProductPreview />
+        <AnimatedBlock delay={400} y={50} duration={800}>
+          <ProductPreview />
+        </AnimatedBlock>
       </div>
     </section>
   );
@@ -460,7 +473,7 @@ function MockLine({
 }
 
 /* ─────────────────────────────────────────────────────────────────────
- *  Pain section — dolor del cliente
+ *  PROBLEMA — Pain section
  * ──────────────────────────────────────────────────────────────────── */
 
 const pains = [
@@ -492,8 +505,8 @@ const pains = [
 
 function PainSection() {
   return (
-    <section className="relative border-y border-navy-100 bg-navy-50/40 py-28 transition-colors">
-      <div className="mx-auto max-w-6xl px-6">
+    <Section tone="muted" bordered>
+      <AnimatedBlock y={30} duration={650}>
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
             El problema
@@ -505,41 +518,26 @@ function PainSection() {
             Si alguna de estas frases te suena, no eres tú. Es el sistema con el que estás trabajando.
           </p>
         </div>
+      </AnimatedBlock>
 
-        <div className="mt-16 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {pains.map((p, i) => (
-            <article
-              key={i}
-              className="
-                group relative rounded-2xl border border-navy-100 bg-white p-7
-                shadow-[0_1px_2px_rgba(10,25,41,0.04)]
-                transition-all duration-300
-                hover:-translate-y-[2px] hover:border-navy-200
-                hover:shadow-[0_12px_32px_-16px_rgba(10,25,41,0.18)]]]
-              "
-            >
-              <div
-                className="
-                  flex h-10 w-10 items-center justify-center rounded-xl
-                  bg-red-50 text-red-500 ring-1 ring-inset ring-red-100
-                "
-              >
-                <IconAlert size={18} />
-              </div>
-              <h3 className="mt-5 text-[15.5px] font-semibold tracking-tight text-navy-900 transition-colors">
-                {p.title}
-              </h3>
-              <p className="mt-2 text-[14px] leading-relaxed text-navy-500 transition-colors">{p.desc}</p>
-            </article>
-          ))}
-        </div>
+      <div className="mt-16 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {pains.map((p, i) => (
+          <AnimatedBlock key={i} delay={i * 80} y={36} duration={650}>
+            <FeatureCard
+              icon={<IconAlert size={18} />}
+              iconVariant="red"
+              title={p.title}
+              description={p.desc}
+            />
+          </AnimatedBlock>
+        ))}
       </div>
-    </section>
+    </Section>
   );
 }
 
 /* ─────────────────────────────────────────────────────────────────────
- *  Benefits — qué hace el producto (outcomes, no features)
+ *  SOLUCIÓN / FEATURES — Benefits
  * ──────────────────────────────────────────────────────────────────── */
 
 const benefits = [
@@ -567,8 +565,8 @@ const benefits = [
 
 function Benefits() {
   return (
-    <section id="producto" className="relative py-28">
-      <div className="mx-auto max-w-6xl px-6">
+    <Section id="producto" tone="light">
+      <AnimatedBlock y={30} duration={650}>
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
             La solución
@@ -580,38 +578,22 @@ function Benefits() {
             ENLAZE te ayuda a organizar el trabajo comercial y operativo de tu empresa para responder más rápido, crear presupuestos con más agilidad, hacer seguimiento sin olvidos y centralizar la información importante.
           </p>
         </div>
+      </AnimatedBlock>
 
-        <div className="mt-16 grid grid-cols-1 gap-5 md:grid-cols-2">
-          {benefits.map(({ Icon, title, desc }, i) => (
-            <article
-              key={i}
-              className="
-                group relative overflow-hidden rounded-2xl border border-navy-100 bg-white p-8
-                shadow-[0_1px_2px_rgba(10,25,41,0.04)]
-                transition-all duration-300 ease-out
-                hover:-translate-y-[2px] hover:border-navy-200
-                hover:shadow-[0_12px_32px_-16px_rgba(10,25,41,0.18)]]]
-              "
-            >
-              <div
-                className="
-                  flex h-11 w-11 items-center justify-center rounded-xl
-                  bg-navy-50 text-navy-700 ring-1 ring-inset ring-navy-100
-                  transition-colors duration-300
-                  group-hover:bg-brand-green/10 group-hover:text-brand-green group-hover:ring-brand-green/15
-                "
-              >
-                <Icon size={20} />
-              </div>
-              <h3 className="mt-6 text-[17px] font-semibold tracking-tight text-navy-900 transition-colors">
-                {title}
-              </h3>
-              <p className="mt-2.5 text-[14.5px] leading-relaxed text-navy-500 transition-colors">{desc}</p>
-            </article>
-          ))}
-        </div>
+      <div className="mt-16 grid grid-cols-1 gap-5 md:grid-cols-2">
+        {benefits.map(({ Icon, title, desc }, i) => (
+          <AnimatedBlock key={i} delay={i * 100} y={40} duration={700}>
+            <FeatureCard
+              icon={<Icon size={20} />}
+              iconVariant="navy"
+              padding="p-8"
+              title={title}
+              description={desc}
+            />
+          </AnimatedBlock>
+        ))}
       </div>
-    </section>
+    </Section>
   );
 }
 
@@ -661,48 +643,51 @@ function HowItWorks() {
       />
 
       <div className="relative mx-auto max-w-6xl px-6">
-        <div className="mx-auto max-w-2xl text-center">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
-            Cómo funciona
-          </p>
-          <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-white md:text-[2.75rem]">
-            Empezar es más fácil que lo que haces ahora
-          </h2>
-          <p className="mt-4 text-[16px] leading-relaxed text-navy-300">
-            Tres pasos. Ni formaciones de dos días, ni consultores, ni manuales de 80 páginas.
-          </p>
-        </div>
+        <AnimatedBlock y={30} duration={650}>
+          <div className="mx-auto max-w-2xl text-center">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
+              Cómo funciona
+            </p>
+            <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-white md:text-[2.75rem]">
+              Empezar es más fácil que lo que haces ahora
+            </h2>
+            <p className="mt-4 text-[16px] leading-relaxed text-navy-300">
+              Tres pasos. Ni formaciones de dos días, ni consultores, ni manuales de 80 páginas.
+            </p>
+          </div>
+        </AnimatedBlock>
 
         <div className="mt-16 grid grid-cols-1 gap-6 md:grid-cols-3">
           {steps.map(({ n, Icon, title, desc }, i) => (
-            <article
-              key={i}
-              className="
-                group relative overflow-hidden rounded-2xl
-                border border-white/10 bg-white/[0.04] p-8
-                backdrop-blur-sm
-                transition-all duration-300
-                hover:-translate-y-[2px] hover:border-brand-green/30 hover:bg-white/[0.06]
-              "
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
-                  Paso {n}
-                </span>
-                <div
-                  className="
-                    flex h-10 w-10 items-center justify-center rounded-xl
-                    bg-brand-green/10 text-brand-green ring-1 ring-inset ring-brand-green/20
-                  "
-                >
-                  <Icon size={18} />
+            <AnimatedBlock key={i} delay={i * 120} y={40} duration={700}>
+              <article
+                className="
+                  group relative overflow-hidden rounded-2xl
+                  border border-white/10 bg-white/[0.04] p-8
+                  backdrop-blur-sm
+                  transition-all duration-300
+                  hover:-translate-y-[2px] hover:border-brand-green/30 hover:bg-white/[0.06]
+                "
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
+                    Paso {n}
+                  </span>
+                  <div
+                    className="
+                      flex h-10 w-10 items-center justify-center rounded-xl
+                      bg-brand-green/10 text-brand-green ring-1 ring-inset ring-brand-green/20
+                    "
+                  >
+                    <Icon size={18} />
+                  </div>
                 </div>
-              </div>
-              <h3 className="mt-8 text-[18px] font-semibold tracking-tight text-white">
-                {title}
-              </h3>
-              <p className="mt-3 text-[14.5px] leading-relaxed text-navy-300">{desc}</p>
-            </article>
+                <h3 className="mt-8 text-[18px] font-semibold tracking-tight text-white">
+                  {title}
+                </h3>
+                <p className="mt-3 text-[14.5px] leading-relaxed text-navy-300">{desc}</p>
+              </article>
+            </AnimatedBlock>
           ))}
         </div>
       </div>
@@ -711,7 +696,7 @@ function HowItWorks() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────
- *  Before vs After
+ *  DEMO / PREVIEW — Before vs After
  * ──────────────────────────────────────────────────────────────────── */
 
 const beforeItems = [
@@ -734,8 +719,8 @@ const afterItems = [
 
 function BeforeAfter() {
   return (
-    <section className="relative py-28">
-      <div className="mx-auto max-w-6xl px-6">
+    <Section tone="light">
+      <AnimatedBlock y={30} duration={650}>
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
             Antes vs. después
@@ -747,13 +732,15 @@ function BeforeAfter() {
             La misma empresa, los mismos clientes, los mismos trabajos. Solo cambia quién hace la parte aburrida.
           </p>
         </div>
+      </AnimatedBlock>
 
-        <div className="mt-16 grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="mt-16 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <AnimatedBlock delay={80} y={40} duration={700}>
           {/* Antes */}
           <div
             className="
               relative overflow-hidden rounded-2xl
-              border border-navy-100 bg-white p-8 transition-colors] md:p-10
+              border border-navy-100 bg-white p-8 transition-colors md:p-10
               shadow-[0_1px_2px_rgba(10,25,41,0.04)]
             "
           >
@@ -780,12 +767,14 @@ function BeforeAfter() {
               ))}
             </ul>
           </div>
+        </AnimatedBlock>
 
+        <AnimatedBlock delay={180} y={40} duration={700}>
           {/* Después */}
           <div
             className="
               relative overflow-hidden rounded-2xl
-              border border-brand-green/20 bg-white p-8 transition-colors] md:p-10
+              border border-brand-green/20 bg-white p-8 transition-colors md:p-10
               shadow-[0_1px_2px_rgba(10,25,41,0.04),0_24px_56px_-28px_rgba(0,200,150,0.25)]
             "
           >
@@ -816,9 +805,9 @@ function BeforeAfter() {
               ))}
             </ul>
           </div>
-        </div>
+        </AnimatedBlock>
       </div>
-    </section>
+    </Section>
   );
 }
 
@@ -862,8 +851,8 @@ const testimonials = [
 
 function SocialProof() {
   return (
-    <section className="relative border-y border-navy-100 bg-navy-50/40 py-28 transition-colors">
-      <div className="mx-auto max-w-6xl px-6">
+    <Section tone="muted" bordered>
+      <AnimatedBlock y={30} duration={650}>
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
             Resultados
@@ -875,14 +864,15 @@ function SocialProof() {
             Lo que consiguen los equipos que ya trabajan con Enlaze.
           </p>
         </div>
+      </AnimatedBlock>
 
-        <div className="mt-14 grid grid-cols-2 gap-5 md:grid-cols-4">
-          {metrics.map(({ value, label, Icon }, i) => (
+      <div className="mt-14 grid grid-cols-2 gap-5 md:grid-cols-4">
+        {metrics.map(({ value, label, Icon }, i) => (
+          <AnimatedBlock key={i} delay={i * 80} y={30} duration={650}>
             <div
-              key={i}
               className="
                 rounded-2xl border border-navy-100 bg-white p-6 transition-colors
-                shadow-[0_1px_2px_rgba(10,25,41,0.04)]]
+                shadow-[0_1px_2px_rgba(10,25,41,0.04)]
               "
             >
               <div
@@ -898,13 +888,14 @@ function SocialProof() {
               </p>
               <p className="mt-1 text-[13px] leading-snug text-navy-500 transition-colors">{label}</p>
             </div>
-          ))}
-        </div>
+          </AnimatedBlock>
+        ))}
+      </div>
 
-        <div className="mt-14 grid grid-cols-1 gap-5 md:grid-cols-3">
-          {testimonials.map((t, i) => (
+      <div className="mt-14 grid grid-cols-1 gap-5 md:grid-cols-3">
+        {testimonials.map((t, i) => (
+          <AnimatedBlock key={i} delay={i * 120} y={40} duration={700}>
             <figure
-              key={i}
               className="
                 relative overflow-hidden rounded-2xl
                 border border-navy-100 bg-white p-7
@@ -938,10 +929,10 @@ function SocialProof() {
                 </div>
               </figcaption>
             </figure>
-          ))}
-        </div>
+          </AnimatedBlock>
+        ))}
       </div>
-    </section>
+    </Section>
   );
 }
 
@@ -966,8 +957,8 @@ const fitNo = [
 
 function ForWhom() {
   return (
-    <section className="relative py-28">
-      <div className="mx-auto max-w-6xl px-6">
+    <Section tone="light">
+      <AnimatedBlock y={30} duration={650}>
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
             Para quién es
@@ -979,15 +970,16 @@ function ForWhom() {
             ENLAZE está pensado para negocios que trabajan con solicitudes, clientes, presupuestos, tareas y seguimiento diario.
           </p>
         </div>
+      </AnimatedBlock>
 
-        <div className="mt-16 grid grid-cols-1 gap-6 lg:grid-cols-5">
+      <div className="mt-16 grid grid-cols-1 gap-6 lg:grid-cols-5">
+        <AnimatedBlock delay={80} y={40} duration={700} className="lg:col-span-3">
           {/* Sí */}
           <div
             className="
-              relative overflow-hidden rounded-2xl
-              border border-brand-green/20 bg-white p-8 transition-colors] md:p-10
+              relative h-full overflow-hidden rounded-2xl
+              border border-brand-green/20 bg-white p-8 transition-colors md:p-10
               shadow-[0_1px_2px_rgba(10,25,41,0.04),0_24px_56px_-28px_rgba(0,200,150,0.25)]
-              lg:col-span-3
             "
           >
             <div
@@ -1019,13 +1011,14 @@ function ForWhom() {
               ))}
             </ul>
           </div>
+        </AnimatedBlock>
 
+        <AnimatedBlock delay={180} y={40} duration={700} className="lg:col-span-2">
           {/* No */}
           <div
             className="
-              relative overflow-hidden rounded-2xl
+              relative h-full overflow-hidden rounded-2xl
               border border-navy-100 bg-navy-50/40 p-8 transition-colors md:p-10
-              lg:col-span-2
             "
           >
             <div className="flex items-center gap-3">
@@ -1051,14 +1044,14 @@ function ForWhom() {
               ))}
             </ul>
           </div>
-        </div>
+        </AnimatedBlock>
       </div>
-    </section>
+    </Section>
   );
 }
 
 /* ─────────────────────────────────────────────────────────────────────
- *  Final CTA
+ *  CTA FINAL
  * ──────────────────────────────────────────────────────────────────── */
 
 function FinalCTA() {
@@ -1068,83 +1061,85 @@ function FinalCTA() {
         aria-hidden
         className="
           pointer-events-none absolute inset-0 -z-10
-          bg-[radial-gradient(ellipse_at_center,rgba(0,200,150,0.08),transparent_60%)]]
+          bg-[radial-gradient(ellipse_at_center,rgba(0,200,150,0.08),transparent_60%)]
         "
       />
       <div className="mx-auto max-w-4xl px-6">
-        <div
-          className="
-            relative overflow-hidden rounded-3xl border border-navy-100 bg-gradient-to-b from-white to-navy-50/60 p-10 transition-colors] md:p-16
-            shadow-[0_1px_2px_rgba(10,25,41,0.04),0_30px_60px_-30px_rgba(10,25,41,0.15)]
-          "
-        >
+        <AnimatedBlock y={40} duration={750}>
           <div
-            aria-hidden
             className="
-              pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full
-              bg-brand-green/10 blur-3xl
+              relative overflow-hidden rounded-3xl border border-navy-100 bg-gradient-to-b from-white to-navy-50/60 p-10 transition-colors md:p-16
+              shadow-[0_1px_2px_rgba(10,25,41,0.04),0_30px_60px_-30px_rgba(10,25,41,0.15)]
             "
-          />
-          <div
-            aria-hidden
-            className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-green/60 to-transparent"
-          />
+          >
+            <div
+              aria-hidden
+              className="
+                pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full
+                bg-brand-green/10 blur-3xl
+              "
+            />
+            <div
+              aria-hidden
+              className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-green/60 to-transparent"
+            />
 
-          <div className="relative text-center">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
-              Empieza hoy
-            </p>
-            <h2 className="mx-auto mt-4 max-w-2xl text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 transition-colors md:text-[2.75rem]">
-              Tu próximo cliente ya te ha escrito. La pregunta es si vas a contestar a tiempo.
-            </h2>
-            <p className="mx-auto mt-5 max-w-xl text-[16px] leading-relaxed text-navy-500 transition-colors">
-              Crea tu cuenta en dos minutos. A partir de hoy, el sistema trabaja mientras tú te dedicas a lo que mejor sabes hacer.
-            </p>
+            <div className="relative text-center">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
+                Empieza hoy
+              </p>
+              <h2 className="mx-auto mt-4 max-w-2xl text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 transition-colors md:text-[2.75rem]">
+                Tu próximo cliente ya te ha escrito. La pregunta es si vas a contestar a tiempo.
+              </h2>
+              <p className="mx-auto mt-5 max-w-xl text-[16px] leading-relaxed text-navy-500 transition-colors">
+                Crea tu cuenta en dos minutos. A partir de hoy, el sistema trabaja mientras tú te dedicas a lo que mejor sabes hacer.
+              </p>
 
-            <div className="mt-10 flex flex-wrap justify-center gap-3">
-              <Link
-                href="/register"
-                className="
-                  group inline-flex items-center gap-2
-                  rounded-xl bg-brand-green px-7 py-4 text-[14px] font-semibold text-white
-                  shadow-[0_10px_28px_-10px_rgba(0,200,150,0.55),0_2px_4px_-2px_rgba(0,200,150,0.4),inset_0_1px_0_rgba(255,255,255,0.18)]
-                  ring-1 ring-inset ring-white/10
-                  transition-all duration-200 ease-out
-                  hover:-translate-y-[1.5px] hover:bg-brand-green-dark
-                "
-              >
-                Empezar a cerrar más clientes
-                <IconArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
-              </Link>
-              <Link
-                href="/pricing"
-                className="
-                  inline-flex items-center gap-2
-                  rounded-xl border border-navy-200 bg-white px-6 py-4 text-[14px] font-semibold text-navy-800
-                  transition-all duration-200
-                  hover:-translate-y-[1px] hover:border-navy-300 hover:bg-navy-50
-                "
-              >
-                Ver precios
-              </Link>
-            </div>
+              <div className="mt-10 flex flex-wrap justify-center gap-3">
+                <Link
+                  href="/register"
+                  className="
+                    group inline-flex items-center gap-2
+                    rounded-xl bg-brand-green px-7 py-4 text-[14px] font-semibold text-white
+                    shadow-[0_10px_28px_-10px_rgba(0,200,150,0.55),0_2px_4px_-2px_rgba(0,200,150,0.4),inset_0_1px_0_rgba(255,255,255,0.18)]
+                    ring-1 ring-inset ring-white/10
+                    transition-all duration-200 ease-out
+                    hover:-translate-y-[1.5px] hover:bg-brand-green-dark
+                  "
+                >
+                  Empezar a cerrar más clientes
+                  <IconArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
+                </Link>
+                <Link
+                  href="/pricing"
+                  className="
+                    inline-flex items-center gap-2
+                    rounded-xl border border-navy-200 bg-white px-6 py-4 text-[14px] font-semibold text-navy-800
+                    transition-all duration-200
+                    hover:-translate-y-[1px] hover:border-navy-300 hover:bg-navy-50
+                  "
+                >
+                  Ver precios
+                </Link>
+              </div>
 
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[12.5px] text-navy-500 transition-colors">
-              <span className="inline-flex items-center gap-1.5">
-                <IconCheck size={14} className="text-brand-green" />
-                Sin tarjeta de crédito
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <IconCheck size={14} className="text-brand-green" />
-                Configuración en 2 minutos
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <IconCheck size={14} className="text-brand-green" />
-                Cancela cuando quieras
-              </span>
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[12.5px] text-navy-500 transition-colors">
+                <span className="inline-flex items-center gap-1.5">
+                  <IconCheck size={14} className="text-brand-green" />
+                  Sin tarjeta de crédito
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <IconCheck size={14} className="text-brand-green" />
+                  Configuración en 2 minutos
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <IconCheck size={14} className="text-brand-green" />
+                  Cancela cuando quieras
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        </AnimatedBlock>
       </div>
     </section>
   );
