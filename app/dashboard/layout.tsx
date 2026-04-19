@@ -114,9 +114,11 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
     { href: "/dashboard/compliance", label: "Compliance", icon: "🛡️" },
     { href: "/dashboard/audit-log", label: "Audit Log", icon: "📋" },
   ];
-  const navItems = sectorModules.length > 0
+  const rawNavItems = sectorModules.length > 0
     ? [...sectorModules.map(m => ({ href: m.href, label: m.label, icon: m.icon })), ...complianceItems, { href: "/dashboard/settings", label: "Ajustes", icon: "⚙️" }]
     : fallbackNavItems;
+
+  const navItems = Array.from(new Map(rawNavItems.map(item => [item.href, item])).values());
 
   // User initials for the avatar
   const initials = (() => {
