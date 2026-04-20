@@ -1,9 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { syncUserPrices } from "@/lib/services/price-sync";
 
+// Usamos el Service Role Key para operaciones de webhook que necesitan saltarse RLS
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
 // POST /api/webhooks/comercio-local - Endpoint exclusivo para n8n de comercio local
@@ -53,8 +55,8 @@ const { action, sector, data } = normalizedBody;
           return NextResponse.json({ error: "data.prices debe ser un array" }, { status: 400 });
         }
 
+        // 1. Guardar en sector_data (registro maestro del mercado)
         for (const price of data.prices) {
-          // Buscar si ya existe
           const { data: existing } = await supabase
             .from("sector_data")
             .select("id")
@@ -93,6 +95,37 @@ const { action, sector, data } = normalizedBody;
           }
         }
 
+        // 2. Broadcast: Actualizar bancos de precios de todos los usuarios activos del sector
+        let usersProcessed = 0;
+        let totalAdded = 0;
+        let totalUpdated = 0;
+
+        try {
+          // Buscar usuarios activos del sector
+          const { data: activeUsers } = await supabase
+            .from("profiles")
+            .select("id")
+            .eq("business_sector", sector);
+
+          if (activeUsers && activeUsers.length > 0) {
+            const marketPrices = data.prices;
+            
+            // Ejecutar la sincronización para cada usuario
+            for (const user of activeUsers) {
+              try {
+                const results = await syncUserPrices(supabase, user.id, sector, marketPrices, "n8n_workflow");
+                usersProcessed++;
+                totalAdded += results.added;
+                totalUpdated += results.updated;
+              } catch (userErr) {
+                console.error(`Error sync user ${user.id}:`, userErr);
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Error broadcast users:", err);
+        }
+
         // Marcar update como completado
         await supabase
           .from("n8n_updates")
@@ -102,7 +135,7 @@ const { action, sector, data } = normalizedBody;
 
         return NextResponse.json({
           success: true,
-          message: data.prices.length + " precios actualizados para sector " + sector,
+          message: `${data.prices.length} precios actualizados en mercado. Broadcast a ${usersProcessed} usuarios (${totalAdded} nuevos, ${totalUpdated} act).`,
         });
       }
 

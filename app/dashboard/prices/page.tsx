@@ -60,6 +60,7 @@ export default function PricesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [lastSyncDate, setLastSyncDate] = useState<string | null>(null);
 
   const normalizedSector = normalizeSector(sectorKey);
   const sectorConfig = getSectorConfig(normalizedSector);
@@ -161,9 +162,34 @@ export default function PricesPage() {
     }
   }
 
+  async function loadLastSync() {
+    if (!userId) return;
+    try {
+      const { data } = await supabase
+        .from("price_sync_logs")
+        .select("finished_at")
+        .eq("user_id", userId)
+        .eq("sector", sectorConfig.sector)
+        .eq("status", "completed")
+        .order("finished_at", { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (data?.finished_at) {
+        setLastSyncDate(new Date(data.finished_at).toLocaleString("es-ES", {
+          dateStyle: "short",
+          timeStyle: "short"
+        }));
+      }
+    } catch (err) {
+      // Ignore if no logs exist
+    }
+  }
+
   useEffect(() => {
     if (!userId) return;
     loadItems();
+    loadLastSync();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, sectorConfig.sector]);
 
@@ -320,78 +346,22 @@ export default function PricesPage() {
     setSyncing(true);
 
     try {
-      const sectorAliases = getSectorAliases(sectorConfig.sector);
-      const { data: marketPrices } = await supabase
-        .from("sector_data")
-        .select("*")
-        .eq("data_type", "price")
-        .in("sector", sectorAliases)
-        .order("last_updated", { ascending: false });
-
-      if (!marketPrices || marketPrices.length === 0) {
-        toast.error("No hay precios de mercado disponibles. Ejecuta el workflow de n8n o usa 'Importar por defecto'.");
-        setSyncing(false);
-        return;
+      const res = await fetch("/api/prices/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sector: sectorConfig.sector }),
+      });
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || "Error al sincronizar precios");
       }
 
-      const { data: currentItems } = await supabase
-        .from("price_items")
-        .select("name")
-        .eq("user_id", userId)
-        .eq("sector", sectorConfig.sector);
-      const existingNames = new Set((currentItems || []).map((i) => i.name.toLowerCase()));
-
-      let added = 0;
-      let updated = 0;
-
-      for (const mp of marketPrices) {
-        const itemName = mp.title || "";
-        if (!itemName) continue;
-        let subcat = mp.subcategory || "Otros";
-        if (subcat === "Fontaneria") subcat = "Fontanería";
-        if (subcat === "Albanileria") subcat = "Albañilería";
-        const priceValue = parseFloat(mp.value) || 0;
-        if (priceValue <= 0) continue;
-
-        if (existingNames.has(itemName.toLowerCase())) {
-          await supabase
-            .from("price_items")
-            .update({
-              unit_price: priceValue,
-              description: `Precio de mercado \u00B7 ${mp.source || "n8n"} \u00B7 ${new Date(mp.last_updated).toLocaleDateString("es-ES")}`,
-              source_type: "n8n_sync",
-              confidence_score: 0.7,
-              captured_at: new Date().toISOString(),
-            })
-            .ilike("name", itemName)
-            .eq("user_id", userId)
-            .eq("sector", sectorConfig.sector)
-            .eq("is_manual_override", false);
-          updated++;
-        } else {
-          const { error } = await supabase.from("price_items").insert({
-            user_id: userId,
-            sector: sectorConfig.sector,
-            name: itemName,
-            description: `Precio de mercado \u00B7 ${mp.source || "n8n"} \u00B7 ${new Date(mp.last_updated).toLocaleDateString("es-ES")}`,
-            category: mp.category || categories[0]?.value || "producto",
-            subcategory: subcat,
-            unit: mp.unit || "ud",
-            unit_price: priceValue,
-            source_type: "n8n_sync",
-            source_url: mp.source || null,
-            confidence_score: 0.7,
-            captured_at: new Date().toISOString(),
-          });
-          if (error) console.error("Error insertando:", itemName, error);
-          else added++;
-        }
-      }
-
-      toast.success(`Precios importados: ${added} nuevos, ${updated} actualizados.`);
-    } catch (err) {
+      toast.success(data.message || "Precios sincronizados correctamente");
+      loadLastSync();
+    } catch (err: any) {
       console.error("Error sincronizando:", err);
-      toast.error("Error al sincronizar precios");
+      toast.error(err.message || "Error al sincronizar precios");
     }
     setSyncing(false);
     loadItems();
@@ -761,7 +731,12 @@ export default function PricesPage() {
         count={kpis.total}
         countLabel="precios"
         actions={
-          <>
+          <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3">
+            {lastSyncDate && (
+              <span className="text-xs text-navy-500 dark:text-zinc-400">
+                Última sync: <span className="font-medium text-navy-700 dark:text-zinc-300">{lastSyncDate}</span>
+              </span>
+            )}
             <button
               onClick={syncFromMarket}
               disabled={syncing}
@@ -784,7 +759,7 @@ export default function PricesPage() {
             >
               + Nuevo precio
             </button>
-          </>
+          </div>
         }
       />
 
