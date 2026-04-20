@@ -7,7 +7,7 @@ import { getSectorConfig } from "@/lib/sector-config";
 import { getSectorPriceConfig, getSectorAliases } from "@/lib/price-defaults";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
-import { normalizeBusinessSector } from "@/lib/sector-config";
+import { normalizeSector } from "@/lib/sector-config";
 
 interface PriceItem {
   id: string;
@@ -39,7 +39,7 @@ export default function PricesPage() {
   const [filterCat, setFilterCat] = useState("all");
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const normalizedSector = normalizeBusinessSector(sectorKey);
+  const normalizedSector = normalizeSector(sectorKey);
 const sectorConfig = getSectorConfig(normalizedSector);
 
 
