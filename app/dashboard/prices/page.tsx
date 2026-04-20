@@ -414,11 +414,7 @@ export default function PricesPage() {
     let sectorDefaults = defaultPrices();
     if (sectorDefaults.length === 0) {
       sectorDefaults = priceConfig.defaults.map((d) => ({
-        name: d.name,
-        category: d.category,
-        subcategory: d.subcategory,
-        unit: d.unit,
-        price: d.price,
+        ...d,
       }));
     }
 

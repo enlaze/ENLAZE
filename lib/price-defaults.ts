@@ -16,6 +16,7 @@ export interface DefaultPriceItem {
   brand?: string;
   format?: string;
   purchase_price?: number;
+  recommended_sale_price?: number;
   vat_rate?: number;
   gross_margin_pct?: number;
   supplier_name?: string;
@@ -88,35 +89,34 @@ const comercio_local: SectorPriceConfig = {
   },
   units: ["ud", "pack", "caja", "palet", "kg", "h", "mes", "global"],
   defaults: [
-    // ─── Productos ejemplo (con compra/venta/margen) ───
-    { name: "Camiseta algodón básica", category: "producto", subcategory: "Ropa", unit: "ud", price: 19.90, purchase_price: 6.50, gross_margin_pct: 67.3, vat_rate: 21, brand: "Genérico", format: "Talla S/M/L/XL", business_subsector: "moda", family: "Camisetas" },
-    { name: "Vaquero slim fit", category: "producto", subcategory: "Ropa", unit: "ud", price: 39.90, purchase_price: 14.00, gross_margin_pct: 64.9, vat_rate: 21, brand: "Genérico", format: "Talla 36-46", business_subsector: "moda", family: "Pantalones" },
-    { name: "Zapatilla deportiva urbana", category: "producto", subcategory: "Calzado", unit: "ud", price: 59.90, purchase_price: 22.00, gross_margin_pct: 63.3, vat_rate: 21, brand: "Genérico", format: "36-45", business_subsector: "moda", family: "Calzado deportivo" },
-    { name: "Bolso bandolera mediano", category: "producto", subcategory: "Accesorios", unit: "ud", price: 29.90, purchase_price: 9.00, gross_margin_pct: 69.9, vat_rate: 21, brand: "Genérico", format: "25x18cm", business_subsector: "moda", family: "Bolsos" },
-    { name: "Aceite oliva virgen extra 1L", category: "producto", subcategory: "Alimentación", unit: "ud", price: 8.90, purchase_price: 5.80, gross_margin_pct: 34.8, vat_rate: 10, brand: "Genérico", format: "1L", business_subsector: "alimentación", family: "Aceites" },
-    { name: "Miel artesana 500g", category: "producto", subcategory: "Alimentación", unit: "ud", price: 9.50, purchase_price: 5.00, gross_margin_pct: 47.4, vat_rate: 10, brand: "Genérico", format: "500g", business_subsector: "alimentación", family: "Conservas y untables" },
-    { name: "Funda móvil silicona", category: "producto", subcategory: "Electrónica", unit: "ud", price: 12.90, purchase_price: 2.50, gross_margin_pct: 80.6, vat_rate: 21, brand: "Genérico", format: "Universal", business_subsector: "electrónica", family: "Accesorios móvil" },
-    { name: "Cargador USB-C rápido", category: "producto", subcategory: "Electrónica", unit: "ud", price: 18.90, purchase_price: 5.50, gross_margin_pct: 70.9, vat_rate: 21, brand: "Genérico", format: "30W", business_subsector: "electrónica", family: "Cargadores" },
-    { name: "Vela aromática artesanal", category: "producto", subcategory: "Hogar", unit: "ud", price: 14.90, purchase_price: 4.50, gross_margin_pct: 69.8, vat_rate: 21, brand: "Genérico", format: "200g", business_subsector: "hogar", family: "Decoración" },
-    // ─── Logística ───
-    { name: "Envío nacional estándar", category: "logistica", subcategory: "Transporte nacional", unit: "ud", price: 5.50, purchase_price: 3.80 },
-    { name: "Envío express 24h", category: "logistica", subcategory: "Transporte nacional", unit: "ud", price: 8.90, purchase_price: 6.20 },
-    { name: "Envío internacional EU", category: "logistica", subcategory: "Transporte internacional", unit: "ud", price: 12.00, purchase_price: 8.50 },
-    { name: "Almacenaje palet (mes)", category: "logistica", subcategory: "Almacenaje", unit: "palet", price: 25.00 },
-    // ─── Packaging ───
-    { name: "Caja cartón 40x30x20", category: "packaging", subcategory: "Cajas", unit: "ud", price: 0.85, purchase_price: 0.45 },
-    { name: "Sobre acolchado", category: "packaging", subcategory: "Embalaje", unit: "ud", price: 0.35, purchase_price: 0.18 },
-    { name: "Etiquetas adhesivas (rollo 500)", category: "packaging", subcategory: "Etiquetado", unit: "ud", price: 12.00, purchase_price: 7.00 },
-    { name: "Film estirable (rollo)", category: "packaging", subcategory: "Embalaje", unit: "ud", price: 6.50, purchase_price: 3.80 },
-    { name: "Bolsa de papel con asa (100 uds)", category: "packaging", subcategory: "Bolsas", unit: "pack", price: 18.00, purchase_price: 10.50 },
-    // ─── Marketing ───
-    { name: "Tarjetas de visita (500 uds)", category: "marketing", subcategory: "Cartelería", unit: "pack", price: 25.00 },
-    { name: "Campaña Google Ads (gestión mes)", category: "marketing", subcategory: "Digital", unit: "mes", price: 150.00 },
-    { name: "Diseño banner promocional", category: "marketing", subcategory: "Digital", unit: "ud", price: 35.00 },
-    { name: "Escaparate estacional", category: "marketing", subcategory: "Escaparate", unit: "ud", price: 80.00 },
-    // ─── Otros ───
-    { name: "TPV software (licencia mes)", category: "otros", subcategory: "Software", unit: "mes", price: 29.90 },
-    { name: "Seguro responsabilidad civil", category: "otros", subcategory: "Seguros", unit: "global", price: 350.00 },
+    // ─── PACKAGING ───
+    { name: "Caja cartón envíos 40x30x20", category: "packaging", subcategory: "Cajas", unit: "ud", price: 0.85, purchase_price: 0.45, recommended_sale_price: 0.85, gross_margin_pct: 47.1, vat_rate: 21, supplier_name: "Cartonajes Ibéricos", family: "packaging", business_subsector: "retail_general" },
+    { name: "Bolsa papel Kraft asa rizada (100 uds)", category: "packaging", subcategory: "Bolsas", unit: "pack", price: 18.00, purchase_price: 10.50, recommended_sale_price: 18.00, gross_margin_pct: 41.7, vat_rate: 21, supplier_name: "EcoBolsas", family: "packaging", business_subsector: "retail_general" },
+    { name: "Papel de seda relleno (resma)", category: "packaging", subcategory: "Embalaje", unit: "ud", price: 15.00, purchase_price: 8.50, recommended_sale_price: 15.00, gross_margin_pct: 43.3, vat_rate: 21, supplier_name: "Papelera del Norte", family: "packaging", business_subsector: "retail_general" },
+
+    // ─── LOGÍSTICA ───
+    { name: "Envío estándar península (2-3 días)", category: "logistica", subcategory: "Transporte nacional", unit: "ud", price: 4.90, purchase_price: 3.50, recommended_sale_price: 4.90, gross_margin_pct: 28.6, vat_rate: 21, supplier_name: "Correos Express", family: "logística", business_subsector: "retail_general" },
+    { name: "Envío express 24h", category: "logistica", subcategory: "Transporte nacional", unit: "ud", price: 8.50, purchase_price: 6.00, recommended_sale_price: 8.50, gross_margin_pct: 29.4, vat_rate: 21, supplier_name: "Seur", family: "logística", business_subsector: "retail_general" },
+
+    // ─── TPV/OPERACIONES ───
+    { name: "Licencia software TPV (mensual)", category: "otros", subcategory: "Software", unit: "mes", price: 39.00, purchase_price: 39.00, recommended_sale_price: 39.00, gross_margin_pct: 0.0, vat_rate: 21, brand: "Square", supplier_name: "Square Inc", family: "TPV/operaciones", business_subsector: "retail_general" },
+    { name: "Rollo papel térmico tickets (pack 8)", category: "otros", subcategory: "Material oficina", unit: "pack", price: 6.50, purchase_price: 3.80, recommended_sale_price: 6.50, gross_margin_pct: 41.5, vat_rate: 21, supplier_name: "OfiMarket", family: "TPV/operaciones", business_subsector: "retail_general" },
+
+    // ─── CONSUMIBLES TIENDA ───
+    { name: "Ambientador profesional tienda", category: "otros", subcategory: "Limpieza", unit: "ud", price: 12.50, purchase_price: 8.00, recommended_sale_price: 12.50, gross_margin_pct: 36.0, vat_rate: 21, brand: "Scentia", supplier_name: "Aromas Store", family: "consumibles tienda", business_subsector: "retail_general" },
+    { name: "Bolsas de basura 50L (rollo)", category: "otros", subcategory: "Limpieza", unit: "ud", price: 3.50, purchase_price: 2.10, recommended_sale_price: 3.50, gross_margin_pct: 40.0, vat_rate: 21, supplier_name: "Distribuciones Limpieza", family: "consumibles tienda", business_subsector: "retail_general" },
+
+    // ─── MARKETING/MERCHANDISING ───
+    { name: "Tarjetas de fidelización (500 uds)", category: "marketing", subcategory: "Cartelería", unit: "pack", price: 35.00, purchase_price: 20.00, recommended_sale_price: 35.00, gross_margin_pct: 42.9, vat_rate: 21, supplier_name: "Imprenta Online", family: "marketing/merchandising", business_subsector: "retail_general" },
+    { name: "Display escaparate temporada", category: "marketing", subcategory: "Escaparate", unit: "ud", price: 85.00, purchase_price: 50.00, recommended_sale_price: 85.00, gross_margin_pct: 41.2, vat_rate: 21, supplier_name: "Visual Merchandising Pro", family: "marketing/merchandising", business_subsector: "retail_general" },
+
+    // ─── COMISIONES PAGOS / MARKETPLACE ───
+    { name: "Comisión pasarela de pago (tarjeta)", category: "otros", subcategory: "Financiero", unit: "ud", price: 0.35, purchase_price: 0.35, recommended_sale_price: 0.35, gross_margin_pct: 0.0, vat_rate: 0, supplier_name: "Redsys", family: "comisiones pagos / marketplace", business_subsector: "retail_general" },
+    { name: "Comisión venta marketplace", category: "otros", subcategory: "Financiero", unit: "ud", price: 15.00, purchase_price: 15.00, recommended_sale_price: 15.00, gross_margin_pct: 0.0, vat_rate: 21, supplier_name: "Miravia/Amazon", family: "comisiones pagos / marketplace", business_subsector: "retail_general" },
+
+    // ─── DEVOLUCIONES / ATENCIÓN AL CLIENTE ───
+    { name: "Gestión etiqueta retorno", category: "servicio", subcategory: "Atención al cliente", unit: "ud", price: 3.50, purchase_price: 3.50, recommended_sale_price: 3.50, gross_margin_pct: 0.0, vat_rate: 21, supplier_name: "Correos Express", family: "devoluciones / atención al cliente", business_subsector: "retail_general" },
+    { name: "Vale descuento compensación", category: "marketing", subcategory: "Atención al cliente", unit: "ud", price: 10.00, purchase_price: 10.00, recommended_sale_price: 10.00, gross_margin_pct: 0.0, vat_rate: 21, supplier_name: "Interno", family: "devoluciones / atención al cliente", business_subsector: "retail_general" }
   ],
   placeholder: "Ej: Camiseta básica algodón M/L/XL",
 };
