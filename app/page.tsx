@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   motion,
@@ -226,17 +226,14 @@ function Navbar() {
  *  HERO — HeroMotion: animaciones solo en capa decorativa
  *
  *  Arquitectura:
- *  - El layout del hero (texto, CTAs, mockup) es 100 % ESTÁTICO. Cero
- *    transforms sobre cards, grids o contenedores. Las cajas no cambian
- *    de tamaño ni se desalinean al hacer scroll.
+ *  - El layout del hero (texto, CTAs, demo) es 100 % ESTÁTICO. Cero
+ *    transforms sobre cards, grids o contenedores.
  *  - Las animaciones de entrada (fade-in + slide-up) las hace AnimatedBlock
- *    con IntersectionObserver — se disparan una sola vez al entrar en
- *    viewport y dejan de tocar el elemento.
- *  - Solo se animan elementos puramente decorativos posicionados en
- *    `absolute`, fuera del flujo: la nube radial superior y el halo de
- *    profundidad detrás del mockup. Estos no afectan al layout.
- *  - Spring "pesado" Apple-style: stiffness 80 / damping 25 / mass 0.6.
- *  - useReducedMotion: si el sistema lo pide, se desactivan los efectos.
+ *    con IntersectionObserver — una sola vez al entrar en viewport.
+ *  - La única capa "animada" es la nube radial superior con parallax muy
+ *    sutil (decorativa, absolute, fuera del flujo). Sin halos ni blurs
+ *    detrás del mockup — el mockup ahora es la demo interactiva real.
+ *  - useReducedMotion: si el sistema lo pide, el parallax se desactiva.
  * ──────────────────────────────────────────────────────────────────── */
 
 function HeroMotion() {
@@ -258,11 +255,7 @@ function HeroMotion() {
   // Parallax MUY sutil sobre la nube radial superior (decorativa, absolute).
   const bgY = useTransform(smooth, [0, 1], [0, -40]);
 
-  // Halo de profundidad detrás del mockup (decorativo, absolute, no layout).
-  const glowOpacity = useTransform(smooth, [0, 0.5, 1], [0, 0.45, 0.7]);
-
   const bgStyle = reduced ? undefined : { y: bgY };
-  const glowStyle = reduced ? undefined : { opacity: glowOpacity };
 
   return (
     <section
@@ -376,50 +369,142 @@ function HeroMotion() {
           </p>
         </AnimatedBlock>
 
-        <div className="relative">
-          {/* Halo de profundidad — decorativo, absolute, NO afecta al layout */}
-          <motion.div
-            aria-hidden
-            style={glowStyle}
-            className="
-              pointer-events-none absolute inset-x-8 -bottom-12 top-20 -z-10
-              rounded-[40px]
-              bg-[radial-gradient(ellipse_at_center,rgba(0,200,150,0.18),transparent_65%)]
-              blur-3xl
-              will-change-[opacity]
-            "
-          />
-          <AnimatedBlock delay={400} y={50} duration={800}>
-            <ProductPreview />
-          </AnimatedBlock>
-        </div>
+        <AnimatedBlock delay={400} y={50} duration={800}>
+          <LiveDemoPanel />
+        </AnimatedBlock>
       </div>
     </section>
   );
 }
 
 /* ─────────────────────────────────────────────────────────────────────
- *  Product preview — mockup del panel
+ *  LiveDemoPanel — Demo interactiva del producto en el Hero
+ *
+ *  Coreografía en bucle (autónoma):
+ *    1) typing      → el asistente "escribe" una descripción en la caja,
+ *                     con cursor parpadeante.
+ *    2) generating  → aparece el indicador "Generando presupuesto con IA"
+ *                     con puntos animados.
+ *    3) budget      → fade-in + slide-up del presupuesto completo, con
+ *                     las partidas entrando escalonadas (stagger 90 ms).
+ *    4) confirmed   → aparece la barra verde "Presupuesto enviado".
+ *    (pausa ~4 s y vuelve al paso 1)
+ *
+ *  Reglas: solo opacity + translateY leve + typing. Sin scale, sin blur,
+ *  sin transforms en contenedores de layout. Respeta prefers-reduced-motion.
  * ──────────────────────────────────────────────────────────────────── */
 
-function ProductPreview() {
-  return (
-    <div className="relative mx-auto mt-20 max-w-5xl">
-      <div
-        aria-hidden
-        className="
-          pointer-events-none absolute inset-x-8 -bottom-10 h-40 rounded-[40px]
-          bg-gradient-to-r from-brand-green/10 via-navy-200/40 to-brand-green/10
-          blur-3xl
-        "
-      />
+const DEMO_TEXT =
+  "Mantenimiento oficina 120 m². Climatización, electricidad y fontanería, revisión trimestral 12 meses.";
 
+const DEMO_ITEMS: {
+  label: string;
+  qty: string;
+  unit: string;
+  total: string;
+}[] = [
+  {
+    label: "Diagnóstico y revisión inicial",
+    qty: "1 ud",
+    unit: "420,00",
+    total: "420,00",
+  },
+  {
+    label: "Mantenimiento climatización",
+    qty: "12 meses",
+    unit: "180,00",
+    total: "2.160,00",
+  },
+  {
+    label: "Mantenimiento electricidad",
+    qty: "12 meses",
+    unit: "140,00",
+    total: "1.680,00",
+  },
+  {
+    label: "Mantenimiento fontanería",
+    qty: "12 meses",
+    unit: "120,00",
+    total: "1.440,00",
+  },
+];
+
+type DemoPhase = "typing" | "generating" | "budget" | "confirmed";
+
+function LiveDemoPanel() {
+  const [typed, setTyped] = useState("");
+  const [phase, setPhase] = useState<DemoPhase>("typing");
+  const reduced = useReducedMotion();
+
+  useEffect(() => {
+    if (reduced) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTyped(DEMO_TEXT);
+      setPhase("confirmed");
+      return;
+    }
+
+    let cancelled = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    let typingInterval: ReturnType<typeof setInterval> | null = null;
+
+    const stopAll = () => {
+      timers.forEach(clearTimeout);
+      timers.length = 0;
+      if (typingInterval) {
+        clearInterval(typingInterval);
+        typingInterval = null;
+      }
+    };
+
+    const runCycle = () => {
+      if (cancelled) return;
+      setTyped("");
+      setPhase("typing");
+
+      let i = 0;
+      typingInterval = setInterval(() => {
+        if (cancelled) return;
+        i += 1;
+        setTyped(DEMO_TEXT.slice(0, i));
+        if (i >= DEMO_TEXT.length && typingInterval) {
+          clearInterval(typingInterval);
+          typingInterval = null;
+
+          // Pasos encadenados tras terminar el typing:
+          timers.push(
+            setTimeout(() => !cancelled && setPhase("generating"), 500),
+            setTimeout(() => !cancelled && setPhase("budget"), 1500),
+            setTimeout(() => !cancelled && setPhase("confirmed"), 2800),
+            setTimeout(() => !cancelled && runCycle(), 7000) // pausa + loop
+          );
+        }
+      }, 34);
+    };
+
+    // Pequeña pausa inicial para que el panel termine de aparecer
+    timers.push(setTimeout(runCycle, 500));
+
+    return () => {
+      cancelled = true;
+      stopAll();
+    };
+  }, [reduced]);
+
+  const showCursor = phase === "typing";
+  const showGenerating = phase === "generating";
+  const showBudget = phase === "budget" || phase === "confirmed";
+  const showConfirmed = phase === "confirmed";
+
+  return (
+    <div className="relative mx-auto mt-20 max-w-3xl">
       <div
         className="
           relative overflow-hidden rounded-2xl border border-navy-100 bg-white
           shadow-[0_40px_80px_-30px_rgba(10,25,41,0.25),0_20px_40px_-20px_rgba(10,25,41,0.15)]
         "
       >
+        {/* Chrome estilo navegador */}
         <div className="flex items-center justify-between border-b border-navy-100 bg-navy-50/60 px-4 py-3">
           <div className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full bg-navy-200" />
@@ -428,110 +513,176 @@ function ProductPreview() {
           </div>
           <div className="flex items-center gap-1.5 rounded-md border border-navy-100 bg-white px-3 py-1 text-[11px] text-navy-500">
             <span className="h-1.5 w-1.5 rounded-full bg-brand-green" />
-            app.enlaze.com/dashboard
+            app.enlaze.com/presupuestos/nuevo
           </div>
           <div className="w-12" />
         </div>
 
-        <div className="grid grid-cols-12 gap-0">
-          <aside className="col-span-3 hidden border-r border-navy-100 bg-white p-4 md:block">
-            <div className="flex items-center gap-2 px-2 py-2">
-              <div className="h-6 w-6 rounded-md bg-navy-900" />
-              <div className="h-2.5 w-16 rounded bg-navy-200" />
+        {/* Cabecera del proyecto/cliente */}
+        <div className="flex items-center justify-between border-b border-navy-100 bg-white px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-navy-900 text-white">
+              <IconFileText size={16} />
             </div>
-            <div className="mt-6 space-y-1">
-              <MockNavItem label="Dashboard" active />
-              <MockNavItem label="Clientes" />
-              <MockNavItem label="Presupuestos" />
-              <MockNavItem label="Proyectos" />
-              <MockNavItem label="Facturas" />
-              <MockNavItem label="Ajustes" />
-            </div>
-          </aside>
-
-          <div className="col-span-12 bg-navy-50/30 p-5 md:col-span-9 md:p-7">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-navy-400">
-                  Nuevo presupuesto
-                </div>
-                <div className="mt-1 text-[15px] font-semibold text-navy-900">
-                  Mantenimiento integral — Oficinas Castellana 48
-                </div>
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-navy-400">
+                Nuevo presupuesto
               </div>
-              <div className="hidden items-center gap-2 rounded-full border border-brand-green/20 bg-brand-green/10 px-2.5 py-1 sm:inline-flex">
-                <IconSparkles size={12} className="text-brand-green" />
-                <span className="text-[11px] font-semibold text-brand-green">
-                  Generado con IA
-                </span>
+              <div className="mt-0.5 text-[14px] font-semibold text-navy-900">
+                Cliente: Reformas López
               </div>
             </div>
+          </div>
+          <div className="hidden items-center gap-2 rounded-full border border-brand-green/20 bg-brand-green/10 px-2.5 py-1 sm:inline-flex">
+            <IconSparkles size={12} className="text-brand-green" />
+            <span className="text-[11px] font-semibold text-brand-green">
+              Asistente IA activo
+            </span>
+          </div>
+        </div>
 
-            <div className="mt-5 overflow-hidden rounded-xl border border-navy-100 bg-white">
+        {/* Zona de input — typing con cursor parpadeante */}
+        <div className="border-b border-navy-100 bg-navy-50/30 px-6 py-5">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-navy-400">
+            Describe el servicio
+          </div>
+          <div className="mt-2 min-h-[52px] text-[13.5px] leading-relaxed text-navy-800">
+            <span className="whitespace-pre-wrap">{typed}</span>
+            <span
+              aria-hidden
+              className={`
+                ml-0.5 inline-block h-[1.05em] w-[2px] translate-y-[3px] align-middle bg-brand-green
+                ${
+                  showCursor
+                    ? "[animation:enlaze-cursor-blink_1s_steps(1,end)_infinite]"
+                    : "opacity-0"
+                }
+              `}
+            />
+          </div>
+        </div>
+
+        {/* Zona de resultado */}
+        <div className="relative min-h-[268px] px-6 py-5">
+          {/* Indicador "Generando presupuesto..." — absolute, no genera layout shift */}
+          <div
+            className="
+              absolute inset-x-6 top-5 flex items-center gap-2
+              transition-opacity duration-300
+            "
+            style={{ opacity: showGenerating ? 1 : 0 }}
+          >
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-green/10 text-brand-green">
+              <IconSparkles size={12} />
+            </span>
+            <span className="text-[13px] text-navy-500">
+              Generando presupuesto con IA
+            </span>
+            <span className="ml-1 flex items-end gap-0.5">
+              <span className="h-1 w-1 rounded-full bg-navy-300 [animation:enlaze-dot-bounce_0.9s_ease-in-out_0ms_infinite]" />
+              <span className="h-1 w-1 rounded-full bg-navy-300 [animation:enlaze-dot-bounce_0.9s_ease-in-out_150ms_infinite]" />
+              <span className="h-1 w-1 rounded-full bg-navy-300 [animation:enlaze-dot-bounce_0.9s_ease-in-out_300ms_infinite]" />
+            </span>
+          </div>
+
+          {/* Presupuesto generado */}
+          <div
+            style={{
+              opacity: showBudget ? 1 : 0,
+              transform: showBudget
+                ? "translate3d(0,0,0)"
+                : "translate3d(0,10px,0)",
+              transition:
+                "opacity 500ms cubic-bezier(0.22,1,0.36,1), transform 500ms cubic-bezier(0.22,1,0.36,1)",
+            }}
+          >
+            <div className="overflow-hidden rounded-xl border border-navy-100 bg-white">
               <div className="grid grid-cols-12 gap-4 border-b border-navy-100 bg-navy-50/60 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-navy-500">
                 <div className="col-span-6">Partida</div>
                 <div className="col-span-2 text-right">Uds.</div>
                 <div className="col-span-2 text-right">Precio</div>
                 <div className="col-span-2 text-right">Total</div>
               </div>
-
-              <MockLine label="Diagnóstico y planificación inicial" qty="1 ud" unit="420,00" total="420,00" />
-              <MockLine label="Servicio técnico especializado" qty="1 ud" unit="1.850,00" total="1.850,00" />
-              <MockLine label="Revisión y puesta a punto completa" qty="1 ud" unit="920,00" total="920,00" />
-              <MockLine label="Mantenimiento preventivo trimestral" qty="4 ud" unit="414,00" total="1.656,00" />
+              {DEMO_ITEMS.map((it, i) => (
+                <div
+                  key={i}
+                  className="grid grid-cols-12 gap-4 border-b border-navy-50 px-4 py-3 text-[12px] last:border-0"
+                  style={{
+                    opacity: showBudget ? 1 : 0,
+                    transform: showBudget
+                      ? "translate3d(0,0,0)"
+                      : "translate3d(0,8px,0)",
+                    transition:
+                      "opacity 420ms ease-out, transform 420ms ease-out",
+                    transitionDelay: showBudget ? `${140 + i * 90}ms` : "0ms",
+                  }}
+                >
+                  <div className="col-span-6 truncate font-medium text-navy-800">
+                    {it.label}
+                  </div>
+                  <div className="col-span-2 text-right tabular-nums text-navy-600">
+                    {it.qty}
+                  </div>
+                  <div className="col-span-2 text-right tabular-nums text-navy-600">
+                    €{it.unit}
+                  </div>
+                  <div className="col-span-2 text-right font-semibold tabular-nums text-navy-900">
+                    €{it.total}
+                  </div>
+                </div>
+              ))}
             </div>
 
-            <div className="mt-5 flex items-end justify-between gap-4">
+            <div
+              className="mt-4 flex items-end justify-between gap-4"
+              style={{
+                opacity: showBudget ? 1 : 0,
+                transform: showBudget
+                  ? "translate3d(0,0,0)"
+                  : "translate3d(0,8px,0)",
+                transition: "opacity 420ms ease-out, transform 420ms ease-out",
+                transitionDelay: showBudget
+                  ? `${140 + DEMO_ITEMS.length * 90}ms`
+                  : "0ms",
+              }}
+            >
               <div className="text-[11px] text-navy-500">
-                Enviado automáticamente al cliente el{" "}
-                <span className="font-medium text-navy-700">9 abr 2026</span>
+                Generado automáticamente en{" "}
+                <span className="font-semibold text-navy-700">28 segundos</span>
               </div>
               <div className="rounded-xl border border-navy-100 bg-white px-4 py-3 text-right">
                 <div className="text-[10px] font-semibold uppercase tracking-wider text-navy-500">
                   Total
                 </div>
                 <div className="mt-1 text-xl font-semibold tabular-nums tracking-tight text-navy-900">
-                  €4.846,00
+                  €5.700,00
                 </div>
               </div>
             </div>
           </div>
         </div>
+
+        {/* Barra de confirmación "Presupuesto enviado" */}
+        <div
+          className="flex items-center gap-2.5 border-t border-navy-100 bg-brand-green/[0.04] px-6 py-3"
+          style={{
+            opacity: showConfirmed ? 1 : 0,
+            transform: showConfirmed
+              ? "translate3d(0,0,0)"
+              : "translate3d(0,8px,0)",
+            transition:
+              "opacity 420ms cubic-bezier(0.22,1,0.36,1), transform 420ms cubic-bezier(0.22,1,0.36,1)",
+          }}
+        >
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-green text-white">
+            <IconCheck size={12} />
+          </span>
+          <span className="text-[13px] font-medium text-navy-800">
+            Presupuesto enviado a cliente@reformaslopez.es
+          </span>
+          <span className="ml-auto text-[11px] text-navy-500">Justo ahora</span>
+        </div>
       </div>
-    </div>
-  );
-}
-
-function MockNavItem({ label, active = false }: { label: string; active?: boolean }) {
-  return (
-    <div
-      className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-[12px] font-medium ${
-        active ? "bg-navy-900 text-white" : "text-navy-600"
-      }`}
-    >
-      <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-brand-green" : "bg-navy-200"}`} />
-      {label}
-    </div>
-  );
-}
-
-function MockLine({
-  label,
-  qty,
-  unit,
-  total,
-}: {
-  label: string;
-  qty: string;
-  unit: string;
-  total: string;
-}) {
-  return (
-    <div className="grid grid-cols-12 gap-4 border-b border-navy-50 px-4 py-3 text-[12px] last:border-0">
-      <div className="col-span-6 truncate font-medium text-navy-800">{label}</div>
-      <div className="col-span-2 text-right tabular-nums text-navy-600">{qty}</div>
-      <div className="col-span-2 text-right tabular-nums text-navy-600">€{unit}</div>
-      <div className="col-span-2 text-right font-semibold tabular-nums text-navy-900">€{total}</div>
     </div>
   );
 }
@@ -781,7 +932,79 @@ const afterItems = [
   "Trabajas 40 horas y facturas un 30 % más",
 ];
 
+/* ─────────────────────────────────────────────────────────────────────
+ *  BeforeAfter — transformación real, no solo 2 columnas
+ *
+ *  Secuencia orquestada por un único estado `armed` (IntersectionObserver
+ *  sobre el contenedor):
+ *    t = 0       → ANTES entra desde la izquierda, queda a opacity 0.88
+ *                  (lado "pasado, apagado").
+ *    t ≈ 260ms   → Items ANTES escalonan entrada.
+ *    t ≈ 340ms   → DESPUÉS entra desde la derecha.
+ *    t ≈ 600ms   → Scanner beam atraviesa la sección (keyframe CSS).
+ *    t ≈ 620ms+  → Items DESPUÉS aparecen uno a uno, cada uno con un
+ *                  delay 180ms posterior a su par en ANTES → sensación
+ *                  "problema → solución".
+ *
+ *  Microinteracciones:
+ *    • ANTES hover: shake sutil (keyframe CSS)
+ *    • DESPUÉS hover: scale 1.02 + sombra verde intensa + glow
+ *
+ *  Reglas respetadas: copy intacto, layout base intacto, solo animación
+ *  de contenido interno y capas decorativas absolute.
+ * ──────────────────────────────────────────────────────────────────── */
+
 function BeforeAfter() {
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const reduced = useReducedMotion();
+  const [armed, setArmed] = useState(false);
+
+  useEffect(() => {
+    if (reduced) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setArmed(true);
+      return;
+    }
+    const node = sectionRef.current;
+    if (!node) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            setArmed(true);
+            io.unobserve(e.target);
+          }
+        });
+      },
+      { threshold: 0.2, rootMargin: "0px 0px -80px 0px" }
+    );
+    io.observe(node);
+    return () => io.disconnect();
+  }, [reduced]);
+
+  // Timings base (ms)
+  const PANEL_BEFORE_DELAY = 80;
+  const PANEL_AFTER_DELAY = 340;
+  const ITEM_BEFORE_BASE = 260;
+  const ITEM_BEFORE_STAGGER = 55;
+  const ITEM_AFTER_BASE = ITEM_BEFORE_BASE + 180; // 180 ms después del par
+  const ITEM_AFTER_STAGGER = 130;
+  const SCANNER_DELAY = 600;
+
+  const panelTransition = (delay: number): React.CSSProperties => ({
+    transitionProperty: "opacity, transform",
+    transitionDuration: "750ms",
+    transitionTimingFunction: "cubic-bezier(0.22,1,0.36,1)",
+    transitionDelay: `${delay}ms`,
+  });
+
+  const itemTransition = (delay: number): React.CSSProperties => ({
+    transitionProperty: "opacity, transform",
+    transitionDuration: "520ms",
+    transitionTimingFunction: "cubic-bezier(0.22,1,0.36,1)",
+    transitionDelay: `${delay}ms`,
+  });
+
   return (
     <Section tone="light">
       <AnimatedBlock y={30} duration={650}>
@@ -798,52 +1021,71 @@ function BeforeAfter() {
         </div>
       </AnimatedBlock>
 
-      {/* Contenedor principal con glow central que conecta ambos lados */}
-      <div className="relative mt-16">
-        {/* Tinte horizontal sutil que une ambos lados — solo desktop */}
+      {/* Contenedor principal — disparador único */}
+      <div ref={sectionRef} className="relative mt-16">
+        {/* Tinte horizontal ambiental (rojo → verde) — solo lg+ */}
         <div
           aria-hidden
           className="
-            pointer-events-none absolute inset-y-8 inset-x-0 -z-10 hidden lg:block
-            bg-[linear-gradient(to_right,rgba(239,68,68,0.05)_0%,transparent_35%,transparent_65%,rgba(0,200,150,0.05)_100%)]
-            rounded-3xl
+            pointer-events-none absolute inset-y-8 inset-x-0 -z-10 hidden rounded-3xl lg:block
+            bg-[linear-gradient(to_right,rgba(239,68,68,0.05)_0%,transparent_35%,transparent_65%,rgba(0,200,150,0.06)_100%)]
           "
         />
 
-        {/* Glow verde central — decorativo, se expande al entrar en viewport */}
+        {/* Profundidad — glow verde detrás del lado DESPUÉS */}
         <div
           aria-hidden
-          className="
-            pointer-events-none absolute left-1/2 top-1/2 -z-10 hidden lg:block
-            h-[320px] w-[420px] -translate-x-1/2 -translate-y-1/2
-          "
+          style={{
+            opacity: armed ? 1 : 0,
+            transitionProperty: "opacity",
+            transitionDuration: "1200ms",
+            transitionDelay: "400ms",
+            transitionTimingFunction: "cubic-bezier(0.22,1,0.36,1)",
+          }}
+          className="pointer-events-none absolute inset-y-0 right-0 -z-10 hidden h-full w-1/2 lg:block"
         >
-          <AnimatedBlock
-            delay={260}
-            y={0}
-            duration={1100}
-            className="h-full w-full"
-          >
-            <div
-              className="
-                h-full w-full rounded-full
-                bg-[radial-gradient(ellipse_at_center,rgba(0,200,150,0.22),transparent_65%)]
-                blur-3xl
-              "
-            />
-          </AnimatedBlock>
+          <div
+            className="
+              absolute left-1/2 top-1/2 h-[380px] w-[460px]
+              -translate-x-1/2 -translate-y-1/2 rounded-full
+              bg-[radial-gradient(ellipse_at_center,rgba(0,200,150,0.22),transparent_65%)]
+              blur-3xl
+            "
+          />
         </div>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* ANTES — slide desde la IZQUIERDA */}
-          <AnimatedBlock
-            delay={80}
-            x={-48}
-            y={0}
-            duration={750}
-            className="h-full"
-          >
+        {/* Scanner beam — se dispara cuando aparece DESPUÉS (solo lg+) */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 left-0 z-0 hidden w-full overflow-hidden rounded-3xl lg:block"
+        >
+          <div
+            style={
+              armed && !reduced
+                ? {
+                    animation: `enlaze-scanner-sweep 1200ms cubic-bezier(0.22,1,0.36,1) ${SCANNER_DELAY}ms forwards`,
+                  }
+                : { opacity: 0 }
+            }
+            className="
+              absolute inset-y-0 left-0 h-full w-[55%] -translate-x-full opacity-0
+              bg-[linear-gradient(90deg,transparent_0%,rgba(0,200,150,0.20)_30%,rgba(0,200,150,0.55)_50%,rgba(0,200,150,0.20)_70%,transparent_100%)]
+              blur-2xl
+            "
+          />
+        </div>
+
+        <div className="relative grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* ANTES — lado "apagado" (opacity 0.88) */}
+          <div className="h-full">
             <div
+              style={{
+                ...panelTransition(PANEL_BEFORE_DELAY),
+                opacity: armed ? 0.88 : 0,
+                transform: armed
+                  ? "translate3d(0,0,0)"
+                  : "translate3d(-48px,0,0)",
+              }}
               className="
                 relative h-full overflow-hidden rounded-2xl
                 border border-red-100 bg-red-50/40 p-8 transition-colors md:p-10
@@ -870,51 +1112,59 @@ function BeforeAfter() {
               </div>
 
               <ul className="mt-7 space-y-1">
-                {beforeItems.map((t, i) => (
-                  <AnimatedBlock
-                    as="li"
-                    key={i}
-                    delay={220 + i * 55}
-                    x={-16}
-                    y={0}
-                    duration={500}
-                  >
-                    <div
-                      className="
-                        group flex items-start gap-3 rounded-xl px-3 py-2.5
-                        transition-all duration-200 ease-out
-                        hover:-translate-y-1 hover:bg-white
-                        hover:shadow-[0_10px_24px_-12px_rgba(239,68,68,0.22)]
-                      "
-                    >
-                      <span
-                        className="
-                          mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full
-                          bg-red-100/80 text-red-500 transition-colors
-                          group-hover:bg-red-500 group-hover:text-white
-                        "
+                {beforeItems.map((t, i) => {
+                  const delay = ITEM_BEFORE_BASE + i * ITEM_BEFORE_STAGGER;
+                  return (
+                    <li key={i}>
+                      <div
+                        style={{
+                          ...itemTransition(delay),
+                          opacity: armed ? 1 : 0,
+                          transform: armed
+                            ? "translate3d(0,0,0)"
+                            : "translate3d(-14px,0,0)",
+                        }}
                       >
-                        <IconX size={10} />
-                      </span>
-                      <span className="text-[14.5px] leading-relaxed text-navy-700 transition-colors">
-                        {t}
-                      </span>
-                    </div>
-                  </AnimatedBlock>
-                ))}
+                        {/* Wrapper hover → shake keyframe */}
+                        <div
+                          className="
+                            group flex items-start gap-3 rounded-xl px-3 py-2.5
+                            transition-colors duration-200
+                            hover:bg-white/70
+                            hover:[animation:enlaze-shake_0.45s_ease-in-out]
+                          "
+                        >
+                          <span
+                            className="
+                              mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full
+                              bg-red-100/80 text-red-500 transition-colors
+                              group-hover:bg-red-500 group-hover:text-white
+                            "
+                          >
+                            <IconX size={10} />
+                          </span>
+                          <span className="text-[14.5px] leading-relaxed text-navy-700 transition-colors">
+                            {t}
+                          </span>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
-          </AnimatedBlock>
+          </div>
 
-          {/* DESPUÉS — slide desde la DERECHA, con delay para crear contraste */}
-          <AnimatedBlock
-            delay={340}
-            x={48}
-            y={0}
-            duration={750}
-            className="h-full"
-          >
+          {/* DESPUÉS — lado "resuelto" */}
+          <div className="h-full">
             <div
+              style={{
+                ...panelTransition(PANEL_AFTER_DELAY),
+                opacity: armed ? 1 : 0,
+                transform: armed
+                  ? "translate3d(0,0,0)"
+                  : "translate3d(48px,0,0)",
+              }}
               className="
                 relative h-full overflow-hidden rounded-2xl
                 border border-brand-green/25 bg-brand-green/[0.04] p-8 transition-colors md:p-10
@@ -941,41 +1191,48 @@ function BeforeAfter() {
               </div>
 
               <ul className="mt-7 space-y-1">
-                {afterItems.map((t, i) => (
-                  <AnimatedBlock
-                    as="li"
-                    key={i}
-                    delay={480 + i * 55}
-                    x={16}
-                    y={0}
-                    duration={500}
-                  >
-                    <div
-                      className="
-                        group flex items-start gap-3 rounded-xl px-3 py-2.5
-                        transition-all duration-200 ease-out
-                        hover:-translate-y-1 hover:bg-white
-                        hover:shadow-[0_10px_24px_-12px_rgba(0,200,150,0.3)]
-                      "
-                    >
-                      <span
-                        className="
-                          mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full
-                          bg-brand-green/15 text-brand-green transition-colors
-                          group-hover:bg-brand-green group-hover:text-white
-                        "
+                {afterItems.map((t, i) => {
+                  const delay = ITEM_AFTER_BASE + i * ITEM_AFTER_STAGGER;
+                  return (
+                    <li key={i}>
+                      <div
+                        style={{
+                          ...itemTransition(delay),
+                          opacity: armed ? 1 : 0,
+                          transform: armed
+                            ? "translate3d(0,0,0)"
+                            : "translate3d(0,10px,0)",
+                        }}
                       >
-                        <IconCheck size={10} />
-                      </span>
-                      <span className="text-[14.5px] leading-relaxed text-navy-700 transition-colors">
-                        {t}
-                      </span>
-                    </div>
-                  </AnimatedBlock>
-                ))}
+                        {/* Wrapper hover → scale 1.02 + glow verde */}
+                        <div
+                          className="
+                            group flex items-start gap-3 rounded-xl px-3 py-2.5
+                            transition-all duration-300 ease-out
+                            hover:scale-[1.02] hover:bg-white
+                            hover:shadow-[0_18px_40px_-18px_rgba(0,200,150,0.45),0_0_0_1px_rgba(0,200,150,0.18)]
+                          "
+                        >
+                          <span
+                            className="
+                              mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full
+                              bg-brand-green/15 text-brand-green transition-colors
+                              group-hover:bg-brand-green group-hover:text-white
+                            "
+                          >
+                            <IconCheck size={10} />
+                          </span>
+                          <span className="text-[14.5px] leading-relaxed text-navy-700 transition-colors">
+                            {t}
+                          </span>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
-          </AnimatedBlock>
+          </div>
         </div>
       </div>
     </Section>
