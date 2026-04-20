@@ -7,6 +7,7 @@ import { getSectorConfig } from "@/lib/sector-config";
 import { getSectorPriceConfig, getSectorAliases } from "@/lib/price-defaults";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
+import { normalizeBusinessSector } from "@/lib/sector-config";
 
 interface PriceItem {
   id: string;
@@ -21,11 +22,10 @@ interface PriceItem {
 export default function PricesPage() {
   const supabase = createBrowserClient(
 
-
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
-  const { budgetCategories, subcategories: getSectorSubcats, options, defaultPrices } = useSector();
+  const { sectorKey, budgetCategories, subcategories: getSectorSubcats, options, defaultPrices } = useSector();
   const confirm = useConfirm();
   const toast = useToast();
 
@@ -39,7 +39,10 @@ export default function PricesPage() {
   const [filterCat, setFilterCat] = useState("all");
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const [sectorConfig, setSectorConfig] = useState(getSectorConfig("construccion"));
+  const normalizedSector = normalizeBusinessSector(sectorKey);
+const sectorConfig = getSectorConfig(normalizedSector);
+
+
 
   // Sector-aware fallbacks from lib/price-defaults.ts
   const priceConfig = getSectorPriceConfig(sectorConfig.sector);
@@ -80,7 +83,7 @@ export default function PricesPage() {
           .single();
 
         if (!cancelled) {
-          setSectorConfig(getSectorConfig(profile?.business_sector));
+         
         }
       } catch (err) {
         console.error("[prices] loadContext error:", err);
