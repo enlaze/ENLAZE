@@ -35,33 +35,43 @@ export default function SectorSettingsPage() {
 
   async function handleSave() {
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push("/login"); return; }
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
+      if (!user) { router.push("/login"); return; }
 
-    // Upsert fiscal_settings with the new sector_key
-    const { data: existing } = await supabase
-      .from("fiscal_settings")
-      .select("id")
-      .eq("user_id", user.id)
-      .single();
+      // Upsert fiscal_settings with the new sector_key
+      const { data: existing, error: fetchError } = await supabase
+        .from("fiscal_settings")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-    if (existing) {
-      await supabase
-        .from("fiscal_settings")
-        .update({ sector_key: selected, updated_at: new Date().toISOString() })
-        .eq("id", existing.id);
-    } else {
-      await supabase
-        .from("fiscal_settings")
-        .insert({ user_id: user.id, sector_key: selected });
+      if (fetchError) throw fetchError;
+
+      if (existing) {
+        const { error: updateError } = await supabase
+          .from("fiscal_settings")
+          .update({ sector_key: selected, updated_at: new Date().toISOString() })
+          .eq("id", existing.id);
+        if (updateError) throw updateError;
+      } else {
+        const { error: insertError } = await supabase
+          .from("fiscal_settings")
+          .insert({ user_id: user.id, sector_key: selected });
+        if (insertError) throw insertError;
+      }
+
+      // Reload sector context globally
+      await reload();
+
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (error: any) {
+      alert(`Error al guardar: ${error?.message || "Desconocido"}`);
+    } finally {
+      setSaving(false);
     }
-
-    // Reload sector context globally
-    await reload();
-
-    setSaved(true);
-    setSaving(false);
-    setTimeout(() => setSaved(false), 3000);
   }
 
   useEffect(() => {
@@ -96,11 +106,10 @@ export default function SectorSettingsPage() {
             <button
               key={s.sector_key}
               onClick={() => setSelected(s.sector_key)}
-              className={`text-left rounded-2xl border-2 p-5 transition-all ${
-                isSelected
-                  ? "border-brand-green bg-brand-green/5 shadow-md"
-                  : "border-navy-100 bg-white dark:bg-zinc-900 hover:border-navy-200 dark:hover:border-zinc-800 hover:shadow-sm"
-              }`}
+              className={`text-left rounded-2xl border-2 p-5 transition-all ${isSelected
+                ? "border-brand-green bg-brand-green/5 shadow-md"
+                : "border-navy-100 bg-white dark:bg-zinc-900 hover:border-navy-200 dark:hover:border-zinc-800 hover:shadow-sm"
+                }`}
             >
               <div className="flex items-start gap-3">
                 <span className="text-3xl">{sectorIcons[s.sector_key] || "📦"}</span>
