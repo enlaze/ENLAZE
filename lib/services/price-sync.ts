@@ -41,12 +41,20 @@ export async function syncUserPrices(
 
     // 3. Process each market price
     for (const mp of marketPrices) {
-      const itemName = mp.title || "";
+      const meta = mp.metadata || {};
+
+      const itemName = meta.name || mp.title || "";
       if (!itemName) continue;
-      let subcat = mp.subcategory || "Otros";
+      
+      let cat = meta.category || mp.category || "producto";
+      let subcat = meta.subcategory || mp.subcategory || "Otros";
       if (subcat === "Fontaneria") subcat = "Fontanería";
       if (subcat === "Albanileria") subcat = "Albañilería";
-      const priceValue = parseFloat(mp.value) || 0;
+      
+      const unit = meta.unit || mp.unit || "ud";
+
+      const rawPrice = meta.unit_price !== undefined ? meta.unit_price : (meta.value !== undefined ? meta.value : mp.value);
+      const priceValue = parseFloat(rawPrice) || 0;
       if (priceValue <= 0) continue;
 
       const lowerName = itemName.toLowerCase();
@@ -54,20 +62,18 @@ export async function syncUserPrices(
       // Common fields from market payload
       const updateData: any = {
         unit_price: priceValue,
-        description: `Precio de mercado \u00B7 ${mp.source || "n8n"} \u00B7 ${new Date(mp.last_updated || new Date()).toLocaleDateString("es-ES")}`,
+        description: `Precio de mercado \u00B7 ${meta.source || mp.source || "n8n"} \u00B7 ${new Date(mp.last_updated || new Date()).toLocaleDateString("es-ES")}`,
         source_type: "n8n_sync",
-        source_url: mp.source || null,
-        confidence_score: mp.confidence_score ?? 0.7,
-        captured_at: mp.captured_at || new Date().toISOString(),
+        source_url: meta.source_url || mp.source_url || mp.source || null,
+        confidence_score: meta.confidence_score ?? mp.confidence_score ?? 0.7,
+        captured_at: meta.captured_at || mp.captured_at || new Date().toISOString(),
       };
 
-      // Retail specific fields via metadata (if present)
-      if (mp.metadata) {
-        if (mp.metadata.purchase_price !== undefined) updateData.purchase_price = mp.metadata.purchase_price;
-        if (mp.metadata.recommended_sale_price !== undefined) updateData.recommended_sale_price = mp.metadata.recommended_sale_price;
-        if (mp.metadata.gross_margin_pct !== undefined) updateData.gross_margin_pct = mp.metadata.gross_margin_pct;
-        if (mp.metadata.supplier_name !== undefined) updateData.supplier_name = mp.metadata.supplier_name;
-      }
+      // Retail specific fields via metadata
+      if (meta.purchase_price !== undefined) updateData.purchase_price = parseFloat(meta.purchase_price);
+      if (meta.recommended_sale_price !== undefined) updateData.recommended_sale_price = parseFloat(meta.recommended_sale_price);
+      if (meta.gross_margin_pct !== undefined) updateData.gross_margin_pct = parseFloat(meta.gross_margin_pct);
+      if (meta.supplier_name !== undefined) updateData.supplier_name = meta.supplier_name;
 
       if (existingMap.has(lowerName)) {
         const existing = existingMap.get(lowerName)!;
@@ -91,9 +97,9 @@ export async function syncUserPrices(
           user_id: userId,
           sector: sector,
           name: itemName,
-          category: mp.category || "producto",
+          category: cat,
           subcategory: subcat,
-          unit: mp.unit || "ud",
+          unit: unit,
         };
 
         const { error } = await supabase.from("price_items").insert(insertData);
@@ -104,7 +110,7 @@ export async function syncUserPrices(
 
     // 4. Mark log as completed
     if (logId) {
-      await supabase
+      const { error: logUpdateError } = await supabase
         .from("price_sync_logs")
         .update({
           status: "completed",
@@ -114,11 +120,15 @@ export async function syncUserPrices(
           finished_at: new Date().toISOString(),
         })
         .eq("id", logId);
+
+      if (logUpdateError) {
+        console.error("[PriceSync] Error updating log to completed:", logUpdateError);
+      }
     }
   } catch (error) {
     console.error("[PriceSync] Error during sync:", error);
     if (logId) {
-      await supabase
+      const { error: logFailError } = await supabase
         .from("price_sync_logs")
         .update({
           status: "failed",
@@ -126,6 +136,10 @@ export async function syncUserPrices(
           finished_at: new Date().toISOString(),
         })
         .eq("id", logId);
+
+      if (logFailError) {
+        console.error("[PriceSync] Error updating log to failed:", logFailError);
+      }
     }
     throw error;
   }
