@@ -411,12 +411,9 @@ export default function PricesPage() {
     });
     if (!ok) return;
 
-    let sectorDefaults = defaultPrices();
-    if (sectorDefaults.length === 0) {
-      sectorDefaults = priceConfig.defaults.map((d) => ({
-        ...d,
-      }));
-    }
+    const sectorDefaults = priceConfig.defaults.map((d) => ({
+      ...d,
+    }));
 
     if (sectorDefaults.length === 0) {
       toast.error("No hay precios por defecto configurados para tu sector");
