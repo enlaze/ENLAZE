@@ -45,7 +45,7 @@ const quickActions = [
   { label: "Nueva factura", href: "/dashboard/issued-invoices/new", icon: "🧾", keys: "N F" },
   { label: "Ver clientes", href: "/dashboard/clientes", icon: "👥", keys: "G C" },
   { label: "Ver pagos", href: "/dashboard/payments", icon: "💵", keys: "G P" },
-  { label: "Compliance", href: "/dashboard/compliance", icon: "🛡️", keys: "G X" },
+  { label: "Cumplimiento", href: "/dashboard/compliance", icon: "🛡️", keys: "G X" },
   { label: "Proveedores", href: "/dashboard/suppliers", icon: "🔧", keys: "G V" },
   { label: "Facturas recibidas", href: "/dashboard/suppliers/invoices", icon: "🧾", keys: "G R" },
   { label: "Asistente IA", href: "/dashboard/agent", icon: "🤖", keys: "G A" },

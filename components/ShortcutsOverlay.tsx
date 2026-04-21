@@ -38,14 +38,14 @@ const GROUPS: ShortcutGroup[] = [
   {
     title: "Navegación",
     items: [
-      { keys: ["G", "D"], label: "Ir a Dashboard" },
+      { keys: ["G", "D"], label: "Ir al Centro de control" },
       { keys: ["G", "C"], label: "Ir a Clientes" },
       { keys: ["G", "P"], label: "Ir a Pagos" },
       { keys: ["G", "V"], label: "Ir a Proveedores" },
       { keys: ["G", "R"], label: "Ir a Facturas recibidas" },
       { keys: ["G", "A"], label: "Ir a Asistente IA" },
       { keys: ["G", "S"], label: "Ir a Ajustes" },
-      { keys: ["G", "X"], label: "Ir a Compliance" },
+      { keys: ["G", "X"], label: "Ir a Cumplimiento" },
     ],
   },
 ];

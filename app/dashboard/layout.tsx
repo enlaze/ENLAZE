@@ -10,28 +10,55 @@ import ShortcutsOverlay from "@/components/ShortcutsOverlay";
 import ThemeToggle from "@/components/ThemeToggle";
 import { SectorProvider, useSector } from "@/lib/sector-context";
 
-/* Fallback nav items used while sector config loads */
-const fallbackNavItems = [
-  { href: "/dashboard", label: "Dashboard", icon: "📊" },
-  { href: "/dashboard/clientes", label: "Clientes", icon: "👥" },
-  { href: "/dashboard/budgets", label: "Presupuestos", icon: "📋" },
-  { href: "/dashboard/messages", label: "WhatsApp", icon: "💬" },
-  { href: "/dashboard/emails", label: "Emails", icon: "📧" },
-  { href: "/dashboard/prices", label: "Banco precios", icon: "💰" },
-  { href: "/dashboard/projects", label: "Obras", icon: "🏗️" },
-  { href: "/dashboard/suppliers", label: "Proveedores", icon: "🔧" },
-  { href: "/dashboard/orders", label: "Pedidos", icon: "📦" },
-  { href: "/dashboard/delivery-notes", label: "Albaranes", icon: "📄" },
-  { href: "/dashboard/suppliers/invoices", label: "Facturas recibidas", icon: "🧾" },
-  { href: "/dashboard/issued-invoices", label: "Facturas emitidas", icon: "📑" },
-  { href: "/dashboard/payments", label: "Pagos y Tesorería", icon: "💵" },
-  { href: "/dashboard/margins", label: "Márgenes", icon: "📊" },
-  { href: "/dashboard/calendar", label: "Calendario", icon: "📅" },
-  { href: "/dashboard/agent", label: "Asistente IA", icon: "🤖" },
-  { href: "/dashboard/compliance", label: "Compliance", icon: "🛡️" },
-  { href: "/dashboard/audit-log", label: "Audit Log", icon: "📋" },
-  { href: "/dashboard/settings", label: "Ajustes", icon: "⚙️" },
+/* Canonical sidebar structure — single source of truth.
+   Each item has a `section` (null = pinned at top, no header). */
+type NavItem = {
+  href: string;
+  label: string;
+  icon: string;
+  section: "General" | "Negocio" | "Finanzas" | "Sistema" | null;
+};
+
+const NAV_ITEMS: NavItem[] = [
+  // Centro de control — sin sección, siempre arriba del todo
+  { href: "/dashboard", label: "Centro de control", icon: "📊", section: null },
+
+  // GENERAL
+  { href: "/dashboard/clientes", label: "Clientes", icon: "👥", section: "General" },
+  { href: "/dashboard/messages", label: "WhatsApp", icon: "💬", section: "General" },
+  { href: "/dashboard/emails", label: "Emails", icon: "📧", section: "General" },
+  { href: "/dashboard/agent", label: "Asistente IA", icon: "🤖", section: "General" },
+
+  // NEGOCIO
+  { href: "/dashboard/budgets", label: "Presupuestos", icon: "📋", section: "Negocio" },
+  { href: "/dashboard/prices", label: "Banco de precios", icon: "💰", section: "Negocio" },
+  { href: "/dashboard/projects", label: "Obras", icon: "🏗️", section: "Negocio" },
+  { href: "/dashboard/suppliers", label: "Proveedores", icon: "🔧", section: "Negocio" },
+  { href: "/dashboard/orders", label: "Pedidos", icon: "📦", section: "Negocio" },
+  { href: "/dashboard/delivery-notes", label: "Albaranes", icon: "📄", section: "Negocio" },
+
+  // FINANZAS
+  { href: "/dashboard/suppliers/invoices", label: "Facturas recibidas", icon: "🧾", section: "Finanzas" },
+  { href: "/dashboard/issued-invoices", label: "Facturas emitidas", icon: "📑", section: "Finanzas" },
+  { href: "/dashboard/payments", label: "Pagos y tesorería", icon: "💵", section: "Finanzas" },
+  { href: "/dashboard/margins", label: "Márgenes", icon: "📊", section: "Finanzas" },
+
+  // SISTEMA
+  { href: "/dashboard/calendar", label: "Calendario", icon: "📅", section: "Sistema" },
+  { href: "/dashboard/settings", label: "Ajustes", icon: "⚙️", section: "Sistema" },
+  { href: "/dashboard/compliance", label: "Cumplimiento", icon: "🛡️", section: "Sistema" },
+  { href: "/dashboard/audit-log", label: "Registro de actividad", icon: "📋", section: "Sistema" },
 ];
+
+const SECTION_ORDER: Array<NavItem["section"]> = [null, "General", "Negocio", "Finanzas", "Sistema"];
+
+/* Items that should always appear regardless of sector config */
+const ALWAYS_VISIBLE_HREFS = new Set([
+  "/dashboard",
+  "/dashboard/settings",
+  "/dashboard/compliance",
+  "/dashboard/audit-log",
+]);
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -108,17 +135,22 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
 
   const emailVerified = user?.user_metadata?.email_verified === true;
 
-  // Build nav items from sector config or fallback
+  // Build nav items from canonical list, optionally filtered by sector visibility.
+  // If the sector config returns an explicit list of modules, only those hrefs
+  // (plus always-visible system items) are shown. Otherwise we show everything.
   const sectorModules = visibleModules();
-  const complianceItems = [
-    { href: "/dashboard/compliance", label: "Compliance", icon: "🛡️" },
-    { href: "/dashboard/audit-log", label: "Audit Log", icon: "📋" },
-  ];
-  const rawNavItems = sectorModules.length > 0
-    ? [...sectorModules.map(m => ({ href: m.href, label: m.label, icon: m.icon })), ...complianceItems, { href: "/dashboard/settings", label: "Ajustes", icon: "⚙️" }]
-    : fallbackNavItems;
+  const sectorHrefs = new Set(sectorModules.map((m) => m.href));
+  const navItems = sectorModules.length > 0
+    ? NAV_ITEMS.filter((item) => sectorHrefs.has(item.href) || ALWAYS_VISIBLE_HREFS.has(item.href))
+    : NAV_ITEMS;
 
-  const navItems = Array.from(new Map(rawNavItems.map(item => [item.href, item])).values());
+  // Group by section, preserving SECTION_ORDER.
+  const sections = SECTION_ORDER
+    .map((section) => ({
+      title: section,
+      items: navItems.filter((item) => item.section === section),
+    }))
+    .filter((group) => group.items.length > 0);
 
   // User initials for the avatar
   const initials = (() => {
@@ -228,51 +260,57 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
         }`}
       >
         <nav className="h-full overflow-y-auto px-4 py-6">
-          <p className="px-3 pb-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-navy-400 dark:text-zinc-500">
-            General
-          </p>
-          <ul className="space-y-0.5">
-            {navItems.map(item => {
-              const active =
-                item.href === "/dashboard"
-                  ? pathname === "/dashboard"
-                  : pathname === item.href || pathname.startsWith(item.href + "/");
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    onClick={() => setSidebarOpen(false)}
-                    className={`
-                      group relative flex items-center gap-3 rounded-xl
-                      px-3 py-2.5 text-[13.5px] font-medium
-                      transition-all duration-150
-                      ${
-                        active
-                          ? "bg-navy-900 text-white shadow-[0_4px_16px_-8px_rgba(10,25,41,0.4)] dark:bg-zinc-900 dark:text-white dark:shadow-none dark:ring-1 dark:ring-zinc-800"
-                          : "text-navy-600 hover:bg-navy-50 hover:text-navy-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
-                      }
-                    `}
-                  >
-                    <span
-                      className={`
-                        text-base transition-transform duration-150
-                        ${active ? "" : "opacity-70 group-hover:opacity-100 group-hover:scale-105"}
-                      `}
-                    >
-                      {item.icon}
-                    </span>
-                    <span className="truncate">{item.label}</span>
-                    {active && (
-                      <span
-                        aria-hidden
-                        className="ml-auto h-1.5 w-1.5 rounded-full bg-brand-green shadow-[0_0_0_3px_rgba(0,200,150,0.2)]"
-                      />
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          {sections.map((group, groupIdx) => (
+            <div key={group.title ?? "_top"} className={groupIdx === 0 ? "" : "mt-6"}>
+              {group.title && (
+                <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-navy-400 dark:text-zinc-500">
+                  {group.title}
+                </p>
+              )}
+              <ul className="space-y-0.5">
+                {group.items.map((item) => {
+                  const active =
+                    item.href === "/dashboard"
+                      ? pathname === "/dashboard"
+                      : pathname === item.href || pathname.startsWith(item.href + "/");
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        onClick={() => setSidebarOpen(false)}
+                        className={`
+                          group relative flex items-center gap-3 rounded-xl
+                          px-3 py-2.5 text-[13.5px] font-medium
+                          transition-colors duration-150
+                          ${
+                            active
+                              ? "bg-brand-green/10 text-brand-green dark:bg-brand-green/15 dark:text-brand-green-light"
+                              : "text-navy-700 hover:bg-gray-100 hover:text-navy-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
+                          }
+                        `}
+                      >
+                        <span
+                          className={`
+                            text-base transition-transform duration-150
+                            ${active ? "" : "opacity-70 group-hover:opacity-100 group-hover:scale-105"}
+                          `}
+                        >
+                          {item.icon}
+                        </span>
+                        <span className="truncate">{item.label}</span>
+                        {active && (
+                          <span
+                            aria-hidden
+                            className="ml-auto h-1.5 w-1.5 rounded-full bg-brand-green shadow-[0_0_0_3px_rgba(0,200,150,0.2)]"
+                          />
+                        )}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
         </nav>
       </aside>
 

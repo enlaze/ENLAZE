@@ -32,7 +32,7 @@ const CATEGORIES = [
   },
   {
     key: "compliance",
-    label: "Compliance",
+    label: "Cumplimiento",
     description: "Alertas legales, fiscales, seguridad, caducidades",
     icon: "🛡️",
   },

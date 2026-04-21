@@ -107,7 +107,9 @@ export default function ComplianceDashboardPage() {
     setLoading(false);
   }
 
-  useEffect(() => { loadChecks(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    loadChecks(); // eslint-disable-line react-hooks/set-state-in-effect
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <Loading />;
 
@@ -160,20 +162,24 @@ export default function ComplianceDashboardPage() {
       {/* Checks list */}
       <div className="space-y-3">
         {checks.map((check) => (
-          <Link key={check.area} href={check.href} className="block">
-            <div className="rounded-2xl border border-navy-100 bg-white p-5 shadow-sm hover:border-brand-green/40 hover:shadow-md transition cursor-pointer flex items-center gap-4 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-brand-green/40 dark:shadow-none">
-              <div className="text-2xl shrink-0">{check.icon}</div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <h3 className="text-sm font-semibold text-navy-900 dark:text-white">{check.label}</h3>
-                  <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-medium border ${statusBadge[check.status]}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${statusDot[check.status]}`} />
+          <Link key={check.area} href={check.href} className="group block">
+            <div className="flex cursor-pointer items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-colors group-hover:border-brand-green/40 group-hover:bg-gray-50 group-hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:group-hover:border-brand-green/40 dark:group-hover:bg-zinc-800/60 dark:shadow-none">
+              <div className="shrink-0 text-2xl">{check.icon}</div>
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 flex flex-wrap items-center gap-2">
+                  <h3 className="text-sm font-semibold text-navy-900 group-hover:text-navy-900 dark:text-white dark:group-hover:text-white">
+                    {check.label}
+                  </h3>
+                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadge[check.status]}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${statusDot[check.status]}`} />
                     {statusLabels[check.status]}
                   </span>
                 </div>
-                <p className="text-xs text-navy-500 dark:text-zinc-400">{check.detail}</p>
+                <p className="text-xs text-navy-600 group-hover:text-navy-700 dark:text-zinc-400 dark:group-hover:text-zinc-300">
+                  {check.detail}
+                </p>
               </div>
-              <span className="text-navy-300 dark:text-zinc-600 text-lg shrink-0">→</span>
+              <span className="shrink-0 text-lg text-navy-400 group-hover:text-brand-green dark:text-zinc-600 dark:group-hover:text-brand-green">→</span>
             </div>
           </Link>
         ))}

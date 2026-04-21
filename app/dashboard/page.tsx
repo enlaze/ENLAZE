@@ -469,7 +469,7 @@ export default function DashboardHome() {
         <section className="overflow-hidden rounded-2xl border border-navy-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-[0_1px_2px_rgba(10,25,41,0.04)]">
           <div className="flex items-center gap-2 border-b border-navy-100 dark:border-zinc-800 px-6 py-4">
             <IcoShield size={16} className="text-brand-green" />
-            <h2 className="text-[14px] font-semibold text-navy-900 dark:text-white">Compliance</h2>
+            <h2 className="text-[14px] font-semibold text-navy-900 dark:text-white">Cumplimiento</h2>
             <Link href="/dashboard/compliance" className="ml-auto text-[11px] text-navy-500 dark:text-zinc-500 hover:text-brand-green">
               Ver todo →
             </Link>
