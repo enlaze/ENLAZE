@@ -109,6 +109,15 @@ export default function SettingsPage() {
               </div>
             </div>
           </Link>
+          <Link href="/dashboard/settings/integrations" className="rounded-2xl border border-navy-100 bg-white p-5 shadow-sm hover:shadow-md transition-shadow group dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🔌</span>
+              <div>
+                <h3 className="font-semibold text-navy-900 dark:text-white group-hover:text-brand-green transition-colors">Integraciones</h3>
+                <p className="text-xs text-navy-500 dark:text-zinc-400">Gmail, Calendar, Sheets</p>
+              </div>
+            </div>
+          </Link>
         </div>
 
         {/* Theme Preference */}
