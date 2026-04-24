@@ -3,7 +3,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase-browser";
+import { useToast } from "@/components/ui/toast";
 
 const inputCls = "w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm";
 
@@ -42,7 +43,8 @@ const emptyForm: FiscalForm = {
 
 export default function FiscalSettingsPage() {
   const router = useRouter();
-  const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+  const supabase = createClient();
+  const toast = useToast();
 
   const [userId, setUserId] = useState<string | null>(null);
   const [form, setForm] = useState<FiscalForm>(emptyForm);
@@ -82,8 +84,14 @@ export default function FiscalSettingsPage() {
 
   async function handleSave() {
     if (!userId) return;
-    if (!form.business_name.trim()) { alert("La razón social es obligatoria."); return; }
-    if (!form.nif.trim()) { alert("El NIF/CIF es obligatorio."); return; }
+    if (!form.business_name.trim()) {
+      toast.error("La razón social es obligatoria");
+      return;
+    }
+    if (!form.nif.trim()) {
+      toast.error("El NIF/CIF es obligatorio");
+      return;
+    }
     setSaving(true);
 
     const payload = {
@@ -96,12 +104,21 @@ export default function FiscalSettingsPage() {
 
     if (existingId) {
       const { error } = await supabase.from("fiscal_settings").update(payload).eq("id", existingId);
-      if (error) alert("Error: " + error.message);
-      else { setSaved(true); setTimeout(() => setSaved(false), 3000); }
+      if (error) toast.error("Error guardando", { description: error.message });
+      else {
+        toast.success("Datos fiscales actualizados");
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      }
     } else {
       const { data, error } = await supabase.from("fiscal_settings").insert(payload).select("id").single();
-      if (error) alert("Error: " + error.message);
-      else { setExistingId(data.id); setSaved(true); setTimeout(() => setSaved(false), 3000); }
+      if (error) toast.error("Error guardando", { description: error.message });
+      else {
+        setExistingId(data.id);
+        toast.success("Datos fiscales guardados");
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      }
     }
     setSaving(false);
   }

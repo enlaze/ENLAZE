@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { useRouter } from "next/navigation";
 import { useSector, SectorConfig } from "@/lib/sector-context";
+import { useToast } from "@/components/ui/toast";
 
 const sectorIcons: Record<string, string> = {
   construccion: "🏗️",
@@ -16,6 +17,7 @@ export default function SectorSettingsPage() {
   const supabase = createClient();
   const router = useRouter();
   const { sectorKey, reload } = useSector();
+  const toast = useToast();
 
   const [sectors, setSectors] = useState<SectorConfig[]>([]);
   const [selected, setSelected] = useState(sectorKey);
@@ -65,10 +67,13 @@ export default function SectorSettingsPage() {
       // Reload sector context globally
       await reload();
 
+      toast.success("Sector actualizado");
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (error: any) {
-      alert(`Error al guardar: ${error?.message || "Desconocido"}`);
+      toast.error("Error al guardar", {
+        description: error?.message || "Error desconocido",
+      });
     } finally {
       setSaving(false);
     }

@@ -113,11 +113,11 @@ export async function GET(req: NextRequest) {
     const { messages = [], resultSizeEstimate } = await gmailRes.json();
     const unread_count = resultSizeEstimate || messages.length;
 
-    let priority_threads = [];
-    let supplier_messages = [];
-    let customer_messages = [];
-    let invoice_messages = [];
-    let otros = [];
+    const priority_threads = [];
+    const supplier_messages = [];
+    const customer_messages = [];
+    const invoice_messages = [];
+    const otros = [];
 
     // Fetch details for up to 5 messages to avoid rate limits/slow responses
     const messagesToFetch = messages.slice(0, 5);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase-browser";
 import { SupabaseClient } from "@supabase/supabase-js";
 import PageHeader from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
@@ -104,10 +104,7 @@ async function loadAllData(supabase: any) {
 }
 
 export default function PrivacyCompliancePage() {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = createClient();
 
   const [loading, setLoading] = useState(true);
   const [legalAcceptances, setLegalAcceptances] = useState<LegalAcceptance>({
@@ -184,7 +181,7 @@ export default function PrivacyCompliancePage() {
           {acceptanceItems.map((item) => (
             <div
               key={item.key}
-              className="flex items-center justify-between p-4 rounded-xl border border-navy-100 bg-gray-50 hover:bg-white hover:shadow-sm transition dark:border-zinc-800 dark:bg-zinc-800/50 dark:hover:bg-zinc-800"
+              className="flex items-center justify-between p-4 rounded-xl border border-navy-100 bg-navy-50 hover:bg-white hover:shadow-sm transition dark:border-zinc-800 dark:bg-zinc-800/50 dark:hover:bg-zinc-800"
             >
               <span className="text-navy-800 dark:text-zinc-200">{item.label}</span>
               <span
@@ -213,7 +210,7 @@ export default function PrivacyCompliancePage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-y border-navy-100 dark:bg-zinc-800/50 dark:border-zinc-800">
+              <thead className="bg-navy-50 border-y border-navy-100 dark:bg-zinc-800/50 dark:border-zinc-800">
                 <tr>
                   <th className="text-left px-4 py-3 text-navy-700 dark:text-zinc-300 font-semibold">Nombre</th>
                   <th className="text-left px-4 py-3 text-navy-700 dark:text-zinc-300 font-semibold">Servicio</th>
@@ -226,7 +223,7 @@ export default function PrivacyCompliancePage() {
                 {subprocessors.map((sp) => (
                   <tr
                     key={sp.id}
-                    className="border-b border-navy-100 last:border-0 hover:bg-gray-50 transition dark:border-zinc-800 dark:hover:bg-zinc-800/50"
+                    className="border-b border-navy-100 last:border-0 hover:bg-navy-50 transition dark:border-zinc-800 dark:hover:bg-zinc-800/50"
                   >
                     <td className="px-4 py-3 text-navy-800 dark:text-zinc-200">{sp.name}</td>
                     <td className="px-4 py-3 text-navy-600 dark:text-zinc-400">{sp.service}</td>
@@ -276,7 +273,7 @@ export default function PrivacyCompliancePage() {
             {processingActivities.map((activity) => (
               <div
                 key={activity.id}
-                className="p-4 rounded-xl border border-navy-100 bg-gray-50 hover:bg-white hover:shadow-sm transition dark:border-zinc-800 dark:bg-zinc-800/50 dark:hover:bg-zinc-800"
+                className="p-4 rounded-xl border border-navy-100 bg-navy-50 hover:bg-white hover:shadow-sm transition dark:border-zinc-800 dark:bg-zinc-800/50 dark:hover:bg-zinc-800"
               >
                 <div className="mb-2">
                   <h4 className="font-semibold text-navy-900 dark:text-white">{activity.activity_name}</h4>
@@ -321,7 +318,7 @@ export default function PrivacyCompliancePage() {
         </div>
 
         {showNewRequestForm && (
-          <div className="p-4 rounded-xl border border-navy-100 bg-gray-50 mb-4 dark:border-zinc-800 dark:bg-zinc-800/50">
+          <div className="p-4 rounded-xl border border-navy-100 bg-navy-50 mb-4 dark:border-zinc-800 dark:bg-zinc-800/50">
             <p className="text-navy-500 dark:text-zinc-400 text-sm">
               Formulario para registrar nueva solicitud (integración próxima)
             </p>
@@ -336,7 +333,7 @@ export default function PrivacyCompliancePage() {
               <div
                 key={request.id}
                 onClick={() => setSelectedRequest(selectedRequest?.id === request.id ? null : request)}
-                className="p-4 rounded-xl border border-navy-100 bg-gray-50 hover:bg-white hover:shadow-sm transition cursor-pointer dark:border-zinc-800 dark:bg-zinc-800/50 dark:hover:bg-zinc-800"
+                className="p-4 rounded-xl border border-navy-100 bg-navy-50 hover:bg-white hover:shadow-sm transition cursor-pointer dark:border-zinc-800 dark:bg-zinc-800/50 dark:hover:bg-zinc-800"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">

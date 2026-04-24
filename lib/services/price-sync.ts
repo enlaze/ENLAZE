@@ -46,7 +46,7 @@ export async function syncUserPrices(
       const itemName = meta.name || mp.title || "";
       if (!itemName) continue;
       
-      let cat = meta.category || mp.category || "producto";
+      const cat = meta.category || mp.category || "producto";
       let subcat = meta.subcategory || mp.subcategory || "Otros";
       if (subcat === "Fontaneria") subcat = "Fontanería";
       if (subcat === "Albanileria") subcat = "Albañilería";

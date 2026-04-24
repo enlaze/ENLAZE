@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase-browser";
 import { recordFiscalEvent, getFiscalTimeline } from "@/lib/fiscal-events";
 import type { FiscalEventType } from "@/lib/fiscal-events";
 import { logActivity } from "@/lib/activity-log";
@@ -167,7 +167,7 @@ export default function IssuedInvoiceDetailPage() {
   const params = useParams();
   const router = useRouter();
   const invoiceId = params.id as string;
-  const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+  const supabase = createClient();
   const confirm = useConfirm();
   const toast = useToast();
 
@@ -238,7 +238,10 @@ export default function IssuedInvoiceDetailPage() {
 
   async function handleSaveLine() {
     if (!invoice) return;
-    if (!lineForm.description.trim()) { alert("La descripción es obligatoria."); return; }
+    if (!lineForm.description.trim()) {
+      toast.error("La descripción es obligatoria");
+      return;
+    }
     setSavingLine(true);
 
     const gross = lineForm.quantity * lineForm.unit_price;
@@ -358,7 +361,7 @@ export default function IssuedInvoiceDetailPage() {
     setRegisteringPayment(true);
     const amount = parseFloat(paymentAmount);
     if (isNaN(amount) || amount <= 0) {
-      alert("Introduce un importe válido");
+      toast.error("Introduce un importe válido");
       setRegisteringPayment(false);
       return;
     }
@@ -381,8 +384,11 @@ export default function IssuedInvoiceDetailPage() {
       setShowPaymentForm(false);
       setPaymentAmount("");
       setPaymentRef("");
+      toast.success("Cobro registrado");
     } else {
-      alert(result.error || "Error al registrar el cobro");
+      toast.error("Error al registrar el cobro", {
+        description: result.error || undefined,
+      });
     }
     setRegisteringPayment(false);
   }

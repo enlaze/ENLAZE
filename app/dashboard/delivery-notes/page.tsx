@@ -103,7 +103,7 @@ export default function DeliveryNotesPage() {
       status: "pending",
     });
 
-    if (error) alert("Error: " + error.message);
+    if (error) toast.error("Error", { description: error.message });
     else {
       setForm({ note_number: "", supplier_id: "", project_id: "", order_id: "", reception_date: new Date().toISOString().split("T")[0], notes: "" });
       setShowForm(false);

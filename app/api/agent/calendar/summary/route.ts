@@ -102,7 +102,7 @@ export async function GET(req: NextRequest) {
       }))
       .sort((a: any, b: any) => a.start.getTime() - b.start.getTime());
 
-    let free_slots = [];
+    const free_slots = [];
     let lastEndTime = new Date(startOfDay);
     lastEndTime.setHours(workdayStart, 0, 0, 0);
 

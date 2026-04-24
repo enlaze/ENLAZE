@@ -144,14 +144,14 @@ export default function AgentDashboardPage() {
         supabase.from("agent_tasks").select("*").eq("status", "pending").order("created_at", { ascending: false }).limit(15),
       ]);
 
-      setSummary(summaryRes.data?.[0] as DailySummary || null); // eslint-disable-line react-hooks/set-state-in-effect
-      setNews((newsRes.data || []) as AgentNews[]); // eslint-disable-line react-hooks/set-state-in-effect
-      setSignals((signalsRes.data || []) as AgentSignal[]); // eslint-disable-line react-hooks/set-state-in-effect
-      setReviews((reviewsRes.data || []) as AgentReview[]); // eslint-disable-line react-hooks/set-state-in-effect
-      setCampaigns((campaignsRes.data || []) as AgentCampaign[]); // eslint-disable-line react-hooks/set-state-in-effect
-      setLeads((leadsRes.data || []) as AgentLead[]); // eslint-disable-line react-hooks/set-state-in-effect
-      setTasks((tasksRes.data || []) as AgentTask[]); // eslint-disable-line react-hooks/set-state-in-effect
-      setLoading(false); // eslint-disable-line react-hooks/set-state-in-effect
+      setSummary(summaryRes.data?.[0] as DailySummary || null);  
+      setNews((newsRes.data || []) as AgentNews[]);  
+      setSignals((signalsRes.data || []) as AgentSignal[]);  
+      setReviews((reviewsRes.data || []) as AgentReview[]);  
+      setCampaigns((campaignsRes.data || []) as AgentCampaign[]);  
+      setLeads((leadsRes.data || []) as AgentLead[]);  
+      setTasks((tasksRes.data || []) as AgentTask[]);  
+      setLoading(false);  
     }
     load();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

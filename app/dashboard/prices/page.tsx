@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase-browser";
 import { useSector } from "@/lib/sector-context";
 import { getSectorConfig, normalizeSector } from "@/lib/sector-config";
 import { getSectorPriceConfig, getSectorAliases } from "@/lib/price-defaults";
@@ -10,6 +10,7 @@ import { useToast } from "@/components/ui/toast";
 import PageHeader from "@/components/ui/page-header";
 import DataTable, { type Column, type FilterDef } from "@/components/ui/data-table";
 import Badge from "@/components/ui/badge";
+import { SkeletonKpi, SkeletonTable } from "@/components/ui/skeleton";
 import type { PriceListItem } from "@/lib/types/price";
 import { PRICE_LIST_COLUMNS, SOURCE_TYPE_LABELS } from "@/lib/types/price";
 
@@ -45,10 +46,7 @@ const LABEL_CLS = "block text-xs font-medium text-navy-600 dark:text-zinc-300 mb
 /* ═══════════════════════════════════════════════════════════════════ */
 
 export default function PricesPage() {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = createClient();
   const { sectorKey, budgetCategories, subcategories: getSectorSubcats, options, defaultPrices } = useSector();
   const confirm = useConfirm();
   const toast = useToast();
@@ -712,8 +710,18 @@ export default function PricesPage() {
   /* ─── Loading state ──────────────────────────────────────────────── */
   if (!contextLoaded || loadingItems) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-green" />
+      <div className="max-w-[1400px] mx-auto space-y-6">
+        <div className="space-y-2">
+          <div className="h-7 w-48 animate-pulse rounded bg-navy-100" />
+          <div className="h-4 w-80 max-w-full animate-pulse rounded bg-navy-100/70" />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <SkeletonKpi />
+          <SkeletonKpi />
+          <SkeletonKpi />
+          <SkeletonKpi />
+        </div>
+        <SkeletonTable rows={6} cols={6} />
       </div>
     );
   }

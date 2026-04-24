@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase-browser";
 import PageHeader from "@/components/ui/page-header";
 import { Card, StatCard } from "@/components/ui/card";
 import Loading from "@/components/ui/loading";
@@ -32,10 +32,7 @@ async function loadSecurityIncidents(supabase: any, userId: string): Promise<Sec
 }
 
 export default function SecurityCompliancePage() {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = createClient();
 
   const [loading, setLoading] = useState(true);
   const [incidents, setIncidents] = useState<SecurityIncident[]>([]);
@@ -107,7 +104,7 @@ export default function SecurityCompliancePage() {
             className={`px-4 py-2 rounded-lg text-sm font-medium transition border ${
               filterStatus === status
                 ? "bg-brand-green text-navy-900 border-brand-green"
-                : "bg-white text-navy-700 border-navy-200 hover:bg-gray-50 dark:bg-zinc-900 dark:text-zinc-300 dark:border-zinc-800 dark:hover:bg-zinc-800"
+                : "bg-white text-navy-700 border-navy-200 hover:bg-navy-50 dark:bg-zinc-900 dark:text-zinc-300 dark:border-zinc-800 dark:hover:bg-zinc-800"
             }`}
           >
             {status === "all" && "Todos"}
@@ -135,7 +132,7 @@ export default function SecurityCompliancePage() {
               <div
                 key={incident.id}
                 onClick={() => setSelectedIncident(selectedIncident?.id === incident.id ? null : incident)}
-                className="p-4 rounded-xl border border-navy-100 bg-gray-50 hover:bg-white hover:shadow-sm transition cursor-pointer border-l-4 dark:border-zinc-800 dark:bg-zinc-800/50 dark:hover:bg-zinc-800"
+                className="p-4 rounded-xl border border-navy-100 bg-navy-50 hover:bg-white hover:shadow-sm transition cursor-pointer border-l-4 dark:border-zinc-800 dark:bg-zinc-800/50 dark:hover:bg-zinc-800"
                 style={{
                   borderLeftColor:
                     incident.severity === "critical"

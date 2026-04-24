@@ -4,7 +4,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase-browser";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 
@@ -53,7 +53,7 @@ export default function OrderDetailPage() {
   const confirm = useConfirm();
   const toast = useToast();
   const orderId = params.id as string;
-  const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+  const supabase = createClient();
 
   const [order, setOrder] = useState<Order | null>(null);
   const [lines, setLines] = useState<OrderLine[]>([]);
@@ -105,7 +105,7 @@ export default function OrderDetailPage() {
 
   async function handleSaveLine() {
     if (!order) return;
-    if (!lineForm.description.trim()) { alert("La descripción es obligatoria."); return; }
+    if (!lineForm.description.trim()) { toast.error("La descripción es obligatoria."); return; }
     setSavingLine(true);
 
     const lineTotal = lineForm.quantity * lineForm.unit_price;
@@ -115,14 +115,14 @@ export default function OrderDetailPage() {
         description: lineForm.description.trim(), unit: lineForm.unit,
         quantity: lineForm.quantity, unit_price: lineForm.unit_price, total: lineTotal,
       }).eq("id", editingLineId);
-      if (error) alert("Error: " + error.message);
+      if (error) toast.error("Error", { description: error.message });
     } else {
       const { error } = await supabase.from("order_lines").insert({
         order_id: order.id, description: lineForm.description.trim(), unit: lineForm.unit,
         quantity: lineForm.quantity, unit_price: lineForm.unit_price, total: lineTotal,
         sort_order: lines.length,
       });
-      if (error) alert("Error: " + error.message);
+      if (error) toast.error("Error", { description: error.message });
     }
 
     // Reload lines

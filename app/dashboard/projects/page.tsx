@@ -1,4 +1,4 @@
-/* eslint-disable react-hooks/set-state-in-effect */
+ 
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -11,7 +11,8 @@ import { Card, StatCard } from "@/components/ui/card";
 import { FormField, Input, Select, Textarea, SearchInput } from "@/components/ui/form-fields";
 import { Button } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
-import Loading from "@/components/ui/loading";
+import { SkeletonKpi, SkeletonTable } from "@/components/ui/skeleton";
+import EmptyState from "@/components/ui/empty-state";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 
@@ -169,7 +170,7 @@ export default function ProjectsPage() {
   async function handleSave() {
     if (!userId) return;
     if (!form.name.trim()) {
-      alert("El nombre de la obra es obligatorio.");
+      toast.error("El nombre de la obra es obligatorio.");
       return;
     }
 
@@ -244,7 +245,20 @@ export default function ProjectsPage() {
   };
 
   if (loading) {
-    return <Loading />;
+    return (
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="space-y-2">
+          <div className="h-7 w-48 animate-pulse rounded bg-navy-100" />
+          <div className="h-4 w-72 max-w-full animate-pulse rounded bg-navy-100/70" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <SkeletonKpi />
+          <SkeletonKpi />
+          <SkeletonKpi />
+        </div>
+        <SkeletonTable rows={5} cols={6} />
+      </div>
+    );
   }
 
   return (
@@ -412,12 +426,15 @@ export default function ProjectsPage() {
       )}
 
       {filtered.length === 0 ? (
-        <Card>
-          <div className="text-center py-10">
-            <p className="text-navy-600">No hay obras creadas todavía.</p>
-            <p className="text-sm text-navy-500 dark:text-zinc-500 mt-1">Pulsa "+ Nueva obra" para empezar a organizar proyectos.</p>
-          </div>
-        </Card>
+        <EmptyState
+          title={`No hay ${label("projects").toLowerCase()} creadas`}
+          description={`Crea tu primera ${label("project").toLowerCase()} para empezar a organizar proyectos, presupuestos y costes.`}
+          action={
+            <Button onClick={() => { resetForm(); setShowForm(true); }}>
+              + {label("project") === "Obra" ? "Nueva obra" : `Nuevo/a ${label("project").toLowerCase()}`}
+            </Button>
+          }
+        />
       ) : (
         <div className="rounded-2xl border border-navy-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">

@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase-browser";
+import { useToast } from "@/components/ui/toast";
 
 /* ═══════════════════════════ Types ═══════════════════════════ */
 
@@ -139,10 +140,8 @@ export default function ClientPortalPage() {
   const params = useParams();
   const token = params.token as string;
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = createClient();
+  const toast = useToast();
 
   const [project, setProject] = useState<Project | null>(null);
   const [client, setClient] = useState<Client | null>(null);
@@ -266,8 +265,12 @@ export default function ClientPortalPage() {
       status: newStatus,
       ...timestampFields,
     }).eq("id", id);
-    if (error) alert("Error: " + error.message);
-    else setBudgets((prev) => prev.map((b) => b.id === id ? { ...b, status: newStatus } : b));
+    if (error) {
+      toast.error("Error", { description: error.message });
+    } else {
+      setBudgets((prev) => prev.map((b) => b.id === id ? { ...b, status: newStatus } : b));
+      toast.success(newStatus === "accepted" ? "Presupuesto aceptado" : "Presupuesto rechazado");
+    }
     setActionLoading(null);
   }
 
@@ -282,10 +285,14 @@ export default function ClientPortalPage() {
       approved_date: approve ? new Date().toISOString().split("T")[0] : null,
       updated_at: new Date().toISOString(),
     }).eq("id", id);
-    if (error) alert("Error: " + error.message);
-    else setChanges((prev) => prev.map((c) =>
-      c.id === id ? { ...c, status: newStatus, client_approved: approve } : c
-    ));
+    if (error) {
+      toast.error("Error", { description: error.message });
+    } else {
+      setChanges((prev) => prev.map((c) =>
+        c.id === id ? { ...c, status: newStatus, client_approved: approve } : c
+      ));
+      toast.success(approve ? "Cambio aprobado" : "Cambio rechazado");
+    }
     setActionLoading(null);
   }
 

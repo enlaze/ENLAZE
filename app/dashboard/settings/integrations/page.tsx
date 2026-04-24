@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 interface Integration {
   id: string;
@@ -28,17 +30,8 @@ export default function IntegrationsPage() {
 
   const supabase = createClient();
   const router = useRouter();
-
-  useEffect(() => {
-    loadIntegrations();
-    
-    // Check url params for success or error
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("integration_success")) {
-      // Clear URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  }, []);
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const loadIntegrations = async () => {
     setLoading(true);
@@ -48,11 +41,23 @@ export default function IntegrationsPage() {
         .from("agent_connections")
         .select("*")
         .eq("user_id", user.id);
-      
+
       setIntegrations(data || []);
     }
     setLoading(false);
   };
+
+  useEffect(() => {
+    loadIntegrations();
+
+    // Check url params for success or error
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("integration_success")) {
+      // Clear URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, []);
 
   const isConnected = (module: string) => {
     return integrations.some((i) => i.module === module && (i.status === "connected" || i.connected === true));
@@ -62,7 +67,7 @@ export default function IntegrationsPage() {
     const integration = integrations.find((i) => i.module === module);
     if (!integration) return {};
     
-    let data = integration.credentials_ref || integration.metadata;
+    const data = integration.credentials_ref || integration.metadata;
     if (!data || data === '') return {};
     if (typeof data === 'string') {
       try { 
@@ -79,7 +84,7 @@ export default function IntegrationsPage() {
     const integration = integrations.find((i) => i.module === module);
     if (!integration) return {};
 
-    let data = integration.config;
+    const data = integration.config;
     if (!data || data === '') return {};
     if (typeof data === 'string') {
       try { 
@@ -93,22 +98,34 @@ export default function IntegrationsPage() {
   };
 
   const handleDisconnect = async (module: string) => {
-    if (!confirm(`¿Seguro que quieres desconectar ${module}? El agente dejará de tener acceso.`)) return;
-    
+    const ok = await confirm({
+      title: `Desconectar ${module}`,
+      description: "El agente dejará de tener acceso a esta integración.",
+      variant: "danger",
+      confirmLabel: "Desconectar",
+    });
+    if (!ok) return;
+
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      await supabase
+      const { error } = await supabase
         .from("agent_connections")
         .delete()
         .eq("user_id", user.id)
         .eq("module", module);
-      
+
+      if (error) {
+        toast.error("No se pudo desconectar", { description: error.message });
+        return;
+      }
+
+      toast.success(`${module} desconectado`);
       loadIntegrations();
     }
   };
 
   const handleConnect = (module: string) => {
-    window.location.href = `/api/auth/google?module=${module}`;
+    window.location.assign(`/api/auth/google?module=${module}`);
   };
 
   const handleFetchSheets = async () => {
@@ -120,10 +137,13 @@ export default function IntegrationsPage() {
         setAvailableSheets(data.sheets || []);
         setShowSheetSelector(true);
       } else {
-        alert("Error cargando hojas. Revisa que Drive API esté activa.");
+        toast.error("Error cargando hojas", {
+          description: "Revisa que Drive API esté activa.",
+        });
       }
     } catch (e) {
       console.error(e);
+      toast.error("Error de red", { description: "No se pudieron cargar las hojas." });
     }
     setLoadingSheets(false);
   };

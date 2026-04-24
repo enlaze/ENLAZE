@@ -151,7 +151,7 @@ export default function FacturasPage() {
   }
 
   async function handleSave() {
-    if (!form.supplier_name) { alert("El proveedor es obligatorio."); return; }
+    if (!form.supplier_name) { toast.error("El proveedor es obligatorio."); return; }
     if (!userId) return;
 
     const invoiceDate = form.invoice_date ? new Date(form.invoice_date) : new Date();
@@ -209,7 +209,7 @@ export default function FacturasPage() {
     const file = e.target.files?.[0];
     if (!file || !userId) return;
     if (!file.type.startsWith("image/")) {
-      alert("Por favor sube una imagen (JPG, PNG, WEBP). Los PDF no están soportados aún.");
+      toast.error("Por favor sube una imagen (JPG, PNG, WEBP). Los PDF no están soportados aún.");
       e.target.value = ""; return;
     }
     setUploading(true); setUploadProgress("Preparando imagen...");

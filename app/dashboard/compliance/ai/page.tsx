@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase-browser";
 import { SupabaseClient } from "@supabase/supabase-js";
 import PageHeader from "@/components/ui/page-header";
 import { Card, StatCard } from "@/components/ui/card";
@@ -73,10 +73,7 @@ async function loadAiSummary(supabase: SupabaseClient, userId: string): Promise<
 }
 
 export default function AiCompliancePage() {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = createClient();
 
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<AiSummary>({
@@ -154,7 +151,7 @@ export default function AiCompliancePage() {
             {Object.entries(summary.runsByType).map(([type, count]) => (
               <div
                 key={type}
-                className="p-4 rounded-xl border border-navy-100 bg-gray-50 text-center dark:border-zinc-800 dark:bg-zinc-800"
+                className="p-4 rounded-xl border border-navy-100 bg-navy-50 text-center dark:border-zinc-800 dark:bg-zinc-800"
               >
                 <p className="text-lg font-bold text-brand-green">{count}</p>
                 <p className="text-xs text-navy-500 dark:text-zinc-400 mt-1">{runTypeLabels[type] || type}</p>
@@ -179,7 +176,7 @@ export default function AiCompliancePage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-y border-navy-100 dark:bg-zinc-800/50 dark:border-zinc-800">
+              <thead className="bg-navy-50 border-y border-navy-100 dark:bg-zinc-800/50 dark:border-zinc-800">
                 <tr>
                   <th className="text-left px-4 py-3 text-navy-700 dark:text-zinc-300 font-semibold">Tipo</th>
                   <th className="text-left px-4 py-3 text-navy-700 dark:text-zinc-300 font-semibold">Modelo</th>
@@ -195,7 +192,7 @@ export default function AiCompliancePage() {
                 {aiRuns.map((run) => (
                   <tr
                     key={run.id}
-                    className="border-b border-navy-100 last:border-0 hover:bg-gray-50 transition dark:border-zinc-800 dark:hover:bg-zinc-800/50"
+                    className="border-b border-navy-100 last:border-0 hover:bg-navy-50 transition dark:border-zinc-800 dark:hover:bg-zinc-800/50"
                   >
                     <td className="px-4 py-3 text-navy-800 dark:text-zinc-200">
                       {runTypeLabels[run.run_type] || run.run_type}

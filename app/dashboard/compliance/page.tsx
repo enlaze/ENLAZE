@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase-browser";
 import Link from "next/link";
 import PageHeader from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
@@ -17,10 +17,7 @@ interface ComplianceCheck {
 }
 
 export default function ComplianceDashboardPage() {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = createClient();
 
   const [loading, setLoading] = useState(true);
   const [checks, setChecks] = useState<ComplianceCheck[]>([]);
@@ -163,7 +160,7 @@ export default function ComplianceDashboardPage() {
       <div className="space-y-3">
         {checks.map((check) => (
           <Link key={check.area} href={check.href} className="group block">
-            <div className="flex cursor-pointer items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-colors group-hover:border-brand-green/40 group-hover:bg-gray-50 group-hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:group-hover:border-brand-green/40 dark:group-hover:bg-zinc-800/60 dark:shadow-none">
+            <div className="flex cursor-pointer items-center gap-4 rounded-2xl border border-navy-100 bg-white p-5 shadow-sm transition-colors group-hover:border-brand-green/40 group-hover:bg-navy-50 group-hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:group-hover:border-brand-green/40 dark:group-hover:bg-zinc-800/60 dark:shadow-none">
               <div className="shrink-0 text-2xl">{check.icon}</div>
               <div className="min-w-0 flex-1">
                 <div className="mb-1 flex flex-wrap items-center gap-2">

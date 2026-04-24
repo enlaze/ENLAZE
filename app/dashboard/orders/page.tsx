@@ -92,7 +92,7 @@ export default function OrdersPage() {
 
   async function handleSave() {
     if (!userId) return;
-    if (!form.title.trim()) { alert("El título del pedido es obligatorio."); return; }
+    if (!form.title.trim()) { toast.error("El título del pedido es obligatorio."); return; }
     setSaving(true);
 
     const { error } = await supabase.from("orders").insert({
@@ -107,7 +107,7 @@ export default function OrdersPage() {
       status: "draft",
     });
 
-    if (error) alert("Error: " + error.message);
+    if (error) toast.error("Error", { description: error.message });
     else {
       setForm({ title: "", order_number: "", supplier_id: "", project_id: "", order_date: new Date().toISOString().split("T")[0], expected_date: "", notes: "" });
       setShowForm(false);

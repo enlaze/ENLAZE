@@ -3,7 +3,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase-browser";
 import Link from "next/link";
 import { eventLabels, eventIcons } from "@/lib/fiscal-events";
 import type { FiscalEventType } from "@/lib/fiscal-events";
@@ -38,10 +38,7 @@ function eur(n: number) {
 }
 
 export default function FiscalCompliancePage() {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = createClient();
 
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<FiscalSummary>({
@@ -169,7 +166,7 @@ export default function FiscalCompliancePage() {
           {checks.map((check, idx) => (
             <div
               key={idx}
-              className="flex items-center justify-between p-3 rounded-xl border border-navy-100 bg-gray-50 dark:border-zinc-800 dark:bg-zinc-800/50"
+              className="flex items-center justify-between p-3 rounded-xl border border-navy-100 bg-navy-50 dark:border-zinc-800 dark:bg-zinc-800/50"
             >
               <div className="flex items-center gap-3">
                 <div
@@ -223,7 +220,7 @@ export default function FiscalCompliancePage() {
               return (
                 <div
                   key={ev.id}
-                  className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 transition dark:hover:bg-zinc-800/50"
+                  className="flex items-center gap-3 p-2 rounded-xl hover:bg-navy-50 transition dark:hover:bg-zinc-800/50"
                 >
                   <span className="text-lg">{eventIcons[evType] || "📋"}</span>
                   <div className="flex-1 min-w-0">

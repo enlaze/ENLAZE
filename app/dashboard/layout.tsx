@@ -9,6 +9,7 @@ import { SearchCommandProvider, useSearchCommand } from "@/components/SearchComm
 import ShortcutsOverlay from "@/components/ShortcutsOverlay";
 import ThemeToggle from "@/components/ThemeToggle";
 import { SectorProvider, useSector } from "@/lib/sector-context";
+import { useToast } from "@/components/ui/toast";
 
 /* Canonical sidebar structure — single source of truth.
    Each item has a `section` (null = pinned at top, no header). */
@@ -98,6 +99,7 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const supabase = createClient();
+  const toast = useToast();
   const router = useRouter();
   const pathname = usePathname();
   const { visibleModules } = useSector();
@@ -126,10 +128,14 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: user.email }),
       });
-      alert("Email de verificación reenviado. Revisa tu bandeja de entrada.");
+      toast.success("Email de verificación reenviado", {
+        description: "Revisa tu bandeja de entrada.",
+      });
     } catch (error) {
       console.error("Error resending email:", error);
-      alert("Error al reenviar el email. Intenta de nuevo.");
+      toast.error("No se pudo reenviar el email", {
+        description: "Inténtalo de nuevo en unos segundos.",
+      });
     }
   };
 
@@ -285,7 +291,7 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
                           ${
                             active
                               ? "bg-brand-green/10 text-brand-green dark:bg-brand-green/15 dark:text-brand-green-light"
-                              : "text-navy-700 hover:bg-gray-100 hover:text-navy-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
+                              : "text-navy-700 hover:bg-navy-100 hover:text-navy-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
                           }
                         `}
                       >

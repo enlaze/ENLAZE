@@ -38,7 +38,7 @@ export function FormField({
 
 /* ─── Input ────────────────────────────────────────────────────────── */
 
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
+type InputProps = React.InputHTMLAttributes<HTMLInputElement>;
 
 export function Input(props: InputProps) {
   return <input {...props} className={`${inputBase} ${props.className || ""}`} />;
@@ -60,8 +60,7 @@ export function Select({ children, ...props }: SelectProps) {
 
 /* ─── Textarea ─────────────────────────────────────────────────────── */
 
-interface TextareaProps
-  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {}
+type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement>;
 
 export function Textarea(props: TextareaProps) {
   return (

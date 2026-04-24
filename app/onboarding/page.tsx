@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase-browser";
 import { useRouter } from "next/navigation";
 import {
   recordLegalAcceptance,
   recordMarketingConsent,
 } from "@/lib/activity-log";
+import { useToast } from "@/components/ui/toast";
 
 const sectors = [
   { id: "construccion", icon: "🏗️", name: "Construcción y Reformas", desc: "Reformas, obra nueva, rehabilitación, instalaciones" },
@@ -26,11 +27,9 @@ const TERMS_VERSION = "v1.0";
 const PRIVACY_VERSION = "v1.0";
 
 export default function OnboardingPage() {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = createClient();
   const router = useRouter();
+  const toast = useToast();
 
   const [step, setStep] = useState(1);
   const [selectedSector, setSelectedSector] = useState("");
@@ -67,7 +66,7 @@ export default function OnboardingPage() {
       .eq("id", userId);
 
     if (error) {
-      alert("Error: " + error.message);
+      toast.error("No se pudo guardar tu sector", { description: error.message });
       setSaving(false);
       return;
     }

@@ -110,7 +110,10 @@ export default function SuppliersPage() {
 
   async function handleSave() {
     if (!userId) return;
-    if (!form.name.trim()) { alert("El nombre es obligatorio."); return; }
+    if (!form.name.trim()) {
+      toast.error("El nombre es obligatorio");
+      return;
+    }
 
     const payload = {
       user_id: userId, name: form.name.trim(), nif: form.nif, email: form.email,

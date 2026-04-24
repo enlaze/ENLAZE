@@ -8,7 +8,7 @@ export default function Navbar() {
       
       <Logo />
 
-      <div className="hidden md:flex items-center gap-6 text-sm text-gray-600">
+      <div className="hidden md:flex items-center gap-6 text-sm text-navy-600">
         <a href="#beneficios">Beneficios</a>
         <a href="#precios">Precios</a>
         <a href="#como-funciona">Cómo funciona</a>

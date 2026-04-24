@@ -1,4 +1,4 @@
-/* eslint-disable react-hooks/set-state-in-effect */
+ 
 "use client";
 
 import { useEffect, useState } from "react";
@@ -12,6 +12,7 @@ import Badge from "@/components/ui/badge";
 import { FormField, Input, Select, SearchInput } from "@/components/ui/form-fields";
 import EmptyState from "@/components/ui/empty-state";
 import Loading from "@/components/ui/loading";
+import { useToast } from "@/components/ui/toast";
 import {
   getReceivedInvoices,
   createReceivedInvoice,
@@ -40,6 +41,7 @@ const emptyForm = {
 export default function ReceivedInvoicesPage() {
   const supabase = createClient();
   const searchParams = useSearchParams();
+  const toast = useToast();
   const supplierFilter = searchParams.get("supplier") || "";
 
   const [invoices, setInvoices] = useState<ReceivedInvoice[]>([]);
@@ -66,11 +68,11 @@ export default function ReceivedInvoicesPage() {
         supabase.from("suppliers").select("id, name, nif").eq("status", "active").order("name"),
       ]);
 
-      setInvoices(invoiceResult.data); // eslint-disable-line react-hooks/set-state-in-effect
-      setTotal(invoiceResult.count); // eslint-disable-line react-hooks/set-state-in-effect
-      setSummary(summaryResult); // eslint-disable-line react-hooks/set-state-in-effect
-      setSuppliers((suppliersResult.data || []) as Supplier[]); // eslint-disable-line react-hooks/set-state-in-effect
-      setLoading(false); // eslint-disable-line react-hooks/set-state-in-effect
+      setInvoices(invoiceResult.data);  
+      setTotal(invoiceResult.count);  
+      setSummary(summaryResult);  
+      setSuppliers((suppliersResult.data || []) as Supplier[]);  
+      setLoading(false);  
     }
     doLoad();
   }, [statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -132,11 +134,12 @@ export default function ReceivedInvoicesPage() {
     });
 
     if (!error) {
+      toast.success("Factura registrada");
       setForm(emptyForm);
       setShowForm(false);
       load();
     } else {
-      alert("Error al registrar la factura");
+      toast.error("Error al registrar la factura");
     }
     setSaving(false);
   }

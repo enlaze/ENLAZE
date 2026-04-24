@@ -3,11 +3,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase-browser";
 import Link from "next/link";
 import { useSector } from "@/lib/sector-context";
 import PageHeader from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
+import { useToast } from "@/components/ui/toast";
 
 const fallbackServiceTypes = [
   { value: "reforma", label: "Reforma integral" },
@@ -60,10 +61,8 @@ const labelSmCls = "block text-xs text-navy-500 dark:text-zinc-400 mb-1";
 
 export default function NewBudgetPage() {
   const router = useRouter();
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = createClient();
+  const toast = useToast();
   const { serviceTypes, budgetCategories, options } = useSector();
 
   const [saving, setSaving] = useState(false);
@@ -152,11 +151,11 @@ export default function NewBudgetPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!userId) {
-      alert("No se pudo identificar el usuario.");
+      toast.error("No se pudo identificar el usuario.");
       return;
     }
     if (!title || partidas.some((p) => !p.concept || p.unit_price <= 0)) {
-      alert("Completa el título y todas las partidas con precio válido.");
+      toast.error("Completa el título y todas las partidas con precio válido.");
       return;
     }
 
@@ -193,7 +192,7 @@ export default function NewBudgetPage() {
       .single();
 
     if (error || !budget) {
-      alert("Error al guardar: " + (error?.message || ""));
+      toast.error("Error al guardar", { description: error?.message || "Error desconocido" });
       setSaving(false);
       return;
     }
@@ -341,7 +340,7 @@ export default function NewBudgetPage() {
             {partidas.map((p, i) => (
               <div
                 key={i}
-                className="rounded-xl p-4 border border-navy-100 bg-gray-50 dark:border-zinc-800 dark:bg-zinc-800/50"
+                className="rounded-xl p-4 border border-navy-100 bg-navy-50 dark:border-zinc-800 dark:bg-zinc-800/50"
               >
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-medium text-navy-800 dark:text-zinc-200">Partida {i + 1}</span>
@@ -476,7 +475,7 @@ export default function NewBudgetPage() {
           </button>
           <Link
             href="/dashboard/budgets"
-            className="px-6 py-3 bg-white text-navy-700 border border-navy-200 rounded-xl hover:bg-gray-50 transition text-center dark:bg-zinc-900 dark:text-zinc-300 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            className="px-6 py-3 bg-white text-navy-700 border border-navy-200 rounded-xl hover:bg-navy-50 transition text-center dark:bg-zinc-900 dark:text-zinc-300 dark:border-zinc-700 dark:hover:bg-zinc-800"
           >
             Cancelar
           </Link>

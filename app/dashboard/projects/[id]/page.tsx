@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase-browser";
 import Link from "next/link";
 import { useSector } from "@/lib/sector-context";
 import AcceptanceTimeline from "@/components/AcceptanceTimeline";
@@ -252,10 +252,7 @@ type TabKey = "resumen" | "presupuestos" | "facturas" | "cobros" | "cambios" | "
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = createClient();
 
   const { label, serviceTypes, options } = useSector();
   const confirm = useConfirm();
@@ -381,8 +378,8 @@ export default function ProjectDetailPage() {
 
   async function handleSavePayment() {
     if (!userId || !project) return;
-    if (!paymentForm.amount || paymentForm.amount <= 0) { alert("El importe debe ser mayor que 0."); return; }
-    if (!paymentForm.concept.trim()) { alert("Indica un concepto."); return; }
+    if (!paymentForm.amount || paymentForm.amount <= 0) { toast.error("El importe debe ser mayor que 0."); return; }
+    if (!paymentForm.concept.trim()) { toast.error("Indica un concepto."); return; }
     setSavingPayment(true);
     const { error } = await supabase.from("payments").insert({
       user_id: userId, project_id: project.id, client_id: project.client_id,
@@ -390,7 +387,7 @@ export default function ProjectDetailPage() {
       payment_method: paymentForm.payment_method, concept: paymentForm.concept.trim(),
       notes: paymentForm.notes,
     });
-    if (error) alert("Error: " + error.message);
+    if (error) toast.error("Error", { description: error.message });
     else {
       setPaymentForm(emptyPaymentForm); setShowPaymentForm(false);
       const { data } = await supabase.from("payments").select("*")
@@ -421,7 +418,7 @@ export default function ProjectDetailPage() {
 
   async function handleSaveChange() {
     if (!userId || !project) return;
-    if (!changeForm.title.trim()) { alert("El título del cambio es obligatorio."); return; }
+    if (!changeForm.title.trim()) { toast.error("El título del cambio es obligatorio."); return; }
     setSavingChange(true);
 
     const payload = {
@@ -509,7 +506,7 @@ export default function ProjectDetailPage() {
 
   async function handleSaveMilestone() {
     if (!project) return;
-    if (!milestoneForm.title.trim()) { alert("El título del hito es obligatorio."); return; }
+    if (!milestoneForm.title.trim()) { toast.error("El título del hito es obligatorio."); return; }
     setSavingMilestone(true);
 
     const payload = {
@@ -576,13 +573,13 @@ export default function ProjectDetailPage() {
 
   async function handleAssignSupplier() {
     if (!userId || !project) return;
-    if (!supplierAssignForm.supplier_id) { alert("Selecciona un proveedor/subcontrata."); return; }
+    if (!supplierAssignForm.supplier_id) { toast.error("Selecciona un proveedor/subcontrata."); return; }
     setSavingSupplierAssign(true);
     const { error } = await supabase.from("project_suppliers").insert({
       project_id: project.id, supplier_id: supplierAssignForm.supplier_id,
       role: supplierAssignForm.role, notes: supplierAssignForm.notes, user_id: userId,
     });
-    if (error) alert("Error: " + error.message);
+    if (error) toast.error("Error", { description: error.message });
     else {
       setSupplierAssignForm({ supplier_id: "", role: "", notes: "" }); setShowSupplierAssign(false);
       const { data } = await supabase.from("project_suppliers")
@@ -626,7 +623,7 @@ export default function ProjectDetailPage() {
 
     // Load fiscal settings
     const { data: fiscal } = await supabase.from("fiscal_settings").select("*").eq("user_id", userId).single();
-    if (!fiscal) { alert("Configura tus ajustes fiscales antes de facturar (Ajustes → Fiscal)."); return; }
+    if (!fiscal) { toast.error("Configura tus ajustes fiscales antes de facturar (Ajustes → Fiscal)."); return; }
 
     // Load client info
     let clientData = client;
@@ -674,7 +671,7 @@ export default function ProjectDetailPage() {
       verifactu_registered: fiscal.verifactu_enabled,
     }).select("id").single();
 
-    if (error) { alert("Error: " + error.message); return; }
+    if (error) { toast.error("Error", { description: error.message }); return; }
 
     // Increment number
     await supabase.from("fiscal_settings").update({

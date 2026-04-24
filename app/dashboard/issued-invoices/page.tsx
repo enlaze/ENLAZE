@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase-browser";
 import Badge from "@/components/ui/badge";
-import Loading from "@/components/ui/loading";
+import { SkeletonKpi, SkeletonTable } from "@/components/ui/skeleton";
+import EmptyState from "@/components/ui/empty-state";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import DataTable, { type Column, type FilterDef } from "@/components/ui/data-table";
@@ -88,12 +89,12 @@ export default function IssuedInvoicesPage() {
 
   async function handleCreate() {
     if (!userId) return;
-    if (!form.client_id) { alert("Selecciona un cliente."); return; }
+    if (!form.client_id) { toast.error("Selecciona un cliente."); return; }
     setSaving(true);
 
     // Load fiscal settings for auto-numbering
     const { data: fiscal } = await supabase.from("fiscal_settings").select("*").eq("user_id", userId).single();
-    if (!fiscal) { alert("Configura tus ajustes fiscales antes de emitir facturas (Ajustes → Fiscal)."); setSaving(false); return; }
+    if (!fiscal) { toast.error("Configura tus ajustes fiscales antes de emitir facturas (Ajustes → Fiscal)."); setSaving(false); return; }
 
     const client = clients.find((c) => c.id === form.client_id);
     const series = fiscal.invoice_series || "F";
@@ -138,7 +139,7 @@ export default function IssuedInvoicesPage() {
       notes: form.notes,
     });
 
-    if (error) { alert("Error: " + error.message); setSaving(false); return; }
+    if (error) { toast.error("Error", { description: error.message }); setSaving(false); return; }
 
     // Increment next number
     await supabase.from("fiscal_settings").update({
@@ -307,7 +308,23 @@ export default function IssuedInvoicesPage() {
   const pendienteCobro = invoices.filter((i) => i.payment_status !== "paid" && i.status !== "cancelled").reduce((s, i) => s + Number(i.total || 0), 0);
   const vencidas = invoices.filter((i) => i.due_date && i.payment_status !== "paid" && i.status !== "cancelled" && new Date(i.due_date) < new Date()).length;
 
-  if (loading) return <Loading />;
+  if (loading) {
+    return (
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="space-y-2">
+          <div className="h-7 w-56 animate-pulse rounded bg-navy-100" />
+          <div className="h-4 w-72 max-w-full animate-pulse rounded bg-navy-100/70" />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <SkeletonKpi />
+          <SkeletonKpi />
+          <SkeletonKpi />
+          <SkeletonKpi />
+        </div>
+        <SkeletonTable rows={6} cols={5} />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -400,9 +417,18 @@ export default function IssuedInvoicesPage() {
 
       {/* Table */}
       {invoices.length === 0 ? (
-        <div className="p-8 text-center bg-white dark:bg-zinc-900 rounded-2xl border border-navy-100 dark:border-zinc-800">
-          <p className="text-navy-500 dark:text-zinc-400">No hay facturas emitidas.</p>
-        </div>
+        <EmptyState
+          title="Aún no has emitido facturas"
+          description="Crea tu primera factura emitida para empezar a facturar a tus clientes con Verifactu y Facturae."
+          action={
+            <button
+              onClick={() => setShowForm(true)}
+              className="px-5 py-2.5 bg-brand-green text-navy-900 dark:text-white rounded-xl font-semibold text-sm hover:opacity-90 transition"
+            >
+              + Nueva factura
+            </button>
+          }
+        />
       ) : (
         <DataTable<IssuedInvoice>
           columns={columns}

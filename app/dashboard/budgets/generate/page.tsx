@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase-browser";
 import Link from "next/link";
 import { useSector } from "@/lib/sector-context";
 import { normalizeSector } from "@/lib/sector-config";
@@ -69,10 +69,7 @@ const inputCls =
 const labelCls = "block text-xs font-medium text-navy-500 dark:text-zinc-400 mb-1";
 
 export default function GenerateBudgetPage() {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = createClient();
   const { serviceTypes, budgetCategories, sectorKey } = useSector();
   const normalizedSector = normalizeSector(sectorKey);
   const fallbackServiceTypes = fallbackServiceTypesBySector[normalizedSector] || fallbackServiceTypesBySector.construccion;
@@ -400,7 +397,7 @@ export default function GenerateBudgetPage() {
           <Card padding={false} className="mb-6 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-navy-100 dark:bg-zinc-800/50 dark:border-zinc-800">
+                <thead className="bg-navy-50 border-b border-navy-100 dark:bg-zinc-800/50 dark:border-zinc-800">
                   <tr>
                     <th className="text-left text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase px-4 py-3">#</th>
                     <th className="text-left text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase px-4 py-3">Concepto</th>
@@ -415,7 +412,7 @@ export default function GenerateBudgetPage() {
                   {result.partidas.map((p, i) => (
                     <tr
                       key={i}
-                      className="border-t border-navy-100 hover:bg-gray-50 transition dark:border-zinc-800 dark:hover:bg-zinc-800/50"
+                      className="border-t border-navy-100 hover:bg-navy-50 transition dark:border-zinc-800 dark:hover:bg-zinc-800/50"
                     >
                       <td className="px-4 py-3 text-sm text-navy-500 dark:text-zinc-400">{i + 1}</td>
                       <td className="px-4 py-3">
@@ -429,7 +426,7 @@ export default function GenerateBudgetPage() {
                             ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-900"
                             : p.category === "mano_obra" || p.category === "servicio" || p.category === "personal"
                             ? "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-900"
-                            : "bg-gray-100 text-gray-700 border-gray-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700")
+                            : "bg-navy-100 text-navy-700 border-navy-100 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700")
                         }>
                           {(() => {
                             const cats = budgetCategories();
@@ -474,19 +471,19 @@ export default function GenerateBudgetPage() {
             </button>
             <button
               onClick={() => generatePDF("client")}
-              className="px-4 py-3 bg-white text-navy-800 border border-navy-200 rounded-xl font-medium hover:bg-gray-50 transition text-sm dark:bg-zinc-900 dark:text-zinc-200 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              className="px-4 py-3 bg-white text-navy-800 border border-navy-200 rounded-xl font-medium hover:bg-navy-50 transition text-sm dark:bg-zinc-900 dark:text-zinc-200 dark:border-zinc-700 dark:hover:bg-zinc-800"
             >
               PDF Cliente
             </button>
             <button
               onClick={() => generatePDF("internal")}
-              className="px-4 py-3 bg-white text-navy-800 border border-navy-200 rounded-xl font-medium hover:bg-gray-50 transition text-sm dark:bg-zinc-900 dark:text-zinc-200 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              className="px-4 py-3 bg-white text-navy-800 border border-navy-200 rounded-xl font-medium hover:bg-navy-50 transition text-sm dark:bg-zinc-900 dark:text-zinc-200 dark:border-zinc-700 dark:hover:bg-zinc-800"
             >
               PDF Interno
             </button>
             <button
               onClick={() => { setResult(null); setDescription(""); }}
-              className="px-4 py-3 bg-white text-navy-700 border border-navy-200 rounded-xl font-medium hover:bg-gray-50 transition text-sm dark:bg-zinc-900 dark:text-zinc-300 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              className="px-4 py-3 bg-white text-navy-700 border border-navy-200 rounded-xl font-medium hover:bg-navy-50 transition text-sm dark:bg-zinc-900 dark:text-zinc-300 dark:border-zinc-700 dark:hover:bg-zinc-800"
             >
               Nuevo presupuesto
             </button>

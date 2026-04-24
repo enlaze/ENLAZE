@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# editor / scratch backups
+*.bak
+*.bak[0-9]
+*.orig
+*.swp

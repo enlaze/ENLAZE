@@ -4,7 +4,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase-browser";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 
@@ -56,7 +56,7 @@ export default function DeliveryNoteDetailPage() {
   const params = useParams();
   const router = useRouter();
   const noteId = params.id as string;
-  const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+  const supabase = createClient();
   const confirm = useConfirm();
   const toast = useToast();
 
@@ -162,7 +162,7 @@ export default function DeliveryNoteDetailPage() {
 
   async function handleSaveLine() {
     if (!note) return;
-    if (!lineForm.description.trim()) { alert("La descripción es obligatoria."); return; }
+    if (!lineForm.description.trim()) { toast.error("La descripción es obligatoria."); return; }
     setSavingLine(true);
 
     const lineTotal = lineForm.quantity_received * lineForm.unit_price;

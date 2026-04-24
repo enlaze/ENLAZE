@@ -41,6 +41,7 @@ export default function SplashScreen() {
     }
 
     if (alreadyShown) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: skip splash on subsequent navigations within the same session
       setDone(true);
       return;
     }

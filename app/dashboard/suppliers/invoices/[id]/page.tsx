@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FormField, Input, Select } from "@/components/ui/form-fields";
 import Loading from "@/components/ui/loading";
+import { useToast } from "@/components/ui/toast";
 import {
   getReceivedInvoice,
   updateReceivedInvoice,
@@ -24,6 +25,7 @@ export default function ReceivedInvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const supabase = createClient();
+  const toast = useToast();
 
   const [invoice, setInvoice] = useState<ReceivedInvoice | null>(null);
   const [payments, setPayments] = useState<SupplierPayment[]>([]);
@@ -40,11 +42,11 @@ export default function ReceivedInvoiceDetailPage() {
     async function doLoad() {
       const { data: inv } = await getReceivedInvoice(supabase, id);
       if (!inv) { router.push("/dashboard/suppliers/invoices"); return; }
-      setInvoice(inv); // eslint-disable-line react-hooks/set-state-in-effect
+      setInvoice(inv);  
 
       const pays = await getSupplierPayments(supabase, id);
-      setPayments(pays); // eslint-disable-line react-hooks/set-state-in-effect
-      setLoading(false); // eslint-disable-line react-hooks/set-state-in-effect
+      setPayments(pays);  
+      setLoading(false);  
     }
     doLoad();
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -59,7 +61,10 @@ export default function ReceivedInvoiceDetailPage() {
     e.preventDefault();
     if (!invoice) return;
     const amount = parseFloat(paymentAmount);
-    if (!amount || amount <= 0) { alert("Introduce un importe válido"); return; }
+    if (!amount || amount <= 0) {
+      toast.error("Introduce un importe válido");
+      return;
+    }
 
     setRegistering(true);
     const result = await registerSupplierPayment(supabase, {
@@ -79,8 +84,11 @@ export default function ReceivedInvoiceDetailPage() {
       setShowPaymentForm(false);
       setPaymentAmount("");
       setPaymentRef("");
+      toast.success("Pago registrado");
     } else {
-      alert(result.error || "Error al registrar el pago");
+      toast.error("Error al registrar el pago", {
+        description: result.error || undefined,
+      });
     }
     setRegistering(false);
   }

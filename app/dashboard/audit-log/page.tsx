@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase-browser";
 import PageHeader from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { FormField, Select, SearchInput } from "@/components/ui/form-fields";
@@ -52,10 +52,7 @@ const entityVariant: Record<
 };
 
 export default function AuditLogPage() {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = createClient();
 
   const [activities, setActivities] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);

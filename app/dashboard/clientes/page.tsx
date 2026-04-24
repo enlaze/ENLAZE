@@ -31,12 +31,12 @@ export default function ClientsPage() {
   const confirm = useConfirm();
   const toast = useToast();
 
-  useEffect(() => { fetchClients(); }, []);
-
   const fetchClients = async () => {
     const { data } = await supabase.from("clients").select("*").order("created_at", { ascending: false });
     if (data) setClients(data);
   };
+
+  useEffect(() => { fetchClients(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
