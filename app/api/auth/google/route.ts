@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const RAW_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_ID = RAW_GOOGLE_CLIENT_ID ? RAW_GOOGLE_CLIENT_ID.replace(/^["']|["']$/g, '').trim() : undefined;
 
 const APP_BASE_URL =
   process.env.NEXT_PUBLIC_APP_URL ||
@@ -32,10 +33,14 @@ export async function GET(req: NextRequest) {
   }
 
   if (!GOOGLE_CLIENT_ID) {
+    console.error("[Google OAuth Init] Missing GOOGLE_CLIENT_ID in environment variables");
     return NextResponse.json({ error: "Missing GOOGLE_CLIENT_ID" }, { status: 500 });
   }
 
   const moduleToConnect = req.nextUrl.searchParams.get("module") || "gmail";
+  console.log(`\n[Google OAuth Init] Starting OAuth flow for module: ${moduleToConnect}`);
+  console.log(`[Google OAuth Init] GOOGLE_CLIENT_ID present: yes (length: ${GOOGLE_CLIENT_ID.length})`);
+  console.log(`[Google OAuth Init] Client ID starts with: ${GOOGLE_CLIENT_ID.substring(0, 15)}...`);
   
   // Scopes based on module
   let scopes = ["https://www.googleapis.com/auth/userinfo.email"];
@@ -69,5 +74,9 @@ export async function GET(req: NextRequest) {
   authUrl.searchParams.append("prompt", "consent"); // Force consent to ensure refresh_token is returned
   authUrl.searchParams.append("state", stateString);
 
-  return NextResponse.redirect(authUrl.toString());
+  const finalUrl = authUrl.toString();
+  console.log(`[Google OAuth Init] Scopes used: ${scopes.join(" ")}`);
+  console.log(`[Google OAuth Init] Final Auth URL constructed: ${finalUrl}`);
+
+  return NextResponse.redirect(finalUrl);
 }
