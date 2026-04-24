@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAgentRequest, isErrorResponse } from "../../_lib/auth";
+import { getValidAccessToken } from "@/lib/services/google-api";
 async function syncModuleState(
   supabase: any,
   userId: string,
@@ -91,40 +92,90 @@ export async function GET(req: NextRequest) {
     }
 
     // ── Gmail IS connected ──
-    // TODO: Replace with real Gmail API calls when OAuth is configured.
-    // The structure below is the production contract that the n8n workflow expects.
-    // When implementing, categorize emails by:
-    //   - supplier_messages: from known suppliers (match against user's supplier list)
-    //   - customer_messages: from customers or containing order/booking keywords
-    //   - invoice_messages: containing "factura", "invoice", "pago" keywords
-    //   - priority_threads: starred or from important contacts
-    //   - awaiting_reply: sent by user > 48h ago with no response
-await syncModuleState(supabase, userId, "gmail", {
-  connected: true,
-  status: "active",
-  error_message: null,
-});
-await syncModuleState(supabase, userId, "gmail", {
-  connected: true,
-  status: "active",
-  error_message: null,
-});
+    const accessToken = await getValidAccessToken(supabase, userId, "gmail");
+    if (!accessToken) {
+      return NextResponse.json({
+        ok: false,
+        connected: false,
+        error: "Google token missing or expired.",
+      }, { status: 401 });
+    }
 
-return NextResponse.json({
-  ok: true,
-  connected: true,
-  unread_count: 0,
-  priority_threads: [],
-  awaiting_reply: [],
-  supplier_messages: [],
-  customer_messages: [],
-  invoice_messages: [],
-  suggested_replies: [],
-  action_items: [],
-  summary:
-    "Gmail conectado — sin datos nuevos. La integración completa con Gmail API se activará cuando configures credenciales.",
-  last_sync_at: new Date().toISOString(),
-});
+    // Fetch inbox messages
+    const gmailRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages?q=is:unread in:inbox&maxResults=20", {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+
+    if (!gmailRes.ok) {
+      throw new Error(`Gmail API error: ${gmailRes.statusText}`);
+    }
+
+    const { messages = [], resultSizeEstimate } = await gmailRes.json();
+    const unread_count = resultSizeEstimate || messages.length;
+
+    let priority_threads = [];
+    let supplier_messages = [];
+    let customer_messages = [];
+    let invoice_messages = [];
+    let otros = [];
+
+    // Fetch details for up to 5 messages to avoid rate limits/slow responses
+    const messagesToFetch = messages.slice(0, 5);
+    
+    for (const msg of messagesToFetch) {
+      const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (msgRes.ok) {
+        const msgData = await msgRes.json();
+        const headers = msgData.payload?.headers || [];
+        const subject = headers.find((h: any) => h.name === "Subject")?.value || "Sin Asunto";
+        const from = headers.find((h: any) => h.name === "From")?.value || "Desconocido";
+        const snippet = msgData.snippet || "";
+
+        const emailItem = { id: msg.id, subject, from, snippet };
+        const textToAnalyze = `${subject} ${snippet} ${from}`.toLowerCase();
+
+        if (textToAnalyze.includes("urgente") || textToAnalyze.includes("urgent")) {
+          priority_threads.push(emailItem);
+        } else if (textToAnalyze.includes("factura") || textToAnalyze.includes("invoice") || textToAnalyze.includes("pago")) {
+          invoice_messages.push(emailItem);
+        } else if (textToAnalyze.includes("pedido") || textToAnalyze.includes("order")) {
+          customer_messages.push(emailItem);
+        } else if (textToAnalyze.includes("proveedor") || textToAnalyze.includes("supplier") || textToAnalyze.includes("albarán")) {
+          supplier_messages.push(emailItem);
+        } else {
+          otros.push(emailItem);
+        }
+      }
+    }
+
+    let summaryText = `Tienes ${unread_count} correos sin leer. `;
+    if (priority_threads.length > 0) summaryText += `¡Hay ${priority_threads.length} correos urgentes! `;
+    if (invoice_messages.length > 0) summaryText += `Tienes ${invoice_messages.length} facturas pendientes de revisar. `;
+    if (customer_messages.length > 0) summaryText += `Han llegado ${customer_messages.length} mensajes sobre pedidos.`;
+
+    await syncModuleState(supabase, userId, "gmail", {
+      connected: true,
+      status: "active",
+      error_message: null,
+    });
+
+    return NextResponse.json({
+      ok: true,
+      connected: true,
+      unread_count,
+      priority_threads,
+      awaiting_reply: [], // Heuristics for awaiting_reply can be added later
+      supplier_messages,
+      customer_messages,
+      invoice_messages,
+      otros,
+      suggested_replies: [],
+      action_items: [],
+      summary: summaryText.trim() || "Tienes tu bandeja al día, sin correos importantes detectados.",
+      last_sync_at: new Date().toISOString(),
+    });
 
 } catch (err: unknown) {
   const message = err instanceof Error ? err.message : String(err);

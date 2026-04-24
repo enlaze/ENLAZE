@@ -50,6 +50,7 @@ export async function GET(req: NextRequest) {
     scopes.push("https://www.googleapis.com/auth/calendar.readonly");
   } else if (moduleToConnect === "google_sheets") {
     scopes.push("https://www.googleapis.com/auth/spreadsheets.readonly");
+    scopes.push("https://www.googleapis.com/auth/drive.readonly"); // Necesario para buscar la hoja por defecto
   } else if (moduleToConnect === "google_business") {
     scopes.push("https://www.googleapis.com/auth/business.manage");
   } else if (moduleToConnect === "all") {
@@ -57,7 +58,8 @@ export async function GET(req: NextRequest) {
       "https://www.googleapis.com/auth/userinfo.email",
       "https://www.googleapis.com/auth/gmail.readonly",
       "https://www.googleapis.com/auth/calendar.readonly",
-      "https://www.googleapis.com/auth/spreadsheets.readonly"
+      "https://www.googleapis.com/auth/spreadsheets.readonly",
+      "https://www.googleapis.com/auth/drive.readonly"
     ];
   }
 
