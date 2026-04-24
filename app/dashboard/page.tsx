@@ -397,6 +397,9 @@ export default function DashboardHome() {
       {/* ── Onboarding checklist (auto-hides when all steps done) ── */}
       <OnboardingChecklist />
 
+      {/* ── Daily Briefing ── */}
+      <DailyBriefingCard />
+
       {/* ── 2. KPI Cards ─────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard icon={<IcoUsers size={20} />} label="Clientes activos" value={String(kpi.activeClients)} trend={kpi.clientsTrend} />
@@ -721,5 +724,148 @@ function QuickLink({ icon, label, href }: { icon: React.ReactNode; label: string
       </span>
       <span className="text-[13.5px] font-medium text-navy-700 dark:text-zinc-300 group-hover:text-navy-900 dark:text-white">{label}</span>
     </Link>
+  );
+}
+
+function DailyBriefingCard() {
+  const supabase = createClient();
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<any>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    async function fetchBriefing() {
+      try {
+        setLoading(true);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setError(true);
+          return;
+        }
+
+        const res = await fetch(`/api/agent/daily-briefing?user_id=${user.id}`);
+        if (!res.ok) throw new Error("Briefing request failed");
+        
+        const json = await res.json();
+        setData(json);
+      } catch (err) {
+        console.error("Failed to load daily briefing:", err);
+        setError(true);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchBriefing();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="rounded-2xl border border-navy-100 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 animate-pulse">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="h-6 w-6 rounded-full bg-navy-100 dark:bg-zinc-800" />
+          <div className="h-5 w-32 rounded bg-navy-100 dark:bg-zinc-800" />
+        </div>
+        <div className="space-y-2 mb-6">
+          <div className="h-4 w-full rounded bg-navy-50 dark:bg-zinc-800" />
+          <div className="h-4 w-3/4 rounded bg-navy-50 dark:bg-zinc-800" />
+        </div>
+        <div className="flex gap-3">
+          <div className="h-8 w-24 rounded-lg bg-navy-100 dark:bg-zinc-800" />
+          <div className="h-8 w-24 rounded-lg bg-navy-100 dark:bg-zinc-800" />
+          <div className="h-8 w-24 rounded-lg bg-navy-100 dark:bg-zinc-800" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-2xl border border-red-100 bg-red-50 p-6 dark:border-red-900/30 dark:bg-red-900/10">
+        <p className="text-[14px] font-medium text-red-800 dark:text-red-400">
+          No se ha podido cargar tu resumen diario.
+        </p>
+      </div>
+    );
+  }
+
+  const { summary, modules, module_status } = data;
+  const isAllDisconnected = !modules || (!modules.gmail?.connected && !modules.calendar?.connected && !modules.sheets?.connected);
+
+  if (isAllDisconnected) {
+    return (
+      <div className="rounded-2xl border border-brand-green/20 bg-brand-green/5 p-6 shadow-sm dark:border-brand-green/10 dark:bg-brand-green/5 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div>
+          <h2 className="text-[16px] font-semibold text-navy-900 dark:text-white flex items-center gap-2 mb-1">
+            <span className="text-xl">✨</span> Resumen de Inteligencia
+          </h2>
+          <p className="text-[13.5px] text-navy-600 dark:text-zinc-400">
+            Aún no tienes el agente conectado. Integra tu correo, calendario y datos para ver tu resumen de hoy.
+          </p>
+        </div>
+        <Link 
+          href="/dashboard/settings/integrations" 
+          className="shrink-0 px-4 py-2 rounded-lg bg-brand-green text-white hover:bg-brand-green/90 text-sm font-medium transition-colors"
+        >
+          Conectar herramientas
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <section className="relative overflow-hidden rounded-2xl border border-brand-green/20 bg-gradient-to-br from-white to-brand-green/5 p-6 shadow-sm dark:border-brand-green/20 dark:from-zinc-900 dark:to-brand-green/5">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-xl">✨</span>
+        <h2 className="text-[16px] font-semibold text-navy-900 dark:text-white">Resumen de hoy</h2>
+      </div>
+      
+      <p className="text-[15px] leading-relaxed text-navy-800 dark:text-zinc-300 mb-6">
+        {summary}
+      </p>
+
+      <div className="flex flex-wrap gap-3">
+        {/* Gmail Pill */}
+        <ModuleBadge 
+          name="Gmail" 
+          status={module_status?.gmail} 
+          connected={modules?.gmail?.connected}
+          value={modules?.gmail?.unread_count !== undefined ? `${modules.gmail.unread_count} sin leer` : "No conectado"} 
+        />
+        {/* Calendar Pill */}
+        <ModuleBadge 
+          name="Calendar" 
+          status={module_status?.calendar} 
+          connected={modules?.calendar?.connected}
+          value={modules?.calendar?.today_events?.length !== undefined ? `${modules.calendar.today_events.length} eventos` : "No conectado"} 
+        />
+        {/* Sheets Pill */}
+        <ModuleBadge 
+          name="Sheets" 
+          status={module_status?.sheets} 
+          connected={modules?.sheets?.connected}
+          value={modules?.sheets?.spreadsheet_name ? modules.sheets.spreadsheet_name : "No conectado"} 
+        />
+      </div>
+    </section>
+  );
+}
+
+function ModuleBadge({ name, status, connected, value }: { name: string, status?: string, connected?: boolean, value: string }) {
+  if (!connected) return null;
+
+  const isError = status === "error";
+  const bgClass = isError ? "bg-red-50 dark:bg-red-900/10" : "bg-white dark:bg-zinc-800/50";
+  const borderClass = isError ? "border-red-200 dark:border-red-800/50" : "border-navy-100 dark:border-zinc-700/50";
+  const dotClass = isError ? "bg-red-500" : "bg-brand-green";
+  const textClass = isError ? "text-red-700 dark:text-red-400" : "text-navy-700 dark:text-zinc-300";
+
+  return (
+    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${bgClass} ${borderClass} shadow-sm`}>
+      <span className={`h-2 w-2 rounded-full ${dotClass}`} />
+      <span className={`text-[12px] font-medium ${textClass}`}>
+        {name}: <span className="opacity-80 font-normal">{value}</span>
+      </span>
+    </div>
   );
 }
