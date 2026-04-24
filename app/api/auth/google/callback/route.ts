@@ -5,7 +5,12 @@ import { encryptToken } from "@/lib/crypto";
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const GOOGLE_REDIRECT_URI = `${process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000"}/api/auth/google/callback`;
+
+const APP_BASE_URL =
+  process.env.NEXT_PUBLIC_APP_URL ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+
+const GOOGLE_REDIRECT_URI = `${APP_BASE_URL}/api/auth/google/callback`;
 
 export async function GET(req: NextRequest) {
   try {
@@ -33,6 +38,9 @@ export async function GET(req: NextRequest) {
     if (!userId || !module) {
       return NextResponse.json({ error: "Invalid state contents" }, { status: 400 });
     }
+
+    console.log(`[Google OAuth] Starting callback for User: ${userId}, Module: ${module}`);
+    console.log(`[Google OAuth] Redirect URI used: ${GOOGLE_REDIRECT_URI}`);
 
     const cookieStore = await cookies();
     const supabase = createServerClient(
@@ -71,8 +79,10 @@ export async function GET(req: NextRequest) {
     });
 
     const tokenData = await tokenResponse.json();
+    console.log(`[Google OAuth] Token exchange result OK: ${tokenResponse.ok}`);
+
     if (!tokenResponse.ok) {
-      console.error("Token exchange failed:", tokenData);
+      console.error("[Google OAuth] Token exchange failed:", tokenData);
       return NextResponse.redirect(new URL(`/dashboard/settings/integrations?integration_error=token_exchange_failed`, req.url));
     }
 
@@ -84,6 +94,7 @@ export async function GET(req: NextRequest) {
     });
     const userInfo = await userInfoResponse.json();
     const email = userInfo.email;
+    console.log(`[Google OAuth] Fetched UserInfo, Email: ${email}`);
 
     // Encrypt tokens
     const encryptedAccess = encryptToken(access_token);
@@ -123,27 +134,36 @@ export async function GET(req: NextRequest) {
       module: module,
       connected: true,
       status: "connected",
-      credentials_ref: credentialsObj,
+      credentials_ref: JSON.stringify(credentialsObj),
       error_message: null,
       updated_at: new Date().toISOString()
     };
 
     if (existingConnection) {
+      console.log(`[Google OAuth] Updating existing connection for ${module}`);
       const { error: updateError } = await supabase
         .from("agent_connections")
         .update(payload)
         .eq("user_id", userId)
         .eq("module", module);
         
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error(`[Google OAuth] Update error:`, updateError);
+        throw updateError;
+      }
     } else {
+      console.log(`[Google OAuth] Inserting new connection for ${module}`);
       const { error: insertError } = await supabase
         .from("agent_connections")
         .insert(payload);
         
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error(`[Google OAuth] Insert error:`, insertError);
+        throw insertError;
+      }
     }
 
+    console.log(`[Google OAuth] Successfully saved connection for ${module}`);
     return NextResponse.redirect(new URL("/dashboard/settings/integrations?integration_success=true", req.url));
   } catch (err: any) {
     console.error("Google OAuth Callback Error:", err);
