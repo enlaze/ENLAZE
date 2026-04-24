@@ -813,39 +813,118 @@ function DailyBriefingCard() {
     );
   }
 
+  // --- Siguiente mejor acción heurística ---
+  let nextAction = null;
+  if (modules?.sheets && modules.sheets.connected && !modules.sheets.spreadsheet_id) {
+    nextAction = {
+      message: "💡 Configura una hoja para que el agente pueda analizar ventas o stock.",
+      actionLabel: "Configurar hoja",
+      actionUrl: "/dashboard/settings/integrations",
+      isInternal: true
+    };
+  } else if (modules?.gmail && modules.gmail.connected && modules.gmail.priority_threads?.length > 0) {
+    nextAction = {
+      message: `🚨 Tienes ${modules.gmail.priority_threads.length} correos urgentes sin leer.`,
+      actionLabel: "Abrir Gmail",
+      actionUrl: "https://mail.google.com/mail/u/0/#inbox",
+      isInternal: false
+    };
+  } else if (modules?.calendar && modules.calendar.connected && (modules.calendar.daily_agenda?.free_hours || 0) >= 2) {
+    nextAction = {
+      message: `⏱️ Hoy tienes ${modules.calendar.daily_agenda.free_hours} horas libres.`,
+      actionLabel: "Ver agenda",
+      actionUrl: "https://calendar.google.com",
+      isInternal: false
+    };
+  } else {
+    nextAction = {
+      message: "✅ El día está bajo control. ¡Sigue así!",
+      actionLabel: null,
+      actionUrl: null,
+      isInternal: false
+    };
+  }
+
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-brand-green/20 bg-gradient-to-br from-white to-brand-green/5 p-6 shadow-sm dark:border-brand-green/20 dark:from-zinc-900 dark:to-brand-green/5">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-xl">✨</span>
-        <h2 className="text-[16px] font-semibold text-navy-900 dark:text-white">Resumen de hoy</h2>
+    <section className="relative overflow-hidden rounded-2xl border border-brand-green/20 bg-gradient-to-br from-white to-brand-green/5 shadow-sm dark:border-brand-green/20 dark:from-zinc-900 dark:to-brand-green/5">
+      <div className="p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xl">✨</span>
+          <h2 className="text-[16px] font-semibold text-navy-900 dark:text-white">Resumen de hoy</h2>
+        </div>
+        
+        <p className="text-[15px] leading-relaxed text-navy-800 dark:text-zinc-300 mb-6">
+          {summary}
+        </p>
+
+        {/* --- Badges Estáticos --- */}
+        <div className="flex flex-wrap gap-3 mb-6">
+          <ModuleBadge 
+            name="Gmail" 
+            status={module_status?.gmail} 
+            connected={modules?.gmail?.connected}
+            value={modules?.gmail?.unread_count !== undefined ? `${modules.gmail.unread_count} sin leer` : "No conectado"} 
+          />
+          <ModuleBadge 
+            name="Calendar" 
+            status={module_status?.calendar} 
+            connected={modules?.calendar?.connected}
+            value={modules?.calendar?.today_events?.length !== undefined ? `${modules.calendar.today_events.length} eventos` : "No conectado"} 
+          />
+          <ModuleBadge 
+            name="Sheets" 
+            status={module_status?.sheets} 
+            connected={modules?.sheets?.connected}
+            value={modules?.sheets?.spreadsheet_name ? modules.sheets.spreadsheet_name : "No conectado"} 
+          />
+        </div>
+
+        {/* --- Siguiente mejor acción --- */}
+        <div className="bg-white/60 dark:bg-zinc-800/60 rounded-xl p-4 border border-navy-100 dark:border-zinc-700/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <p className="text-[14px] font-medium text-navy-900 dark:text-white">
+            {nextAction.message}
+          </p>
+          {nextAction.actionLabel && (
+            nextAction.isInternal ? (
+              <Link href={nextAction.actionUrl} className="shrink-0 px-4 py-1.5 text-sm font-medium bg-brand-green text-white rounded-lg hover:bg-brand-green/90 transition-colors">
+                {nextAction.actionLabel}
+              </Link>
+            ) : (
+              <a href={nextAction.actionUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 px-4 py-1.5 text-sm font-medium bg-brand-green text-white rounded-lg hover:bg-brand-green/90 transition-colors">
+                {nextAction.actionLabel}
+              </a>
+            )
+          )}
+        </div>
       </div>
       
-      <p className="text-[15px] leading-relaxed text-navy-800 dark:text-zinc-300 mb-6">
-        {summary}
-      </p>
-
-      <div className="flex flex-wrap gap-3">
-        {/* Gmail Pill */}
-        <ModuleBadge 
-          name="Gmail" 
-          status={module_status?.gmail} 
-          connected={modules?.gmail?.connected}
-          value={modules?.gmail?.unread_count !== undefined ? `${modules.gmail.unread_count} sin leer` : "No conectado"} 
-        />
-        {/* Calendar Pill */}
-        <ModuleBadge 
-          name="Calendar" 
-          status={module_status?.calendar} 
-          connected={modules?.calendar?.connected}
-          value={modules?.calendar?.today_events?.length !== undefined ? `${modules.calendar.today_events.length} eventos` : "No conectado"} 
-        />
-        {/* Sheets Pill */}
-        <ModuleBadge 
-          name="Sheets" 
-          status={module_status?.sheets} 
-          connected={modules?.sheets?.connected}
-          value={modules?.sheets?.spreadsheet_name ? modules.sheets.spreadsheet_name : "No conectado"} 
-        />
+      {/* --- Acciones rápidas adicionales --- */}
+      <div className="bg-navy-50/50 dark:bg-zinc-800/30 px-6 py-4 border-t border-brand-green/10 flex flex-wrap items-center gap-3">
+        <span className="text-[12px] font-semibold uppercase tracking-wider text-navy-500 dark:text-zinc-500 mr-2">
+          Enlaces rápidos:
+        </span>
+        
+        {modules?.gmail?.connected && (
+          <a href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noopener noreferrer" className="text-[13px] font-medium text-navy-700 hover:text-brand-green dark:text-zinc-300 transition-colors">
+            Abrir Gmail
+          </a>
+        )}
+        
+        {modules?.calendar?.connected && (
+          <a href="https://calendar.google.com" target="_blank" rel="noopener noreferrer" className="text-[13px] font-medium text-navy-700 hover:text-brand-green dark:text-zinc-300 transition-colors">
+            Ver Agenda
+          </a>
+        )}
+        
+        {modules?.sheets?.connected && modules.sheets.spreadsheet_id ? (
+          <a href={`https://docs.google.com/spreadsheets/d/${modules.sheets.spreadsheet_id}`} target="_blank" rel="noopener noreferrer" className="text-[13px] font-medium text-navy-700 hover:text-brand-green dark:text-zinc-300 transition-colors">
+            Abrir Hoja
+          </a>
+        ) : (
+          <Link href="/dashboard/settings/integrations" className="text-[13px] font-medium text-navy-700 hover:text-brand-green dark:text-zinc-300 transition-colors">
+            Integraciones
+          </Link>
+        )}
       </div>
     </section>
   );
