@@ -1,0 +1,399 @@
+{
+  "name": "ENLAZE — Comercio Local v6.2 Retail",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "e3ac808f-8397-4c8c-8364-b90c17634f26",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 6
+            }
+          ]
+        }
+      },
+      "id": "c6fab4a3-9151-4c33-a3a2-62d03f9dbbef",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://enlaze.vercel.app/api/agent/users?sector=comercio_local",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "017922f3-c58c-4add-b789-4f91cf15a19f",
+      "name": "List Active Users",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        272,
+        96
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ENLAZE_API_CREDENTIAL",
+          "name": "ENLAZE Agent API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.count }}",
+              "operation": "larger"
+            }
+          ]
+        }
+      },
+      "id": "e28adfc6-da78-47bf-9930-55249bde7e65",
+      "name": "Check Users Exist",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        480,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const feeds = [\n  { url: 'https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/economia/portada', name: 'El País', type: 'news' },\n  { url: 'https://www.europapress.es/rss/rss.aspx?ch=136', name: 'Europa Press', type: 'news' },\n  { url: 'https://cincodias.elpais.com/rss/feed.html?feedId=17066', name: 'Cinco Días', type: 'news' },\n  { url: 'https://www.boe.es/rss/canal.php?c=ayudas', name: 'BOE Ayudas', type: 'boe' },\n  { url: 'https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/25171?nult=3', name: 'INE IPC', type: 'ine' },\n  { url: 'https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/24086?nult=3', name: 'INE Retail Sales', type: 'ine' },\n  { url: 'https://news.google.com/rss/search?q=comercio+local+OR+retail+OR+pyme+OR+consumo+OR+ventas+minorista+site%3Aexpansion.com+OR+site%3Acincodias.elpais.com+OR+site%3Aeleconomista.es&hl=es&gl=ES&ceid=ES:es', name: 'Google News Retail', type: 'retail' },\n  { url: 'https://www.mapa.gob.es/es/prensa/ultimas-noticias/default.aspx?rss=true', name: 'MAPA Alimentación', type: 'prices' },\n  { url: 'https://www.facua.org/es/rss.php', name: 'FACUA Consumo', type: 'prices' },\n  { url: 'https://news.google.com/rss/search?q=precios+proveedor+OR+coste+materias+primas+OR+mayorista+comercio+OR+inflacion+alimentacion+OR+costes+logistica&hl=es&gl=ES&ceid=ES:es', name: 'Google News Precios', type: 'prices' },\n  { url: 'https://news.google.com/rss/search?q=apertura+tienda+OR+cierre+comercio+OR+nueva+franquicia+OR+competencia+retail+OR+centro+comercial+OR+promocion+descuento+comercio&hl=es&gl=ES&ceid=ES:es', name: 'Google News Competencia', type: 'competition' },\n  { url: 'https://news.google.com/rss/search?q=oferta+empleo+comercio+OR+hosteleria+OR+tendencia+consumo+OR+habitos+compra+OR+ecommerce+tienda+fisica&hl=es&gl=ES&ceid=ES:es', name: 'Google News Tendencias', type: 'trends' }\n];\n\nconst results = await Promise.all(feeds.map(async (feed) => {\n  try {\n    const resp = await fetch(feed.url, { signal: AbortSignal.timeout(15000) });\n    return { ...feed, text: await resp.text(), ok: true };\n  } catch (e) {\n    console.log(`[Fetch] ${feed.name}: ${e.message}`);\n    return { ...feed, text: '', ok: false, error: e.message };\n  }\n}));\n\nlet energyHtml = '';\ntry {\n  const eresp = await fetch('https://www.esios.ree.es/es/pvpc', { signal: AbortSignal.timeout(15000) });\n  energyHtml = await eresp.text();\n} catch (e) { console.log(`[Energy] ESIOS: ${e.message}`); }\n\nconst byType = (t) => results.filter(r => r.type === t);\nconst textOf = (name) => results.find(r => r.name === name)?.text || '';\n\nreturn [{ json: {\n  newsXml: byType('news').map(r => r.text).join('\\n'),\n  boeXml: textOf('BOE Ayudas'),\n  retailNewsXml: textOf('Google News Retail'),\n  ineIpc: textOf('INE IPC'),\n  ineRetailSales: textOf('INE Retail Sales'),\n  energyHtml,\n  mapaXml: textOf('MAPA Alimentación'),\n  facuaXml: textOf('FACUA Consumo'),\n  priceNewsXml: textOf('Google News Precios'),\n  competitionXml: textOf('Google News Competencia'),\n  trendsXml: textOf('Google News Tendencias'),\n  feedStatus: results.map(r => ({ name: r.name, type: r.type, ok: r.ok, error: r.error || null }))\n} }];"
+      },
+      "id": "dad94074-4fb8-4126-bdb0-aad9896ae211",
+      "name": "Fetch Shared Sources",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        704,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const usersResp = $('List Active Users').first().json;\nif (!usersResp.ok || !Array.isArray(usersResp.users) || usersResp.users.length === 0) {\n  return [{ json: { _skip: true, reason: 'No users after filter', count: 0 } }];\n}\nreturn usersResp.users.map(u => ({\n  json: {\n    user_id: u.user_id || u.id,\n    business_name: u.business_name || '',\n    business_type: u.business_type || '',\n    city: u.city || '',\n    sector: u.sector || 'comercio_local'\n  }\n}));"
+      },
+      "id": "550a078e-d8ab-4e7c-aea1-bcec6058745e",
+      "name": "Split Users",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://enlaze.vercel.app/api/agent/config",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "user_id",
+              "value": "={{$json.user_id}}"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "563a05a1-3167-43ff-9580-0107969b5408",
+      "name": "Get User Config",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1152,
+        96
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ENLAZE_API_CREDENTIAL",
+          "name": "ENLAZE Agent API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "_auth_key",
+              "value": "={{ $vars.ENLAZE_API_KEY || $env.ENLAZE_API_KEY || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "_auth_base_url",
+              "value": "={{ $vars.ENLAZE_BASE_URL || 'https://enlaze.vercel.app' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "e1036129-42ec-46ad-af1d-d6ef1252b127",
+      "name": "Inject Auth",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        1360,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const shared = $('Fetch Shared Sources').first().json;\nconst items = $input.all();\nconst outputs = [];\nconst TODAY = new Date();\nconst TODAY_ISO = TODAY.toISOString().split('T')[0];\nconst MONTH = TODAY.getMonth();\nconst DOW = TODAY.getDay();\n\n// ── UTILS ──────────────────────────────────────────────────\nfunction parseRSS(xml) {\n  const out = [];\n  const rx = /<item[^>]*>([\\s\\S]*?)<\\/item>/gi;\n  let m;\n  while ((m = rx.exec(xml || '')) !== null) {\n    const b = m[1];\n    const title = (b.match(/<title[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/title>/s) || [])[1] || '';\n    const link = (b.match(/<link[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/link>/s) || [])[1] || '';\n    const desc = (b.match(/<description[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/description>/s) || [])[1] || '';\n    const pubDate = (b.match(/<pubDate[^>]*>(.*?)<\\/pubDate>/s) || [])[1] || '';\n    out.push({ title: title.trim(), link: link.trim(), desc: desc.trim(), pubDate: pubDate.trim() });\n  }\n  return out;\n}\n\nfunction strip(s = '') {\n  return String(s).replace(/<[^>]*>/g, ' ').replace(/&[a-z]+;/gi, ' ').replace(/\\s+/g, ' ').trim();\n}\n\nfunction safeIsoDate(raw) {\n  try { return raw ? new Date(raw).toISOString().split('T')[0] : TODAY_ISO; }\n  catch { return TODAY_ISO; }\n}\n\nfunction normalizeKey(v) {\n  return String(v || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();\n}\n\nfunction iso(d) { return d.toISOString().split('T')[0]; }\nfunction addDays(d, n) { return new Date(d.getTime() + n * 86400000); }\nfunction b64id(s) { return Buffer.from(s || 'x').toString('base64').slice(0, 12); }\n\n// ── KEYWORDS ───────────────────────────────────────────────\nfunction buildKeywordSet(config) {\n  const base = [\n    'comercio local','pyme','autonomo','autónomo','hosteleria','hostelería',\n    'subvencion','subvención','digitalizacion','digitalización','kit digital',\n    'iva','energia','energía','alquiler','empleo','consumo','proveedores',\n    'margen','beneficio','coste','precio','facturacion','facturación','venta'\n  ];\n  const dynamic = [\n    ...(config.keywords || []),\n    ...(config.rss_filter_hints || []),\n    config.business_type,\n    config.city\n  ].filter(Boolean);\n  return [...new Set([...base, ...dynamic].map(normalizeKey).filter(Boolean))];\n}\n\nfunction scoreText(text, keywords) {\n  const normalized = normalizeKey(text);\n  let score = 0;\n  for (const kw of keywords) {\n    if (normalized.includes(kw)) score += kw.length > 8 ? 4 : 2;\n  }\n  return Math.min(score, 10);\n}\n\n// ── PARSE NEWS ─────────────────────────────────────────────\nfunction parseNews(config) {\n  const keywords = buildKeywordSet(config);\n  return parseRSS(shared.newsXml || '').map(item => {\n    const src = item.link.includes('elpais') ? 'El País' :\n                item.link.includes('europapress') ? 'Europa Press' :\n                item.link.includes('cincodias') ? 'Cinco Días' : 'Prensa';\n    const relevance = scoreText(`${item.title} ${item.desc}`, keywords);\n    return {\n      id: 'news_' + b64id(item.link || item.title),\n      title: strip(item.title), summary: strip(item.desc).slice(0, 320),\n      source: src, url: item.link, date: safeIsoDate(item.pubDate),\n      category: 'noticias', relevance,\n      tags: keywords.filter(kw => normalizeKey(`${item.title} ${item.desc}`).includes(kw)).slice(0, 8)\n    };\n  }).filter(n => n.relevance >= 3).sort((a, b) => b.relevance - a.relevance).slice(0, 15);\n}\n\nfunction parseRetailNews(config, xml) {\n  const keywords = buildKeywordSet(config);\n  return parseRSS(xml || '').map(item => {\n    const relevance = scoreText(`${item.title} ${item.desc}`, keywords);\n    return {\n      id: 'retail_' + b64id(item.link || item.title),\n      title: strip(item.title), summary: strip(item.desc).slice(0, 320),\n      source: 'Google News Retail', url: item.link, date: safeIsoDate(item.pubDate),\n      category: 'retail', relevance,\n      tags: keywords.filter(kw => normalizeKey(`${item.title} ${item.desc}`).includes(kw)).slice(0, 8)\n    };\n  }).filter(n => n.relevance >= 2).sort((a, b) => b.relevance - a.relevance).slice(0, 10);\n}\n\n// ── PARSE BOE ──────────────────────────────────────────────\nfunction parseBoe(config) {\n  const keywords = buildKeywordSet(config);\n  const boeItems = parseRSS(shared.boeXml || '');\n  const subsidies = [], regulations = [];\n  for (const item of boeItems) {\n    const text = `${item.title} ${item.desc}`;\n    const normalized = normalizeKey(text);\n    if (!keywords.some(kw => normalized.includes(kw))) continue;\n    const common = { id: b64id(item.link || item.title), title: strip(item.title), summary: strip(item.desc).slice(0, 300), url: item.link };\n    if (/(ley|reglamento|obligacion|obligación|normativa|sancion|sanción)/i.test(text)) {\n      regulations.push({ id: `reg_${common.id}`, title: common.title, type: 'normativa', summary: common.summary, url: common.url, impact: /(obligacion|obligación|sancion|sanción)/i.test(text) ? 'high' : 'medium', action_required: 'Revisar requisitos, plazos y adaptación operativa' });\n    } else {\n      subsidies.push({ id: `sub_${common.id}`, title: common.title, type: /formacion|formación/i.test(text) ? 'formación' : /subvencion|subvención/i.test(text) ? 'subvención' : 'ayuda', amount_range: '', deadline: '', target: 'Pymes y autónomos', url: common.url, status: 'abierta' });\n    }\n  }\n  return { subsidies: subsidies.slice(0, 10), regulations: regulations.slice(0, 10) };\n}\n\n// ── INE / ENERGY ───────────────────────────────────────────\nfunction processIneData(shared) {\n  const signals = [];\n  const fecha = new Date().toISOString();\n  function parseIneSeries(data, label) {\n    if (!Array.isArray(data)) return;\n    for (const serie of data.slice(0, 15)) {\n      const nombre = (serie.Nombre || '').replace(/<[^>]*>/g, '').trim();\n      const datos = serie.Data || [];\n      if (!nombre || datos.length === 0) continue;\n      const ultimo = datos[0].Valor;\n      const penultimo = datos.length > 1 ? datos[1].Valor : null;\n      const variacion = (ultimo != null && penultimo != null && penultimo !== 0)\n        ? ((ultimo - penultimo) / penultimo * 100).toFixed(2) : '0';\n      signals.push({ name: nombre.substring(0, 150), value: ultimo, previous_value: penultimo, variation_pct: parseFloat(variacion), unit: 'index', source: label, description: `${nombre} — Var: ${variacion}%`, captured_at: fecha });\n    }\n  }\n  try { parseIneSeries(typeof shared.ineIpc === 'string' ? JSON.parse(shared.ineIpc) : shared.ineIpc, 'INE-IPC'); } catch {}\n  try { parseIneSeries(typeof shared.ineRetailSales === 'string' ? JSON.parse(shared.ineRetailSales) : shared.ineRetailSales, 'INE-Ventas-Retail'); } catch {}\n  return signals;\n}\n\nfunction processEnergy(shared) {\n  const html = shared.energyHtml || '';\n  const signals = [];\n  const fecha = new Date().toISOString();\n  const precioMatch = html.match(/(?:precio medio|media)[^0-9]{0,80}?(\\d{1,4}[.,]\\d{1,4})\\s*(?:€\\/(?:MWh|kWh)|cts)/i) || html.match(/(\\d{1,3}[.,]\\d{2,4})\\s*€\\/MWh/i);\n  if (precioMatch) {\n    signals.push({ name: 'electricidad_pvpc_media', value: parseFloat(precioMatch[1].replace(',', '.')), unit: 'EUR/MWh', source: 'ESIOS-REE', description: 'Precio medio PVPC electricidad hoy', captured_at: fecha });\n  }\n  return signals;\n}\n\n// ── RETAIL PRICE RADAR (enhanced) ──────────────────────────\nfunction buildRetailPriceRadar(config, shared) {\n  const keywords = buildKeywordSet(config);\n  const priceKw = [...new Set([...keywords, ...['precio', 'coste', 'proveedor', 'mayorista', 'margen', 'inflacion', 'iva', 'tarifa', 'materia prima', 'logistica', 'transporte', 'alquiler', 'envase', 'embalaje', 'suministro', 'distribucion'].map(normalizeKey)])];\n  const signals = [];\n\n  function processFeed(xml, sourceName, defaultType) {\n    for (const item of parseRSS(xml || '').slice(0, 12)) {\n      const text = `${item.title} ${item.desc}`;\n      const score = scoreText(text, priceKw);\n      if (score < 2) continue;\n      const ntext = normalizeKey(text);\n      let type = defaultType;\n      if (/(proveedor|mayorista|suministro|distribucion|logistica|transporte)/.test(ntext)) type = 'supply_chain';\n      else if (/(precio|coste|tarifa|inflacion|iva|margen)/.test(ntext)) type = 'price_intelligence';\n      else if (/(fraude|alerta|retirada|sancion|denuncia)/.test(ntext)) type = 'consumer_alert';\n      else if (/(tendencia|habito|consumo|demanda|estacional)/.test(ntext)) type = 'demand_signal';\n      signals.push({\n        id: `pr_${b64id(item.link || item.title)}`,\n        title: strip(item.title).slice(0, 200),\n        summary: strip(item.desc).slice(0, 300),\n        source: sourceName, url: item.link, type,\n        relevance: score,\n        impact: score >= 6 ? 'high' : score >= 4 ? 'medium' : 'low',\n        date: safeIsoDate(item.pubDate),\n        action_hint: type === 'price_intelligence' ? 'Revisar impacto en tu escandallo y márgenes'\n          : type === 'supply_chain' ? 'Contactar proveedor o buscar alternativa'\n          : type === 'consumer_alert' ? 'Verificar si afecta a tu negocio'\n          : type === 'demand_signal' ? 'Ajustar stock u oferta según tendencia'\n          : 'Evaluar relevancia para tu negocio'\n      });\n    }\n  }\n\n  processFeed(shared.mapaXml, 'MAPA-Alimentación', 'supply_chain');\n  processFeed(shared.facuaXml, 'FACUA-Consumo', 'consumer_alert');\n  processFeed(shared.priceNewsXml, 'Prensa-Precios', 'price_intelligence');\n  return signals.sort((a, b) => b.relevance - a.relevance).slice(0, 20);\n}\n\n// ── COMPETITIVE INTELLIGENCE (NEW) ────────────────────────\nfunction buildCompetitiveIntel(config, shared) {\n  const city = normalizeKey(config.city || '');\n  const bt = normalizeKey(config.business_type || '');\n  const compKw = [...new Set([city, bt, 'apertura', 'cierre', 'franquicia', 'expansion', 'centro comercial', 'promocion', 'descuento', 'oferta', 'competencia', 'tienda online', 'ecommerce'].filter(Boolean))];\n  const trendKw = [...new Set([city, bt, 'tendencia', 'consumo', 'habito', 'compra', 'demanda', 'estacional', 'empleo comercio', 'hosteleria', 'turismo'].filter(Boolean))];\n  const signals = [];\n\n  for (const item of parseRSS(shared.competitionXml || '').slice(0, 15)) {\n    const text = `${item.title} ${item.desc}`;\n    const score = scoreText(text, compKw);\n    if (score < 2) continue;\n    const ntext = normalizeKey(text);\n    let type = 'competitor_move';\n    if (/(apertura|nueva|inaugur|franquicia|expansion)/.test(ntext)) type = 'new_competitor';\n    else if (/(cierre|liquida|quiebra|traspaso)/.test(ntext)) type = 'competitor_exit';\n    else if (/(promocion|descuento|oferta|rebaja|2x1|outlet)/.test(ntext)) type = 'competitor_promo';\n    else if (/(centro comercial|gran superficie|marketplace|amazon)/.test(ntext)) type = 'big_retail_move';\n    const isLocal = city && ntext.includes(city);\n    signals.push({\n      id: `comp_${b64id(item.link || item.title)}`,\n      title: strip(item.title).slice(0, 200),\n      summary: strip(item.desc).slice(0, 300),\n      source: 'Inteligencia-Competitiva', url: item.link, type,\n      is_local: isLocal,\n      relevance: isLocal ? Math.min(score + 3, 10) : score,\n      date: safeIsoDate(item.pubDate),\n      recommendation: type === 'new_competitor' ? 'Refuerza tu diferenciación y comunicación local'\n        : type === 'competitor_exit' ? 'Oportunidad: capta sus clientes con campaña dirigida'\n        : type === 'competitor_promo' ? 'Evalúa contraoferta o enfatiza tu valor añadido'\n        : type === 'big_retail_move' ? 'Diferénciate en cercanía, servicio personalizado y confianza'\n        : 'Monitorizar y evaluar impacto en tu zona'\n    });\n  }\n\n  for (const item of parseRSS(shared.trendsXml || '').slice(0, 10)) {\n    const text = `${item.title} ${item.desc}`;\n    const score = scoreText(text, trendKw);\n    if (score < 2) continue;\n    signals.push({\n      id: `trend_${b64id(item.link || item.title)}`,\n      title: strip(item.title).slice(0, 200),\n      summary: strip(item.desc).slice(0, 300),\n      source: 'Tendencias-Consumo', url: item.link, type: 'consumer_trend',\n      is_local: city ? normalizeKey(text).includes(city) : false,\n      relevance: score,\n      date: safeIsoDate(item.pubDate),\n      recommendation: 'Adapta tu oferta o comunicación a esta tendencia'\n    });\n  }\n\n  return signals.sort((a, b) => b.relevance - a.relevance).slice(0, 15);\n}\n\n// ── COST MONITOR (NEW) ────────────────────────────────────\nfunction buildCostMonitor(config, ineSignals, energySignals, priceRadar) {\n  const bt = normalizeKey(config.business_type || '');\n  const alerts = [];\n  const recommendations = [];\n\n  // Energy impact\n  for (const s of energySignals) {\n    if (s.value > 100) {\n      alerts.push({ category: 'energia', severity: 'high', title: `Electricidad cara: ${s.value} ${s.unit}`, recommendation: 'Concentrar uso intensivo en horas valle. Revisar contrato eléctrico. Considerar iluminación LED si no la tienes.' });\n    } else if (s.value > 60) {\n      alerts.push({ category: 'energia', severity: 'medium', title: `Electricidad moderada: ${s.value} ${s.unit}`, recommendation: 'Buen momento para operaciones intensivas en energía.' });\n    }\n  }\n\n  // IPC impact by business type\n  const foodTypes = ['bar', 'cafeteria', 'restaurante', 'panaderia', 'fruteria', 'carniceria', 'supermercado', 'alimentacion'];\n  const isFoodBiz = foodTypes.some(t => bt.includes(normalizeKey(t)));\n  for (const s of ineSignals) {\n    const n = normalizeKey(s.name);\n    if (Math.abs(s.variation_pct) < 0.5) continue;\n    const rising = s.variation_pct > 0;\n    if (isFoodBiz && /(aliment|bebida|pan|carne|pescado|fruta|verdura|aceite|leche|huevo)/.test(n)) {\n      alerts.push({\n        category: 'costes_producto', severity: Math.abs(s.variation_pct) > 2 ? 'high' : 'medium',\n        title: `${s.name}: ${rising ? '+' : ''}${s.variation_pct}%`,\n        recommendation: rising\n          ? 'Revisar precios de venta o buscar proveedor alternativo. Considerar ajuste de carta/menú.'\n          : 'Oportunidad para mejorar margen o hacer promoción con mejor coste.'\n      });\n    }\n    if (/(alquiler|vivienda)/.test(n) && Math.abs(s.variation_pct) > 1) {\n      alerts.push({ category: 'costes_local', severity: 'medium', title: `Alquileres: ${rising ? '+' : ''}${s.variation_pct}%`, recommendation: rising ? 'Si se acerca renovación de contrato, negociar con datos.' : 'Buen momento para renegociar o buscar local.' });\n    }\n    if (/(transporte|combustible|carburante)/.test(n) && Math.abs(s.variation_pct) > 1) {\n      alerts.push({ category: 'costes_logistica', severity: Math.abs(s.variation_pct) > 3 ? 'high' : 'medium', title: `Transporte/combustible: ${rising ? '+' : ''}${s.variation_pct}%`, recommendation: rising ? 'Agrupar pedidos a proveedor. Revisar costes de reparto.' : 'Buen momento para stockar o negociar envíos.' });\n    }\n  }\n\n  // Supply chain alerts from price radar\n  for (const s of priceRadar.filter(s => s.impact === 'high')) {\n    alerts.push({ category: 'proveedor', severity: 'high', title: s.title.slice(0, 120), recommendation: s.action_hint || 'Revisar impacto en tu cadena de suministro.' });\n  }\n\n  // General margin recommendations\n  if (alerts.filter(a => a.severity === 'high').length >= 2) {\n    recommendations.push({ priority: 'high', action: 'Revisión urgente de escandallos y márgenes', detail: 'Hay varias alertas de costes altos simultáneas. Prioriza los productos con menor margen.', category: 'proteger_margen' });\n  }\n  if (alerts.some(a => a.category === 'energia' && a.severity === 'high')) {\n    recommendations.push({ priority: 'high', action: 'Optimizar consumo energético', detail: 'Electricidad cara hoy. Evita encender hornos/climatización en horas punta si es posible.', category: 'reducir_costes' });\n  }\n  if (alerts.some(a => a.severity !== 'high' && a.recommendation.includes('Oportunidad'))) {\n    recommendations.push({ priority: 'medium', action: 'Aprovechar bajada de costes', detail: 'Algunos costes están bajando. Buen momento para stockar, mejorar margen o lanzar promoción.', category: 'oportunidad' });\n  }\n\n  return { alerts: alerts.slice(0, 15), recommendations: recommendations.slice(0, 8), summary: alerts.length === 0 ? 'Sin alertas de costes relevantes hoy.' : `${alerts.filter(a => a.severity === 'high').length} alerta(s) de coste alto, ${alerts.filter(a => a.severity === 'medium').length} media(s).` };\n}\n\n// ── BUSINESS RECOMMENDATIONS (NEW) ────────────────────────\nfunction buildBusinessRecommendations(config, context) {\n  const recs = [];\n  const bizName = config.business_name || 'Tu negocio';\n  const bt = normalizeKey(config.business_type || '');\n\n  // Revenue opportunities\n  if ((context.calendar.free_slots || []).length > 2) {\n    recs.push({ category: 'vender_mas', priority: 'high', title: 'Activar huecos libres', action: `Tienes ${context.calendar.free_slots.length} huecos libres. Lanza oferta flash por WhatsApp a clientes recurrentes.`, estimated_impact: 'Potencial +5-15% facturación día', timeframe: 'hoy' });\n  }\n  if ((context.competitive.signals || []).some(s => s.type === 'competitor_exit')) {\n    recs.push({ category: 'vender_mas', priority: 'high', title: 'Captar clientes de competidor que cierra', action: 'Un competidor cercano ha cerrado o traspasado. Lanza campaña para captar sus clientes.', estimated_impact: 'Potencial +10-20% nuevos clientes', timeframe: 'esta semana' });\n  }\n  if ((context.competitive.signals || []).some(s => s.type === 'competitor_promo')) {\n    recs.push({ category: 'proteger_margen', priority: 'medium', title: 'Competidor con promoción activa', action: 'No bajes precios automáticamente. Enfatiza tu diferenciación: servicio, calidad, cercanía, confianza.', estimated_impact: 'Protección de margen', timeframe: 'esta semana' });\n  }\n\n  // Cost protection\n  if ((context.cost_monitor.alerts || []).filter(a => a.severity === 'high').length > 0) {\n    recs.push({ category: 'proteger_margen', priority: 'high', title: 'Revisar precios de venta', action: 'Costes subiendo. Revisa tu escandallo y ajusta precios donde sea posible sin perder clientes.', estimated_impact: 'Protección de margen 2-5%', timeframe: 'esta semana' });\n  }\n\n  // Reputation\n  const urgentReviews = context.reputation.reviews?.urgent?.length || 0;\n  if (urgentReviews > 0) {\n    recs.push({ category: 'proteger_reputacion', priority: 'high', title: `${urgentReviews} reseña(s) negativa(s) sin responder`, action: 'Responde hoy con profesionalidad. Ofrece solución concreta. Una buena respuesta mejora la percepción de futuros clientes.', estimated_impact: 'Protección de reputación online', timeframe: 'hoy' });\n  }\n\n  // Subsidies\n  if ((context.radar.subsidies || []).length > 0) {\n    recs.push({ category: 'oportunidad', priority: 'medium', title: `${context.radar.subsidies.length} ayuda(s) disponible(s)`, action: 'Revisa si cumples los requisitos. Muchas ayudas caducan rápido y la competencia también las solicita.', estimated_impact: 'Financiación potencial', timeframe: 'esta semana' });\n  }\n\n  // Seasonal\n  const seasonalTips = {\n    0: { title: 'Optimizar rebajas de enero', action: 'Mueve stock antiguo agresivamente. Lo que no vendas ahora pierde valor cada día.' },\n    1: { title: 'Preparar San Valentín', action: 'Lanza oferta temática para parejas o regalos. Último momento para captar ventas.' },\n    2: { title: 'Campaña Día del Padre', action: 'Prepara selección de regalos y promoción especial.' },\n    3: { title: 'Preparar Semana Santa', action: 'Si estás en zona turística, prepara stock y horarios ampliados.' },\n    4: { title: 'Preparar Día de la Madre', action: 'La campaña de mayor gasto medio en regalos. Prepara escaparate y oferta.' },\n    5: { title: 'Inicio de verano', action: 'Adapta horario, terraza si aplica, y lanza campaña de verano.' },\n    6: { title: 'Rebajas de verano', action: 'Liquida stock de temporada. Prepara captación de turistas si aplica.' },\n    7: { title: 'Mes más bajo en ventas', action: 'Minimiza costes fijos. Aprovecha para reformas, formación o planificar otoño.' },\n    8: { title: 'Vuelta al cole / al trabajo', action: 'Reactivación general del consumo. Lanza campaña de nueva temporada.' },\n    9: { title: 'Preparar Q4', action: 'Q4 es 35-40% de la facturación anual en retail. Planifica stock, campañas y personal extra.' },\n    10: { title: 'Black Friday / Cyber Monday', action: 'Prepara ofertas competitivas. No regales margen: crea packs y bundles.' },\n    11: { title: 'Campaña navideña', action: 'Máxima temporada de consumo. Todo el foco en ventas, servicio al cliente y stock.' }\n  };\n  if (seasonalTips[MONTH]) {\n    recs.push({ category: 'estacional', priority: 'medium', title: seasonalTips[MONTH].title, action: seasonalTips[MONTH].action, estimated_impact: 'Alineación con calendario comercial', timeframe: 'este mes' });\n  }\n\n  // Day-of-week optimization\n  if (DOW >= 1 && DOW <= 3) {\n    recs.push({ category: 'vender_mas', priority: 'low', title: 'Día entre semana: activar tráfico', action: 'Martes-miércoles son días valle. Considera oferta especial solo para hoy para mover tráfico.', estimated_impact: '+3-8% en día valle', timeframe: 'hoy' });\n  }\n\n  // Email management\n  if ((context.inbox.awaiting_reply || []).length > 3) {\n    recs.push({ category: 'eficiencia', priority: 'medium', title: `${context.inbox.awaiting_reply.length} emails sin responder`, action: 'Bloquea 15 minutos ahora para responder todos. No dejes que se acumulen: cada email sin responder es un cliente que se enfría.', estimated_impact: 'Retención de clientes', timeframe: 'hoy' });\n  }\n\n  return recs.sort((a, b) => {\n    const p = { high: 3, medium: 2, low: 1 };\n    return (p[b.priority] || 0) - (p[a.priority] || 0);\n  }).slice(0, 10);\n}\n\n// ── API MODULES ────────────────────────────────────────────\nasync function callModule(baseUrl, rawKey, path) {\n  if (!rawKey) return { ok: false, status: 0, data: null, error: 'No API key configured' };\n  const authHeader = rawKey.startsWith('Bearer ') ? rawKey : `Bearer ${rawKey}`;\n  try {\n    const resp = await fetch(`${baseUrl}${path}`, {\n      method: 'GET',\n      headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },\n      signal: AbortSignal.timeout(12000)\n    });\n    if (!resp.ok) return { ok: false, status: resp.status, data: null };\n    return { ok: true, status: resp.status, data: await resp.json() };\n  } catch (error) {\n    return { ok: false, status: 0, data: null, error: error.message };\n  }\n}\n\n// ── DEFAULTS (honest about backend deps) ──────────────────\nfunction defaultInbox() {\n  return { connected: false, _requires_backend: '/api/agent/gmail/summary', _setup: 'Configurar OAuth Gmail en panel ENLAZE', unread_count: 0, priority_threads: [], awaiting_reply: [], supplier_messages: [], customer_messages: [], invoice_messages: [], suggested_replies: [], action_items: [], summary: 'Gmail no conectado — Conecta tu cuenta en el panel ENLAZE para activar.' };\n}\nfunction defaultCalendar() {\n  return { connected: false, _requires_backend: '/api/agent/calendar/summary', _setup: 'Configurar OAuth Calendar en panel ENLAZE', today_events: [], next_events: [], free_slots: [], reminders: [], daily_agenda: { date: TODAY_ISO, total_events: 0, busy_hours: 0, free_hours: 8, next_important: null }, action_items: [], summary: 'Calendar no conectado — Conecta tu cuenta en el panel ENLAZE para activar.' };\n}\nfunction defaultReputation() {\n  return { connected: false, _requires_backend: '/api/agent/reputation/summary', _setup: 'Configurar Google Business Profile en panel ENLAZE', reviews: { current_rating: 0, total_reviews: 0, new_reviews_count: 0, urgent: [], recurring_themes: [], trend: 'unknown' }, suggested_responses: [], action_items: [], summary: 'Google Business no conectado — Configura tu perfil en el panel ENLAZE.' };\n}\nfunction defaultMarket() {\n  return { connected: false, _requires_backend: '/api/agent/market/summary', price_signals: [], competitor_signals: [], market_signals: [], supplier_alerts: [], retail_price_radar: [], price_analysis: { trending_up: [], trending_down: [], recommendations: [] }, action_items: [] };\n}\nfunction defaultSheets() {\n  return { connected: false, _requires_backend: '/api/agent/sheets/summary', _setup: 'Configurar OAuth Sheets en panel ENLAZE', spreadsheets: [], inventory_alerts: [], sales_data: [], last_update: null, action_items: [], summary: 'Google Sheets no conectado — Conecta tu hoja de ventas/inventario en el panel ENLAZE.' };\n}\n\n// ── CAMPAIGNS (enhanced) ──────────────────────────────────\nfunction buildCampaigns(config, context) {\n  const bizName = config.business_name || 'Tu negocio';\n  const bt = normalizeKey(config.business_type || '');\n  const campaigns = [];\n  const isHospo = ['bar', 'cafeteria', 'restaurante', 'cerveceria', 'taberna'].some(x => bt.includes(normalizeKey(x)));\n\n  // Seasonal — always include current month\n  const seasonal = {\n    0: { title: 'Rebajas de enero', msg: `Últimos días de rebajas en ${bizName}. Stock limitado.`, channels: ['instagram','whatsapp','escaparate'] },\n    1: { title: 'San Valentín', msg: `Sorprende a quien quieres. Ideas de regalo en ${bizName}.`, channels: ['instagram','whatsapp'] },\n    2: { title: 'Día del Padre', msg: `El regalo perfecto para papá está en ${bizName}.`, channels: ['instagram','whatsapp'] },\n    4: { title: 'Día de la Madre', msg: `Demuéstrale cuánto la quieres. En ${bizName} tenemos lo ideal.`, channels: ['instagram','whatsapp','email'] },\n    8: { title: 'Vuelta al cole', msg: `Todo lo que necesitas para la vuelta. Visítanos en ${bizName}.`, channels: ['instagram','whatsapp','escaparate'] },\n    10: { title: 'Black Friday', msg: `Black Friday en ${bizName}. Ofertas que no se repiten. Solo esta semana.`, channels: ['instagram','email','whatsapp'] },\n    11: { title: 'Campaña Navidad', msg: `Regala desde ${bizName}. Selección navideña con envío disponible.`, channels: ['instagram','email','whatsapp','escaparate'] }\n  };\n  if (seasonal[MONTH]) {\n    campaigns.push({ title: seasonal[MONTH].title, type: 'seasonal', channel: seasonal[MONTH].channels, target_audience: 'todos', suggested_date: TODAY_ISO, message_draft: seasonal[MONTH].msg, reason: `Temporada comercial clave — ${seasonal[MONTH].title}`, expected_impact: 'Alto — temporada de demanda' });\n  }\n\n  // Competitor-driven\n  const compExits = (context.competitive?.signals || []).filter(s => s.type === 'competitor_exit');\n  if (compExits.length > 0) {\n    campaigns.push({ title: 'Captar clientes de competidor', type: 'acquisition', channel: ['instagram','whatsapp','buzoneo'], target_audience: 'nuevos_clientes', suggested_date: TODAY_ISO, message_draft: `¿Buscas alternativa? En ${bizName} te atendemos como mereces. Ven a conocernos.`, reason: 'Competidor ha cerrado — oportunidad de captación', expected_impact: 'Alto — clientes disponibles' });\n  }\n\n  // Hospo day-of-week\n  if (isHospo && DOW >= 1 && DOW <= 3) {\n    campaigns.push({ title: 'Promoción día valle', type: 'promotion', channel: ['whatsapp','instagram stories'], target_audience: 'clientes_recurrentes', suggested_date: TODAY_ISO, message_draft: `Hoy en ${bizName}: menú/oferta especial entre semana. ¿Te vienes?`, reason: 'Día entre semana — activar tráfico en horas valle', expected_impact: 'Medio — +5-10% tráfico día' });\n  }\n\n  // Reputation recovery\n  if ((context.reputation.reviews?.urgent || []).length > 0) {\n    campaigns.push({ title: 'Recuperación reputacional', type: 'service_recovery', channel: ['email','whatsapp'], target_audience: 'clientes_insatisfechos', suggested_date: iso(addDays(TODAY, 1)), message_draft: `Gracias por tu feedback. En ${bizName} estamos mejorando para ti. Queremos invitarte a una segunda oportunidad.`, reason: 'Reseñas negativas urgentes pendientes', expected_impact: 'Alto — proteger reputación' });\n  }\n\n  // Cost-driven\n  if ((context.cost_monitor?.alerts || []).filter(a => a.severity === 'high').length > 0) {\n    campaigns.push({ title: 'Ajuste estratégico de precios', type: 'pricing', channel: ['interno'], target_audience: 'gerencia', suggested_date: iso(addDays(TODAY, 1)), message_draft: 'Costes subiendo: revisar escandallo, ajustar precios selectivamente, comunicar valor al cliente.', reason: 'Alertas de coste alto activas', expected_impact: 'Alto — proteger margen' });\n  }\n\n  // Availability\n  if ((context.calendar.free_slots || []).length > 0) {\n    campaigns.push({ title: 'Oferta flash por disponibilidad', type: 'promotion', channel: ['whatsapp','instagram stories'], target_audience: 'clientes_recurrentes', suggested_date: TODAY_ISO, message_draft: `Hoy hay sitio en ${bizName}. Reserva ahora o pasa a vernos.`, reason: 'Huecos libres detectados en agenda', expected_impact: 'Medio — llenar huecos' });\n  }\n\n  // Default\n  if (campaigns.length === 0) {\n    campaigns.push({ title: 'Contenido semanal', type: 'content', channel: ['instagram','whatsapp'], target_audience: 'todos', suggested_date: iso(addDays(TODAY, 1)), message_draft: `Publica hoy en ${bizName}: producto estrella, testimonio de cliente, o promoción de la semana.`, reason: 'Mantener presencia y visibilidad comercial', expected_impact: 'Bajo — mantenimiento de marca' });\n  }\n\n  return campaigns.slice(0, 7);\n}\n\n// ── ACTIONABLE TASKS (enhanced with impact) ───────────────\nfunction buildActionableTasks(config, context) {\n  const tasks = [];\n\n  // HIGH PRIORITY: Revenue & reputation\n  for (const review of (context.reputation.reviews?.urgent || []).slice(0, 5)) {\n    const suggested = (context.reputation.suggested_responses || []).find(sr => sr.author === review.author);\n    tasks.push({ type: 'review_reply', title: `Responder reseña de ${review.author || 'Anónimo'}`, source: 'google_business', priority: 'high', due_date: TODAY_ISO, category: 'proteger_reputacion', estimated_impact: 'Cada reseña sin responder reduce conversión un 15%', description: suggested ? `Respuesta sugerida: ${suggested.suggested_response}` : `Reseña ${review.rating}★ — responde profesionalmente` });\n  }\n\n  for (const email of (context.inbox.awaiting_reply || []).filter(e => e.priority === 'high' || /proveedor|cliente|factura|pedido|urgente/i.test(e.subject || '')).slice(0, 5)) {\n    tasks.push({ type: 'email_reply', title: `Responder: ${(email.subject || 'Email pendiente').slice(0, 80)}`, source: 'gmail', priority: 'high', due_date: TODAY_ISO, category: 'operativo', estimated_impact: 'Email prioritario — puede afectar ventas o servicio', entity_id: email.thread_id || null, description: email.suggested_reply ? `Sugerencia: ${email.suggested_reply}` : 'Pendiente de respuesta' });\n  }\n\n  // Cost alerts\n  for (const alert of (context.cost_monitor?.alerts || []).filter(a => a.severity === 'high').slice(0, 3)) {\n    tasks.push({ type: 'cost_review', title: `Coste: ${alert.title.slice(0, 80)}`, source: alert.category, priority: 'high', due_date: TODAY_ISO, category: 'proteger_margen', estimated_impact: 'Impacto directo en margen si no se actúa', description: alert.recommendation });\n  }\n\n  // Competitive moves\n  for (const sig of (context.competitive?.signals || []).filter(s => ['new_competitor', 'competitor_exit', 'competitor_promo'].includes(s.type)).slice(0, 3)) {\n    tasks.push({ type: 'competitive_action', title: `Competencia: ${sig.title.slice(0, 80)}`, source: 'inteligencia_competitiva', priority: sig.type === 'competitor_exit' ? 'high' : 'medium', due_date: TODAY_ISO, category: sig.type === 'competitor_exit' ? 'vender_mas' : 'proteger_margen', estimated_impact: sig.recommendation, description: sig.summary.slice(0, 200) });\n  }\n\n  // MEDIUM: Regulations, subsidies, price signals\n  for (const reg of (context.radar.regulations || []).slice(0, 3)) {\n    tasks.push({ type: 'regulation_review', title: `Normativa: ${reg.title.slice(0, 80)}`, source: 'boe', priority: reg.impact === 'high' ? 'high' : 'medium', due_date: TODAY_ISO, category: 'cumplimiento', estimated_impact: reg.impact === 'high' ? 'Riesgo de sanción si no se cumple' : 'Revisar plazo y requisitos', description: reg.action_required });\n  }\n\n  for (const sub of (context.radar.subsidies || []).slice(0, 3)) {\n    tasks.push({ type: 'subsidy_check', title: `Ayuda: ${sub.title.slice(0, 80)}`, source: 'boe', priority: 'medium', due_date: TODAY_ISO, category: 'oportunidad', estimated_impact: 'Financiación potencial — las ayudas caducan', description: `${sub.type} — ${sub.target || 'Pymes'}` });\n  }\n\n  for (const signal of (context.market.price_signals || []).slice(0, 3)) {\n    tasks.push({ type: 'price_review', title: `Precios: ${(signal.title || 'Señal de mercado').slice(0, 80)}`, source: 'market', priority: signal.impact === 'high' ? 'high' : 'medium', due_date: TODAY_ISO, category: 'proteger_margen', estimated_impact: 'Revisar impacto en tu precio final', description: signal.summary || '' });\n  }\n\n  // Remaining emails\n  for (const email of (context.inbox.awaiting_reply || []).filter(e => e.priority !== 'high').slice(0, 3)) {\n    tasks.push({ type: 'email_reply', title: `Responder: ${(email.subject || 'Email').slice(0, 80)}`, source: 'gmail', priority: 'medium', due_date: TODAY_ISO, category: 'operativo', estimated_impact: 'Mantener relación con clientes/proveedores', description: email.suggested_reply || 'Pendiente' });\n  }\n\n  // Calendar\n  for (const reminder of (context.calendar.reminders || []).slice(0, 3)) {\n    tasks.push({ type: 'calendar_action', title: (reminder.title || 'Recordatorio').slice(0, 80), source: 'google_calendar', priority: 'medium', due_date: reminder.date || TODAY_ISO, category: 'operativo', estimated_impact: 'Puntualidad operativa', description: reminder.notes || '' });\n  }\n\n  // Campaigns to execute\n  for (const camp of (context.marketing?.campaigns || []).filter(c => c.suggested_date === TODAY_ISO).slice(0, 2)) {\n    tasks.push({ type: 'campaign_launch', title: `Lanzar: ${camp.title.slice(0, 80)}`, source: 'marketing', priority: 'medium', due_date: TODAY_ISO, category: 'vender_mas', estimated_impact: camp.expected_impact || 'Visibilidad y ventas', description: `Canal: ${(camp.channel || []).join(', ')}. ${camp.message_draft.slice(0, 100)}...` });\n  }\n\n  return tasks.sort((a, b) => {\n    const p = { high: 3, medium: 2, low: 1 };\n    return (p[b.priority] || 0) - (p[a.priority] || 0);\n  }).slice(0, 25);\n}\n\n// ── DAILY SUMMARY (business-focused) ──────────────────────\nfunction buildDailySummary(config, context) {\n  const bizName = config.business_name || 'Tu negocio';\n  const highTasks = (context.tasks || []).filter(t => t.priority === 'high');\n  const medTasks = (context.tasks || []).filter(t => t.priority === 'medium');\n  const costAlerts = (context.cost_monitor?.alerts || []).filter(a => a.severity === 'high').length;\n  const compMoves = (context.competitive?.signals || []).filter(s => s.relevance >= 5).length;\n  const opportunities = (context.radar.subsidies?.length || 0) + (context.competitive?.signals || []).filter(s => s.type === 'competitor_exit').length;\n  const risks = (context.radar.regulations?.length || 0) + costAlerts + (context.reputation.reviews?.urgent?.length || 0);\n  const totalTasks = (context.tasks || []).length;\n\n  // Business health score\n  let score = 60;\n  score += Math.min((context.radar.news?.length || 0) * 1, 8);\n  score += Math.min((context.radar.subsidies?.length || 0) * 3, 12);\n  score += Math.min((context.marketing?.campaigns?.length || 0) * 2, 8);\n  score += context.reputation.connected ? 5 : 0;\n  score += context.inbox.connected ? 5 : 0;\n  score += context.calendar.connected ? 3 : 0;\n  score -= Math.min((context.reputation.reviews?.urgent?.length || 0) * 8, 24);\n  score -= Math.min((context.radar.regulations?.length || 0) * 4, 16);\n  score -= Math.min(costAlerts * 5, 15);\n  score -= Math.min((context.inbox.awaiting_reply?.length || 0) * 3, 12);\n  score = Math.max(0, Math.min(100, score));\n\n  // Headline — focused on what matters for sales\n  let headline = '';\n  if (highTasks.length > 0) {\n    headline = `${highTasks.length} acción(es) urgente(s) para ${bizName}`;\n  } else {\n    headline = `${bizName}: día sin urgencias`;\n  }\n  if (costAlerts > 0) headline += ` | ${costAlerts} alerta(s) de costes`;\n  if (compMoves > 0) headline += ` | ${compMoves} movimiento(s) de competencia`;\n  if (opportunities > 0) headline += ` | ${opportunities} oportunidad(es)`;\n  headline += '.';\n\n  // Top 3 priorities — actionable, not informational\n  const top3 = highTasks.slice(0, 3).map(t => ({\n    action: t.title,\n    why: t.estimated_impact || 'Impacto en negocio',\n    category: t.category || 'general'\n  }));\n\n  // Priority actions\n  const actions = [];\n  if (highTasks.length > 0) actions.push(`🔴 ${highTasks.length} tarea(s) de alta prioridad — impacto directo en ventas o margen`);\n  if (costAlerts > 0) actions.push(`💰 ${costAlerts} alerta(s) de costes — revisar márgenes`);\n  if ((context.reputation.reviews?.urgent || []).length > 0) actions.push(`⭐ ${context.reputation.reviews.urgent.length} reseña(s) negativa(s) — responder hoy`);\n  if ((context.inbox.awaiting_reply || []).length > 0) actions.push(`📧 ${context.inbox.awaiting_reply.length} email(s) pendiente(s)`);\n  if ((context.radar.regulations || []).length > 0) actions.push(`📋 ${context.radar.regulations.length} cambio(s) normativo(s) — revisar cumplimiento`);\n  if ((context.marketing?.campaigns || []).length > 0) actions.push(`📣 ${context.marketing.campaigns.length} campaña(s) sugerida(s) para vender más`);\n  if ((context.radar.subsidies || []).length > 0) actions.push(`💶 ${context.radar.subsidies.length} ayuda(s) disponible(s) — solicitar antes de que caduquen`);\n  if (medTasks.length > 0) actions.push(`🟡 ${medTasks.length} tarea(s) de prioridad media`);\n\n  // Connected modules status\n  const modules_active = [\n    context.inbox.connected ? 'Gmail' : null,\n    context.calendar.connected ? 'Calendar' : null,\n    context.reputation.connected ? 'Reputación' : null,\n    context.sheets?.connected ? 'Sheets' : null\n  ].filter(Boolean);\n  const modules_pending = [\n    !context.inbox.connected ? 'Gmail' : null,\n    !context.calendar.connected ? 'Calendar' : null,\n    !context.reputation.connected ? 'Reputación' : null,\n    !context.sheets?.connected ? 'Sheets' : null\n  ].filter(Boolean);\n\n  return {\n    headline,\n    business_health_score: score,\n    score_interpretation: score >= 75 ? 'Buen día — ejecuta las acciones sugeridas' : score >= 50 ? 'Día normal — atiende las alertas primero' : 'Día con riesgos — prioriza las tareas urgentes',\n    top_priorities: top3,\n    priority_actions: actions.slice(0, 10),\n    opportunities_count: opportunities,\n    risks_count: risks,\n    tasks_total: totalTasks,\n    tasks_high: highTasks.length,\n    tasks_medium: medTasks.length,\n    modules_connected: modules_active,\n    modules_pending: modules_pending,\n    tip: modules_pending.length > 0\n      ? `Conecta ${modules_pending.join(', ')} en tu panel ENLAZE para desbloquear más automatización.`\n      : 'Todos los módulos conectados. ENLAZE trabaja al máximo para ti.'\n  };\n}\n\n// ══════════════════════════════════════════════════════════\n// MAIN LOOP\n// ══════════════════════════════════════════════════════════\nfor (const item of items) {\n  const config = item.json;\n  if (config._skip) { outputs.push({ json: { ...config, skipped: true } }); continue; }\n\n  const baseUrl = config._auth_base_url || 'https://enlaze.vercel.app';\n  const agentKey = config._auth_key || '';\n\n  if (!agentKey) {\n    console.log(`[WARN] No API key for user ${config.user_id}. Check $vars.ENLAZE_API_KEY or $env.ENLAZE_API_KEY.`);\n  }\n\n  // ── Parse public sources (always work) ──\n  const radarNews = parseNews(config);\n  const boe = parseBoe(config);\n  const retailNews = parseRetailNews(config, shared.retailNewsXml || '');\n  const ineSignals = processIneData(shared);\n  const energySignals = processEnergy(shared);\n  const priceRadar = buildRetailPriceRadar(config, shared);\n  const competitive = { signals: buildCompetitiveIntel(config, shared) };\n\n  // ── Call backend modules (depend on backend) ──\n  const modules = config.agent_modules_enabled || {};\n  const gmailOn = Boolean(config.gmail_connected || modules.gmail);\n  const calendarOn = Boolean(config.google_calendar_connected || modules.calendar);\n  const businessOn = Boolean(config.google_business_connected || config.google_place_id || modules.reputation);\n  const marketOn = Boolean(modules.market || true);\n  const sheetsOn = Boolean(config.google_sheets_connected || modules.sheets);\n\n  const [gmailResp, calendarResp, reputationResp, marketResp, sheetsResp] = await Promise.all([\n    gmailOn ? callModule(baseUrl, agentKey, `/api/agent/gmail/summary?user_id=${encodeURIComponent(config.user_id)}`) : Promise.resolve({ ok: false }),\n    calendarOn ? callModule(baseUrl, agentKey, `/api/agent/calendar/summary?user_id=${encodeURIComponent(config.user_id)}`) : Promise.resolve({ ok: false }),\n    businessOn ? callModule(baseUrl, agentKey, `/api/agent/reputation/summary?user_id=${encodeURIComponent(config.user_id)}`) : Promise.resolve({ ok: false }),\n    marketOn ? callModule(baseUrl, agentKey, `/api/agent/market/summary?user_id=${encodeURIComponent(config.user_id)}`) : Promise.resolve({ ok: false }),\n    sheetsOn ? callModule(baseUrl, agentKey, `/api/agent/sheets/summary?user_id=${encodeURIComponent(config.user_id)}`) : Promise.resolve({ ok: false })\n  ]);\n\n  const inbox = gmailResp.ok && gmailResp.data ? { connected: true, ...gmailResp.data } : defaultInbox();\n  const calendar = calendarResp.ok && calendarResp.data ? { connected: true, ...calendarResp.data } : defaultCalendar();\n  const reputation = reputationResp.ok && reputationResp.data ? { connected: true, ...reputationResp.data } : defaultReputation();\n  const market = marketResp.ok && marketResp.data ? { connected: true, ...marketResp.data } : defaultMarket();\n  const sheets = sheetsResp.ok && sheetsResp.data ? { connected: true, ...sheetsResp.data } : defaultSheets();\n\n  // ── Enrich market with public data ──\n  market.ine_signals = ineSignals;\n  market.energy_signals = energySignals;\n  market.retail_price_radar = priceRadar;\n  market.cost_alerts = [\n    ...energySignals.filter(s => s.value != null),\n    ...ineSignals.filter(s => Math.abs(s.variation_pct) > 1)\n  ].slice(0, 10);\n  market.price_signals = [...(market.price_signals || []), ...priceRadar.filter(s => s.type === 'price_intelligence').map(s => ({ title: s.title, summary: s.summary, source: s.source, impact: s.impact }))].slice(0, 15);\n  market.supplier_alerts = [...(market.supplier_alerts || []), ...priceRadar.filter(s => s.type === 'supply_chain').map(s => ({ title: s.title, summary: s.summary, source: s.source, impact: s.impact }))].slice(0, 10);\n\n  // ── Merge news ──\n  const allNews = [...radarNews, ...retailNews].sort((a, b) => b.relevance - a.relevance);\n  const uniqueNews = Array.from(new Map(allNews.map(n => [normalizeKey(n.title), n])).values()).slice(0, 20);\n\n  const radar = {\n    news: uniqueNews,\n    regulations: boe.regulations,\n    subsidies: boe.subsidies,\n    competitor_signals: [...(market.competitor_signals || []), ...competitive.signals.filter(s => s.type !== 'consumer_trend')],\n    local_events: market.market_signals || [],\n    consumer_trends: competitive.signals.filter(s => s.type === 'consumer_trend')\n  };\n\n  // ── Build cost monitor ──\n  const cost_monitor = buildCostMonitor(config, ineSignals, energySignals, priceRadar);\n\n  // ── Build campaigns & tasks ──\n  const contextForCampaigns = { inbox, calendar, reputation, market, radar, competitive, cost_monitor };\n  const campaigns = buildCampaigns(config, contextForCampaigns);\n\n  const contextForTasks = { inbox, calendar, reputation, market, radar, competitive, cost_monitor, marketing: { campaigns } };\n  const tasks = buildActionableTasks(config, contextForTasks);\n\n  // ── Build recommendations ──\n  const contextForRecs = { inbox, calendar, reputation, market, radar, competitive, cost_monitor, marketing: { campaigns }, tasks };\n  const recommendations = buildBusinessRecommendations(config, contextForRecs);\n\n  // ── Automation status ──\n  const automation = {\n    module_status: {\n      gmail: gmailResp.ok ? 'active' : gmailOn ? 'error' : 'not_connected',\n      calendar: calendarResp.ok ? 'active' : calendarOn ? 'error' : 'not_connected',\n      reputation: reputationResp.ok ? 'active' : businessOn ? 'error' : 'not_connected',\n      sheets: sheetsResp.ok ? 'active' : sheetsOn ? 'error' : 'not_connected',\n      market: marketResp.ok ? 'active' : 'enriched_with_public_sources',\n      radar_publico: 'active',\n      inteligencia_competitiva: 'active',\n      cost_monitor: 'active',\n      price_radar: 'active'\n    },\n    autonomous_sources: {\n      active: true,\n      count: shared.feedStatus?.filter(f => f.ok).length || 0,\n      total: shared.feedStatus?.length || 0,\n      feeds: (shared.feedStatus || []).map(f => ({ name: f.name, status: f.ok ? 'ok' : 'error' }))\n    },\n    backend_endpoints: [\n      { path: '/api/agent/users', role: 'Lista usuarios', status: 'workflow' },\n      { path: '/api/agent/config', role: 'Config por usuario', status: 'workflow' },\n      { path: '/api/agent/gmail/summary', role: 'Gmail', status: gmailResp.ok ? 'active' : gmailOn ? 'error' : 'pending_setup' },\n      { path: '/api/agent/calendar/summary', role: 'Calendar', status: calendarResp.ok ? 'active' : calendarOn ? 'error' : 'pending_setup' },\n      { path: '/api/agent/reputation/summary', role: 'Reputación', status: reputationResp.ok ? 'active' : businessOn ? 'error' : 'pending_setup' },\n      { path: '/api/agent/market/summary', role: 'Market', status: marketResp.ok ? 'active' : 'public_fallback' },\n      { path: '/api/agent/sheets/summary', role: 'Sheets', status: sheetsResp.ok ? 'active' : sheetsOn ? 'error' : 'pending_setup' },\n      { path: '/api/agent/ingest', role: 'Ingesta payload', status: 'workflow' }\n    ]\n  };\n\n  // ── Build payload ──\n  const payload = {\n    user_id: config.user_id,\n    business_id: config.business_id || config.user_id,\n    business_name: config.business_name,\n    business_type: config.business_type,\n    city: config.city,\n    sector: config.sector || 'comercio_local',\n    agent: 'comercio_local',\n    version: '6.2',\n    timestamp: new Date().toISOString(),\n    daily_summary: buildDailySummary(config, { inbox, calendar, reputation, market, radar, competitive, cost_monitor, marketing: { campaigns }, tasks, sheets }),\n    recommendations,\n    tasks,\n    radar,\n    competitive,\n    cost_monitor,\n    inbox,\n    calendar,\n    reputation,\n    market,\n    sheets,\n    marketing: { campaigns, upcoming_dates: calendar.next_events || [] },\n    automation,\n    connections: {\n      gmail_connected: inbox.connected,\n      google_calendar_connected: calendar.connected,\n      google_business_connected: reputation.connected,\n      google_sheets_connected: sheets?.connected || false\n    }\n  };\n\n  delete payload._auth_key;\n  delete payload._auth_base_url;\n\n  outputs.push({ json: payload });\n}\n\nreturn outputs;"
+      },
+      "id": "33e4b7d2-2e2f-4858-b35c-ac4aa3948c5e",
+      "name": "Run User Modules",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1584,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://enlaze.vercel.app/api/agent/ingest",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{$json}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "7d0eb7f7-dc27-4e48-8ddf-b65117f3dc8c",
+      "name": "Send to ENLAZE",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1808,
+        96
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ENLAZE_API_CREDENTIAL",
+          "name": "ENLAZE Agent API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n  const r = item.json || {};\n  return {\n    json: {\n      success: r.success === true || r.ok === true,\n      timestamp: r.timestamp || new Date().toISOString(),\n      user_id: r.user_id || null,\n      results: r.results || {}\n    }\n  };\n});"
+      },
+      "id": "79999981-5a02-426a-a9df-078ce5d43956",
+      "name": "Log Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2032,
+        96
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "List Active Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "List Active Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Active Users": {
+      "main": [
+        [
+          {
+            "node": "Check Users Exist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Users Exist": {
+      "main": [
+        [
+          {
+            "node": "Fetch Shared Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Shared Sources": {
+      "main": [
+        [
+          {
+            "node": "Split Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Users": {
+      "main": [
+        [
+          {
+            "node": "Get User Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get User Config": {
+      "main": [
+        [
+          {
+            "node": "Inject Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inject Auth": {
+      "main": [
+        [
+          {
+            "node": "Run User Modules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run User Modules": {
+      "main": [
+        [
+          {
+            "node": "Send to ENLAZE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to ENLAZE": {
+      "main": [
+        [
+          {
+            "node": "Log Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timezone": "Europe/Madrid"
+  },
+  "versionId": "c3d4e5f6-a7b8-9012-cdef-234567890abc",
+  "meta": {
+    "instanceId": "f44835b6e6cc8eaa64f52f06f6d775c5721d6e1b6dc47e0c38c161624e77373f"
+  },
+  "id": "WX0ChPKwcCcefkzp",
+  "tags": [
+    {
+      "updatedAt": "2026-04-18T00:00:00.000Z",
+      "createdAt": "2026-04-18T00:00:00.000Z",
+      "id": "1N8JSxvolDqdlJEE",
+      "name": "automatizacion"
+    },
+    {
+      "updatedAt": "2026-04-18T00:00:00.000Z",
+      "createdAt": "2026-04-18T00:00:00.000Z",
+      "id": "2cenNFD8Wys9jO9j",
+      "name": "v6.2"
+    },
+    {
+      "updatedAt": "2026-04-18T00:00:00.000Z",
+      "createdAt": "2026-04-18T00:00:00.000Z",
+      "id": "8Am1YUIQEpnC1zqa",
+      "name": "enlaze"
+    },
+    {
+      "updatedAt": "2026-04-18T00:00:00.000Z",
+      "createdAt": "2026-04-18T00:00:00.000Z",
+      "id": "NLbMGsFRRZ4759m9",
+      "name": "multiusuario"
+    },
+    {
+      "updatedAt": "2026-04-18T00:00:00.000Z",
+      "createdAt": "2026-04-18T00:00:00.000Z",
+      "id": "ij8AJjXgoUMI5wYv",
+      "name": "comercio-local"
+    }
+  ]
+}

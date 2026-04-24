@@ -1,0 +1,397 @@
+{
+  "name": "ENLAZE — Comercio Local v6.0 Retail",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "e3ac808f-8397-4c8c-8364-b90c17634f26",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 6
+            }
+          ]
+        }
+      },
+      "id": "c6fab4a3-9151-4c33-a3a2-62d03f9dbbef",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://enlaze.vercel.app/api/agent/users?sector=comercio_local",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer enlaze_agentcomerciallocal_2026_9f3c7a1d5b8e2f4a6c1d9e7b3a5f2c12"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "017922f3-c58c-4add-b789-4f91cf15a19f",
+      "name": "List Active Users",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        272,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.count }}",
+              "operation": "larger"
+            }
+          ]
+        }
+      },
+      "id": "e28adfc6-da78-47bf-9930-55249bde7e65",
+      "name": "Check Users Exist",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        480,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const feeds = [\n  { url: 'https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/economia/portada', name: 'El País' },\n  { url: 'https://www.europapress.es/rss/rss.aspx?ch=136', name: 'Europa Press' },\n  { url: 'https://cincodias.elpais.com/rss/feed.html?feedId=17066', name: 'Cinco Días' },\n  { url: 'https://www.boe.es/rss/canal.php?c=ayudas', name: 'BOE Ayudas' },\n  { url: 'https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/25171?nult=3', name: 'INE IPC' },\n  { url: 'https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/24086?nult=3', name: 'INE Retail Sales' },\n  { url: 'https://news.google.com/rss/search?q=comercio+local+OR+retail+OR+pyme+OR+consumo+OR+ventas+minorista+site%3Aexpansion.com+OR+site%3Acincodias.elpais.com+OR+site%3Aeleconomista.es&hl=es&gl=ES&ceid=ES:es', name: 'Google News Retail' }\n];\n\nconst results = await Promise.all(feeds.map(async (feed) => {\n  try {\n    const resp = await fetch(feed.url, { signal: AbortSignal.timeout(15000) });\n    return { name: feed.name, text: await resp.text(), ok: true };\n  } catch (e) {\n    console.log(`[Fetch] ${feed.name}: ${e.message}`);\n    return { name: feed.name, text: '', ok: false, error: e.message };\n  }\n}));\n\nconst newsXml = results.filter(r => !['BOE Ayudas', 'INE IPC', 'INE Retail Sales', 'ESIOS Energy'].includes(r.name)).map(r => r.text).join('\\n');\nconst boeXml = results.find(r => r.name === 'BOE Ayudas')?.text || '';\nconst ineIpc = results.find(r => r.name === 'INE IPC')?.text || '';\nconst ineRetailSales = results.find(r => r.name === 'INE Retail Sales')?.text || '';\nconst retailNewsXml = results.find(r => r.name === 'Google News Retail')?.text || '';\n\nlet energyHtml = '';\ntry {\n  const energyResp = await fetch('https://www.esios.ree.es/es/pvpc', { signal: AbortSignal.timeout(15000) });\n  energyHtml = await energyResp.text();\n} catch (e) {\n  console.log(`[Energy] ESIOS: ${e.message}`);\n}\n\nconst feedStatus = results.map(r => ({ name: r.name, ok: r.ok, error: r.error || null }));\nreturn [{ json: { newsXml, boeXml, retailNewsXml, ineIpc, ineRetailSales, energyHtml, feedStatus } }];"
+      },
+      "id": "dad94074-4fb8-4126-bdb0-aad9896ae211",
+      "name": "Fetch Shared Sources",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        704,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const usersResp = $('List Active Users').first().json;\nif (!usersResp.ok || !Array.isArray(usersResp.users) || usersResp.users.length === 0) {\n  return [{ json: { _skip: true, reason: 'No users after filter', count: 0 } }];\n}\nreturn usersResp.users.map(u => ({\n  json: {\n    user_id: u.user_id || u.id,\n    business_name: u.business_name || '',\n    business_type: u.business_type || '',\n    city: u.city || '',\n    sector: u.sector || 'comercio_local'\n  }\n}));"
+      },
+      "id": "550a078e-d8ab-4e7c-aea1-bcec6058745e",
+      "name": "Split Users",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://enlaze.vercel.app/api/agent/config",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "user_id",
+              "value": "={{$json.user_id}}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer enlaze_agentcomerciallocal_2026_9f3c7a1d5b8e2f4a6c1d9e7b3a5f2c12"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "563a05a1-3167-43ff-9580-0107969b5408",
+      "name": "Get User Config",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1152,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "_auth_key",
+              "value": "=Bearer enlaze_agentcomerciallocal_2026_9f3c7a1d5b8e2f4a6c1d9e7b3a5f2c12",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "_auth_base_url",
+              "value": "=https://enlaze.vercel.app",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "e1036129-42ec-46ad-af1d-d6ef1252b127",
+      "name": "Inject Auth",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        1360,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const shared = $('Fetch Shared Sources').first().json;\nconst items = $input.all();\nconst outputs = [];\n\nfunction parseRSS(xml) {\n  const out = [];\n  const rx = /<item[^>]*>([\\s\\S]*?)<\\/item>/gi;\n  let m;\n  while ((m = rx.exec(xml || '')) !== null) {\n    const b = m[1];\n    const title = (b.match(/<title[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/title>/s) || [])[1] || '';\n    const link = (b.match(/<link[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/link>/s) || [])[1] || '';\n    const desc = (b.match(/<description[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/description>/s) || [])[1] || '';\n    const pubDate = (b.match(/<pubDate[^>]*>(.*?)<\\/pubDate>/s) || [])[1] || '';\n    out.push({ title: title.trim(), link: link.trim(), desc: desc.trim(), pubDate: pubDate.trim() });\n  }\n  return out;\n}\n\nfunction strip(s='') {\n  return String(s).replace(/<[^>]*>/g, ' ').replace(/&[a-z]+;/gi, ' ').replace(/\\s+/g, ' ').trim();\n}\n\nfunction safeIsoDate(raw) {\n  try { return raw ? new Date(raw).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]; }\n  catch { return new Date().toISOString().split('T')[0]; }\n}\n\nfunction normalizeKey(v) {\n  return String(v || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();\n}\n\nfunction buildKeywordSet(config) {\n  const base = [\n    'comercio local','pyme','autonomo','autónomo','hosteleria','hostelería',\n    'subvencion','subvención','digitalizacion','digitalización','kit digital',\n    'iva','energia','energía','alquiler','empleo','consumo','proveedores'\n  ];\n  const dynamic = [\n    ...(config.keywords || []),\n    ...(config.rss_filter_hints || []),\n    config.business_type,\n    config.city\n  ].filter(Boolean);\n  return [...new Set([...base, ...dynamic].map(normalizeKey).filter(Boolean))];\n}\n\nfunction scoreText(text, keywords) {\n  const normalized = normalizeKey(text);\n  let score = 0;\n  for (const kw of keywords) {\n    if (normalized.includes(kw)) score += kw.length > 8 ? 4 : 2;\n  }\n  return Math.min(score, 10);\n}\n\nfunction parseNews(config) {\n  const keywords = buildKeywordSet(config);\n  const newsItems = parseRSS(shared.newsXml || '');\n  return newsItems.map(item => {\n    const src = item.link.includes('elpais') ? 'El País' :\n                item.link.includes('europapress') ? 'Europa Press' :\n                item.link.includes('cincodias') ? 'Cinco Días' : 'Prensa';\n    const relevance = scoreText(`${item.title} ${item.desc}`, keywords);\n    return {\n      id: 'news_' + Buffer.from(item.link || item.title).toString('base64').slice(0, 12),\n      title: strip(item.title),\n      summary: strip(item.desc).slice(0, 320),\n      source: src,\n      url: item.link,\n      date: safeIsoDate(item.pubDate),\n      category: 'noticias',\n      relevance,\n      tags: keywords.filter(kw => normalizeKey(`${item.title} ${item.desc}`).includes(kw)).slice(0, 8)\n    };\n  }).filter(n => n.relevance >= 3).sort((a,b) => b.relevance - a.relevance).slice(0, 15);\n}\n\nfunction parseBoe(config) {\n  const keywords = buildKeywordSet(config);\n  const boeItems = parseRSS(shared.boeXml || '');\n  const subsidies = [];\n  const regulations = [];\n  for (const item of boeItems) {\n    const text = `${item.title} ${item.desc}`;\n    const normalized = normalizeKey(text);\n    if (!keywords.some(kw => normalized.includes(kw))) continue;\n    const common = {\n      id: Buffer.from(item.link || item.title).toString('base64').slice(0, 12),\n      title: strip(item.title),\n      summary: strip(item.desc).slice(0, 300),\n      url: item.link\n    };\n    if (/(ley|reglamento|obligacion|obligación|normativa|sancion|sanción)/i.test(text)) {\n      regulations.push({\n        id: `reg_${common.id}`,\n        title: common.title,\n        type: 'normativa',\n        summary: common.summary,\n        url: common.url,\n        impact: /(obligacion|obligación|sancion|sanción)/i.test(text) ? 'high' : 'medium',\n        action_required: 'Revisar requisitos, plazos y adaptación operativa'\n      });\n    } else {\n      subsidies.push({\n        id: `sub_${common.id}`,\n        title: common.title,\n        type: /formacion|formación/i.test(text) ? 'formación' : /subvencion|subvención/i.test(text) ? 'subvención' : 'ayuda',\n        amount_range: '',\n        deadline: '',\n        target: 'Pymes y autónomos',\n        url: common.url,\n        status: 'abierta'\n      });\n    }\n  }\n  return { subsidies: subsidies.slice(0, 10), regulations: regulations.slice(0, 10) };\n}\n\nfunction processIneData(shared) {\n  const signals = [];\n  const fecha = new Date().toISOString();\n  function parseIneSeries(data, label) {\n    if (!Array.isArray(data)) return;\n    for (const serie of data.slice(0, 15)) {\n      const nombre = (serie.Nombre || '').replace(/<[^>]*>/g, '').trim();\n      const datos = serie.Data || [];\n      if (!nombre || datos.length === 0) continue;\n      const ultimo = datos[0].Valor;\n      const penultimo = datos.length > 1 ? datos[1].Valor : null;\n      const variacion = (ultimo != null && penultimo != null && penultimo !== 0)\n        ? ((ultimo - penultimo) / penultimo * 100).toFixed(2) : '0';\n      signals.push({\n        name: nombre.substring(0, 150), value: ultimo, previous_value: penultimo,\n        variation_pct: parseFloat(variacion), unit: 'index', source: label,\n        description: `${nombre} — Var: ${variacion}%`, captured_at: fecha\n      });\n    }\n  }\n  try { parseIneSeries(typeof shared.ineIpc === 'string' ? JSON.parse(shared.ineIpc) : shared.ineIpc, 'INE-IPC'); } catch {}\n  try { parseIneSeries(typeof shared.ineRetailSales === 'string' ? JSON.parse(shared.ineRetailSales) : shared.ineRetailSales, 'INE-Ventas-Retail'); } catch {}\n  return signals;\n}\n\nfunction processEnergy(shared) {\n  const html = shared.energyHtml || '';\n  const signals = [];\n  const fecha = new Date().toISOString();\n  const precioMatch = html.match(/(?:precio medio|media)[^0-9]{0,80}?(\\d{1,4}[.,]\\d{1,4})\\s*(?:€\\/(?:MWh|kWh)|cts)/i)\n    || html.match(/(\\d{1,3}[.,]\\d{2,4})\\s*€\\/MWh/i);\n  if (precioMatch) {\n    signals.push({ name: 'electricidad_pvpc_media', value: parseFloat(precioMatch[1].replace(',', '.')), unit: 'EUR/MWh', source: 'ESIOS-REE', description: 'Precio medio PVPC electricidad hoy', captured_at: fecha });\n  }\n  return signals;\n}\n\nfunction parseRetailNews(config, xml) {\n  const keywords = buildKeywordSet(config);\n  const newsItems = parseRSS(xml || '');\n  return newsItems.map(item => {\n    const relevance = scoreText(`${item.title} ${item.desc}`, keywords);\n    return {\n      id: 'retail_' + Buffer.from(item.link || item.title).toString('base64').slice(0, 12),\n      title: strip(item.title),\n      summary: strip(item.desc).slice(0, 320),\n      source: 'Google News Retail',\n      url: item.link,\n      date: safeIsoDate(item.pubDate),\n      category: 'retail',\n      relevance,\n      tags: keywords.filter(kw => normalizeKey(`${item.title} ${item.desc}`).includes(kw)).slice(0, 8)\n    };\n  }).filter(n => n.relevance >= 2).sort((a,b) => b.relevance - a.relevance).slice(0, 10);\n}\n\nasync function callModule(baseUrl, agentKey, path) {\n  try {\n    const resp = await fetch(`${baseUrl}${path}`, {\n      method: 'GET',\n      headers: { 'Authorization': `Bearer ${agentKey}`, 'Content-Type': 'application/json' },\n      signal: AbortSignal.timeout(12000)\n    });\n    if (!resp.ok) return { ok: false, status: resp.status, data: null };\n    return { ok: true, status: resp.status, data: await resp.json() };\n  } catch (error) {\n    return { ok: false, status: 0, data: null, error: error.message };\n  }\n}\n\nfunction defaultInbox() {\n  return { connected: false, unread_count: 0, priority_threads: [], awaiting_reply: [], supplier_messages: [], customer_messages: [], invoice_messages: [], suggested_replies: [], action_items: [], summary: 'Gmail no conectado' };\n}\n\nfunction defaultCalendar() {\n  return { connected: false, today_events: [], next_events: [], free_slots: [], reminders: [], daily_agenda: { date: new Date().toISOString().split('T')[0], total_events: 0, busy_hours: 0, free_hours: 8, next_important: null }, action_items: [], summary: 'Google Calendar no conectado' };\n}\n\nfunction defaultReputation() {\n  return { connected: false, reviews: { current_rating: 0, total_reviews: 0, new_reviews_count: 0, urgent: [], recurring_themes: [], trend: 'unknown' }, suggested_responses: [], action_items: [], summary: 'Google Business no conectado' };\n}\n\nfunction defaultMarket() {\n  return { connected: false, price_signals: [], competitor_signals: [], market_signals: [], supplier_alerts: [], price_analysis: { trending_up: [], trending_down: [], recommendations: [] }, action_items: [] };\n}\n\nfunction defaultSheets() {\n  return { connected: false, spreadsheets: [], last_update: null, action_items: [], summary: 'Google Sheets no conectado' };\n}\n\nfunction buildCampaigns(config, context) {\n  const bizName = config.business_name || 'Tu negocio';\n  const bt = normalizeKey(config.business_type || 'comercio');\n  const campaigns = [];\n  const today = new Date();\n  const iso = d => d.toISOString().split('T')[0];\n  const month = today.getMonth();\n\n  if (month === 0) {\n    campaigns.push({\n      title: 'Campaña Rebajas Enero', type: 'seasonal', channel: ['instagram','whatsapp','email'],\n      target_audience: 'todos', suggested_date: iso(today),\n      message_draft: `Rebajas de enero en ${bizName}. Ofertas especiales en toda la tienda. ¡No te lo pierdas!`,\n      reason: 'Temporada de rebajas de enero — máxima demanda'\n    });\n  }\n  if (month === 10) {\n    campaigns.push({\n      title: 'Campaña Black Friday', type: 'seasonal', channel: ['instagram','email','whatsapp'],\n      target_audience: 'todos', suggested_date: iso(today),\n      message_draft: `Black Friday en ${bizName}. Descuentos hasta el 70%. Aprovecha hoy.`,\n      reason: 'Black Friday — máxima oportunidad de ventas'\n    });\n  }\n  if (month === 11) {\n    campaigns.push({\n      title: 'Campaña Navidad', type: 'seasonal', channel: ['instagram','email','whatsapp'],\n      target_audience: 'todos', suggested_date: iso(today),\n      message_draft: `Regala desde ${bizName}. Nuestras mejores propuestas para Navidad. Envíos disponibles.`,\n      reason: 'Navidad — temporada alta de consumo'\n    });\n  }\n\n  if (['bar','cafeteria','cafetería','restaurante'].some(x => bt.includes(normalizeKey(x)))) {\n    const tue = new Date(today.getTime() + ((9 - today.getDay()) % 7) * 86400000);\n    campaigns.push({\n      title: 'Promoción día valle', type: 'promotion', channel: ['whatsapp','instagram'],\n      target_audience: 'clientes_recurrentes', suggested_date: iso(tue),\n      message_draft: `Esta semana en ${bizName}: promo especial entre semana para aumentar tráfico en horas valle.`,\n      reason: 'Optimización de ocupación entre semana'\n    });\n  }\n  if ((context.reputation.reviews?.urgent || []).length > 0) {\n    campaigns.push({\n      title: 'Campaña recuperación reputacional', type: 'service_recovery', channel: ['email','whatsapp'],\n      target_audience: 'clientes_insatisfechos', suggested_date: iso(new Date(today.getTime() + 86400000)),\n      message_draft: `Gracias por seguir confiando en ${bizName}. Estamos mejorando nuestro servicio y queremos invitarte a volver.`,\n      reason: 'Hay reseñas negativas urgentes pendientes'\n    });\n  }\n  if ((context.market.price_signals || []).length > 0) {\n    campaigns.push({\n      title: 'Ajuste de oferta por costes', type: 'pricing', channel: ['interno'],\n      target_audience: 'gerencia', suggested_date: iso(new Date(today.getTime() + 2 * 86400000)),\n      message_draft: 'Revisar escandallos, márgenes y precios de productos clave por cambios de mercado.',\n      reason: 'Se detectan señales de precio/proveedor'\n    });\n  }\n  if ((context.calendar.free_slots || []).length > 0) {\n    campaigns.push({\n      title: 'Huecos libres para activar ventas', type: 'promotion', channel: ['whatsapp','instagram stories'],\n      target_audience: 'clientes_recurrentes', suggested_date: iso(today),\n      message_draft: `Tenemos disponibilidad/huecos libres hoy en ${bizName}. Reserva o ven a visitarnos.`,\n      reason: 'Agenda con huecos libres detectados'\n    });\n  }\n  if (campaigns.length === 0) {\n    campaigns.push({\n      title: 'Campaña semanal de visibilidad', type: 'content', channel: ['instagram','whatsapp'],\n      target_audience: 'todos', suggested_date: iso(new Date(today.getTime() + 86400000)),\n      message_draft: `Publica hoy una pieza sobre producto estrella, testimonio de cliente o promoción de la semana en ${bizName}.`,\n      reason: 'Mantener presencia comercial continua'\n    });\n  }\n  return campaigns.slice(0, 5);\n}\n\nfunction buildActionableTasks(config, context) {\n  const tasks = [];\n  const today = new Date().toISOString().split('T')[0];\n\n  for (const email of (context.inbox.awaiting_reply || []).slice(0, 5)) {\n    tasks.push({ type: 'email_reply', title: `Responder: ${email.subject || 'Email pendiente'}`, source: 'gmail', priority: email.priority || 'medium', due_date: today, entity_type: 'email', entity_id: email.thread_id || null, description: email.suggested_reply ? `Respuesta sugerida: ${email.suggested_reply}` : 'Pendiente de respuesta' });\n  }\n  for (const sr of (context.inbox.suggested_replies || []).slice(0, 3)) {\n    tasks.push({ type: 'email_action', title: `Acción sugerida: ${sr.subject || 'Email'}`, source: 'gmail', priority: sr.priority || 'medium', due_date: today, description: sr.suggested_reply || '' });\n  }\n\n  for (const review of (context.reputation.reviews?.urgent || []).slice(0, 5)) {\n    const suggested = (context.reputation.suggested_responses || []).find(sr => sr.author === review.author);\n    tasks.push({ type: 'review_reply', title: `Responder reseña de ${review.author || 'Anónimo'}`, source: 'google_business', priority: 'high', due_date: today, entity_type: 'review', description: suggested ? `Respuesta sugerida: ${suggested.suggested_response}` : `Reseña ${review.rating} estrellas — requiere respuesta profesional` });\n  }\n\n  for (const reminder of (context.calendar.reminders || []).slice(0, 5)) {\n    tasks.push({ type: 'calendar_action', title: reminder.title || 'Recordatorio de agenda', source: 'google_calendar', priority: 'medium', due_date: reminder.date || today, description: reminder.notes || '' });\n  }\n  for (const action of (context.calendar.action_items || []).slice(0, 3)) {\n    tasks.push({ type: 'calendar_prep', title: action.title || `Preparar: ${action.event || ''}`, source: 'google_calendar', priority: 'medium', due_date: action.date || today, description: action.notes || '' });\n  }\n\n  for (const signal of (context.market.price_signals || []).slice(0, 3)) {\n    tasks.push({ type: 'price_review', title: `Revisar precio: ${signal.title || 'Señal de mercado'}`, source: 'market', priority: signal.impact === 'high' ? 'high' : 'medium', due_date: today, description: signal.summary || '' });\n  }\n  for (const action of (context.market.action_items || []).slice(0, 3)) {\n    tasks.push({ type: 'market_action', title: action.title || 'Acción de mercado', source: 'market', priority: action.priority || 'medium', due_date: today, description: action.description || '' });\n  }\n\n  for (const reg of (context.radar.regulations || []).slice(0, 3)) {\n    tasks.push({ type: 'regulation_review', title: `Normativa: ${reg.title}`, source: 'boe', priority: reg.impact === 'high' ? 'high' : 'medium', due_date: today, description: reg.action_required || 'Revisar cambio normativo' });\n  }\n\n  for (const sub of (context.radar.subsidies || []).slice(0, 3)) {\n    tasks.push({ type: 'subsidy_check', title: `Ayuda: ${sub.title}`, source: 'boe', priority: 'medium', due_date: today, description: `${sub.type} — ${sub.target || 'Pymes'}` });\n  }\n\n  return tasks.slice(0, 20);\n}\n\nfunction buildDailySummary(config, context) {\n  const opportunities = (context.radar.subsidies?.length || 0) + (context.marketing.campaigns?.length || 0) + (context.calendar.free_slots?.length || 0);\n  const risks = (context.radar.regulations?.length || 0) + (context.inbox.awaiting_reply?.length || 0) + (context.reputation.reviews?.urgent?.length || 0);\n  const unread = context.inbox.unread_count || 0;\n  const taskCount = context.tasks?.length || 0;\n  const energySignals = (context.market.energy_signals || []).filter(s => s.value != null).length;\n  const ipcChanges = (context.market.ine_signals || []).filter(s => Math.abs(s.variation_pct) > 1).length;\n  const score = Math.max(0, Math.min(100,\n    55\n    + (context.radar.news?.length || 0) * 2\n    + (context.radar.subsidies?.length || 0) * 4\n    + (context.marketing.campaigns?.length || 0) * 3\n    - (context.reputation.reviews?.urgent?.length || 0) * 8\n    - (context.radar.regulations?.length || 0) * 5\n    - (context.inbox.awaiting_reply?.length || 0) * 4\n  ));\n\n  let headline = `Hoy tienes ${context.radar.news.length} noticias relevantes`;\n  if ((context.radar.subsidies || []).length > 0) headline += `, ${context.radar.subsidies.length} ayudas detectadas`;\n  if (energySignals > 0 || ipcChanges > 0) headline += `, datos IPC/energía actualizados`;\n  if (unread > 0) headline += ` y ${unread} email(s) sin leer`;\n  if (taskCount > 0) headline += `. ${taskCount} tareas pendientes`;\n  headline += '.';\n\n  const actions = [];\n  if ((context.inbox.awaiting_reply || []).length > 0) actions.push(`Responder ${context.inbox.awaiting_reply.length} conversación(es) pendientes`);\n  if ((context.reputation.reviews?.urgent || []).length > 0) actions.push(`Atender ${context.reputation.reviews.urgent.length} reseña(s) urgente(s)`);\n  if ((context.radar.regulations || []).length > 0) actions.push(`Revisar ${context.radar.regulations.length} cambio(s) normativo(s)`);\n  if ((context.calendar.reminders || []).length > 0) actions.push(`Ejecutar ${context.calendar.reminders.length} recordatorio(s) de agenda`);\n  if ((context.market.price_signals || []).length > 0) actions.push(`Revisar ${context.market.price_signals.length} señal(es) de precios/proveedores`);\n  if ((context.market.energy_signals || []).length > 0) actions.push(`Analizar ${context.market.energy_signals.length} dato(s) de energía`);\n  if ((context.market.ine_signals || []).length > 0) actions.push(`Considerar ${context.market.ine_signals.length} indicador(es) económico(s)`);\n  if ((context.marketing.campaigns || []).length > 0) actions.push(`Lanzar ${context.marketing.campaigns.length} acción(es) de marketing sugeridas`);\n  if ((context.radar.subsidies || []).length > 0) actions.push(`Evaluar ${context.radar.subsidies.length} ayuda(s)/subvención(es) disponibles`);\n\n  return { headline, priority_actions: actions.slice(0, 8), opportunities_count: opportunities, risks_count: risks, score, tasks_count: taskCount };\n}\n\nfor (const item of items) {\n  const config = item.json;\n  if (config._skip) { outputs.push({ json: { ...config, skipped: true } }); continue; }\n\n  const baseUrl = config._auth_base_url || 'https://enlaze.vercel.app';\n  const agentKey = config._auth_key || '';\n\n  const radarNews = parseNews(config);\n  const boe = parseBoe(config);\n  const retailNews = parseRetailNews(config, shared.retailNewsXml || '');\n\n  const modules = config.agent_modules_enabled || {};\n  const gmailConnected = Boolean(config.gmail_connected || modules.gmail);\n  const calendarConnected = Boolean(config.google_calendar_connected || modules.calendar);\n  const businessConnected = Boolean(config.google_business_connected || config.google_place_id || modules.reputation);\n  const marketConnected = Boolean(modules.market || true);\n  const sheetsConnected = Boolean(config.google_sheets_connected || modules.sheets);\n\n  const [gmailResp, calendarResp, reputationResp, marketResp, sheetsResp] = await Promise.all([\n    gmailConnected ? callModule(baseUrl, agentKey, `/api/agent/gmail/summary?user_id=${encodeURIComponent(config.user_id)}`) : Promise.resolve({ ok: false }),\n    calendarConnected ? callModule(baseUrl, agentKey, `/api/agent/calendar/summary?user_id=${encodeURIComponent(config.user_id)}`) : Promise.resolve({ ok: false }),\n    businessConnected ? callModule(baseUrl, agentKey, `/api/agent/reputation/summary?user_id=${encodeURIComponent(config.user_id)}`) : Promise.resolve({ ok: false }),\n    marketConnected ? callModule(baseUrl, agentKey, `/api/agent/market/summary?user_id=${encodeURIComponent(config.user_id)}`) : Promise.resolve({ ok: false }),\n    sheetsConnected ? callModule(baseUrl, agentKey, `/api/agent/sheets/summary?user_id=${encodeURIComponent(config.user_id)}`) : Promise.resolve({ ok: false })\n  ]);\n\n  const inbox = gmailResp.ok && gmailResp.data ? { connected: true, ...gmailResp.data } : defaultInbox();\n  const calendar = calendarResp.ok && calendarResp.data ? { connected: true, ...calendarResp.data } : defaultCalendar();\n  const reputation = reputationResp.ok && reputationResp.data ? { connected: true, ...reputationResp.data } : defaultReputation();\n  const market = marketResp.ok && marketResp.data ? { connected: true, ...marketResp.data } : defaultMarket();\n  const sheets = sheetsResp.ok && sheetsResp.data ? { connected: true, ...sheetsResp.data } : defaultSheets();\n\n  const ineSignals = processIneData(shared);\n  const energySignals = processEnergy(shared);\n  market.ine_signals = ineSignals;\n  market.energy_signals = energySignals;\n  market.cost_alerts = [\n    ...energySignals.filter(s => s.value != null),\n    ...ineSignals.filter(s => Math.abs(s.variation_pct) > 1)\n  ].slice(0, 10);\n\n  const mergedRadarNews = [...radarNews, ...retailNews].sort((a,b) => b.relevance - a.relevance);\n  const uniqueNews = Array.from(new Map(mergedRadarNews.map(n => [normalizeKey(n.title), n])).values()).slice(0, 20);\n\n  const radar = {\n    news: uniqueNews,\n    regulations: boe.regulations,\n    subsidies: boe.subsidies,\n    competitor_signals: market.competitor_signals || [],\n    local_events: market.market_signals || []\n  };\n\n  const campaigns = buildCampaigns(config, { inbox, calendar, reputation, market, radar });\n\n  const tasks = buildActionableTasks(config, { inbox, calendar, reputation, market, radar });\n\n  const automation = {\n    gmail_connected: inbox.connected,\n    calendar_connected: calendar.connected,\n    google_business_connected: reputation.connected,\n    google_sheets_connected: sheets.connected,\n    module_status: {\n      gmail: gmailResp.ok ? 'active' : gmailConnected ? 'error' : 'not_connected',\n      calendar: calendarResp.ok ? 'active' : calendarConnected ? 'error' : 'not_connected',\n      reputation: reputationResp.ok ? 'active' : businessConnected ? 'error' : 'not_connected',\n      sheets: sheetsResp.ok ? 'active' : sheetsConnected ? 'error' : 'not_connected',\n      market: marketResp.ok ? 'active' : 'fallback'\n    },\n    pending_tasks: tasks.filter(t => t.priority === 'high').slice(0, 5),\n    total_tasks: tasks.length\n  };\n\n  const payload = {\n    user_id: config.user_id,\n    business_id: config.business_id || config.user_id,\n    business_name: config.business_name,\n    business_type: config.business_type,\n    city: config.city,\n    sector: config.sector || 'comercio_local',\n    agent: 'comercio_local',\n    version: '6.0',\n    timestamp: new Date().toISOString(),\n    daily_summary: buildDailySummary(config, { inbox, calendar, reputation, market, radar, marketing: { campaigns }, tasks }),\n    radar,\n    inbox,\n    calendar,\n    reputation,\n    market,\n    sheets,\n    marketing: { campaigns, upcoming_dates: calendar.next_events || [] },\n    automation,\n    tasks,\n    connections: { gmail_connected: inbox.connected, google_calendar_connected: calendar.connected, google_business_connected: reputation.connected, google_sheets_connected: sheets.connected }\n  };\n\n  delete payload._auth_key;\n  delete payload._auth_base_url;\n\n  outputs.push({ json: payload });\n}\n\nreturn outputs;"
+      },
+      "id": "33e4b7d2-2e2f-4858-b35c-ac4aa3948c5e",
+      "name": "Run User Modules",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1584,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://enlaze.vercel.app/api/agent/ingest",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer enlaze_agentcomerciallocal_2026_9f3c7a1d5b8e2f4a6c1d9e7b3a5f2c12"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{$json}}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "7d0eb7f7-dc27-4e48-8ddf-b65117f3dc8c",
+      "name": "Send to ENLAZE",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1808,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n  const r = item.json || {};\n  return {\n    json: {\n      success: r.success === true || r.ok === true,\n      timestamp: r.timestamp || new Date().toISOString(),\n      user_id: r.user_id || null,\n      results: r.results || {}\n    }\n  };\n});"
+      },
+      "id": "79999981-5a02-426a-a9df-078ce5d43956",
+      "name": "Log Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2032,
+        96
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "List Active Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "List Active Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Active Users": {
+      "main": [
+        [
+          {
+            "node": "Check Users Exist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Users Exist": {
+      "main": [
+        [
+          {
+            "node": "Fetch Shared Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Shared Sources": {
+      "main": [
+        [
+          {
+            "node": "Split Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Users": {
+      "main": [
+        [
+          {
+            "node": "Get User Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get User Config": {
+      "main": [
+        [
+          {
+            "node": "Inject Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inject Auth": {
+      "main": [
+        [
+          {
+            "node": "Run User Modules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run User Modules": {
+      "main": [
+        [
+          {
+            "node": "Send to ENLAZE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to ENLAZE": {
+      "main": [
+        [
+          {
+            "node": "Log Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timezone": "Europe/Madrid"
+  },
+  "versionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "meta": {
+    "instanceId": "f44835b6e6cc8eaa64f52f06f6d775c5721d6e1b6dc47e0c38c161624e77373f"
+  },
+  "id": "WX0ChPKwcCcefkzp",
+  "tags": [
+    {
+      "updatedAt": "2026-04-18T00:00:00.000Z",
+      "createdAt": "2026-04-18T00:00:00.000Z",
+      "id": "1N8JSxvolDqdlJEE",
+      "name": "automatizacion"
+    },
+    {
+      "updatedAt": "2026-04-18T00:00:00.000Z",
+      "createdAt": "2026-04-18T00:00:00.000Z",
+      "id": "2cenNFD8Wys9jO9j",
+      "name": "v6"
+    },
+    {
+      "updatedAt": "2026-04-18T00:00:00.000Z",
+      "createdAt": "2026-04-18T00:00:00.000Z",
+      "id": "8Am1YUIQEpnC1zqa",
+      "name": "enlaze"
+    },
+    {
+      "updatedAt": "2026-04-18T00:00:00.000Z",
+      "createdAt": "2026-04-18T00:00:00.000Z",
+      "id": "NLbMGsFRRZ4759m9",
+      "name": "multiusuario"
+    },
+    {
+      "updatedAt": "2026-04-18T00:00:00.000Z",
+      "createdAt": "2026-04-18T00:00:00.000Z",
+      "id": "ij8AJjXgoUMI5wYv",
+      "name": "comercio-local"
+    }
+  ]
+}

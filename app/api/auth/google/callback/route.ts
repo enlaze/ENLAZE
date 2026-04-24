@@ -94,37 +94,54 @@ export async function GET(req: NextRequest) {
     // We check if it exists first to not overwrite refresh_token if Google didn't send a new one
     const { data: existingConnection } = await supabase
       .from("agent_connections")
-      .select("id, refresh_token")
+      .select("user_id, credentials_ref")
       .eq("user_id", userId)
       .eq("module", module)
-      .single();
+      .maybeSingle();
 
-    const finalRefreshToken = encryptedRefresh || (existingConnection ? existingConnection.refresh_token : null);
+    let oldRefreshToken = null;
+    if (existingConnection?.credentials_ref) {
+      try {
+        const parsed = typeof existingConnection.credentials_ref === 'string' 
+          ? JSON.parse(existingConnection.credentials_ref) 
+          : existingConnection.credentials_ref;
+        oldRefreshToken = parsed.refresh_token;
+      } catch (e) {}
+    }
+
+    const finalRefreshToken = encryptedRefresh || oldRefreshToken;
+
+    const credentialsObj = {
+      access_token: encryptedAccess,
+      refresh_token: finalRefreshToken,
+      expires_at: expiresAt,
+      email: email
+    };
+
+    const payload = {
+      user_id: userId,
+      module: module,
+      connected: true,
+      status: "connected",
+      credentials_ref: credentialsObj,
+      error_message: null,
+      updated_at: new Date().toISOString()
+    };
 
     if (existingConnection) {
-      await supabase
+      const { error: updateError } = await supabase
         .from("agent_connections")
-        .update({
-          access_token: encryptedAccess,
-          refresh_token: finalRefreshToken,
-          expires_at: expiresAt,
-          status: "connected",
-          metadata: { email },
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", existingConnection.id);
+        .update(payload)
+        .eq("user_id", userId)
+        .eq("module", module);
+        
+      if (updateError) throw updateError;
     } else {
-      await supabase
+      const { error: insertError } = await supabase
         .from("agent_connections")
-        .insert({
-          user_id: userId,
-          module,
-          access_token: encryptedAccess,
-          refresh_token: finalRefreshToken,
-          expires_at: expiresAt,
-          status: "connected",
-          metadata: { email }
-        });
+        .insert(payload);
+        
+      if (insertError) throw insertError;
     }
 
     return NextResponse.redirect(new URL("/dashboard/settings/integrations?integration_success=true", req.url));

@@ -1,0 +1,105 @@
+
+> enlaze@0.1.0 build
+> next build
+
+▲ Next.js 16.2.1 (Turbopack)
+- Environments: .env.local
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 2.5s
+  Running TypeScript ...
+  Finished TypeScript in 3.5s ...
+  Collecting page data using 9 workers ...
+  Generating static pages using 9 workers (0/73) ...
+  Generating static pages using 9 workers (18/73) 
+  Generating static pages using 9 workers (36/73) 
+  Generating static pages using 9 workers (54/73) 
+✓ Generating static pages using 9 workers (73/73) in 286ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /api/agent/budgets/generate
+├ ƒ /api/agent/calendar/summary
+├ ƒ /api/agent/config
+├ ƒ /api/agent/gmail/summary
+├ ƒ /api/agent/ingest
+├ ƒ /api/agent/market/analysis
+├ ƒ /api/agent/market/prices
+├ ƒ /api/agent/market/summary
+├ ƒ /api/agent/reputation/summary
+├ ƒ /api/agent/users
+├ ƒ /api/auth/send-verification-email
+├ ƒ /api/auth/verify-email
+├ ƒ /api/generate-budget
+├ ƒ /api/invoices/ocr
+├ ƒ /api/notifications/preferences
+├ ƒ /api/notifications/send
+├ ƒ /api/search
+├ ƒ /api/send-email
+├ ƒ /api/webhook
+├ ƒ /api/webhooks/comercio-local
+├ ƒ /api/webhooks/construccion
+├ ○ /apple-icon.png
+├ ƒ /auth/callback
+├ ○ /dashboard
+├ ○ /dashboard/agent
+├ ○ /dashboard/audit-log
+├ ○ /dashboard/budgets
+├ ƒ /dashboard/budgets/[id]
+├ ○ /dashboard/budgets/generate
+├ ○ /dashboard/budgets/new
+├ ○ /dashboard/calendar
+├ ○ /dashboard/clientes
+├ ○ /dashboard/compliance
+├ ○ /dashboard/compliance/ai
+├ ○ /dashboard/compliance/fiscal
+├ ○ /dashboard/compliance/incidents
+├ ○ /dashboard/compliance/privacy
+├ ○ /dashboard/compliance/security
+├ ○ /dashboard/delivery-notes
+├ ƒ /dashboard/delivery-notes/[id]
+├ ○ /dashboard/emails
+├ ○ /dashboard/facturas
+├ ○ /dashboard/issued-invoices
+├ ƒ /dashboard/issued-invoices/[id]
+├ ○ /dashboard/margins
+├ ○ /dashboard/messages
+├ ○ /dashboard/notifications
+├ ○ /dashboard/orders
+├ ƒ /dashboard/orders/[id]
+├ ○ /dashboard/payments
+├ ○ /dashboard/prices
+├ ○ /dashboard/projects
+├ ƒ /dashboard/projects/[id]
+├ ○ /dashboard/settings
+├ ○ /dashboard/settings/fiscal
+├ ○ /dashboard/settings/notifications
+├ ○ /dashboard/settings/sector
+├ ○ /dashboard/suppliers
+├ ƒ /dashboard/suppliers/[id]
+├ ○ /dashboard/suppliers/invoices
+├ ƒ /dashboard/suppliers/invoices/[id]
+├ ○ /icon.png
+├ ○ /legal/aviso-legal
+├ ○ /legal/cookies
+├ ○ /legal/dpa
+├ ○ /legal/privacy
+├ ○ /legal/subprocessors
+├ ○ /legal/terms
+├ ○ /login
+├ ○ /onboarding
+├ ○ /opengraph-image
+├ ƒ /portal/[token]
+├ ○ /pricing
+├ ○ /register
+├ ○ /robots.txt
+├ ○ /security
+├ ○ /sitemap.xml
+└ ○ /verify-email
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

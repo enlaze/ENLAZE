@@ -9,7 +9,9 @@ interface Integration {
   id: string;
   module: string;
   status: string;
-  metadata: any;
+  connected?: boolean;
+  credentials_ref?: any;
+  metadata?: any;
 }
 
 export default function IntegrationsPage() {
@@ -44,12 +46,18 @@ export default function IntegrationsPage() {
   };
 
   const isConnected = (module: string) => {
-    return integrations.some((i) => i.module === module && i.status === "connected");
+    return integrations.some((i) => i.module === module && (i.status === "connected" || i.connected === true));
   };
 
   const getMetadata = (module: string) => {
     const integration = integrations.find((i) => i.module === module);
-    return integration?.metadata;
+    if (!integration) return null;
+    
+    let data = integration.credentials_ref || integration.metadata;
+    if (typeof data === 'string') {
+      try { data = JSON.parse(data); } catch(e) {}
+    }
+    return data;
   };
 
   const handleDisconnect = async (module: string) => {
