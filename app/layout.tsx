@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import SplashScreen from "@/components/SplashScreen";
 import { ClientThemeProvider } from "./theme-provider";
 import { ToastProvider } from "@/components/ui/toast";
 import { ConfirmProvider } from "@/components/ui/confirm-dialog";
+import BrandIntro from "@/components/landing/BrandIntro";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -152,7 +152,7 @@ export default function RootLayout({
         <ClientThemeProvider>
           <ToastProvider>
             <ConfirmProvider>
-              <SplashScreen />
+              <BrandIntro />
               {children}
             </ConfirmProvider>
           </ToastProvider>
