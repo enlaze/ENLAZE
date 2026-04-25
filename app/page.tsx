@@ -289,11 +289,14 @@ function HeroMotion() {
       <div className="relative mx-auto max-w-6xl px-6">
         {/* Glass card — contiene el bloque tipográfico para máxima legibilidad
             sobre el shader oscuro. LiveDemoPanel queda fuera porque tiene su
-            propia superficie y un layout más ancho. */}
+            propia superficie y un layout más ancho.
+
+            NOTA: animación SIEMPRE activa (sin guard reduced). En reduced-motion
+            duración baja a 0.01s → no se percibe pero el end-state se aplica. */}
         <motion.div
-          initial={reduced ? false : { opacity: 0, y: 40 }}
-          animate={reduced ? undefined : { opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
+          initial={{ opacity: 0, y: 60 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: reduced ? 0.01 : 0.9, ease: "easeOut" }}
           className="relative z-10 mx-auto max-w-4xl rounded-3xl border border-white/40 bg-white/85 px-6 py-10 shadow-2xl shadow-navy-900/10 backdrop-blur-md sm:px-10 sm:py-12 md:px-12 md:py-14"
         >
         <AnimatedBlock y={20} duration={600}>
@@ -343,8 +346,8 @@ function HeroMotion() {
           <div className="mt-10 flex flex-wrap justify-center gap-3">
             <motion.span
               className="inline-block"
-              whileHover={reduced ? undefined : { scale: 1.03 }}
-              whileTap={reduced ? undefined : { scale: 0.97 }}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
               transition={{ type: "spring", stiffness: 420, damping: 22, mass: 0.4 }}
             >
               <Link
@@ -366,8 +369,8 @@ function HeroMotion() {
             </motion.span>
             <motion.span
               className="inline-block"
-              whileHover={reduced ? undefined : { scale: 1.03 }}
-              whileTap={reduced ? undefined : { scale: 0.97 }}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
               transition={{ type: "spring", stiffness: 420, damping: 22, mass: 0.4 }}
             >
               <a
