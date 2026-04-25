@@ -133,11 +133,18 @@ export default function RootLayout({
             `,
           }}
         />
-        {/* JSON-LD structured data — Organization + WebSite */}
+        {/* JSON-LD structured data — un <script> por objeto (más
+            compatible con parsers que iteran y leen `@context` por entrada). */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify([organizationJsonLd, websiteJsonLd]),
+            __html: JSON.stringify(organizationJsonLd),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(websiteJsonLd),
           }}
         />
       </head>

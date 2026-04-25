@@ -165,11 +165,17 @@ export default function PricingPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* JSON-LD structured data */}
+      {/* JSON-LD structured data — un script por objeto para máxima compatibilidad */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify([productJsonLd, faqJsonLd]),
+          __html: JSON.stringify(productJsonLd),
+        }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(faqJsonLd),
         }}
       />
 

@@ -13,6 +13,7 @@ import Logo from "@/components/Logo";
 import AnimatedBlock from "@/components/landing/AnimatedBlock";
 import Section from "@/components/landing/Section";
 import FeatureCard from "@/components/landing/FeatureCard";
+import ShaderBackground from "@/components/landing/ShaderBackground";
 
 /* ─────────────────────────────────────────────────────────────────────
  *  Icons — estilo Lucide (stroke 1.75, rounded, 24x24)
@@ -260,8 +261,11 @@ function HeroMotion() {
   return (
     <section
       ref={ref}
-      className="relative overflow-hidden pt-36 pb-24 md:pt-44 md:pb-32"
+      className="relative isolate overflow-hidden pt-36 pb-24 md:pt-44 md:pb-32"
     >
+      {/* Fondo animado WebGL — capa más profunda, no interactúa con el contenido */}
+      <ShaderBackground variant="dark" />
+
       {/* Capa decorativa — parallax SUTIL, absolute, fuera del flujo */}
       <motion.div
         aria-hidden
@@ -283,6 +287,15 @@ function HeroMotion() {
       />
 
       <div className="relative mx-auto max-w-6xl px-6">
+        {/* Glass card — contiene el bloque tipográfico para máxima legibilidad
+            sobre el shader oscuro. LiveDemoPanel queda fuera porque tiene su
+            propia superficie y un layout más ancho. */}
+        <motion.div
+          initial={reduced ? false : { opacity: 0, y: 40 }}
+          animate={reduced ? undefined : { opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="relative z-10 mx-auto max-w-4xl rounded-3xl border border-white/40 bg-white/85 px-6 py-10 shadow-2xl shadow-navy-900/10 backdrop-blur-md sm:px-10 sm:py-12 md:px-12 md:py-14"
+        >
         <AnimatedBlock y={20} duration={600}>
           <div className="flex justify-center">
             <div className="inline-flex items-center gap-2 rounded-full border border-navy-100 bg-white/80 px-3.5 py-1.5 shadow-[0_1px_2px_rgba(10,25,41,0.04)] backdrop-blur transition-colors">
@@ -328,34 +341,48 @@ function HeroMotion() {
 
         <AnimatedBlock delay={240} y={24} duration={700}>
           <div className="mt-10 flex flex-wrap justify-center gap-3">
-            <Link
-              href="/register"
-              className="
-                group inline-flex items-center gap-2
-                rounded-xl bg-brand-green px-6 py-3.5 text-[14px] font-semibold text-white
-                shadow-[0_10px_28px_-10px_rgba(0,200,150,0.55),0_2px_4px_-2px_rgba(0,200,150,0.4),inset_0_1px_0_rgba(255,255,255,0.18)]
-                ring-1 ring-inset ring-white/10
-                transition-all duration-200 ease-out
-                hover:-translate-y-[1.5px] hover:bg-brand-green-dark
-                hover:shadow-[0_16px_36px_-12px_rgba(0,200,150,0.65),0_2px_4px_-2px_rgba(0,200,150,0.4),inset_0_1px_0_rgba(255,255,255,0.22)]
-                focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:ring-offset-2
-              "
+            <motion.span
+              className="inline-block"
+              whileHover={reduced ? undefined : { scale: 1.03 }}
+              whileTap={reduced ? undefined : { scale: 0.97 }}
+              transition={{ type: "spring", stiffness: 420, damping: 22, mass: 0.4 }}
             >
-              Solicitar demo
-              <IconArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
-            </Link>
-            <a
-              href="#como-funciona"
-              className="
-                group inline-flex items-center gap-2
-                rounded-xl border border-navy-200 bg-white px-6 py-3.5 text-[14px] font-semibold text-navy-800
-                transition-all duration-200
-                hover:-translate-y-[1px] hover:border-navy-300 hover:bg-navy-50
-              "
+              <Link
+                href="/register"
+                className="
+                  group inline-flex items-center gap-2
+                  rounded-xl bg-brand-green px-6 py-3.5 text-[14px] font-semibold text-white
+                  shadow-[0_10px_28px_-10px_rgba(0,200,150,0.55),0_2px_4px_-2px_rgba(0,200,150,0.4),inset_0_1px_0_rgba(255,255,255,0.18)]
+                  ring-1 ring-inset ring-white/10
+                  transition-all duration-200 ease-out
+                  hover:-translate-y-[1.5px] hover:bg-brand-green-dark
+                  hover:shadow-[0_16px_36px_-12px_rgba(0,200,150,0.65),0_2px_4px_-2px_rgba(0,200,150,0.4),inset_0_1px_0_rgba(255,255,255,0.22)]
+                  focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:ring-offset-2
+                "
+              >
+                Solicitar demo
+                <IconArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            </motion.span>
+            <motion.span
+              className="inline-block"
+              whileHover={reduced ? undefined : { scale: 1.03 }}
+              whileTap={reduced ? undefined : { scale: 0.97 }}
+              transition={{ type: "spring", stiffness: 420, damping: 22, mass: 0.4 }}
             >
-              <IconPlay size={14} />
-              Ver cómo funciona
-            </a>
+              <a
+                href="#como-funciona"
+                className="
+                  group inline-flex items-center gap-2
+                  rounded-xl border border-navy-200 bg-white px-6 py-3.5 text-[14px] font-semibold text-navy-800
+                  transition-all duration-200
+                  hover:-translate-y-[1px] hover:border-navy-300 hover:bg-navy-50
+                "
+              >
+                <IconPlay size={14} />
+                Ver cómo funciona
+              </a>
+            </motion.span>
           </div>
         </AnimatedBlock>
 
@@ -368,6 +395,7 @@ function HeroMotion() {
             Sin tarjeta · Configuración en 2 minutos · Cancela cuando quieras
           </p>
         </AnimatedBlock>
+        </motion.div>
 
         <AnimatedBlock delay={400} y={50} duration={800}>
           <LiveDemoPanel />
