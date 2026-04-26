@@ -873,9 +873,9 @@ function DailyBriefingCard() {
           />
           <ModuleBadge 
             name="Sheets" 
-            status={module_status?.sheets} 
+            status={modules?.sheets?.connected && !modules?.sheets?.spreadsheet_name ? "warning" : module_status?.sheets} 
             connected={modules?.sheets?.connected}
-            value={modules?.sheets?.spreadsheet_name ? modules.sheets.spreadsheet_name : "No conectado"} 
+            value={modules?.sheets?.spreadsheet_name ? modules.sheets.spreadsheet_name : "Sin hoja configurada"} 
           />
         </div>
 
@@ -931,19 +931,19 @@ function DailyBriefingCard() {
 }
 
 function ModuleBadge({ name, status, connected, value }: { name: string, status?: string, connected?: boolean, value: string }) {
-  if (!connected) return null;
-
-  const isError = status === "error";
-  const bgClass = isError ? "bg-red-50 dark:bg-red-900/10" : "bg-white dark:bg-zinc-800/50";
-  const borderClass = isError ? "border-red-200 dark:border-red-800/50" : "border-navy-100 dark:border-zinc-700/50";
-  const dotClass = isError ? "bg-red-500" : "bg-brand-green";
-  const textClass = isError ? "text-red-700 dark:text-red-400" : "text-navy-700 dark:text-zinc-300";
+  const isError = status === "error" || !connected;
+  const isWarning = status === "warning";
+  
+  const bgClass = isError ? "bg-red-50 dark:bg-red-900/10" : isWarning ? "bg-amber-50 dark:bg-amber-900/10" : "bg-white dark:bg-zinc-800/50";
+  const borderClass = isError ? "border-red-200 dark:border-red-800/50" : isWarning ? "border-amber-200 dark:border-amber-800/50" : "border-navy-100 dark:border-zinc-700/50";
+  const dotClass = isError ? "bg-red-500" : isWarning ? "bg-amber-400" : "bg-brand-green";
+  const textClass = isError ? "text-red-700 dark:text-red-400" : isWarning ? "text-amber-700 dark:text-amber-400" : "text-navy-700 dark:text-zinc-300";
 
   return (
     <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${bgClass} ${borderClass} shadow-sm`}>
       <span className={`h-2 w-2 rounded-full ${dotClass}`} />
       <span className={`text-[12px] font-medium ${textClass}`}>
-        {name}: <span className="opacity-80 font-normal">{value}</span>
+        {name}: <span className="opacity-80 font-normal">{!connected ? "No conectado" : value}</span>
       </span>
     </div>
   );
