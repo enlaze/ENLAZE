@@ -87,15 +87,15 @@ export default function OnboardingChecklist() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
 
-      const [clients, budgets, prices, suppliers] = await Promise.all([
+      const [clients, budgets, prices, suppliers, { data: profile }] = await Promise.all([
         supabase.from("clients").select("id", { count: "exact", head: true }),
         supabase.from("budgets").select("id", { count: "exact", head: true }),
         supabase.from("price_items").select("id", { count: "exact", head: true }),
         supabase.from("suppliers").select("id", { count: "exact", head: true }),
+        supabase.from("profiles").select("full_name, business_name").eq("id", user.id).maybeSingle(),
       ]);
 
-      const meta = user.user_metadata || {};
-      const profileComplete = !!(meta.full_name && meta.company_name);
+      const profileComplete = !!(profile?.full_name && profile?.business_name);
 
       setCtx({
         hasClients: (clients.count ?? 0) > 0,

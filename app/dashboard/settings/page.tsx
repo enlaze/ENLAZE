@@ -29,7 +29,7 @@ export default function SettingsPage() {
         const savedTheme = user.user_metadata?.theme_preference as ThemePreference || "system";
         setThemePreference(savedTheme);
         const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-        if (data) { setFullName(data.full_name || ""); setCompanyName(data.company_name || ""); }
+        if (data) { setFullName(data.full_name || ""); setCompanyName(data.business_name || ""); }
       }
     };
     load();
@@ -40,11 +40,38 @@ export default function SettingsPage() {
     setSaving(true);
     setResult({ type: "", text: "" });
     const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      await supabase.from("profiles").upsert({ id: user.id, email: user.email, full_name: fullName, company_name: companyName, updated_at: new Date().toISOString() });
-      await supabase.auth.updateUser({ data: { full_name: fullName } });
-      setResult({ type: "success", text: "Perfil actualizado correctamente" });
+    if (!user) {
+      setResult({ type: "error", text: "No hay sesión activa. Vuelve a iniciar sesión." });
+      setSaving(false);
+      return;
     }
+
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .upsert({
+        id: user.id,
+        email: user.email,
+        full_name: fullName,
+        business_name: companyName,
+        updated_at: new Date().toISOString(),
+      });
+
+    if (profileError) {
+      console.error("[settings/profile] upsert error:", profileError);
+      setResult({
+        type: "error",
+        text: `Error al guardar el perfil: ${profileError.message}${profileError.code ? ` (code ${profileError.code})` : ""}`,
+      });
+      setSaving(false);
+      return;
+    }
+
+    const { error: authError } = await supabase.auth.updateUser({ data: { full_name: fullName } });
+    if (authError) {
+      console.error("[settings/profile] auth.updateUser error:", authError);
+    }
+
+    setResult({ type: "success", text: "Perfil actualizado correctamente" });
     setSaving(false);
     setTimeout(() => setResult({ type: "", text: "" }), 4000);
   };
