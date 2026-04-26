@@ -743,7 +743,7 @@ function DailyBriefingCard() {
           return;
         }
 
-        const res = await fetch(`/api/agent/daily-briefing?user_id=${user.id}`);
+        const res = await fetch(`/api/agent/daily-briefing`);
         if (!res.ok) throw new Error("Briefing request failed");
         
         const json = await res.json();

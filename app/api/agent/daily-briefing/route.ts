@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyAgentRequest, isErrorResponse } from "../_lib/auth";
+import { verifyAgentRequest, verifyAgentOrBrowserRequest, isErrorResponse } from "../_lib/auth";
 
 export async function GET(req: NextRequest) {
   try {
-    const auth = verifyAgentRequest(req);
+    const auth = await verifyAgentOrBrowserRequest(req);
     if (isErrorResponse(auth)) return auth;
     
     // We only need the userId to pass along, and potentially the auth header
@@ -16,7 +16,12 @@ export async function GET(req: NextRequest) {
     const fetchModule = async (modulePath: string) => {
       const url = `${baseUrl}/api/agent/${modulePath}/summary?user_id=${userId}`;
       const headers: Record<string, string> = {};
-      if (authHeader) headers["Authorization"] = authHeader;
+      const expectedKey = process.env.AGENT_API_KEY;
+      if (expectedKey) {
+        headers["Authorization"] = `Bearer ${expectedKey}`;
+      } else if (authHeader) {
+        headers["Authorization"] = authHeader;
+      }
 
       const res = await fetch(url, { headers });
       if (!res.ok) {
