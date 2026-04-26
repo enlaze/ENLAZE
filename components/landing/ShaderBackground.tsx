@@ -206,9 +206,20 @@ interface ShaderBackgroundProps {
   variant?: ShaderVariant;
 }
 
+// Fallback CSS — visible inmediatamente (sin esperar a que WebGL pinte el
+// primer frame). En producción casi no se nota; en dev es lo que evita el
+// "flash negro" durante la doble-init de React Strict Mode.
+const FALLBACK_BG_DARK =
+  "radial-gradient(ellipse at 30% 20%, rgba(0,200,150,0.18), transparent 55%), radial-gradient(ellipse at 70% 80%, rgba(8,34,69,0.50), transparent 60%), #0B1F2A";
+const FALLBACK_BG_LIGHT =
+  "radial-gradient(ellipse at 30% 20%, rgba(0,200,150,0.12), transparent 55%), radial-gradient(ellipse at 70% 80%, rgba(46,176,176,0.10), transparent 60%), #ffffff";
+
 export default function ShaderBackground({ variant = "default" }: ShaderBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const darkRef = useRef(variant === "dark");
+  // Guard contra doble-init en React Strict Mode (dev). Si el primer mount
+  // sigue activo, el segundo skipea la creación de un nuevo contexto WebGL.
+  const initializedRef = useRef(false);
 
   // Mantener `darkRef` sincronizado si el padre cambia la variant en runtime,
   // sin reiniciar el ciclo WebGL.
@@ -221,19 +232,35 @@ export default function ShaderBackground({ variant = "default" }: ShaderBackgrou
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    // Pinta SIEMPRE el fallback CSS antes de tocar WebGL — así, aunque el
+    // primer frame del shader tarde, el canvas nunca se ve negro.
+    canvas.style.background = darkRef.current ? FALLBACK_BG_DARK : FALLBACK_BG_LIGHT;
+
+    // Strict Mode dev: skipea si ya hay un contexto activo de un mount anterior.
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
+    // alpha:true → canvas no opaco; antes del primer drawArrays se ve el
+    // background CSS. premultipliedAlpha:false porque dibujamos opaco igual.
     const gl =
-      (canvas.getContext("webgl", { antialias: false, alpha: false, premultipliedAlpha: false }) as
+      (canvas.getContext("webgl", { antialias: false, alpha: true, premultipliedAlpha: false }) as
         | WebGLRenderingContext
         | null) ||
       (canvas.getContext("experimental-webgl") as WebGLRenderingContext | null);
 
     if (!gl) {
-      // Fallback CSS estático — paleta acorde a la variant.
-      canvas.style.background = darkRef.current
-        ? "radial-gradient(ellipse at 30% 20%, rgba(0,200,150,0.18), transparent 55%), radial-gradient(ellipse at 70% 80%, rgba(8,34,69,0.50), transparent 60%), #0B1F2A"
-        : "radial-gradient(ellipse at 30% 20%, rgba(0,200,150,0.12), transparent 55%), radial-gradient(ellipse at 70% 80%, rgba(46,176,176,0.10), transparent 60%), #ffffff";
+      // Sin WebGL → el fallback CSS ya está aplicado, no hace falta nada más.
       return;
     }
+
+    // Clear color = navy oscuro: si por alguna razón el frame 1 tarda,
+    // el clear inicial pinta navy en vez de negro.
+    if (darkRef.current) {
+      gl.clearColor(0.043, 0.075, 0.122, 1.0); // ~ #0B1320
+    } else {
+      gl.clearColor(1.0, 1.0, 1.0, 1.0);
+    }
+    gl.clear(gl.COLOR_BUFFER_BIT);
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -363,9 +390,12 @@ export default function ShaderBackground({ variant = "default" }: ShaderBackgrou
       gl.deleteProgram(program);
       gl.deleteShader(vs);
       gl.deleteShader(fs);
-      // Liberar contexto explícitamente cuando esté disponible
-      const lose = gl.getExtension("WEBGL_lose_context");
-      lose?.loseContext();
+      // NOTA: NO llamamos WEBGL_lose_context.loseContext() aquí —
+      // el browser libera el contexto cuando el canvas es GC'd. Llamarlo
+      // explícitamente rompía la doble-init de React Strict Mode (dev) y
+      // dejaba el segundo mount con un contexto perdido → flash negro.
+      // Permitir el reset del guard en caso de unmount real del componente.
+      initializedRef.current = false;
     };
   }, []);
 

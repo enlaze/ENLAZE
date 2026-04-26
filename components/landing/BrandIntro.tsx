@@ -30,7 +30,7 @@ import ShaderBackground from "@/components/landing/ShaderBackground";
  *    · Z-index 50 dentro del stacking del Hero (isolate en <section>)
  * ───────────────────────────────────────────────────────────────────── */
 
-const STORAGE_KEY = "enlaze:brand-intro:played:v5";
+const STORAGE_KEY = "enlaze:brand-intro:played:v6";
 
 export default function BrandIntro() {
   const [stage, setStage] = useState<"hidden" | "playing" | "leaving" | "done">(
@@ -59,11 +59,16 @@ export default function BrandIntro() {
       return;
     }
 
-    // Empezamos a "playing" en el siguiente frame para asegurar que el
-    // estado inicial (sin .lit) se pinta primero y el browser puede animar
-    // la transición de .lit en condiciones.
-    const litTimer = setTimeout(() => setStage("playing"), 40);
-    const leaveTimer = setTimeout(() => setStage("leaving"), 2000);
+    // Delay de arranque (150 ms) para dar tiempo a que el ShaderBackground
+    // monte su contexto WebGL, compile shaders y pinte el primer frame.
+    // En producción no se nota; en dev (React Strict Mode + HMR) evita el
+    // "flash negro" porque el shader ya tiene contenido cuando entramos
+    // a la fase .lit.
+    const STARTUP_DELAY = 150;
+    const TOTAL = STARTUP_DELAY + 2400;
+
+    const litTimer = setTimeout(() => setStage("playing"), STARTUP_DELAY + 40);
+    const leaveTimer = setTimeout(() => setStage("leaving"), STARTUP_DELAY + 2000);
     const doneTimer = setTimeout(() => {
       setStage("done");
       try {
@@ -71,7 +76,7 @@ export default function BrandIntro() {
       } catch {
         /* ignore */
       }
-    }, 2400);
+    }, TOTAL);
 
     return () => {
       clearTimeout(litTimer);
@@ -144,28 +149,39 @@ export default function BrandIntro() {
           opacity: 0;
         }
 
-        /* Base sólida — mismo color que body del HTML original (#050b14). */
+        /* Base sólida — fallback navy enriquecido. NUNCA puramente negro:
+           si el shader tarda en pintar (dev mode), esto es lo que se ve. */
         .base {
           position: absolute;
           inset: 0;
-          background: radial-gradient(
-            80% 60% at 50% 50%,
-            #0a1a2c 0%,
-            #050b14 60%,
-            #02060c 100%
-          );
+          background:
+            radial-gradient(
+              ellipse at 30% 20%,
+              rgba(0, 200, 150, 0.12),
+              transparent 55%
+            ),
+            radial-gradient(
+              ellipse at 70% 80%,
+              rgba(8, 34, 69, 0.50),
+              transparent 60%
+            ),
+            radial-gradient(
+              80% 60% at 50% 50%,
+              #0a1a2c 0%,
+              #050b14 60%,
+              #02060c 100%
+            );
         }
 
-        /* Shader host — contiene el <ShaderBackground /> en fade-in suave.
-           Replica el .root.lit #shader { opacity: 0.85 } del HTML original
-           (que en 700 ms pasa de 0 a 0.85). */
+        /* Shader host — visible desde el primer frame (opacity 0.85 fija).
+           En el HTML original tenía un fade-in de 700 ms, pero en un entorno
+           con React Strict Mode ese fade combinado con el delay de init de
+           WebGL deja varios cientos de ms de canvas vacío visible.
+           Mostrarlo ya con su opacidad final + el .base navy de abajo
+           garantiza que nunca se vea negro. */
         .shader-host {
           position: absolute;
           inset: 0;
-          opacity: 0;
-          transition: opacity 700ms ease-out;
-        }
-        .bi-root.lit .shader-host {
           opacity: 0.85;
         }
         /* El canvas interno del ShaderBackground necesita anclar al
