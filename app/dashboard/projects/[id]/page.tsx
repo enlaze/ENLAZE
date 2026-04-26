@@ -10,6 +10,7 @@ import { saveDocumentVersion, getNextVersion } from "@/lib/document-versions";
 import { logActivity } from "@/lib/activity-log";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
+import BackButton from "@/components/ui/back-button";
 
 /* ═══════════════════════════ Types ═══════════════════════════ */
 
@@ -790,12 +791,10 @@ export default function ProjectDetailPage() {
 
   return (
     <div className="max-w-6xl mx-auto">
+      <BackButton fallbackHref="/dashboard/projects" label="Volver a obras" />
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
         <div>
-          <Link href="/dashboard/projects" className="text-sm text-[var(--color-navy-400)] hover:text-[var(--color-brand-green)] mb-2 inline-block">
-            ← Volver a {label("project")}s
-          </Link>
           <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">{project.name}</h1>
           {project.address && <p className="text-[var(--color-navy-400)] text-sm mt-0.5">📍 {project.address}</p>}
         </div>

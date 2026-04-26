@@ -45,3 +45,6 @@ next-env.d.ts
 *.bak[0-9]
 *.orig
 *.swp
+
+# claude code (agent worktrees, local settings)
+.claude/

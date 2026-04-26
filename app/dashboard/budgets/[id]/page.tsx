@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
-import Link from "next/link";
 import { useSector } from "@/lib/sector-context";
 import AcceptanceTimeline from "@/components/AcceptanceTimeline";
 import { saveDocumentVersion, getNextVersion } from "@/lib/document-versions";
@@ -15,6 +14,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
 import Loading from "@/components/ui/loading";
+import BackButton from "@/components/ui/back-button";
 
 interface BudgetItem {
   id: string;
@@ -430,12 +430,7 @@ export default function BudgetDetailPage() {
   return (
     <div className="max-w-5xl mx-auto">
       {/* Back link */}
-      <Link
-        href="/dashboard/budgets"
-        className="mb-3 inline-flex items-center text-sm text-navy-500 hover:text-brand-green dark:text-zinc-400"
-      >
-        ← Volver a presupuestos
-      </Link>
+      <BackButton fallbackHref="/dashboard/budgets" label="Volver a presupuestos" />
 
       {/* Header */}
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

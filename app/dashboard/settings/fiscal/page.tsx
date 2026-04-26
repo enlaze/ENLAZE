@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { useToast } from "@/components/ui/toast";
+import BackButton from "@/components/ui/back-button";
 
 const inputCls = "w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm";
 
@@ -131,6 +132,7 @@ export default function FiscalSettingsPage() {
 
   return (
     <div className="max-w-3xl mx-auto">
+      <BackButton fallbackHref="/dashboard/settings" label="Volver a Ajustes" />
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">Ajustes Fiscales</h1>
         <p className="text-sm text-[var(--color-navy-400)]">Datos del emisor para facturas emitidas, Verifactu y Facturae</p>

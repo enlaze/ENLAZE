@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { useRouter } from "next/navigation";
 import { useSector, SectorConfig } from "@/lib/sector-context";
 import { useToast } from "@/components/ui/toast";
+import BackButton from "@/components/ui/back-button";
 
 const sectorIcons: Record<string, string> = {
   construccion: "🏗️",
@@ -97,6 +98,7 @@ export default function SectorSettingsPage() {
 
   return (
     <div className="max-w-3xl mx-auto">
+      <BackButton fallbackHref="/dashboard/settings" label="Volver a Ajustes" />
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-navy-900 dark:text-white">Sector de actividad</h1>
         <p className="text-sm text-navy-500 dark:text-zinc-500 mt-1">

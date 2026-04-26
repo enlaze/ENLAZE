@@ -6,6 +6,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import PageHeader from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import Loading from "@/components/ui/loading";
+import BackButton from "@/components/ui/back-button";
 
 interface LegalAcceptance {
   terms: boolean;
@@ -167,6 +168,7 @@ export default function PrivacyCompliancePage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
+      <BackButton fallbackHref="/dashboard/compliance" label="Volver a cumplimiento" className="!mb-0" />
       <PageHeader
         title="Cumplimiento de privacidad"
         description="Gestión de aceptaciones legales, subprocesadores y solicitudes de interesados."

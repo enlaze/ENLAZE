@@ -10,6 +10,7 @@ import { Card, StatCard } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
 import Loading from "@/components/ui/loading";
+import BackButton from "@/components/ui/back-button";
 import {
   type Supplier,
   type ReceivedInvoice,
@@ -62,14 +63,12 @@ export default function SupplierDetailPage() {
 
   return (
     <div className="max-w-5xl mx-auto">
+      <BackButton fallbackHref="/dashboard/suppliers" label="Volver a proveedores" />
       <PageHeader
         title={supplier.name}
         description={[supplier.nif, supplier.city].filter(Boolean).join(" · ") || "Proveedor"}
         actions={
           <div className="flex gap-2">
-            <Link href="/dashboard/suppliers">
-              <Button variant="secondary">← Volver</Button>
-            </Link>
             <Link href={`/dashboard/suppliers/invoices/new?supplier=${id}`}>
               <Button>+ Nueva factura recibida</Button>
             </Link>

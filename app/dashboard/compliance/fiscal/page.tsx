@@ -10,6 +10,7 @@ import type { FiscalEventType } from "@/lib/fiscal-events";
 import PageHeader from "@/components/ui/page-header";
 import { Card, StatCard } from "@/components/ui/card";
 import Loading from "@/components/ui/loading";
+import BackButton from "@/components/ui/back-button";
 
 interface FiscalSummary {
   totalInvoices: number;
@@ -138,6 +139,7 @@ export default function FiscalCompliancePage() {
 
   return (
     <div className="max-w-5xl mx-auto">
+      <BackButton fallbackHref="/dashboard/compliance" label="Volver a cumplimiento" />
       <PageHeader
         title="Cumplimiento fiscal"
         description="Trazabilidad fiscal, Verifactu y Facturae."

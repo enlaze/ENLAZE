@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
-import Link from "next/link";
+import BackButton from "@/components/ui/back-button";
 
 interface NotificationPref {
   id?: string;
@@ -137,13 +137,8 @@ export default function NotificationPreferencesPage() {
 
   return (
     <div className="max-w-2xl mx-auto">
+      <BackButton fallbackHref="/dashboard/settings" label="Volver a Ajustes" />
       <div className="mb-6">
-        <Link
-          href="/dashboard/settings"
-          className="text-sm text-navy-500 dark:text-zinc-500 hover:text-navy-700 mb-2 inline-block"
-        >
-          &larr; Volver a Ajustes
-        </Link>
         <h1 className="text-2xl font-bold text-navy-900 dark:text-white">
           Preferencias de notificaciones
         </h1>

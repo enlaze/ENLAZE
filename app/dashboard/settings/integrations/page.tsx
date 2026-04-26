@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import BackButton from "@/components/ui/back-button";
 
 interface Integration {
   id: string;
@@ -197,14 +198,10 @@ export default function IntegrationsPage() {
 
   return (
     <>
-      <div className="mb-6 flex items-center gap-3">
-        <button onClick={() => router.back()} className="p-2 rounded-lg hover:bg-navy-50 dark:hover:bg-zinc-800 transition-colors text-navy-500">
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-        </button>
-        <div>
-          <h1 className="text-2xl font-bold text-navy-900 dark:text-white">Integraciones</h1>
-          <p className="mt-1 text-sm text-navy-600 dark:text-zinc-400">Conecta las herramientas de tu negocio con el agente</p>
-        </div>
+      <BackButton fallbackHref="/dashboard/settings" label="Volver a Ajustes" />
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-navy-900 dark:text-white">Integraciones</h1>
+        <p className="mt-1 text-sm text-navy-600 dark:text-zinc-400">Conecta las herramientas de tu negocio con el agente</p>
       </div>
 
       <div className="space-y-6 max-w-3xl">
