@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
 
     // Phase 1: If user configured a specific sheet ID in config, use it. Otherwise, search recent sheets.
     let targetSpreadsheetId = connection.config?.target_spreadsheet_id;
-    let spreadsheetName = "Hoja configurada";
+    let spreadsheetName = connection.config?.target_spreadsheet_name || "Hoja configurada";
 
     if (!targetSpreadsheetId) {
       // Fallback: search for the latest modified spreadsheet
