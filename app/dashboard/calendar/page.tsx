@@ -115,12 +115,12 @@ export default function CalendarPage() {
             <FormField label="Fecha" required>
               <Input type="date" value={form.event_date} onChange={e => setForm({...form, event_date: e.target.value})} required />
             </FormField>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 [&>*]:min-w-0">
               <FormField label="Hora">
-                <Input type="time" value={form.event_time} onChange={e => setForm({...form, event_time: e.target.value})} />
+                <Input type="time" value={form.event_time} onChange={e => setForm({...form, event_time: e.target.value})} className="min-w-0 w-full" />
               </FormField>
               <FormField label="Duración">
-                <Select value={form.duration_minutes} onChange={e => setForm({...form, duration_minutes: Number(e.target.value)})}>
+                <Select value={form.duration_minutes} onChange={e => setForm({...form, duration_minutes: Number(e.target.value)})} className="min-w-0 w-full">
                   <option value={15}>15 min</option>
                   <option value={30}>30 min</option>
                   <option value={45}>45 min</option>
