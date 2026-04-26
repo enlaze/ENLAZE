@@ -11,6 +11,10 @@ import { logActivity } from "@/lib/activity-log";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import BackButton from "@/components/ui/back-button";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import Loading from "@/components/ui/loading";
+import { inputBase } from "@/components/ui/form-fields";
 
 /* ═══════════════════════════ Types ═══════════════════════════ */
 
@@ -159,52 +163,57 @@ interface ProjectDeliveryNote {
 
 /* ═══════════════════════════ Labels ═══════════════════════════ */
 
+const defaultStatusColor = "bg-zinc-100 text-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-400";
+
 const statusLabelMap: Record<string, string> = {
   planning: "Planificación", approved: "Aprobada", in_progress: "En curso",
   paused: "Pausada", completed: "Finalizada", cancelled: "Cancelada",
 };
 const statusColorMap: Record<string, string> = {
-  planning: "bg-blue-900/30 text-blue-300", approved: "bg-emerald-900/30 text-emerald-300",
-  in_progress: "bg-yellow-900/30 text-yellow-300", paused: "bg-orange-900/30 text-orange-300",
-  completed: "bg-green-900/30 text-green-300", cancelled: "bg-red-900/30 text-red-300",
+  planning: "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+  approved: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
+  in_progress: "bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300",
+  paused: "bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
+  completed: "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+  cancelled: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300",
 };
 const budgetStatusMap: Record<string, { label: string; color: string }> = {
-  pending: { label: "Pendiente", color: "bg-yellow-900/30 text-yellow-300" },
-  sent: { label: "Enviado", color: "bg-blue-900/30 text-blue-300" },
-  accepted: { label: "Aceptado", color: "bg-green-900/30 text-green-300" },
-  rejected: { label: "Rechazado", color: "bg-red-900/30 text-red-300" },
+  pending: { label: "Pendiente", color: "bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300" },
+  sent: { label: "Enviado", color: "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+  accepted: { label: "Aceptado", color: "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
+  rejected: { label: "Rechazado", color: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
 };
 const invoiceStatusMap: Record<string, { label: string; color: string }> = {
-  pending: { label: "Pendiente", color: "bg-yellow-900/30 text-yellow-300" },
-  paid: { label: "Pagada", color: "bg-green-900/30 text-green-300" },
-  overdue: { label: "Vencida", color: "bg-red-900/30 text-red-300" },
-  cancelled: { label: "Anulada", color: "bg-zinc-900/30 text-zinc-400 dark:bg-zinc-900/50 dark:text-zinc-500" },
+  pending: { label: "Pendiente", color: "bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300" },
+  paid: { label: "Pagada", color: "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
+  overdue: { label: "Vencida", color: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
+  cancelled: { label: "Anulada", color: defaultStatusColor },
 };
 const changeStatusMap: Record<string, { label: string; color: string }> = {
-  proposed: { label: "Propuesto", color: "bg-blue-900/30 text-blue-300" },
-  approved: { label: "Aprobado", color: "bg-green-900/30 text-green-300" },
-  rejected: { label: "Rechazado", color: "bg-red-900/30 text-red-300" },
-  executed: { label: "Ejecutado", color: "bg-emerald-900/30 text-emerald-300" },
+  proposed: { label: "Propuesto", color: "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+  approved: { label: "Aprobado", color: "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
+  rejected: { label: "Rechazado", color: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
+  executed: { label: "Ejecutado", color: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" },
 };
 const milestoneStatusMap: Record<string, { label: string; color: string }> = {
-  pending: { label: "Pendiente", color: "bg-yellow-900/30 text-yellow-300" },
-  in_progress: { label: "En curso", color: "bg-blue-900/30 text-blue-300" },
-  completed: { label: "Completado", color: "bg-green-900/30 text-green-300" },
-  cancelled: { label: "Cancelado", color: "bg-red-900/30 text-red-300" },
+  pending: { label: "Pendiente", color: "bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300" },
+  in_progress: { label: "En curso", color: "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+  completed: { label: "Completado", color: "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
+  cancelled: { label: "Cancelado", color: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
 };
 const orderStatusMap: Record<string, { label: string; color: string }> = {
-  draft: { label: "Borrador", color: "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400" },
-  sent: { label: "Enviado", color: "bg-blue-900/30 text-blue-300" },
-  confirmed: { label: "Confirmado", color: "bg-emerald-900/30 text-emerald-300" },
-  partial: { label: "Parcial", color: "bg-yellow-900/30 text-yellow-300" },
-  received: { label: "Recibido", color: "bg-green-900/30 text-green-300" },
-  cancelled: { label: "Cancelado", color: "bg-red-900/30 text-red-300" },
+  draft: { label: "Borrador", color: defaultStatusColor },
+  sent: { label: "Enviado", color: "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+  confirmed: { label: "Confirmado", color: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" },
+  partial: { label: "Parcial", color: "bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300" },
+  received: { label: "Recibido", color: "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
+  cancelled: { label: "Cancelado", color: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
 };
 const dnStatusMap: Record<string, { label: string; color: string }> = {
-  pending: { label: "Pendiente", color: "bg-yellow-900/30 text-yellow-300" },
-  received: { label: "Recibido", color: "bg-blue-900/30 text-blue-300" },
-  verified: { label: "Verificado", color: "bg-green-900/30 text-green-300" },
-  disputed: { label: "Incidencia", color: "bg-red-900/30 text-red-300" },
+  pending: { label: "Pendiente", color: "bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300" },
+  received: { label: "Recibido", color: "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+  verified: { label: "Verificado", color: "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
+  disputed: { label: "Incidencia", color: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
 };
 const fallbackServiceLabels: Record<string, string> = {
   reforma: "Reforma", fontaneria: "Fontanería", electricidad: "Electricidad",
@@ -255,7 +264,7 @@ export default function ProjectDetailPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  const { label, serviceTypes, options } = useSector();
+  const { label, serviceTypes } = useSector();
   const confirm = useConfirm();
   const toast = useToast();
 
@@ -410,7 +419,7 @@ export default function ProjectDetailPage() {
       await supabase.from("payments").delete().eq("id", id);
       setPayments((prev) => prev.filter((p) => p.id !== id));
       toast.success("Cobro eliminado");
-    } catch (error) {
+    } catch {
       toast.error("Error al eliminar el cobro");
     }
   }
@@ -498,7 +507,7 @@ export default function ProjectDetailPage() {
       await supabase.from("project_changes").delete().eq("id", id);
       setChanges((prev) => prev.filter((c) => c.id !== id));
       toast.success("Cambio eliminado");
-    } catch (error) {
+    } catch {
       toast.error("Error al eliminar el cambio");
     }
   }
@@ -555,7 +564,7 @@ export default function ProjectDetailPage() {
       await supabase.from("project_milestones").delete().eq("id", id);
       setMilestones((prev) => prev.filter((m) => m.id !== id));
       toast.success("Hito eliminado");
-    } catch (error) {
+    } catch {
       toast.error("Error al eliminar el hito");
     }
   }
@@ -602,7 +611,7 @@ export default function ProjectDetailPage() {
       await supabase.from("project_suppliers").delete().eq("id", id);
       setProjectSuppliers((prev) => prev.filter((ps) => ps.id !== id));
       toast.success("Proveedor eliminado de la obra");
-    } catch (error) {
+    } catch {
       toast.error("Error al eliminar el proveedor");
     }
   }
@@ -771,19 +780,15 @@ export default function ProjectDetailPage() {
   /* ═══════════════════════════ Loading ═══════════════════════════ */
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-brand-green)]"></div>
-      </div>
-    );
+    return <Loading />;
   }
   if (!project) return null;
 
   const estadoColors = {
-    verde: "bg-emerald-900/30 text-emerald-300 border-emerald-500/30",
-    amarillo: "bg-yellow-900/30 text-yellow-300 border-yellow-500/30",
-    rojo: "bg-red-900/30 text-red-300 border-red-500/30",
-    gris: "bg-[var(--color-navy-700)] text-[var(--color-navy-400)] border-[var(--color-navy-600)]",
+    verde: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-500/30",
+    amarillo: "bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-500/30",
+    rojo: "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-500/30",
+    gris: "bg-navy-50 text-navy-600 border-navy-200 dark:bg-zinc-900 dark:text-zinc-400 dark:border-zinc-700",
   };
   const estadoLabels = { verde: "Saludable", amarillo: "Atención", rojo: "En riesgo", gris: "Sin datos" };
 
@@ -795,18 +800,18 @@ export default function ProjectDetailPage() {
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">{project.name}</h1>
-          {project.address && <p className="text-[var(--color-navy-400)] text-sm mt-0.5">📍 {project.address}</p>}
+          <h1 className="text-2xl font-bold text-navy-900 dark:text-white">{project.name}</h1>
+          {project.address && <p className="text-navy-500 dark:text-zinc-400 text-sm mt-0.5">📍 {project.address}</p>}
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusColorMap[project.status] || "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400"}`}>
+          <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusColorMap[project.status] || defaultStatusColor}`}>
             {statusLabelMap[project.status] || project.status}
           </span>
           <span className={`px-3 py-1 rounded-full text-sm font-medium border ${estadoColors[kpis.estadoEconomico]}`}>
             {estadoLabels[kpis.estadoEconomico]}
           </span>
           {kpis.hitosTotal > 0 && (
-            <span className="px-3 py-1 rounded-full text-sm font-medium bg-[var(--color-navy-700)] text-[var(--color-navy-300)]">
+            <span className="px-3 py-1 rounded-full text-sm font-medium bg-navy-100 text-navy-700 dark:bg-zinc-800 dark:text-zinc-300">
               {kpis.hitosCompletados}/{kpis.hitosTotal} hitos
             </span>
           )}
@@ -826,7 +831,7 @@ export default function ProjectDetailPage() {
               setLinkCopied(true);
               setTimeout(() => setLinkCopied(false), 3000);
             }}
-            className="px-4 py-1.5 rounded-lg text-sm font-medium bg-[var(--color-navy-700)] text-[var(--color-navy-200)] hover:bg-[var(--color-navy-600)] border border-[var(--color-navy-600)] transition flex items-center gap-1.5">
+            className="px-4 py-1.5 rounded-lg text-sm font-medium border border-navy-200 bg-white text-navy-700 hover:bg-navy-50 hover:border-navy-300 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:hover:border-zinc-700 transition flex items-center gap-1.5">
             {linkCopied ? "✓ Enlace copiado" : "🔗 Compartir con cliente"}
           </button>
         </div>
@@ -834,81 +839,81 @@ export default function ProjectDetailPage() {
 
       {/* ── Info cards ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-5">
-          <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-3">Datos de la {label("project")}</h3>
+        <Card>
+          <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-3">Datos de la {label("project")}</h3>
           <div className="space-y-2 text-sm">
             <InfoRow label="Estado" value={statusLabelMap[project.status] || project.status} />
             <InfoRow label="Fecha inicio" value={fmtDate(project.start_date)} />
             <InfoRow label="Fecha fin" value={fmtDate(project.end_date)} />
             {kpis.diasExtra > 0 && <InfoRow label="Días extra (cambios)" value={`+${kpis.diasExtra} días`} />}
             {project.description && (
-              <div className="pt-2 border-t border-[var(--color-navy-700)]">
-                <span className="text-[var(--color-navy-400)] block mb-1">Descripción</span>
-                <span className="text-[var(--color-navy-200)]">{project.description}</span>
+              <div className="pt-2 border-t border-navy-100 dark:border-zinc-800">
+                <span className="text-navy-500 dark:text-zinc-400 block mb-1">Descripción</span>
+                <span className="text-navy-700 dark:text-zinc-200">{project.description}</span>
               </div>
             )}
             {project.notes && (
-              <div className="pt-2 border-t border-[var(--color-navy-700)]">
-                <span className="text-[var(--color-navy-400)] block mb-1">Notas</span>
-                <span className="text-[var(--color-navy-200)] whitespace-pre-wrap">{project.notes}</span>
+              <div className="pt-2 border-t border-navy-100 dark:border-zinc-800">
+                <span className="text-navy-500 dark:text-zinc-400 block mb-1">Notas</span>
+                <span className="text-navy-700 dark:text-zinc-200 whitespace-pre-wrap">{project.notes}</span>
               </div>
             )}
           </div>
-        </div>
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-5">
-          <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-3">Cliente asociado</h3>
+        </Card>
+        <Card>
+          <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-3">Cliente asociado</h3>
           {client ? (
             <div className="space-y-2 text-sm">
-              <p className="text-[var(--color-navy-100)] font-medium text-base">{client.name}</p>
-              {client.company && <p className="text-[var(--color-navy-300)]">🏢 {client.company}</p>}
-              {client.email && <p className="text-[var(--color-navy-300)]">📧 {client.email}</p>}
-              {client.phone && <p className="text-[var(--color-navy-300)]">📱 {client.phone}</p>}
+              <p className="text-navy-900 dark:text-white font-medium text-base">{client.name}</p>
+              {client.company && <p className="text-navy-600 dark:text-zinc-300">🏢 {client.company}</p>}
+              {client.email && <p className="text-navy-600 dark:text-zinc-300">📧 {client.email}</p>}
+              {client.phone && <p className="text-navy-600 dark:text-zinc-300">📱 {client.phone}</p>}
             </div>
           ) : (
-            <p className="text-[var(--color-navy-500)] text-sm">Sin cliente asignado</p>
+            <p className="text-navy-500 dark:text-zinc-400 text-sm">Sin cliente asignado</p>
           )}
-        </div>
+        </Card>
       </div>
 
       {/* ── Panel económico ── */}
-      <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-6">
-        <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-4">Resumen económico</h3>
+      <Card className="mb-6">
+        <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-4">Resumen económico</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-          <KpiCard label="Total presupuestado" value={eur(kpis.totalPresupuestado)} color="text-blue-400" sub={`${kpis.nPresupuestos} presupuesto${kpis.nPresupuestos !== 1 ? "s" : ""}`} />
-          <KpiCard label="Aprobado por cliente" value={eur(kpis.totalAprobado)} color="text-emerald-400" />
-          <KpiCard label="Extras aprobados" value={eur(kpis.extrasAprobados)} color={kpis.extrasAprobados > 0 ? "text-purple-400" : "text-[var(--color-navy-500)]"} sub={`${kpis.nCambios} cambio${kpis.nCambios !== 1 ? "s" : ""}`} />
-          <KpiCard label="Presupuesto ajustado" value={eur(kpis.presupuestoAjustado)} color="text-blue-300" sub="Aprobado + extras" />
+          <KpiCard label="Total presupuestado" value={eur(kpis.totalPresupuestado)} color="text-blue-600 dark:text-blue-400" sub={`${kpis.nPresupuestos} presupuesto${kpis.nPresupuestos !== 1 ? "s" : ""}`} />
+          <KpiCard label="Aprobado por cliente" value={eur(kpis.totalAprobado)} color="text-emerald-600 dark:text-emerald-400" />
+          <KpiCard label="Extras aprobados" value={eur(kpis.extrasAprobados)} color={kpis.extrasAprobados > 0 ? "text-purple-600 dark:text-purple-400" : "text-navy-500 dark:text-zinc-500"} sub={`${kpis.nCambios} cambio${kpis.nCambios !== 1 ? "s" : ""}`} />
+          <KpiCard label="Presupuesto ajustado" value={eur(kpis.presupuestoAjustado)} color="text-blue-600 dark:text-blue-300" sub="Aprobado + extras" />
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-          <KpiCard label="Coste real acumulado" value={eur(kpis.costeReal)} color="text-orange-400" sub={`${kpis.nFacturas} factura${kpis.nFacturas !== 1 ? "s" : ""}`} />
-          <KpiCard label="Cobrado" value={eur(kpis.totalCobrado)} color="text-[var(--color-brand-green)]" sub={`${kpis.nCobros} cobro${kpis.nCobros !== 1 ? "s" : ""}`} />
-          <KpiCard label="Pendiente de cobro" value={eur(kpis.pendienteCobro)} color={kpis.pendienteCobro > 0 ? "text-yellow-400" : "text-[var(--color-navy-400)]"} />
-          <KpiCard label="Facturas sin pagar" value={eur(kpis.costePendientePago)} color={kpis.costePendientePago > 0 ? "text-red-400" : "text-[var(--color-navy-400)]"} />
+          <KpiCard label="Coste real acumulado" value={eur(kpis.costeReal)} color="text-orange-600 dark:text-orange-400" sub={`${kpis.nFacturas} factura${kpis.nFacturas !== 1 ? "s" : ""}`} />
+          <KpiCard label="Cobrado" value={eur(kpis.totalCobrado)} color="text-brand-green" sub={`${kpis.nCobros} cobro${kpis.nCobros !== 1 ? "s" : ""}`} />
+          <KpiCard label="Pendiente de cobro" value={eur(kpis.pendienteCobro)} color={kpis.pendienteCobro > 0 ? "text-yellow-600 dark:text-yellow-400" : "text-navy-500 dark:text-zinc-400"} />
+          <KpiCard label="Facturas sin pagar" value={eur(kpis.costePendientePago)} color={kpis.costePendientePago > 0 ? "text-red-600 dark:text-red-400" : "text-navy-500 dark:text-zinc-400"} />
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <div className="bg-[var(--color-navy-750)] rounded-xl p-4">
-            <p className="text-xs text-[var(--color-navy-400)] mb-1">Margen previsto</p>
-            <p className={`text-xl font-bold ${kpis.margenPrevisto >= 0 ? "text-emerald-400" : "text-red-400"}`}>{eur(kpis.margenPrevisto)}</p>
-            <p className="text-xs text-[var(--color-navy-500)] mt-0.5">{kpis.pctMargenPrevisto.toFixed(1)}% sobre ajustado</p>
+          <div className="rounded-xl border border-navy-100 bg-navy-50/40 dark:border-zinc-800 dark:bg-zinc-900/50 p-4">
+            <p className="text-xs text-navy-500 dark:text-zinc-400 mb-1">Margen previsto</p>
+            <p className={`text-xl font-bold ${kpis.margenPrevisto >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>{eur(kpis.margenPrevisto)}</p>
+            <p className="text-xs text-navy-400 dark:text-zinc-500 mt-0.5">{kpis.pctMargenPrevisto.toFixed(1)}% sobre ajustado</p>
           </div>
-          <div className="bg-[var(--color-navy-750)] rounded-xl p-4">
-            <p className="text-xs text-[var(--color-navy-400)] mb-1">Margen real</p>
-            <p className={`text-xl font-bold ${kpis.margenReal >= 0 ? "text-emerald-400" : "text-red-400"}`}>{eur(kpis.margenReal)}</p>
-            <p className="text-xs text-[var(--color-navy-500)] mt-0.5">{kpis.pctMargenReal.toFixed(1)}% sobre cobrado</p>
+          <div className="rounded-xl border border-navy-100 bg-navy-50/40 dark:border-zinc-800 dark:bg-zinc-900/50 p-4">
+            <p className="text-xs text-navy-500 dark:text-zinc-400 mb-1">Margen real</p>
+            <p className={`text-xl font-bold ${kpis.margenReal >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>{eur(kpis.margenReal)}</p>
+            <p className="text-xs text-navy-400 dark:text-zinc-500 mt-0.5">{kpis.pctMargenReal.toFixed(1)}% sobre cobrado</p>
           </div>
-          <div className="bg-[var(--color-navy-750)] rounded-xl p-4 flex items-center justify-center col-span-2 md:col-span-1">
+          <div className="rounded-xl border border-navy-100 bg-navy-50/40 dark:border-zinc-800 dark:bg-zinc-900/50 p-4 flex items-center justify-center col-span-2 md:col-span-1">
             <div className="text-center">
-              <p className="text-xs text-[var(--color-navy-400)] mb-1">Estado económico</p>
+              <p className="text-xs text-navy-500 dark:text-zinc-400 mb-1">Estado económico</p>
               <span className={`inline-block px-4 py-1.5 rounded-full text-sm font-bold border ${estadoColors[kpis.estadoEconomico]}`}>
                 {estadoLabels[kpis.estadoEconomico]}
               </span>
             </div>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* ── Tabs ── */}
-      <div className="flex gap-1 mb-6 bg-[var(--color-navy-800)] rounded-xl p-1 overflow-x-auto">
+      <div className="flex gap-1 mb-6 rounded-2xl border border-navy-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 p-1 overflow-x-auto">
         {([
           { key: "resumen" as TabKey, label: "Resumen" },
           { key: "presupuestos" as TabKey, label: "Presupuestos", count: kpis.nPresupuestos },
@@ -922,12 +927,12 @@ export default function ProjectDetailPage() {
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
             className={`flex-1 px-3 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${
               activeTab === tab.key
-                ? "bg-[var(--color-brand-green)] text-[var(--color-navy-900)]"
-                : "text-[var(--color-navy-300)] hover:text-[var(--color-navy-100)] hover:bg-[var(--color-navy-750)]"
+                ? "bg-brand-green text-white"
+                : "text-navy-600 hover:text-navy-900 hover:bg-navy-50 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800"
             }`}>
             {tab.label}
             {"count" in tab && tab.count !== undefined && (
-              <span className={`ml-1 text-xs ${activeTab === tab.key ? "opacity-70" : "text-[var(--color-navy-500)]"}`}>
+              <span className={`ml-1 text-xs ${activeTab === tab.key ? "opacity-80" : "text-navy-400 dark:text-zinc-500"}`}>
                 ({tab.count})
               </span>
             )}
@@ -937,61 +942,61 @@ export default function ProjectDetailPage() {
 
       {/* ═══════ TAB: Resumen ═══════ */}
       {activeTab === "resumen" && (
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-10">
-          <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-3">Últimos movimientos</h3>
+        <Card className="mb-10">
+          <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-3">Últimos movimientos</h3>
           {budgets.length === 0 && invoices.length === 0 && payments.length === 0 && changes.length === 0 ? (
-            <p className="text-[var(--color-navy-500)] text-sm">No hay movimientos todavía en esta {label("project")}.</p>
+            <p className="text-navy-500 dark:text-zinc-400 text-sm">No hay movimientos todavía en esta {label("project")}.</p>
           ) : (
             <div className="space-y-2">
               {[
-                ...budgets.slice(0, 3).map((b) => ({ date: b.created_at, label: `Presupuesto ${b.budget_number} — ${b.title}`, amount: Number(b.total || 0), status: budgetStatusMap[b.status]?.label || b.status, color: "text-blue-400", sign: "" })),
-                ...invoices.slice(0, 3).map((i) => ({ date: i.invoice_date || i.created_at, label: `Factura ${i.invoice_number || "s/n"} — ${i.supplier_name}`, amount: Number(i.total_amount || 0), status: invoiceStatusMap[i.payment_status]?.label || i.payment_status, color: "text-orange-400", sign: "−" })),
-                ...payments.slice(0, 3).map((p) => ({ date: p.payment_date, label: `Cobro — ${p.concept}`, amount: Number(p.amount || 0), status: p.payment_method, color: "text-emerald-400", sign: "+" })),
-                ...changes.filter((c) => c.status === "approved" || c.status === "executed").slice(0, 3).map((c) => ({ date: c.approved_date || c.created_at, label: `Extra — ${c.title}`, amount: Number(c.economic_impact || 0), status: changeStatusMap[c.status]?.label || c.status, color: "text-purple-400", sign: "+" })),
+                ...budgets.slice(0, 3).map((b) => ({ date: b.created_at, label: `Presupuesto ${b.budget_number} — ${b.title}`, amount: Number(b.total || 0), status: budgetStatusMap[b.status]?.label || b.status, color: "text-blue-600 dark:text-blue-400", sign: "" })),
+                ...invoices.slice(0, 3).map((i) => ({ date: i.invoice_date || i.created_at, label: `Factura ${i.invoice_number || "s/n"} — ${i.supplier_name}`, amount: Number(i.total_amount || 0), status: invoiceStatusMap[i.payment_status]?.label || i.payment_status, color: "text-orange-600 dark:text-orange-400", sign: "−" })),
+                ...payments.slice(0, 3).map((p) => ({ date: p.payment_date, label: `Cobro — ${p.concept}`, amount: Number(p.amount || 0), status: p.payment_method, color: "text-emerald-600 dark:text-emerald-400", sign: "+" })),
+                ...changes.filter((c) => c.status === "approved" || c.status === "executed").slice(0, 3).map((c) => ({ date: c.approved_date || c.created_at, label: `Extra — ${c.title}`, amount: Number(c.economic_impact || 0), status: changeStatusMap[c.status]?.label || c.status, color: "text-purple-600 dark:text-purple-400", sign: "+" })),
               ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10).map((item, i) => (
-                <div key={i} className="flex items-center justify-between py-2 border-b border-[var(--color-navy-700)] last:border-0">
+                <div key={i} className="flex items-center justify-between py-2 border-b border-navy-100 dark:border-zinc-800 last:border-0">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-[var(--color-navy-100)] truncate">{item.label}</p>
-                    <p className="text-xs text-[var(--color-navy-500)]">{fmtDate(item.date)} · {item.status}</p>
+                    <p className="text-sm text-navy-900 dark:text-white truncate">{item.label}</p>
+                    <p className="text-xs text-navy-500 dark:text-zinc-400">{fmtDate(item.date)} · {item.status}</p>
                   </div>
                   <p className={`text-sm font-semibold ${item.color} ml-4 whitespace-nowrap`}>{item.sign}{eur(item.amount)}</p>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </Card>
       )}
 
       {/* ═══════ TAB: Presupuestos ═══════ */}
       {activeTab === "presupuestos" && (
-        <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden mb-10">
-          <div className="p-5 border-b border-[var(--color-navy-700)] flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider">Presupuestos ({budgets.length})</h3>
-            <Link href="/dashboard/budgets/new" className="text-xs text-[var(--color-brand-green)] hover:underline">+ Nuevo presupuesto</Link>
+        <Card padding={false} className="mb-10 overflow-hidden">
+          <div className="p-5 border-b border-navy-100 dark:border-zinc-800 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider">Presupuestos ({budgets.length})</h3>
+            <Link href="/dashboard/budgets/new" className="text-xs text-brand-green hover:underline">+ Nuevo presupuesto</Link>
           </div>
           {budgets.length === 0 ? (
-            <div className="p-8 text-center"><p className="text-[var(--color-navy-500)]">No hay presupuestos vinculados.</p></div>
+            <div className="p-8 text-center"><p className="text-sm text-navy-500 dark:text-zinc-400">No hay presupuestos vinculados.</p></div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead><tr className="bg-[var(--color-navy-750)]">
+                <thead><tr className="border-b border-navy-100 dark:border-zinc-800 bg-navy-50/60 dark:bg-zinc-900/50">
                   <Th align="left">Nº</Th><Th align="left">Título</Th><Th>Servicio</Th><Th>Estado</Th><Th align="right">Total</Th><Th>Fecha</Th><Th align="right">Acción</Th>
                 </tr></thead>
                 <tbody>{budgets.map((b) => {
-                  const st = budgetStatusMap[b.status] || { label: b.status, color: "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400" };
+                  const st = budgetStatusMap[b.status] || { label: b.status, color: defaultStatusColor };
                   return (
-                    <tr key={b.id} className="border-t border-[var(--color-navy-700)] hover:bg-[var(--color-navy-750)] transition">
-                      <td className="px-5 py-3 text-sm text-[var(--color-navy-300)] font-mono">{b.budget_number}</td>
-                      <td className="px-3 py-3 text-sm text-[var(--color-navy-100)] font-medium">{b.title}</td>
-                      <td className="px-3 py-3 text-center text-xs text-[var(--color-navy-300)]">{serviceLabels[b.service_type] || b.service_type}</td>
+                    <tr key={b.id} className="border-b border-navy-100 dark:border-zinc-800 hover:bg-navy-50/40 dark:hover:bg-zinc-800/50 transition">
+                      <td className="px-5 py-3 text-sm text-navy-600 dark:text-zinc-400 font-mono">{b.budget_number}</td>
+                      <td className="px-3 py-3 text-sm text-navy-900 dark:text-white font-medium">{b.title}</td>
+                      <td className="px-3 py-3 text-center text-xs text-navy-600 dark:text-zinc-400">{serviceLabels[b.service_type] || b.service_type}</td>
                       <td className="px-3 py-3 text-center"><span className={`text-xs px-2 py-1 rounded-full font-medium ${st.color}`}>{st.label}</span></td>
-                      <td className="px-3 py-3 text-right text-sm font-semibold text-[var(--color-navy-100)]">{eur(b.total)}</td>
-                      <td className="px-3 py-3 text-center text-xs text-[var(--color-navy-400)]">{fmtDate(b.created_at)}</td>
+                      <td className="px-3 py-3 text-right text-sm font-semibold text-navy-900 dark:text-white">{eur(b.total)}</td>
+                      <td className="px-3 py-3 text-center text-xs text-navy-500 dark:text-zinc-400">{fmtDate(b.created_at)}</td>
                       <td className="px-5 py-3 text-right">
-                        <div className="flex justify-end gap-2">
-                          <Link href={`/dashboard/budgets/${b.id}`} className="text-xs text-[var(--color-brand-green)] hover:underline">Ver detalle</Link>
+                        <div className="flex justify-end gap-3">
+                          <Link href={`/dashboard/budgets/${b.id}`} className="text-xs text-brand-green hover:underline">Ver detalle</Link>
                           {b.status === "accepted" && (
-                            <button onClick={() => generateInvoiceFromBudget(b)} className="text-xs text-purple-400 hover:underline">Facturar</button>
+                            <button onClick={() => generateInvoiceFromBudget(b)} className="text-xs text-purple-600 dark:text-purple-400 hover:underline">Facturar</button>
                           )}
                         </div>
                       </td>
@@ -1001,106 +1006,105 @@ export default function ProjectDetailPage() {
               </table>
             </div>
           )}
-        </div>
+        </Card>
       )}
 
       {/* ═══════ TAB: Facturas ═══════ */}
       {activeTab === "facturas" && (
-        <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden mb-10">
-          <div className="p-5 border-b border-[var(--color-navy-700)] flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider">Facturas ({invoices.length})</h3>
-            <Link href="/dashboard/facturas" className="text-xs text-[var(--color-brand-green)] hover:underline">+ Nueva factura</Link>
+        <Card padding={false} className="mb-10 overflow-hidden">
+          <div className="p-5 border-b border-navy-100 dark:border-zinc-800 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider">Facturas ({invoices.length})</h3>
+            <Link href="/dashboard/facturas" className="text-xs text-brand-green hover:underline">+ Nueva factura</Link>
           </div>
           {invoices.length === 0 ? (
-            <div className="p-8 text-center"><p className="text-[var(--color-navy-500)]">No hay facturas vinculadas.</p></div>
+            <div className="p-8 text-center"><p className="text-sm text-navy-500 dark:text-zinc-400">No hay facturas vinculadas.</p></div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead><tr className="bg-[var(--color-navy-750)]">
+                <thead><tr className="border-b border-navy-100 dark:border-zinc-800 bg-navy-50/60 dark:bg-zinc-900/50">
                   <Th align="left">Nº</Th><Th align="left">Proveedor</Th><Th>Categoría</Th><Th>Estado</Th><Th align="right">Base</Th><Th align="right">Total</Th><Th>Fecha</Th>
                 </tr></thead>
                 <tbody>{invoices.map((inv) => {
-                  const st = invoiceStatusMap[inv.payment_status] || { label: inv.payment_status, color: "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400" };
+                  const st = invoiceStatusMap[inv.payment_status] || { label: inv.payment_status, color: defaultStatusColor };
                   return (
-                    <tr key={inv.id} className="border-t border-[var(--color-navy-700)] hover:bg-[var(--color-navy-750)] transition">
-                      <td className="px-5 py-3 text-sm text-[var(--color-navy-300)] font-mono">{inv.invoice_number || "—"}</td>
-                      <td className="px-3 py-3 text-sm text-[var(--color-navy-100)] font-medium">{inv.supplier_name}</td>
-                      <td className="px-3 py-3 text-center text-xs text-[var(--color-navy-300)]">{categoryLabels[inv.category] || inv.category}</td>
+                    <tr key={inv.id} className="border-b border-navy-100 dark:border-zinc-800 hover:bg-navy-50/40 dark:hover:bg-zinc-800/50 transition">
+                      <td className="px-5 py-3 text-sm text-navy-600 dark:text-zinc-400 font-mono">{inv.invoice_number || "—"}</td>
+                      <td className="px-3 py-3 text-sm text-navy-900 dark:text-white font-medium">{inv.supplier_name}</td>
+                      <td className="px-3 py-3 text-center text-xs text-navy-600 dark:text-zinc-400">{categoryLabels[inv.category] || inv.category}</td>
                       <td className="px-3 py-3 text-center"><span className={`text-xs px-2 py-1 rounded-full font-medium ${st.color}`}>{st.label}</span></td>
-                      <td className="px-3 py-3 text-right text-sm text-[var(--color-navy-200)]">{eur(inv.base_amount)}</td>
-                      <td className="px-3 py-3 text-right text-sm font-semibold text-[var(--color-navy-100)]">{eur(inv.total_amount)}</td>
-                      <td className="px-5 py-3 text-center text-xs text-[var(--color-navy-400)]">{fmtDate(inv.invoice_date)}</td>
+                      <td className="px-3 py-3 text-right text-sm text-navy-700 dark:text-zinc-200">{eur(inv.base_amount)}</td>
+                      <td className="px-3 py-3 text-right text-sm font-semibold text-navy-900 dark:text-white">{eur(inv.total_amount)}</td>
+                      <td className="px-5 py-3 text-center text-xs text-navy-500 dark:text-zinc-400">{fmtDate(inv.invoice_date)}</td>
                     </tr>
                   );
                 })}</tbody>
               </table>
             </div>
           )}
-        </div>
+        </Card>
       )}
 
       {/* ═══════ TAB: Cobros ═══════ */}
       {activeTab === "cobros" && (
         <div className="mb-10">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider">Cobros ({payments.length})</h3>
-            <button onClick={() => setShowPaymentForm(!showPaymentForm)}
-              className="px-4 py-2 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-lg text-sm font-medium hover:opacity-90 transition">
+            <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider">Cobros ({payments.length})</h3>
+            <Button onClick={() => setShowPaymentForm(!showPaymentForm)}>
               + Registrar cobro
-            </button>
+            </Button>
           </div>
           {showPaymentForm && (
-            <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-4 border border-[var(--color-navy-600)]">
+            <Card className="mb-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField label="Importe (€) *">
-                  <input type="number" min="0" step="0.01" value={paymentForm.amount || ""} onChange={(e) => setPaymentForm({ ...paymentForm, amount: parseFloat(e.target.value) || 0 })} className={inputCls} placeholder="0.00" />
+                  <input type="number" min="0" step="0.01" value={paymentForm.amount || ""} onChange={(e) => setPaymentForm({ ...paymentForm, amount: parseFloat(e.target.value) || 0 })} className={inputBase} placeholder="0.00" />
                 </FormField>
                 <FormField label="Fecha *">
-                  <input type="date" value={paymentForm.payment_date} onChange={(e) => setPaymentForm({ ...paymentForm, payment_date: e.target.value })} className={inputCls} />
+                  <input type="date" value={paymentForm.payment_date} onChange={(e) => setPaymentForm({ ...paymentForm, payment_date: e.target.value })} className={inputBase} />
                 </FormField>
                 <FormField label="Método de pago">
-                  <select value={paymentForm.payment_method} onChange={(e) => setPaymentForm({ ...paymentForm, payment_method: e.target.value })} className={inputCls}>
+                  <select value={paymentForm.payment_method} onChange={(e) => setPaymentForm({ ...paymentForm, payment_method: e.target.value })} className={inputBase}>
                     {paymentMethods.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
                   </select>
                 </FormField>
                 <FormField label="Concepto *" span={2}>
-                  <input type="text" value={paymentForm.concept} onChange={(e) => setPaymentForm({ ...paymentForm, concept: e.target.value })} className={inputCls} placeholder="Ej: Certificación Fase 1" />
+                  <input type="text" value={paymentForm.concept} onChange={(e) => setPaymentForm({ ...paymentForm, concept: e.target.value })} className={inputBase} placeholder="Ej: Certificación Fase 1" />
                 </FormField>
                 <FormField label="Notas">
-                  <input type="text" value={paymentForm.notes} onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })} className={inputCls} placeholder="Observaciones" />
+                  <input type="text" value={paymentForm.notes} onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })} className={inputBase} placeholder="Observaciones" />
                 </FormField>
               </div>
               <FormActions onSave={handleSavePayment} onCancel={() => { setShowPaymentForm(false); setPaymentForm(emptyPaymentForm); }} saving={savingPayment} label="Guardar cobro" />
-            </div>
+            </Card>
           )}
-          <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden">
+          <Card padding={false} className="overflow-hidden">
             {payments.length === 0 ? (
-              <div className="p-8 text-center"><p className="text-[var(--color-navy-500)]">No hay cobros registrados.</p></div>
+              <div className="p-8 text-center"><p className="text-sm text-navy-500 dark:text-zinc-400">No hay cobros registrados.</p></div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead><tr className="bg-[var(--color-navy-750)]">
+                  <thead><tr className="border-b border-navy-100 dark:border-zinc-800 bg-navy-50/60 dark:bg-zinc-900/50">
                     <Th>Fecha</Th><Th align="left">Concepto</Th><Th>Método</Th><Th align="right">Importe</Th><Th align="right">Acción</Th>
                   </tr></thead>
                   <tbody>{payments.map((p) => (
-                    <tr key={p.id} className="border-t border-[var(--color-navy-700)] hover:bg-[var(--color-navy-750)] transition">
-                      <td className="px-5 py-3 text-center text-sm text-[var(--color-navy-300)]">{fmtDate(p.payment_date)}</td>
-                      <td className="px-3 py-3 text-sm text-[var(--color-navy-100)] font-medium">{p.concept}{p.notes && <span className="text-xs text-[var(--color-navy-500)] ml-2">({p.notes})</span>}</td>
-                      <td className="px-3 py-3 text-center text-xs text-[var(--color-navy-300)]">{paymentMethods.find((m) => m.value === p.payment_method)?.label || p.payment_method}</td>
-                      <td className="px-3 py-3 text-right text-sm font-semibold text-emerald-400">{eur(p.amount)}</td>
-                      <td className="px-5 py-3 text-right"><button onClick={() => handleDeletePayment(p.id)} className="text-xs text-red-400 hover:underline">Eliminar</button></td>
+                    <tr key={p.id} className="border-b border-navy-100 dark:border-zinc-800 hover:bg-navy-50/40 dark:hover:bg-zinc-800/50 transition">
+                      <td className="px-5 py-3 text-center text-sm text-navy-600 dark:text-zinc-400">{fmtDate(p.payment_date)}</td>
+                      <td className="px-3 py-3 text-sm text-navy-900 dark:text-white font-medium">{p.concept}{p.notes && <span className="text-xs text-navy-500 dark:text-zinc-400 ml-2">({p.notes})</span>}</td>
+                      <td className="px-3 py-3 text-center text-xs text-navy-600 dark:text-zinc-400">{paymentMethods.find((m) => m.value === p.payment_method)?.label || p.payment_method}</td>
+                      <td className="px-3 py-3 text-right text-sm font-semibold text-emerald-600 dark:text-emerald-400">{eur(p.amount)}</td>
+                      <td className="px-5 py-3 text-right"><button onClick={() => handleDeletePayment(p.id)} className="text-xs text-red-600 dark:text-red-400 hover:underline">Eliminar</button></td>
                     </tr>
                   ))}</tbody>
                 </table>
               </div>
             )}
-          </div>
+          </Card>
           {payments.length > 0 && (
             <div className="flex justify-end mt-3">
-              <div className="bg-[var(--color-navy-800)] rounded-xl px-5 py-3">
-                <span className="text-sm text-[var(--color-navy-400)] mr-3">Total cobrado:</span>
-                <span className="text-lg font-bold text-[var(--color-brand-green)]">{eur(kpis.totalCobrado)}</span>
-              </div>
+              <Card padding={false} className="px-5 py-3">
+                <span className="text-sm text-navy-500 dark:text-zinc-400 mr-3">Total cobrado:</span>
+                <span className="text-lg font-bold text-brand-green">{eur(kpis.totalCobrado)}</span>
+              </Card>
             </div>
           )}
         </div>
@@ -1110,22 +1114,21 @@ export default function ProjectDetailPage() {
       {activeTab === "cambios" && (
         <div className="mb-10">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider">Cambios / Extras ({changes.length})</h3>
-            <button onClick={() => { setChangeForm(emptyChangeForm); setEditingChangeId(null); setShowChangeForm(!showChangeForm); }}
-              className="px-4 py-2 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-lg text-sm font-medium hover:opacity-90 transition">
+            <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider">Cambios / Extras ({changes.length})</h3>
+            <Button onClick={() => { setChangeForm(emptyChangeForm); setEditingChangeId(null); setShowChangeForm(!showChangeForm); }}>
               + Nuevo cambio
-            </button>
+            </Button>
           </div>
 
           {showChangeForm && (
-            <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-4 border border-[var(--color-navy-600)]">
-              <h4 className="text-sm font-semibold text-[var(--color-navy-100)] mb-4">{editingChangeId ? "Editar cambio" : "Nuevo cambio"}</h4>
+            <Card className="mb-4">
+              <h4 className="text-sm font-semibold text-navy-900 dark:text-white mb-4">{editingChangeId ? "Editar cambio" : "Nuevo cambio"}</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField label="Título *" span={2}>
-                  <input type="text" value={changeForm.title} onChange={(e) => setChangeForm({ ...changeForm, title: e.target.value })} className={inputCls} placeholder="Ej: Añadir tabique en cocina" />
+                  <input type="text" value={changeForm.title} onChange={(e) => setChangeForm({ ...changeForm, title: e.target.value })} className={inputBase} placeholder="Ej: Añadir tabique en cocina" />
                 </FormField>
                 <FormField label="Estado">
-                  <select value={changeForm.status} onChange={(e) => setChangeForm({ ...changeForm, status: e.target.value })} className={inputCls}>
+                  <select value={changeForm.status} onChange={(e) => setChangeForm({ ...changeForm, status: e.target.value })} className={inputBase}>
                     <option value="proposed">Propuesto</option>
                     <option value="approved">Aprobado por cliente</option>
                     <option value="rejected">Rechazado</option>
@@ -1133,56 +1136,56 @@ export default function ProjectDetailPage() {
                   </select>
                 </FormField>
                 <FormField label="Impacto económico (€)">
-                  <input type="number" step="0.01" value={changeForm.economic_impact || ""} onChange={(e) => setChangeForm({ ...changeForm, economic_impact: parseFloat(e.target.value) || 0 })} className={inputCls} placeholder="0.00" />
+                  <input type="number" step="0.01" value={changeForm.economic_impact || ""} onChange={(e) => setChangeForm({ ...changeForm, economic_impact: parseFloat(e.target.value) || 0 })} className={inputBase} placeholder="0.00" />
                 </FormField>
                 <FormField label="Impacto en plazo (días)">
-                  <input type="number" value={changeForm.time_impact_days || ""} onChange={(e) => setChangeForm({ ...changeForm, time_impact_days: parseInt(e.target.value) || 0 })} className={inputCls} placeholder="0" />
+                  <input type="number" value={changeForm.time_impact_days || ""} onChange={(e) => setChangeForm({ ...changeForm, time_impact_days: parseInt(e.target.value) || 0 })} className={inputBase} placeholder="0" />
                 </FormField>
                 <FormField label="Descripción" span={3}>
-                  <textarea value={changeForm.description} onChange={(e) => setChangeForm({ ...changeForm, description: e.target.value })} className={`${inputCls} min-h-[80px]`} placeholder="Describe el cambio solicitado por el cliente..." />
+                  <textarea value={changeForm.description} onChange={(e) => setChangeForm({ ...changeForm, description: e.target.value })} className={`${inputBase} min-h-[80px] resize-none`} placeholder="Describe el cambio solicitado por el cliente..." />
                 </FormField>
                 <FormField label="Observaciones" span={3}>
-                  <input type="text" value={changeForm.notes} onChange={(e) => setChangeForm({ ...changeForm, notes: e.target.value })} className={inputCls} placeholder="Notas internas" />
+                  <input type="text" value={changeForm.notes} onChange={(e) => setChangeForm({ ...changeForm, notes: e.target.value })} className={inputBase} placeholder="Notas internas" />
                 </FormField>
               </div>
               <FormActions onSave={handleSaveChange} onCancel={() => { setShowChangeForm(false); setChangeForm(emptyChangeForm); setEditingChangeId(null); }} saving={savingChange} label={editingChangeId ? "Guardar cambios" : "Crear cambio"} />
-            </div>
+            </Card>
           )}
 
           {/* Resumen impacto */}
           {changes.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-              <KpiCard label="Total cambios" value={String(changes.length)} color="text-purple-400" />
-              <KpiCard label="Aprobados" value={String(changes.filter((c) => c.status === "approved" || c.status === "executed").length)} color="text-green-400" />
-              <KpiCard label="Impacto económico" value={eur(kpis.extrasAprobados)} color="text-purple-400" />
-              <KpiCard label="Impacto plazo" value={`+${kpis.diasExtra} días`} color={kpis.diasExtra > 0 ? "text-orange-400" : "text-[var(--color-navy-400)]"} />
+              <KpiCard label="Total cambios" value={String(changes.length)} color="text-purple-600 dark:text-purple-400" />
+              <KpiCard label="Aprobados" value={String(changes.filter((c) => c.status === "approved" || c.status === "executed").length)} color="text-green-600 dark:text-green-400" />
+              <KpiCard label="Impacto económico" value={eur(kpis.extrasAprobados)} color="text-purple-600 dark:text-purple-400" />
+              <KpiCard label="Impacto plazo" value={`+${kpis.diasExtra} días`} color={kpis.diasExtra > 0 ? "text-orange-600 dark:text-orange-400" : "text-navy-500 dark:text-zinc-400"} />
             </div>
           )}
 
-          <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden">
+          <Card padding={false} className="overflow-hidden">
             {changes.length === 0 ? (
-              <div className="p-8 text-center"><p className="text-[var(--color-navy-500)]">No hay cambios registrados en esta {label("project")}.</p></div>
+              <div className="p-8 text-center"><p className="text-sm text-navy-500 dark:text-zinc-400">No hay cambios registrados en esta {label("project")}.</p></div>
             ) : (
-              <div className="divide-y divide-[var(--color-navy-700)]">
+              <div className="divide-y divide-navy-100 dark:divide-zinc-800">
                 {changes.map((c) => {
-                  const st = changeStatusMap[c.status] || { label: c.status, color: "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400" };
+                  const st = changeStatusMap[c.status] || { label: c.status, color: defaultStatusColor };
                   return (
-                    <div key={c.id} className="p-5 hover:bg-[var(--color-navy-750)] transition">
+                    <div key={c.id} className="p-5 hover:bg-navy-50/40 dark:hover:bg-zinc-800/50 transition">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <h4 className="text-sm font-semibold text-[var(--color-navy-100)]">{c.title}</h4>
+                            <h4 className="text-sm font-semibold text-navy-900 dark:text-white">{c.title}</h4>
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.color}`}>{st.label}</span>
-                            {c.client_approved && <span className="text-xs text-green-400">✓ Cliente</span>}
+                            {c.client_approved && <span className="text-xs text-green-600 dark:text-green-400">✓ Cliente</span>}
                           </div>
-                          {c.description && <p className="text-sm text-[var(--color-navy-300)] mb-2">{c.description}</p>}
-                          <div className="flex flex-wrap gap-4 text-xs text-[var(--color-navy-400)]">
+                          {c.description && <p className="text-sm text-navy-600 dark:text-zinc-300 mb-2">{c.description}</p>}
+                          <div className="flex flex-wrap gap-4 text-xs text-navy-500 dark:text-zinc-400">
                             <span>💰 {eur(c.economic_impact)}</span>
                             {c.time_impact_days > 0 && <span>📅 +{c.time_impact_days} días</span>}
                             <span>Creado: {fmtDate(c.created_at)}</span>
                             {c.approved_date && <span>Aprobado: {fmtDate(c.approved_date)}</span>}
                           </div>
-                          {c.notes && <p className="text-xs text-[var(--color-navy-500)] mt-1 italic">{c.notes}</p>}
+                          {c.notes && <p className="text-xs text-navy-400 dark:text-zinc-500 mt-1 italic">{c.notes}</p>}
                           {/* Acceptance timeline for change */}
                           <div className="mt-2">
                             <AcceptanceTimeline
@@ -1197,9 +1200,9 @@ export default function ProjectDetailPage() {
                             />
                           </div>
                         </div>
-                        <div className="flex gap-2">
-                          <button onClick={() => startEditChange(c)} className="text-xs text-[var(--color-brand-green)] hover:underline">Editar</button>
-                          <button onClick={() => handleDeleteChange(c.id)} className="text-xs text-red-400 hover:underline">Eliminar</button>
+                        <div className="flex gap-3">
+                          <button onClick={() => startEditChange(c)} className="text-xs text-brand-green hover:underline">Editar</button>
+                          <button onClick={() => handleDeleteChange(c.id)} className="text-xs text-red-600 dark:text-red-400 hover:underline">Eliminar</button>
                         </div>
                       </div>
                     </div>
@@ -1207,7 +1210,7 @@ export default function ProjectDetailPage() {
                 })}
               </div>
             )}
-          </div>
+          </Card>
         </div>
       )}
 
@@ -1215,22 +1218,21 @@ export default function ProjectDetailPage() {
       {activeTab === "hitos" && (
         <div className="mb-10">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider">Hitos ({milestones.length})</h3>
-            <button onClick={() => { setMilestoneForm(emptyMilestoneForm); setEditingMilestoneId(null); setShowMilestoneForm(!showMilestoneForm); }}
-              className="px-4 py-2 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-lg text-sm font-medium hover:opacity-90 transition">
+            <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider">Hitos ({milestones.length})</h3>
+            <Button onClick={() => { setMilestoneForm(emptyMilestoneForm); setEditingMilestoneId(null); setShowMilestoneForm(!showMilestoneForm); }}>
               + Nuevo hito
-            </button>
+            </Button>
           </div>
 
           {showMilestoneForm && (
-            <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-4 border border-[var(--color-navy-600)]">
-              <h4 className="text-sm font-semibold text-[var(--color-navy-100)] mb-4">{editingMilestoneId ? "Editar hito" : "Nuevo hito"}</h4>
+            <Card className="mb-4">
+              <h4 className="text-sm font-semibold text-navy-900 dark:text-white mb-4">{editingMilestoneId ? "Editar hito" : "Nuevo hito"}</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField label="Título *" span={2}>
-                  <input type="text" value={milestoneForm.title} onChange={(e) => setMilestoneForm({ ...milestoneForm, title: e.target.value })} className={inputCls} placeholder="Ej: Demolición completada" />
+                  <input type="text" value={milestoneForm.title} onChange={(e) => setMilestoneForm({ ...milestoneForm, title: e.target.value })} className={inputBase} placeholder="Ej: Demolición completada" />
                 </FormField>
                 <FormField label="Estado">
-                  <select value={milestoneForm.status} onChange={(e) => setMilestoneForm({ ...milestoneForm, status: e.target.value })} className={inputCls}>
+                  <select value={milestoneForm.status} onChange={(e) => setMilestoneForm({ ...milestoneForm, status: e.target.value })} className={inputBase}>
                     <option value="pending">Pendiente</option>
                     <option value="in_progress">En curso</option>
                     <option value="completed">Completado</option>
@@ -1238,49 +1240,49 @@ export default function ProjectDetailPage() {
                   </select>
                 </FormField>
                 <FormField label="Fecha prevista">
-                  <input type="date" value={milestoneForm.planned_date} onChange={(e) => setMilestoneForm({ ...milestoneForm, planned_date: e.target.value })} className={inputCls} />
+                  <input type="date" value={milestoneForm.planned_date} onChange={(e) => setMilestoneForm({ ...milestoneForm, planned_date: e.target.value })} className={inputBase} />
                 </FormField>
                 <FormField label="Notas" span={2}>
-                  <input type="text" value={milestoneForm.notes} onChange={(e) => setMilestoneForm({ ...milestoneForm, notes: e.target.value })} className={inputCls} placeholder="Observaciones del hito" />
+                  <input type="text" value={milestoneForm.notes} onChange={(e) => setMilestoneForm({ ...milestoneForm, notes: e.target.value })} className={inputBase} placeholder="Observaciones del hito" />
                 </FormField>
               </div>
               <FormActions onSave={handleSaveMilestone} onCancel={() => { setShowMilestoneForm(false); setMilestoneForm(emptyMilestoneForm); setEditingMilestoneId(null); }} saving={savingMilestone} label={editingMilestoneId ? "Guardar hito" : "Crear hito"} />
-            </div>
+            </Card>
           )}
 
           {/* Progress bar */}
           {milestones.length > 0 && (
-            <div className="bg-[var(--color-navy-800)] rounded-xl p-4 mb-4">
+            <Card className="mb-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-[var(--color-navy-300)]">Progreso</span>
-                <span className="text-sm font-semibold text-[var(--color-navy-100)]">{kpis.hitosCompletados}/{kpis.hitosTotal}</span>
+                <span className="text-sm text-navy-600 dark:text-zinc-300">Progreso</span>
+                <span className="text-sm font-semibold text-navy-900 dark:text-white">{kpis.hitosCompletados}/{kpis.hitosTotal}</span>
               </div>
-              <div className="w-full bg-[var(--color-navy-700)] rounded-full h-2.5">
+              <div className="w-full bg-navy-100 dark:bg-zinc-800 rounded-full h-2.5">
                 <div
-                  className="bg-[var(--color-brand-green)] h-2.5 rounded-full transition-all"
+                  className="bg-brand-green h-2.5 rounded-full transition-all"
                   style={{ width: `${kpis.hitosTotal > 0 ? (kpis.hitosCompletados / kpis.hitosTotal) * 100 : 0}%` }}
                 />
               </div>
-            </div>
+            </Card>
           )}
 
-          <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden">
+          <Card padding={false} className="overflow-hidden">
             {milestones.length === 0 ? (
-              <div className="p-8 text-center"><p className="text-[var(--color-navy-500)]">No hay hitos definidos para esta {label("project")}.</p></div>
+              <div className="p-8 text-center"><p className="text-sm text-navy-500 dark:text-zinc-400">No hay hitos definidos para esta {label("project")}.</p></div>
             ) : (
-              <div className="divide-y divide-[var(--color-navy-700)]">
+              <div className="divide-y divide-navy-100 dark:divide-zinc-800">
                 {milestones.map((m, idx) => {
-                  const st = milestoneStatusMap[m.status] || { label: m.status, color: "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400" };
+                  const st = milestoneStatusMap[m.status] || { label: m.status, color: defaultStatusColor };
                   const isLate = m.planned_date && !m.actual_date && m.status !== "completed" && m.status !== "cancelled" && new Date(m.planned_date) < new Date();
                   return (
-                    <div key={m.id} className="p-4 hover:bg-[var(--color-navy-750)] transition">
+                    <div key={m.id} className="p-4 hover:bg-navy-50/40 dark:hover:bg-zinc-800/50 transition">
                       <div className="flex items-center gap-4">
                         {/* Check circle */}
                         <button onClick={() => toggleMilestoneComplete(m)}
                           className={`flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center transition ${
                             m.status === "completed"
-                              ? "bg-[var(--color-brand-green)] border-[var(--color-brand-green)] text-[var(--color-navy-900)]"
-                              : "border-[var(--color-navy-600)] text-transparent hover:border-[var(--color-brand-green)]"
+                              ? "bg-brand-green border-brand-green text-white"
+                              : "border-navy-300 dark:border-zinc-600 text-transparent hover:border-brand-green"
                           }`}>
                           {m.status === "completed" && <span className="text-sm">✓</span>}
                         </button>
@@ -1288,14 +1290,14 @@ export default function ProjectDetailPage() {
                         {/* Content */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-[var(--color-navy-500)]">#{idx + 1}</span>
-                            <h4 className={`text-sm font-medium ${m.status === "completed" ? "text-[var(--color-navy-400)] line-through" : "text-[var(--color-navy-100)]"}`}>
+                            <span className="text-xs text-navy-500 dark:text-zinc-400">#{idx + 1}</span>
+                            <h4 className={`text-sm font-medium ${m.status === "completed" ? "text-navy-500 dark:text-zinc-400 line-through" : "text-navy-900 dark:text-white"}`}>
                               {m.title}
                             </h4>
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.color}`}>{st.label}</span>
-                            {isLate && <span className="text-xs px-2 py-0.5 rounded-full bg-red-900/30 text-red-300 font-medium">Retrasado</span>}
+                            {isLate && <span className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300 font-medium">Retrasado</span>}
                           </div>
-                          <div className="flex flex-wrap gap-3 text-xs text-[var(--color-navy-500)] mt-1">
+                          <div className="flex flex-wrap gap-3 text-xs text-navy-500 dark:text-zinc-400 mt-1">
                             {m.planned_date && <span>Previsto: {fmtDate(m.planned_date)}</span>}
                             {m.actual_date && <span>Real: {fmtDate(m.actual_date)}</span>}
                             {m.notes && <span className="italic">{m.notes}</span>}
@@ -1303,9 +1305,9 @@ export default function ProjectDetailPage() {
                         </div>
 
                         {/* Actions */}
-                        <div className="flex gap-2">
-                          <button onClick={() => startEditMilestone(m)} className="text-xs text-[var(--color-brand-green)] hover:underline">Editar</button>
-                          <button onClick={() => handleDeleteMilestone(m.id)} className="text-xs text-red-400 hover:underline">Eliminar</button>
+                        <div className="flex gap-3">
+                          <button onClick={() => startEditMilestone(m)} className="text-xs text-brand-green hover:underline">Editar</button>
+                          <button onClick={() => handleDeleteMilestone(m.id)} className="text-xs text-red-600 dark:text-red-400 hover:underline">Eliminar</button>
                         </div>
                       </div>
                     </div>
@@ -1313,7 +1315,7 @@ export default function ProjectDetailPage() {
                 })}
               </div>
             )}
-          </div>
+          </Card>
         </div>
       )}
 
@@ -1321,23 +1323,22 @@ export default function ProjectDetailPage() {
       {activeTab === "proveedores" && (
         <div className="mb-10">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider">Proveedores / Subcontratas ({projectSuppliers.length})</h3>
-            <button onClick={() => { setSupplierAssignForm({ supplier_id: "", role: "", notes: "" }); setShowSupplierAssign(!showSupplierAssign); }}
-              className="px-4 py-2 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-lg text-sm font-medium hover:opacity-90 transition">
+            <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider">Proveedores / Subcontratas ({projectSuppliers.length})</h3>
+            <Button onClick={() => { setSupplierAssignForm({ supplier_id: "", role: "", notes: "" }); setShowSupplierAssign(!showSupplierAssign); }}>
               + Asignar proveedor
-            </button>
+            </Button>
           </div>
 
           {showSupplierAssign && (
-            <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-4 border border-[var(--color-navy-600)]">
-              <h4 className="text-sm font-semibold text-[var(--color-navy-100)] mb-4">Asignar proveedor a esta {label("project")}</h4>
+            <Card className="mb-4">
+              <h4 className="text-sm font-semibold text-navy-900 dark:text-white mb-4">Asignar proveedor a esta {label("project")}</h4>
               {availableSuppliers.length === 0 ? (
-                <p className="text-sm text-[var(--color-navy-400)]">No hay proveedores disponibles para asignar. <Link href="/dashboard/suppliers" className="text-[var(--color-brand-green)] hover:underline">Crear nuevo proveedor</Link></p>
+                <p className="text-sm text-navy-500 dark:text-zinc-400">No hay proveedores disponibles para asignar. <Link href="/dashboard/suppliers" className="text-brand-green hover:underline">Crear nuevo proveedor</Link></p>
               ) : (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <FormField label="Proveedor *" span={1}>
-                      <select value={supplierAssignForm.supplier_id} onChange={(e) => setSupplierAssignForm({ ...supplierAssignForm, supplier_id: e.target.value })} className={inputCls}>
+                      <select value={supplierAssignForm.supplier_id} onChange={(e) => setSupplierAssignForm({ ...supplierAssignForm, supplier_id: e.target.value })} className={inputBase}>
                         <option value="">Seleccionar...</option>
                         {availableSuppliers.map((s) => (
                           <option key={s.id} value={s.id}>{s.name} — {s.trade}{s.type ? ` (${s.type === "subcontrata" ? "Subcontrata" : "Proveedor"})` : ""}</option>
@@ -1345,57 +1346,57 @@ export default function ProjectDetailPage() {
                       </select>
                     </FormField>
                     <FormField label={`Rol en ${label("project")}`}>
-                      <input type="text" value={supplierAssignForm.role} onChange={(e) => setSupplierAssignForm({ ...supplierAssignForm, role: e.target.value })} className={inputCls} placeholder="Ej: Fontanería planta baja" />
+                      <input type="text" value={supplierAssignForm.role} onChange={(e) => setSupplierAssignForm({ ...supplierAssignForm, role: e.target.value })} className={inputBase} placeholder="Ej: Fontanería planta baja" />
                     </FormField>
                     <FormField label="Notas">
-                      <input type="text" value={supplierAssignForm.notes} onChange={(e) => setSupplierAssignForm({ ...supplierAssignForm, notes: e.target.value })} className={inputCls} placeholder="Observaciones" />
+                      <input type="text" value={supplierAssignForm.notes} onChange={(e) => setSupplierAssignForm({ ...supplierAssignForm, notes: e.target.value })} className={inputBase} placeholder="Observaciones" />
                     </FormField>
                   </div>
                   <FormActions onSave={handleAssignSupplier} onCancel={() => { setShowSupplierAssign(false); setSupplierAssignForm({ supplier_id: "", role: "", notes: "" }); }} saving={savingSupplierAssign} label="Asignar" />
                 </>
               )}
-            </div>
+            </Card>
           )}
 
-          <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden">
+          <Card padding={false} className="overflow-hidden">
             {projectSuppliers.length === 0 ? (
-              <div className="p-8 text-center"><p className="text-[var(--color-navy-500)]">No hay proveedores asignados a esta {label("project")}.</p></div>
+              <div className="p-8 text-center"><p className="text-sm text-navy-500 dark:text-zinc-400">No hay proveedores asignados a esta {label("project")}.</p></div>
             ) : (
-              <div className="divide-y divide-[var(--color-navy-700)]">
+              <div className="divide-y divide-navy-100 dark:divide-zinc-800">
                 {projectSuppliers.map((ps) => {
                   const s = ps.suppliers;
                   const stars = s.rating ? "★".repeat(s.rating) + "☆".repeat(5 - s.rating) : "—";
                   return (
-                    <div key={ps.id} className="p-4 hover:bg-[var(--color-navy-750)] transition">
+                    <div key={ps.id} className="p-4 hover:bg-navy-50/40 dark:hover:bg-zinc-800/50 transition">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <Link href="/dashboard/suppliers" className="text-sm font-medium text-[var(--color-navy-100)] hover:text-[var(--color-brand-green)] transition">{s.name}</Link>
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.type === "subcontrata" ? "bg-purple-900/30 text-purple-300" : "bg-blue-900/30 text-blue-300"}`}>
+                            <Link href="/dashboard/suppliers" className="text-sm font-medium text-navy-900 dark:text-white hover:text-brand-green transition">{s.name}</Link>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.type === "subcontrata" ? "bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300" : "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"}`}>
                               {s.type === "subcontrata" ? "Subcontrata" : "Proveedor"}
                             </span>
-                            {ps.role && <span className="text-xs text-[var(--color-navy-400)]">· {ps.role}</span>}
+                            {ps.role && <span className="text-xs text-navy-500 dark:text-zinc-400">· {ps.role}</span>}
                           </div>
-                          <div className="flex flex-wrap gap-3 text-xs text-[var(--color-navy-500)]">
+                          <div className="flex flex-wrap gap-3 text-xs text-navy-500 dark:text-zinc-400">
                             <span>{s.trade}{s.specialty ? ` — ${s.specialty}` : ""}</span>
                             {s.contact_person && <span>Contacto: {s.contact_person}</span>}
                             {s.phone && <span>{s.phone}</span>}
                             {s.email && <span>{s.email}</span>}
                             {s.hourly_rate && <span>{Number(s.hourly_rate).toLocaleString("es-ES", { style: "currency", currency: "EUR" })}/h</span>}
                           </div>
-                          <div className="flex gap-3 mt-1 text-xs text-[var(--color-navy-500)]">
-                            <span className="text-yellow-400">{stars}</span>
+                          <div className="flex gap-3 mt-1 text-xs text-navy-500 dark:text-zinc-400">
+                            <span className="text-yellow-500 dark:text-yellow-400">{stars}</span>
                             {ps.notes && <span className="italic">{ps.notes}</span>}
                           </div>
                         </div>
-                        <button onClick={() => handleRemoveSupplier(ps.id)} className="text-xs text-red-400 hover:underline flex-shrink-0">Quitar</button>
+                        <button onClick={() => handleRemoveSupplier(ps.id)} className="text-xs text-red-600 dark:text-red-400 hover:underline flex-shrink-0">Quitar</button>
                       </div>
                     </div>
                   );
                 })}
               </div>
             )}
-          </div>
+          </Card>
         </div>
       )}
 
@@ -1405,102 +1406,106 @@ export default function ProjectDetailPage() {
           {/* Pedidos */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider">Pedidos ({projectOrders.length})</h3>
-              <Link href="/dashboard/orders" className="text-xs text-[var(--color-brand-green)] hover:underline">Ver todos →</Link>
+              <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider">Pedidos ({projectOrders.length})</h3>
+              <Link href="/dashboard/orders" className="text-xs text-brand-green hover:underline">Ver todos →</Link>
             </div>
-            <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden">
+            <Card padding={false} className="overflow-hidden">
               {projectOrders.length === 0 ? (
-                <div className="p-6 text-center"><p className="text-[var(--color-navy-500)]">No hay pedidos vinculados a esta {label("project")}.</p></div>
+                <div className="p-6 text-center"><p className="text-sm text-navy-500 dark:text-zinc-400">No hay pedidos vinculados a esta {label("project")}.</p></div>
               ) : (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--color-navy-700)]">
-                      <Th>Pedido</Th><Th>Fecha</Th><Th align="right">Total</Th><Th>Estado</Th><Th align="right">Acc.</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {projectOrders.map((o) => {
-                      const ost = orderStatusMap[o.status] || { label: o.status, color: "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400" };
-                      const sName = allSuppliers.find((s) => s.id === o.supplier_id)?.name;
-                      return (
-                        <tr key={o.id} className="border-b border-[var(--color-navy-700)]/50 hover:bg-[var(--color-navy-750)] transition">
-                          <td className="px-4 py-3">
-                            <p className="text-[var(--color-navy-100)] font-medium">{o.title}</p>
-                            <p className="text-xs text-[var(--color-navy-500)]">{o.order_number}{sName ? ` · ${sName}` : ""}</p>
-                          </td>
-                          <td className="px-4 py-3 text-[var(--color-navy-400)]">{fmtDate(o.order_date)}</td>
-                          <td className="px-4 py-3 text-right font-medium text-[var(--color-navy-100)]">{eur(o.total)}</td>
-                          <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ost.color}`}>{ost.label}</span></td>
-                          <td className="px-4 py-3 text-right"><Link href={`/dashboard/orders/${o.id}`} className="text-xs text-[var(--color-brand-green)] hover:underline">Detalle</Link></td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-navy-100 dark:border-zinc-800 bg-navy-50/60 dark:bg-zinc-900/50">
+                        <Th align="left">Pedido</Th><Th>Fecha</Th><Th align="right">Total</Th><Th>Estado</Th><Th align="right">Acc.</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {projectOrders.map((o) => {
+                        const ost = orderStatusMap[o.status] || { label: o.status, color: defaultStatusColor };
+                        const sName = allSuppliers.find((s) => s.id === o.supplier_id)?.name;
+                        return (
+                          <tr key={o.id} className="border-b border-navy-100 dark:border-zinc-800 hover:bg-navy-50/40 dark:hover:bg-zinc-800/50 transition">
+                            <td className="px-4 py-3">
+                              <p className="text-sm text-navy-900 dark:text-white font-medium">{o.title}</p>
+                              <p className="text-xs text-navy-500 dark:text-zinc-400">{o.order_number}{sName ? ` · ${sName}` : ""}</p>
+                            </td>
+                            <td className="px-4 py-3 text-center text-sm text-navy-600 dark:text-zinc-400">{fmtDate(o.order_date)}</td>
+                            <td className="px-4 py-3 text-right text-sm font-medium text-navy-900 dark:text-white">{eur(o.total)}</td>
+                            <td className="px-4 py-3 text-center"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ost.color}`}>{ost.label}</span></td>
+                            <td className="px-4 py-3 text-right"><Link href={`/dashboard/orders/${o.id}`} className="text-xs text-brand-green hover:underline">Detalle</Link></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
-            </div>
+            </Card>
           </div>
 
           {/* Albaranes */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider">Albaranes ({projectDeliveryNotes.length})</h3>
-              <Link href="/dashboard/delivery-notes" className="text-xs text-[var(--color-brand-green)] hover:underline">Ver todos →</Link>
+              <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider">Albaranes ({projectDeliveryNotes.length})</h3>
+              <Link href="/dashboard/delivery-notes" className="text-xs text-brand-green hover:underline">Ver todos →</Link>
             </div>
-            <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden">
+            <Card padding={false} className="overflow-hidden">
               {projectDeliveryNotes.length === 0 ? (
-                <div className="p-6 text-center"><p className="text-[var(--color-navy-500)]">No hay albaranes vinculados a esta {label("project")}.</p></div>
+                <div className="p-6 text-center"><p className="text-sm text-navy-500 dark:text-zinc-400">No hay albaranes vinculados a esta {label("project")}.</p></div>
               ) : (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--color-navy-700)]">
-                      <Th>Albarán</Th><Th>Fecha</Th><Th align="right">Total</Th><Th>Estado</Th><Th>Pedido</Th><Th align="right">Acc.</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {projectDeliveryNotes.map((dn) => {
-                      const dst = dnStatusMap[dn.status] || { label: dn.status, color: "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400" };
-                      const linkedOrder = projectOrders.find((o) => o.id === dn.order_id);
-                      return (
-                        <tr key={dn.id} className="border-b border-[var(--color-navy-700)]/50 hover:bg-[var(--color-navy-750)] transition">
-                          <td className="px-4 py-3 font-mono text-[var(--color-navy-100)]">{dn.note_number || "Sin nº"}</td>
-                          <td className="px-4 py-3 text-[var(--color-navy-400)]">{fmtDate(dn.reception_date)}</td>
-                          <td className="px-4 py-3 text-right font-medium text-[var(--color-navy-100)]">{eur(dn.total)}</td>
-                          <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${dst.color}`}>{dst.label}</span></td>
-                          <td className="px-4 py-3 text-[var(--color-navy-400)]">{linkedOrder ? (linkedOrder.order_number || linkedOrder.title) : "—"}</td>
-                          <td className="px-4 py-3 text-right"><Link href={`/dashboard/delivery-notes/${dn.id}`} className="text-xs text-[var(--color-brand-green)] hover:underline">Detalle</Link></td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-navy-100 dark:border-zinc-800 bg-navy-50/60 dark:bg-zinc-900/50">
+                        <Th align="left">Albarán</Th><Th>Fecha</Th><Th align="right">Total</Th><Th>Estado</Th><Th align="left">Pedido</Th><Th align="right">Acc.</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {projectDeliveryNotes.map((dn) => {
+                        const dst = dnStatusMap[dn.status] || { label: dn.status, color: defaultStatusColor };
+                        const linkedOrder = projectOrders.find((o) => o.id === dn.order_id);
+                        return (
+                          <tr key={dn.id} className="border-b border-navy-100 dark:border-zinc-800 hover:bg-navy-50/40 dark:hover:bg-zinc-800/50 transition">
+                            <td className="px-4 py-3 font-mono text-sm text-navy-900 dark:text-white">{dn.note_number || "Sin nº"}</td>
+                            <td className="px-4 py-3 text-center text-sm text-navy-600 dark:text-zinc-400">{fmtDate(dn.reception_date)}</td>
+                            <td className="px-4 py-3 text-right text-sm font-medium text-navy-900 dark:text-white">{eur(dn.total)}</td>
+                            <td className="px-4 py-3 text-center"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${dst.color}`}>{dst.label}</span></td>
+                            <td className="px-4 py-3 text-sm text-navy-600 dark:text-zinc-400">{linkedOrder ? (linkedOrder.order_number || linkedOrder.title) : "—"}</td>
+                            <td className="px-4 py-3 text-right"><Link href={`/dashboard/delivery-notes/${dn.id}`} className="text-xs text-brand-green hover:underline">Detalle</Link></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
-            </div>
+            </Card>
           </div>
 
           {/* Traceability summary */}
           {(projectOrders.length > 0 || projectDeliveryNotes.length > 0) && (
-            <div className="bg-[var(--color-navy-800)] rounded-xl p-4">
-              <h4 className="text-xs font-semibold text-[var(--color-navy-400)] uppercase mb-3">Resumen de trazabilidad</h4>
+            <Card>
+              <h4 className="text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase mb-3">Resumen de trazabilidad</h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="text-center">
-                  <p className="text-lg font-bold text-blue-400">{projectOrders.length}</p>
-                  <p className="text-xs text-[var(--color-navy-500)]">Pedidos</p>
+                  <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{projectOrders.length}</p>
+                  <p className="text-xs text-navy-500 dark:text-zinc-400">Pedidos</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-lg font-bold text-purple-400">{projectDeliveryNotes.length}</p>
-                  <p className="text-xs text-[var(--color-navy-500)]">Albaranes</p>
+                  <p className="text-lg font-bold text-purple-600 dark:text-purple-400">{projectDeliveryNotes.length}</p>
+                  <p className="text-xs text-navy-500 dark:text-zinc-400">Albaranes</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-lg font-bold text-emerald-400">{eur(projectOrders.reduce((s, o) => s + Number(o.total || 0), 0))}</p>
-                  <p className="text-xs text-[var(--color-navy-500)]">Total pedidos</p>
+                  <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{eur(projectOrders.reduce((s, o) => s + Number(o.total || 0), 0))}</p>
+                  <p className="text-xs text-navy-500 dark:text-zinc-400">Total pedidos</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-lg font-bold text-yellow-400">{eur(projectDeliveryNotes.reduce((s, d) => s + Number(d.total || 0), 0))}</p>
-                  <p className="text-xs text-[var(--color-navy-500)]">Total albaranes</p>
+                  <p className="text-lg font-bold text-yellow-600 dark:text-yellow-400">{eur(projectDeliveryNotes.reduce((s, d) => s + Number(d.total || 0), 0))}</p>
+                  <p className="text-xs text-navy-500 dark:text-zinc-400">Total albaranes</p>
                 </div>
               </div>
-            </div>
+            </Card>
           )}
         </div>
       )}
@@ -1510,14 +1515,12 @@ export default function ProjectDetailPage() {
 
 /* ═══════════════════════════ Shared UI ═══════════════════════════ */
 
-const inputCls = "w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm";
-
 function KpiCard({ label, value, color, sub }: { label: string; value: string; color: string; sub?: string }) {
   return (
-    <div className="bg-[var(--color-navy-750)] rounded-xl p-4 text-center">
+    <div className="rounded-xl border border-navy-100 bg-navy-50/40 dark:border-zinc-800 dark:bg-zinc-900/50 p-4 text-center">
       <p className={`text-lg font-bold ${color}`}>{value}</p>
-      <p className="text-xs text-[var(--color-navy-400)] mt-1">{label}</p>
-      {sub && <p className="text-xs text-[var(--color-navy-500)] mt-0.5">{sub}</p>}
+      <p className="text-xs text-navy-500 dark:text-zinc-400 mt-1">{label}</p>
+      {sub && <p className="text-xs text-navy-400 dark:text-zinc-500 mt-0.5">{sub}</p>}
     </div>
   );
 }
@@ -1525,21 +1528,21 @@ function KpiCard({ label, value, color, sub }: { label: string; value: string; c
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between">
-      <span className="text-[var(--color-navy-400)]">{label}</span>
-      <span className="text-[var(--color-navy-100)] font-medium">{value}</span>
+      <span className="text-navy-500 dark:text-zinc-400">{label}</span>
+      <span className="text-navy-900 dark:text-white font-medium">{value}</span>
     </div>
   );
 }
 
 function Th({ children, align = "center" }: { children: React.ReactNode; align?: "left" | "center" | "right" }) {
-  return <th className={`${align === "left" ? "text-left" : align === "right" ? "text-right" : "text-center"} text-xs font-semibold text-[var(--color-navy-400)] uppercase tracking-wider px-5 py-3`}>{children}</th>;
+  return <th className={`${align === "left" ? "text-left" : align === "right" ? "text-right" : "text-center"} text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase tracking-wider px-4 py-2`}>{children}</th>;
 }
 
 function FormField({ label, children, span }: { label: string; children: React.ReactNode; span?: number }) {
   const spanCls = span === 2 ? "md:col-span-2" : span === 3 ? "md:col-span-3" : "";
   return (
     <div className={spanCls}>
-      <label className="block text-xs text-[var(--color-navy-400)] mb-1">{label}</label>
+      <label className="mb-1.5 block text-xs font-medium text-navy-600 dark:text-zinc-300">{label}</label>
       {children}
     </div>
   );
@@ -1548,14 +1551,12 @@ function FormField({ label, children, span }: { label: string; children: React.R
 function FormActions({ onSave, onCancel, saving, label }: { onSave: () => void; onCancel: () => void; saving: boolean; label: string }) {
   return (
     <div className="flex gap-3 mt-4">
-      <button onClick={onSave} disabled={saving}
-        className="px-5 py-2 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-lg text-sm font-medium hover:opacity-90 transition disabled:opacity-50">
+      <Button onClick={onSave} disabled={saving}>
         {saving ? "Guardando..." : label}
-      </button>
-      <button onClick={onCancel}
-        className="px-5 py-2 bg-[var(--color-navy-700)] text-[var(--color-navy-300)] rounded-lg text-sm hover:bg-[var(--color-navy-600)] transition">
+      </Button>
+      <Button variant="secondary" onClick={onCancel}>
         Cancelar
-      </button>
+      </Button>
     </div>
   );
 }

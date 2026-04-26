@@ -6,8 +6,10 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { useToast } from "@/components/ui/toast";
 import BackButton from "@/components/ui/back-button";
-
-const inputCls = "w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { FormField, Input, Select } from "@/components/ui/form-fields";
+import Loading from "@/components/ui/loading";
 
 const ivaRegimes = [
   { value: "general", label: "Régimen General" },
@@ -127,124 +129,108 @@ export default function FiscalSettingsPage() {
   useEffect(() => { load(); }, []);
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-brand-green)]"></div></div>;
+    return <Loading />;
   }
 
   return (
     <div className="max-w-3xl mx-auto">
       <BackButton fallbackHref="/dashboard/settings" label="Volver a Ajustes" />
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">Ajustes Fiscales</h1>
-        <p className="text-sm text-[var(--color-navy-400)]">Datos del emisor para facturas emitidas, Verifactu y Facturae</p>
+        <h1 className="text-2xl font-bold text-navy-900 dark:text-white">Ajustes Fiscales</h1>
+        <p className="text-sm text-navy-500 dark:text-zinc-400">Datos del emisor para facturas emitidas, Verifactu y Facturae</p>
       </div>
 
       {/* Datos de la empresa */}
-      <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-6 border border-[var(--color-navy-600)]">
-        <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-4">Datos de la empresa / autónomo</h3>
+      <Card className="mb-6">
+        <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-4">Datos de la empresa / autónomo</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="md:col-span-2">
-            <label className="block text-xs text-[var(--color-navy-400)] mb-1">Razón social *</label>
-            <input type="text" value={form.business_name} onChange={(e) => setForm({ ...form, business_name: e.target.value })} className={inputCls} placeholder="Ej: Reformas López S.L." />
-          </div>
-          <div>
-            <label className="block text-xs text-[var(--color-navy-400)] mb-1">Nombre comercial</label>
-            <input type="text" value={form.trade_name} onChange={(e) => setForm({ ...form, trade_name: e.target.value })} className={inputCls} placeholder="Ej: Reformas López" />
-          </div>
-          <div>
-            <label className="block text-xs text-[var(--color-navy-400)] mb-1">NIF / CIF *</label>
-            <input type="text" value={form.nif} onChange={(e) => setForm({ ...form, nif: e.target.value })} className={inputCls} placeholder="B12345678" />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-xs text-[var(--color-navy-400)] mb-1">Dirección fiscal</label>
-            <input type="text" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className={inputCls} placeholder="Calle, número, piso" />
-          </div>
-          <div>
-            <label className="block text-xs text-[var(--color-navy-400)] mb-1">Ciudad</label>
-            <input type="text" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className={inputCls} placeholder="Madrid" />
-          </div>
-          <div>
-            <label className="block text-xs text-[var(--color-navy-400)] mb-1">Código postal</label>
-            <input type="text" value={form.postal_code} onChange={(e) => setForm({ ...form, postal_code: e.target.value })} className={inputCls} placeholder="28001" />
-          </div>
-          <div>
-            <label className="block text-xs text-[var(--color-navy-400)] mb-1">Provincia</label>
-            <select value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value })} className={inputCls}>
+          <FormField label="Razón social" required className="md:col-span-2">
+            <Input type="text" value={form.business_name} onChange={(e) => setForm({ ...form, business_name: e.target.value })} placeholder="Ej: Reformas López S.L." />
+          </FormField>
+          <FormField label="Nombre comercial">
+            <Input type="text" value={form.trade_name} onChange={(e) => setForm({ ...form, trade_name: e.target.value })} placeholder="Ej: Reformas López" />
+          </FormField>
+          <FormField label="NIF / CIF" required>
+            <Input type="text" value={form.nif} onChange={(e) => setForm({ ...form, nif: e.target.value })} placeholder="B12345678" />
+          </FormField>
+          <FormField label="Dirección fiscal" className="md:col-span-2">
+            <Input type="text" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Calle, número, piso" />
+          </FormField>
+          <FormField label="Ciudad">
+            <Input type="text" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="Madrid" />
+          </FormField>
+          <FormField label="Código postal">
+            <Input type="text" value={form.postal_code} onChange={(e) => setForm({ ...form, postal_code: e.target.value })} placeholder="28001" />
+          </FormField>
+          <FormField label="Provincia">
+            <Select value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value })}>
               {provinces.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-[var(--color-navy-400)] mb-1">Email</label>
-            <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={inputCls} placeholder="facturacion@empresa.com" />
-          </div>
-          <div>
-            <label className="block text-xs text-[var(--color-navy-400)] mb-1">Teléfono</label>
-            <input type="text" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={inputCls} placeholder="600 000 000" />
-          </div>
+            </Select>
+          </FormField>
+          <FormField label="Email">
+            <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="facturacion@empresa.com" />
+          </FormField>
+          <FormField label="Teléfono">
+            <Input type="text" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="600 000 000" />
+          </FormField>
         </div>
-      </div>
+      </Card>
 
       {/* Configuración fiscal */}
-      <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-6 border border-[var(--color-navy-600)]">
-        <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-4">Configuración fiscal</h3>
+      <Card className="mb-6">
+        <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-4">Configuración fiscal</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-xs text-[var(--color-navy-400)] mb-1">Régimen de IVA</label>
-            <select value={form.iva_regime} onChange={(e) => setForm({ ...form, iva_regime: e.target.value })} className={inputCls}>
+          <FormField label="Régimen de IVA">
+            <Select value={form.iva_regime} onChange={(e) => setForm({ ...form, iva_regime: e.target.value })}>
               {ivaRegimes.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-[var(--color-navy-400)] mb-1">IVA por defecto (%)</label>
-            <input type="number" step="0.01" value={form.default_iva_percent} onChange={(e) => setForm({ ...form, default_iva_percent: parseFloat(e.target.value) || 0 })} className={inputCls} />
-          </div>
-          <div>
-            <label className="block text-xs text-[var(--color-navy-400)] mb-1">IRPF por defecto (%)</label>
-            <input type="number" step="0.01" value={form.default_irpf_percent} onChange={(e) => setForm({ ...form, default_irpf_percent: parseFloat(e.target.value) || 0 })} className={inputCls} />
-            <p className="text-xs text-[var(--color-navy-500)] mt-1">0 si no aplica retención</p>
-          </div>
+            </Select>
+          </FormField>
+          <FormField label="IVA por defecto (%)">
+            <Input type="number" step="0.01" value={form.default_iva_percent} onChange={(e) => setForm({ ...form, default_iva_percent: parseFloat(e.target.value) || 0 })} />
+          </FormField>
+          <FormField label="IRPF por defecto (%)" hint="0 si no aplica retención">
+            <Input type="number" step="0.01" value={form.default_irpf_percent} onChange={(e) => setForm({ ...form, default_irpf_percent: parseFloat(e.target.value) || 0 })} />
+          </FormField>
         </div>
-      </div>
+      </Card>
 
       {/* Series de facturación */}
-      <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-6 border border-[var(--color-navy-600)]">
-        <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-4">Numeración de facturas</h3>
+      <Card className="mb-6">
+        <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-4">Numeración de facturas</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-xs text-[var(--color-navy-400)] mb-1">Serie</label>
-            <input type="text" value={form.invoice_series} onChange={(e) => setForm({ ...form, invoice_series: e.target.value.toUpperCase() })} className={inputCls} placeholder="F" />
-          </div>
-          <div>
-            <label className="block text-xs text-[var(--color-navy-400)] mb-1">Próximo número</label>
-            <input type="number" value={form.invoice_next_number} onChange={(e) => setForm({ ...form, invoice_next_number: parseInt(e.target.value) || 1 })} className={inputCls} />
-          </div>
+          <FormField label="Serie">
+            <Input type="text" value={form.invoice_series} onChange={(e) => setForm({ ...form, invoice_series: e.target.value.toUpperCase() })} placeholder="F" />
+          </FormField>
+          <FormField label="Próximo número">
+            <Input type="number" value={form.invoice_next_number} onChange={(e) => setForm({ ...form, invoice_next_number: parseInt(e.target.value) || 1 })} />
+          </FormField>
           <div className="flex items-end">
-            <p className="text-sm text-[var(--color-navy-300)] bg-[var(--color-navy-700)] rounded-lg px-4 py-2 w-full text-center font-mono">
+            <p className="text-sm text-navy-700 bg-navy-50 dark:bg-zinc-900 dark:text-zinc-300 border border-navy-100 dark:border-zinc-800 rounded-lg px-4 py-2 w-full text-center font-mono">
               {form.invoice_series}-{new Date().getFullYear()}/{String(form.invoice_next_number).padStart(4, "0")}
             </p>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Verifactu */}
-      <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-6 border border-[var(--color-navy-600)]">
-        <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider mb-4">Verifactu</h3>
+      <Card className="mb-6">
+        <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-4">Verifactu</h3>
         <label className="flex items-center gap-3 cursor-pointer">
           <input type="checkbox" checked={form.verifactu_enabled} onChange={(e) => setForm({ ...form, verifactu_enabled: e.target.checked })}
-            className="w-5 h-5 rounded border-[var(--color-navy-600)] bg-[var(--color-navy-700)] text-[var(--color-brand-green)] focus:ring-[var(--color-brand-green)]" />
+            className="w-5 h-5 rounded border-navy-200 dark:border-zinc-700 text-brand-green focus:ring-brand-green" />
           <div>
-            <span className="text-sm text-[var(--color-navy-100)]">Activar Verifactu</span>
-            <p className="text-xs text-[var(--color-navy-500)]">Genera hash SHA-256 encadenado y código QR en cada factura emitida. Obligatorio desde julio 2025.</p>
+            <span className="text-sm text-navy-900 dark:text-white">Activar Verifactu</span>
+            <p className="text-xs text-navy-500 dark:text-zinc-400">Genera hash SHA-256 encadenado y código QR en cada factura emitida. Obligatorio desde julio 2025.</p>
           </div>
         </label>
-      </div>
+      </Card>
 
       {/* Save */}
-      <div className="flex justify-end gap-3">
-        {saved && <span className="text-sm text-[var(--color-brand-green)] flex items-center">✓ Guardado correctamente</span>}
-        <button onClick={handleSave} disabled={saving}
-          className="px-6 py-2.5 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-xl font-semibold text-sm hover:opacity-90 transition disabled:opacity-50">
+      <div className="flex justify-end gap-3 items-center">
+        {saved && <span className="text-sm text-brand-green flex items-center">✓ Guardado correctamente</span>}
+        <Button onClick={handleSave} disabled={saving}>
           {saving ? "Guardando..." : "Guardar ajustes fiscales"}
-        </button>
+        </Button>
       </div>
     </div>
   );

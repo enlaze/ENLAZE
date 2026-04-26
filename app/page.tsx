@@ -14,6 +14,7 @@ import AnimatedBlock from "@/components/landing/AnimatedBlock";
 import Section from "@/components/landing/Section";
 import FeatureCard from "@/components/landing/FeatureCard";
 import ShaderBackground from "@/components/landing/ShaderBackground";
+import GradientText from "@/components/ui/gradient-text";
 
 /* ─────────────────────────────────────────────────────────────────────
  *  Icons — estilo Lucide (stroke 1.75, rounded, 24x24)
@@ -317,7 +318,7 @@ function HeroMotion() {
           <h1 className="mx-auto mt-8 max-w-4xl text-center text-[2.5rem] font-semibold leading-[1.05] tracking-[-0.025em] text-navy-900 transition-colors md:text-[4rem] lg:text-[4.5rem]">
             Cierra más clientes{" "}
             <span className="relative inline-block whitespace-nowrap">
-              <span className="relative z-10 text-brand-green">sin trabajar más horas</span>
+              <GradientText className="relative z-10">sin trabajar más horas</GradientText>
               <svg
                 aria-hidden
                 viewBox="0 0 300 12"

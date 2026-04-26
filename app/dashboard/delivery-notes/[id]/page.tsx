@@ -8,6 +8,10 @@ import { createClient } from "@/lib/supabase-browser";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import BackButton from "@/components/ui/back-button";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { FormField, Input, Select } from "@/components/ui/form-fields";
+import Loading from "@/components/ui/loading";
 
 /* ═══════════════ Types ═══════════════ */
 
@@ -35,11 +39,13 @@ interface InvoiceMin { id: string; invoice_number: string; total_amount: number;
 
 /* ═══════════════ Labels ═══════════════ */
 
+const defaultStatusColor = "bg-zinc-100 text-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-400";
+
 const statusMap: Record<string, { label: string; color: string }> = {
-  pending: { label: "Pendiente", color: "bg-yellow-900/30 text-yellow-300" },
-  received: { label: "Recibido", color: "bg-blue-900/30 text-blue-300" },
-  verified: { label: "Verificado", color: "bg-green-900/30 text-green-300" },
-  disputed: { label: "Incidencia", color: "bg-red-900/30 text-red-300" },
+  pending: { label: "Pendiente", color: "bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300" },
+  received: { label: "Recibido", color: "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+  verified: { label: "Verificado", color: "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
+  disputed: { label: "Incidencia", color: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
 };
 
 const unitOptions = ["ud", "m", "m²", "m³", "kg", "l", "h", "ml", "global"];
@@ -48,8 +54,6 @@ const unitOptions = ["ud", "m", "m²", "m³", "kg", "l", "h", "ml", "global"];
 
 function eur(n: number) { return Number(n || 0).toLocaleString("es-ES", { style: "currency", currency: "EUR" }); }
 function fmtDate(d: string | null) { return d ? new Date(d).toLocaleDateString("es-ES") : "—"; }
-
-const inputCls = "w-full bg-[var(--color-navy-700)] text-[var(--color-navy-50)] rounded-lg px-4 py-2 border border-[var(--color-navy-600)] focus:border-[var(--color-brand-green)] focus:outline-none text-sm";
 
 /* ═══════════════ Page ═══════════════ */
 
@@ -154,7 +158,7 @@ export default function DeliveryNoteDetailPage() {
       setLines(newLines);
       await recalcTotals(newLines);
       toast.success("Líneas del pedido importadas");
-    } catch (error) {
+    } catch {
       toast.error("Error al importar líneas del pedido");
     }
   }
@@ -219,7 +223,7 @@ export default function DeliveryNoteDetailPage() {
       setLines(newLines);
       await recalcTotals(newLines);
       toast.success("Línea eliminada");
-    } catch (error) {
+    } catch {
       toast.error("Error al eliminar la línea");
     }
   }
@@ -243,11 +247,11 @@ export default function DeliveryNoteDetailPage() {
   /* ── Render ── */
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-brand-green)]"></div></div>;
+    return <Loading />;
   }
   if (!note) return null;
 
-  const st = statusMap[note.status] || { label: note.status, color: "bg-zinc-900/30 text-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400" };
+  const st = statusMap[note.status] || { label: note.status, color: defaultStatusColor };
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -255,180 +259,173 @@ export default function DeliveryNoteDetailPage() {
       <BackButton fallbackHref="/dashboard/delivery-notes" label="Volver a albaranes" />
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--color-navy-50)]">Albarán {note.note_number || "(sin nº)"}</h1>
-          <p className="text-sm text-[var(--color-navy-500)]">Recepción: {fmtDate(note.reception_date)}</p>
+          <h1 className="text-2xl font-bold text-navy-900 dark:text-white">Albarán {note.note_number || "(sin nº)"}</h1>
+          <p className="text-sm text-navy-500 dark:text-zinc-400">Recepción: {fmtDate(note.reception_date)}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`px-3 py-1 rounded-full text-sm font-medium ${st.color}`}>{st.label}</span>
-          <select value={note.status} onChange={(e) => handleStatusChange(e.target.value)} disabled={savingStatus}
-            className="bg-[var(--color-navy-700)] text-[var(--color-navy-200)] rounded-lg px-3 py-1.5 text-sm border border-[var(--color-navy-600)]">
+          <Select value={note.status} onChange={(e) => handleStatusChange(e.target.value)} disabled={savingStatus} className="w-auto">
             {Object.entries(statusMap).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-          </select>
+          </Select>
         </div>
       </div>
 
       {/* Discrepancy alert */}
       {discrepancies.length > 0 && (
-        <div className="bg-red-900/20 border border-red-500/30 rounded-xl p-4 mb-6">
-          <p className="text-sm font-medium text-red-300 mb-1">Discrepancias detectadas ({discrepancies.length})</p>
-          <p className="text-xs text-red-400">Hay diferencias entre cantidad pedida y recibida en {discrepancies.length} línea{discrepancies.length > 1 ? "s" : ""}.</p>
+        <div className="bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-500/30 rounded-2xl p-4 mb-6">
+          <p className="text-sm font-medium text-red-700 dark:text-red-300 mb-1">Discrepancias detectadas ({discrepancies.length})</p>
+          <p className="text-xs text-red-600 dark:text-red-400">Hay diferencias entre cantidad pedida y recibida en {discrepancies.length} línea{discrepancies.length > 1 ? "s" : ""}.</p>
         </div>
       )}
 
       {/* Traceability cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-4">
-          <p className="text-xs text-[var(--color-navy-400)] mb-2">Proveedor</p>
+        <Card>
+          <p className="text-xs text-navy-500 dark:text-zinc-400 mb-2">Proveedor</p>
           {supplier ? (
-            <p className="text-sm font-medium text-[var(--color-navy-100)]">{supplier.name}</p>
-          ) : <p className="text-sm text-[var(--color-navy-500)]">—</p>}
-        </div>
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-4">
-          <p className="text-xs text-[var(--color-navy-400)] mb-2">Obra</p>
+            <p className="text-sm font-medium text-navy-900 dark:text-white">{supplier.name}</p>
+          ) : <p className="text-sm text-navy-500 dark:text-zinc-400">—</p>}
+        </Card>
+        <Card>
+          <p className="text-xs text-navy-500 dark:text-zinc-400 mb-2">Obra</p>
           {project ? (
-            <Link href={`/dashboard/projects/${project.id}`} className="text-sm font-medium text-[var(--color-navy-100)] hover:text-[var(--color-brand-green)] transition">{project.name}</Link>
-          ) : <p className="text-sm text-[var(--color-navy-500)]">—</p>}
-        </div>
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-4">
-          <p className="text-xs text-[var(--color-navy-400)] mb-2">Pedido vinculado</p>
+            <Link href={`/dashboard/projects/${project.id}`} className="text-sm font-medium text-navy-900 dark:text-white hover:text-brand-green transition">{project.name}</Link>
+          ) : <p className="text-sm text-navy-500 dark:text-zinc-400">—</p>}
+        </Card>
+        <Card>
+          <p className="text-xs text-navy-500 dark:text-zinc-400 mb-2">Pedido vinculado</p>
           {order ? (
-            <Link href={`/dashboard/orders/${order.id}`} className="text-sm font-medium text-[var(--color-navy-100)] hover:text-[var(--color-brand-green)] transition">{order.order_number || order.title}</Link>
-          ) : <p className="text-sm text-[var(--color-navy-500)]">—</p>}
-        </div>
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-4">
-          <p className="text-xs text-[var(--color-navy-400)] mb-2">Factura vinculada</p>
+            <Link href={`/dashboard/orders/${order.id}`} className="text-sm font-medium text-navy-900 dark:text-white hover:text-brand-green transition">{order.order_number || order.title}</Link>
+          ) : <p className="text-sm text-navy-500 dark:text-zinc-400">—</p>}
+        </Card>
+        <Card>
+          <p className="text-xs text-navy-500 dark:text-zinc-400 mb-2">Factura vinculada</p>
           {invoice ? (
-            <p className="text-sm font-medium text-[var(--color-navy-100)]">{invoice.invoice_number} ({eur(invoice.total_amount)})</p>
-          ) : <p className="text-sm text-[var(--color-navy-500)]">Sin factura</p>}
-        </div>
+            <p className="text-sm font-medium text-navy-900 dark:text-white">{invoice.invoice_number} ({eur(invoice.total_amount)})</p>
+          ) : <p className="text-sm text-navy-500 dark:text-zinc-400">Sin factura</p>}
+        </Card>
       </div>
 
       {/* Lines */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-[var(--color-brand-green)] uppercase tracking-wider">Líneas del albarán ({lines.length})</h3>
+          <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider">Líneas del albarán ({lines.length})</h3>
           <div className="flex gap-2">
             {order && orderLines.length > 0 && (
-              <button onClick={importFromOrder}
-                className="px-4 py-2 bg-[var(--color-navy-700)] text-[var(--color-navy-200)] border border-[var(--color-navy-600)] rounded-lg text-sm font-medium hover:bg-[var(--color-navy-600)] transition">
+              <Button variant="secondary" onClick={importFromOrder}>
                 Importar del pedido
-              </button>
+              </Button>
             )}
-            <button onClick={() => { setLineForm({ description: "", unit: "ud", quantity_expected: 0, quantity_received: 0, unit_price: 0, order_line_id: "" }); setEditingLineId(null); setShowLineForm(!showLineForm); }}
-              className="px-4 py-2 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-lg text-sm font-medium hover:opacity-90 transition">
+            <Button onClick={() => { setLineForm({ description: "", unit: "ud", quantity_expected: 0, quantity_received: 0, unit_price: 0, order_line_id: "" }); setEditingLineId(null); setShowLineForm(!showLineForm); }}>
               + Añadir línea
-            </button>
+            </Button>
           </div>
         </div>
 
         {showLineForm && (
-          <div className="bg-[var(--color-navy-800)] rounded-xl p-5 mb-4 border border-[var(--color-navy-600)]">
-            <h4 className="text-sm font-semibold text-[var(--color-navy-100)] mb-4">{editingLineId ? "Editar línea" : "Nueva línea"}</h4>
+          <Card className="mb-4">
+            <h4 className="text-sm font-semibold text-navy-900 dark:text-white mb-4">{editingLineId ? "Editar línea" : "Nueva línea"}</h4>
             <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-              <div className="md:col-span-3">
-                <label className="block text-xs text-[var(--color-navy-400)] mb-1">Descripción *</label>
-                <input type="text" value={lineForm.description} onChange={(e) => setLineForm({ ...lineForm, description: e.target.value })} className={inputCls} placeholder="Ej: Tubo PVC 110mm" />
-              </div>
-              <div>
-                <label className="block text-xs text-[var(--color-navy-400)] mb-1">Unidad</label>
-                <select value={lineForm.unit} onChange={(e) => setLineForm({ ...lineForm, unit: e.target.value })} className={inputCls}>
+              <FormField label="Descripción" required className="md:col-span-3">
+                <Input type="text" value={lineForm.description} onChange={(e) => setLineForm({ ...lineForm, description: e.target.value })} placeholder="Ej: Tubo PVC 110mm" />
+              </FormField>
+              <FormField label="Unidad">
+                <Select value={lineForm.unit} onChange={(e) => setLineForm({ ...lineForm, unit: e.target.value })}>
                   {unitOptions.map((u) => <option key={u} value={u}>{u}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-[var(--color-navy-400)] mb-1">Cant. esperada</label>
-                <input type="number" step="0.001" value={lineForm.quantity_expected} onChange={(e) => setLineForm({ ...lineForm, quantity_expected: parseFloat(e.target.value) || 0 })} className={inputCls} />
-              </div>
-              <div>
-                <label className="block text-xs text-[var(--color-navy-400)] mb-1">Cant. recibida</label>
-                <input type="number" step="0.001" value={lineForm.quantity_received} onChange={(e) => setLineForm({ ...lineForm, quantity_received: parseFloat(e.target.value) || 0 })} className={inputCls} />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-xs text-[var(--color-navy-400)] mb-1">Precio unitario</label>
-                <input type="number" step="0.01" value={lineForm.unit_price} onChange={(e) => setLineForm({ ...lineForm, unit_price: parseFloat(e.target.value) || 0 })} className={inputCls} />
-              </div>
+                </Select>
+              </FormField>
+              <FormField label="Cant. esperada">
+                <Input type="number" step="0.001" value={lineForm.quantity_expected} onChange={(e) => setLineForm({ ...lineForm, quantity_expected: parseFloat(e.target.value) || 0 })} />
+              </FormField>
+              <FormField label="Cant. recibida">
+                <Input type="number" step="0.001" value={lineForm.quantity_received} onChange={(e) => setLineForm({ ...lineForm, quantity_received: parseFloat(e.target.value) || 0 })} />
+              </FormField>
+              <FormField label="Precio unitario" className="md:col-span-2">
+                <Input type="number" step="0.01" value={lineForm.unit_price} onChange={(e) => setLineForm({ ...lineForm, unit_price: parseFloat(e.target.value) || 0 })} />
+              </FormField>
             </div>
             <div className="flex items-center justify-between mt-4">
-              <p className="text-sm text-[var(--color-navy-400)]">Total línea: <strong className="text-[var(--color-navy-100)]">{eur(lineForm.quantity_received * lineForm.unit_price)}</strong></p>
+              <p className="text-sm text-navy-500 dark:text-zinc-400">Total línea: <strong className="text-navy-900 dark:text-white">{eur(lineForm.quantity_received * lineForm.unit_price)}</strong></p>
               <div className="flex gap-3">
-                <button onClick={() => { setShowLineForm(false); setEditingLineId(null); }} className="px-4 py-2 text-sm text-[var(--color-navy-400)]">Cancelar</button>
-                <button onClick={handleSaveLine} disabled={savingLine}
-                  className="px-5 py-2 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-lg text-sm font-medium hover:opacity-90 transition disabled:opacity-50">
+                <Button variant="ghost" onClick={() => { setShowLineForm(false); setEditingLineId(null); }}>Cancelar</Button>
+                <Button onClick={handleSaveLine} disabled={savingLine}>
                   {savingLine ? "Guardando..." : editingLineId ? "Guardar" : "Añadir"}
-                </button>
+                </Button>
               </div>
             </div>
-          </div>
+          </Card>
         )}
 
-        <div className="bg-[var(--color-navy-800)] rounded-xl overflow-hidden">
+        <Card padding={false}>
           {lines.length === 0 ? (
             <div className="p-8 text-center">
-              <p className="text-[var(--color-navy-500)]">No hay líneas.{order && orderLines.length > 0 ? " Puedes importar las líneas del pedido vinculado." : ""}</p>
+              <p className="text-sm text-navy-500 dark:text-zinc-400">No hay líneas.{order && orderLines.length > 0 ? " Puedes importar las líneas del pedido vinculado." : ""}</p>
             </div>
           ) : (
             <>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--color-navy-700)]">
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-navy-400)] uppercase w-8">#</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-navy-400)] uppercase">Descripción</th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--color-navy-400)] uppercase">Ud.</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-[var(--color-navy-400)] uppercase">Esperada</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-[var(--color-navy-400)] uppercase">Recibida</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-[var(--color-navy-400)] uppercase">Precio</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-[var(--color-navy-400)] uppercase">Total</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-[var(--color-navy-400)] uppercase">Acc.</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((l, idx) => {
-                    const hasDiscrepancy = l.quantity_expected > 0 && l.quantity_received !== l.quantity_expected;
-                    return (
-                      <tr key={l.id} className={`border-b border-[var(--color-navy-700)]/50 hover:bg-[var(--color-navy-750)] transition ${hasDiscrepancy ? "bg-red-900/10" : ""}`}>
-                        <td className="px-4 py-3 text-[var(--color-navy-500)]">{idx + 1}</td>
-                        <td className="px-4 py-3 text-[var(--color-navy-100)]">
-                          {l.description}
-                          {hasDiscrepancy && <span className="ml-2 text-xs text-red-400">⚠ Discrepancia</span>}
-                        </td>
-                        <td className="px-4 py-3 text-center text-[var(--color-navy-400)]">{l.unit}</td>
-                        <td className="px-4 py-3 text-right text-[var(--color-navy-400)]">{Number(l.quantity_expected).toLocaleString("es-ES")}</td>
-                        <td className={`px-4 py-3 text-right font-medium ${hasDiscrepancy ? "text-red-400" : "text-[var(--color-navy-100)]"}`}>
-                          {Number(l.quantity_received).toLocaleString("es-ES")}
-                        </td>
-                        <td className="px-4 py-3 text-right text-[var(--color-navy-300)]">{eur(l.unit_price)}</td>
-                        <td className="px-4 py-3 text-right font-medium text-[var(--color-navy-100)]">{eur(l.total)}</td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex justify-end gap-2">
-                            <button onClick={() => startEditLine(l)} className="text-xs text-[var(--color-brand-green)] hover:underline">Editar</button>
-                            <button onClick={() => handleDeleteLine(l.id)} className="text-xs text-red-400 hover:underline">Eliminar</button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              <div className="border-t border-[var(--color-navy-700)] p-4">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-navy-100 dark:border-zinc-800 bg-navy-50/60 dark:bg-zinc-900/50">
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase w-8">#</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">Descripción</th>
+                      <th className="px-3 py-2 text-center text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">Ud.</th>
+                      <th className="px-3 py-2 text-right text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">Esperada</th>
+                      <th className="px-3 py-2 text-right text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">Recibida</th>
+                      <th className="px-3 py-2 text-right text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">Precio</th>
+                      <th className="px-3 py-2 text-right text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">Total</th>
+                      <th className="px-4 py-2 text-right text-xs font-semibold text-navy-700 dark:text-zinc-300 uppercase">Acc.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lines.map((l, idx) => {
+                      const hasDiscrepancy = l.quantity_expected > 0 && l.quantity_received !== l.quantity_expected;
+                      return (
+                        <tr key={l.id} className={`border-b border-navy-100 dark:border-zinc-800 hover:bg-navy-50/40 dark:hover:bg-zinc-800/50 transition ${hasDiscrepancy ? "bg-red-50/60 dark:bg-red-900/10" : ""}`}>
+                          <td className="px-4 py-2.5 text-sm text-navy-500 dark:text-zinc-400">{idx + 1}</td>
+                          <td className="px-4 py-2.5 text-sm text-navy-900 dark:text-white">
+                            {l.description}
+                            {hasDiscrepancy && <span className="ml-2 text-xs text-red-600 dark:text-red-400">⚠ Discrepancia</span>}
+                          </td>
+                          <td className="px-3 py-2.5 text-center text-sm text-navy-600 dark:text-zinc-400">{l.unit}</td>
+                          <td className="px-3 py-2.5 text-right text-sm text-navy-600 dark:text-zinc-400">{Number(l.quantity_expected).toLocaleString("es-ES")}</td>
+                          <td className={`px-3 py-2.5 text-right text-sm font-medium ${hasDiscrepancy ? "text-red-600 dark:text-red-400" : "text-navy-900 dark:text-white"}`}>
+                            {Number(l.quantity_received).toLocaleString("es-ES")}
+                          </td>
+                          <td className="px-3 py-2.5 text-right text-sm text-navy-600 dark:text-zinc-400">{eur(l.unit_price)}</td>
+                          <td className="px-3 py-2.5 text-right text-sm font-medium text-navy-900 dark:text-white">{eur(l.total)}</td>
+                          <td className="px-4 py-2.5 text-right">
+                            <div className="flex justify-end gap-3">
+                              <button onClick={() => startEditLine(l)} className="text-xs text-brand-green hover:underline">Editar</button>
+                              <button onClick={() => handleDeleteLine(l.id)} className="text-xs text-red-600 dark:text-red-400 hover:underline">Eliminar</button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="border-t border-navy-100 dark:border-zinc-800 p-4">
                 <div className="flex justify-end gap-8 text-sm">
                   <div className="text-right">
-                    <p className="text-[var(--color-navy-400)]">Subtotal: <span className="text-[var(--color-navy-100)] font-medium ml-2">{eur(note.subtotal)}</span></p>
-                    <p className="text-[var(--color-navy-400)]">IVA ({note.iva_percent}%): <span className="text-[var(--color-navy-100)] font-medium ml-2">{eur(note.iva_amount)}</span></p>
-                    <p className="text-[var(--color-navy-200)] font-bold text-base mt-1">Total: <span className="text-[var(--color-brand-green)] ml-2">{eur(note.total)}</span></p>
+                    <p className="text-navy-500 dark:text-zinc-400">Subtotal: <span className="text-navy-900 dark:text-white font-medium ml-2">{eur(note.subtotal)}</span></p>
+                    <p className="text-navy-500 dark:text-zinc-400">IVA ({note.iva_percent}%): <span className="text-navy-900 dark:text-white font-medium ml-2">{eur(note.iva_amount)}</span></p>
+                    <p className="text-navy-900 dark:text-white font-bold text-base mt-1">Total: <span className="text-brand-green ml-2">{eur(note.total)}</span></p>
                   </div>
                 </div>
               </div>
             </>
           )}
-        </div>
+        </Card>
       </div>
 
       {/* Notes */}
       {note.notes && (
-        <div className="bg-[var(--color-navy-800)] rounded-xl p-4">
-          <p className="text-xs text-[var(--color-navy-400)] mb-1">Notas</p>
-          <p className="text-sm text-[var(--color-navy-300)]">{note.notes}</p>
-        </div>
+        <Card>
+          <p className="text-xs text-navy-500 dark:text-zinc-400 mb-1">Notas</p>
+          <p className="text-sm text-navy-700 dark:text-zinc-300 whitespace-pre-wrap">{note.notes}</p>
+        </Card>
       )}
     </div>
   );

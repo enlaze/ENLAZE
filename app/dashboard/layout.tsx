@@ -56,6 +56,7 @@ const SECTION_ORDER: Array<NavItem["section"]> = [null, "General", "Negocio", "F
 /* Items that should always appear regardless of sector config */
 const ALWAYS_VISIBLE_HREFS = new Set([
   "/dashboard",
+  "/dashboard/clientes",
   "/dashboard/settings",
   "/dashboard/compliance",
   "/dashboard/audit-log",
