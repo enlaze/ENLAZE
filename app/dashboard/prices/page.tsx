@@ -296,7 +296,17 @@ export default function PricesPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!userId) return;
+    console.log('DELETE PRICE ITEM ID:', id);
+    console.log('DELETE CONTEXT:', { userId, sector: sectorConfig.sector });
+    if (!id) {
+      console.error('DELETE ABORT: id is missing/undefined');
+      toast.error("ID inválido");
+      return;
+    }
+    if (!userId) {
+      console.error('DELETE ABORT: userId is missing');
+      return;
+    }
     const ok = await confirm({
       title: "Eliminar precio",
       description: "¿Eliminar este precio? Esta acción no se puede deshacer.",
@@ -305,10 +315,27 @@ export default function PricesPage() {
     });
     if (!ok) return;
     try {
-      await supabase.from("price_items").delete().eq("id", id).eq("user_id", userId).eq("sector", sectorConfig.sector);
+      const { data, error, count } = await supabase
+        .from("price_items")
+        .delete({ count: "exact" })
+        .eq("id", id)
+        .eq("user_id", userId)
+        .select();
+      console.log('DELETE RESULT:', { data, error, count });
+      if (error) {
+        console.error('DELETE ERROR:', error);
+        toast.error(`Error: ${error.message}`);
+        return;
+      }
+      if (!count || count === 0) {
+        console.warn('DELETE AFFECTED 0 ROWS — fila no encontrada o bloqueada por RLS/sector mismatch');
+        toast.error("No se eliminó ninguna fila (RLS o sector no coincide)");
+        return;
+      }
       await loadItems();
       toast.success("Precio eliminado");
-    } catch {
+    } catch (err) {
+      console.error('DELETE CATCH:', err);
       toast.error("Error al eliminar el precio");
     }
   }

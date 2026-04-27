@@ -18,6 +18,7 @@ interface IssuedInvoice {
   id: string; client_id: string | null; project_id: string | null;
   series: string; number: number; invoice_number: string;
   client_name: string; client_nif: string;
+  clients?: { id: string; name: string } | null;
   issue_date: string; due_date: string | null;
   subtotal: number; iva_percent: number; iva_amount: number;
   irpf_percent: number; irpf_amount: number; total: number;
@@ -76,7 +77,7 @@ export default function IssuedInvoicesPage() {
     setUserId(user.id);
 
     const [invRes, clientsRes, projRes] = await Promise.all([
-      supabase.from("issued_invoices").select("*").eq("user_id", user.id).order("number", { ascending: false }),
+      supabase.from("issued_invoices").select("*, clients(id, name)").eq("user_id", user.id).order("number", { ascending: false }),
       supabase.from("clients").select("id, name, nif, email, address").order("name"),
       supabase.from("projects").select("id, name").order("name"),
     ]);
@@ -148,7 +149,7 @@ export default function IssuedInvoicesPage() {
 
     setForm({ client_id: "", project_id: "", issue_date: new Date().toISOString().split("T")[0], due_date: "", notes: "" });
     setShowForm(false);
-    const { data } = await supabase.from("issued_invoices").select("*").eq("user_id", userId).order("number", { ascending: false });
+    const { data } = await supabase.from("issued_invoices").select("*, clients(id, name)").eq("user_id", userId).order("number", { ascending: false });
     setInvoices((data as IssuedInvoice[]) || []);
     setSaving(false);
   }
@@ -202,9 +203,9 @@ export default function IssuedInvoicesPage() {
       key: "client_name",
       header: "Cliente",
       sortable: true,
-      exportValue: (inv) => inv.client_name,
+      exportValue: (inv) => inv.clients?.name || inv.client_name || "—",
       render: (inv) => (
-        <span className="text-navy-700 dark:text-zinc-300">{inv.client_name}</span>
+        <span className="text-navy-700 dark:text-zinc-300">{inv.clients?.name || inv.client_name || "—"}</span>
       ),
     },
     {

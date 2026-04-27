@@ -117,17 +117,20 @@ export default function CalendarPage() {
             </FormField>
             <div className="grid grid-cols-2 gap-4 [&>*]:min-w-0">
               <FormField label="Hora">
-                <Input type="time" value={form.event_time} onChange={e => setForm({...form, event_time: e.target.value})} className="min-w-0 w-full" />
+                <Input type="time" value={form.event_time} onChange={e => setForm({...form, event_time: e.target.value})} className="min-w-0 w-full h-[42px]" />
               </FormField>
               <FormField label="Duración">
-                <Select value={form.duration_minutes} onChange={e => setForm({...form, duration_minutes: Number(e.target.value)})} className="min-w-0 w-full">
-                  <option value={15}>15 min</option>
-                  <option value={30}>30 min</option>
-                  <option value={45}>45 min</option>
-                  <option value={60}>1 hora</option>
-                  <option value={90}>1.5 horas</option>
-                  <option value={120}>2 horas</option>
-                </Select>
+                <div className="relative">
+                  <Select value={form.duration_minutes} onChange={e => setForm({...form, duration_minutes: Number(e.target.value)})} className="min-w-0 w-full h-[42px] appearance-none pr-10">
+                    <option value={15}>15 min</option>
+                    <option value={30}>30 min</option>
+                    <option value={45}>45 min</option>
+                    <option value={60}>1 hora</option>
+                    <option value={90}>1.5 horas</option>
+                    <option value={120}>2 horas</option>
+                  </Select>
+                  <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-navy-400 dark:text-zinc-500" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </div>
               </FormField>
             </div>
             <FormField label="Descripción" className="md:col-span-2">
