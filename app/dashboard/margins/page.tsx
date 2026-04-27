@@ -8,6 +8,7 @@ import PageHeader from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Loading from "@/components/ui/loading";
+import { useToast } from "@/components/ui/toast";
 
 const fallbackServiceTypes = [
   { value: "general", label: "General (todos los servicios)" },
@@ -29,29 +30,63 @@ function eur(n: number) { return Number(n || 0).toLocaleString("es-ES", { style:
 export default function MarginsPage() {
   const supabase = createClient();
   const { serviceTypes } = useSector();
+  const toast = useToast();
 
+  const [userId, setUserId] = useState<string | null>(null);
   const [margins, setMargins] = useState<MarginEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingType, setSavingType] = useState<string | null>(null);
 
-  async function loadMargins() {
-    const { data } = await supabase.from("margin_config").select("*").order("service_type");
+  async function loadMargins(uid: string) {
+    const { data } = await supabase
+      .from("margin_config")
+      .select("*")
+      .eq("user_id", uid)
+      .order("service_type");
     setMargins(data || []);
     setLoading(false);
   }
 
-  useEffect(() => { loadMargins(); }, []);
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setLoading(false); return; }
+      setUserId(user.id);
+      await loadMargins(user.id);
+    })();
+  }, []);
 
   async function saveMargin(serviceType: string, percent: number) {
-    setSaving(true);
+    if (!userId) { toast.error("Sesión no iniciada"); return; }
+    setSavingType(serviceType);
     const existing = margins.find((m) => m.service_type === serviceType);
-    if (existing) {
-      await supabase.from("margin_config").update({ margin_percent: percent }).eq("id", existing.id);
-    } else {
-      await supabase.from("margin_config").insert({ service_type: serviceType, margin_percent: percent });
+    const isPersisted = existing && existing.id !== "temp";
+
+    const { data, error } = isPersisted
+      ? await supabase
+          .from("margin_config")
+          .update({ margin_percent: percent })
+          .eq("id", existing!.id)
+          .select()
+          .single()
+      : await supabase
+          .from("margin_config")
+          .insert({ user_id: userId, service_type: serviceType, margin_percent: percent })
+          .select()
+          .single();
+
+    if (error || !data) {
+      toast.error("No se pudo guardar el margen", { description: error?.message });
+      setSavingType(null);
+      return;
     }
-    await loadMargins();
-    setSaving(false);
+
+    setMargins((prev) => {
+      const without = prev.filter((m) => m.service_type !== serviceType);
+      return [...without, data as MarginEntry].sort((a, b) => a.service_type.localeCompare(b.service_type));
+    });
+    toast.success("Margen guardado");
+    setSavingType(null);
   }
 
   function getMargin(serviceType: string): number {
@@ -161,10 +196,10 @@ export default function MarginsPage() {
                     </div>
                     <Button
                       onClick={() => saveMargin(service.value, currentMargin)}
-                      disabled={saving}
+                      disabled={savingType === service.value}
                       size="sm"
                     >
-                      Guardar
+                      {savingType === service.value ? "Guardando..." : "Guardar"}
                     </Button>
                   </div>
                 </div>
