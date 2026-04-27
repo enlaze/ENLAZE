@@ -27,7 +27,7 @@ interface IssuedInvoice {
   created_at: string;
 }
 
-interface Client { id: string; name: string; nif: string; email: string; address: string; }
+interface Client { id: string; name: string; email: string | null; }
 interface Project { id: string; name: string; }
 
 /* ═══════════════ Labels ═══════════════ */
@@ -78,8 +78,8 @@ export default function IssuedInvoicesPage() {
 
     const [invRes, clientsRes, projRes] = await Promise.all([
       supabase.from("issued_invoices").select("*, clients(id, name)").eq("user_id", user.id).order("number", { ascending: false }),
-      supabase.from("clients").select("id, name, nif, email, address").order("name"),
-      supabase.from("projects").select("id, name").order("name"),
+      supabase.from("clients").select("id, name, email").eq("user_id", user.id).order("name"),
+      supabase.from("projects").select("id, name").eq("user_id", user.id).order("name"),
     ]);
 
     setInvoices((invRes.data as IssuedInvoice[]) || []);
@@ -125,8 +125,8 @@ export default function IssuedInvoicesPage() {
       issuer_nif: fiscal.nif,
       issuer_address: `${fiscal.address}, ${fiscal.postal_code} ${fiscal.city}`,
       client_name: client?.name || "",
-      client_nif: client?.nif || "",
-      client_address: client?.address || "",
+      client_nif: "",
+      client_address: "",
       client_email: client?.email || "",
       issue_date: form.issue_date,
       due_date: form.due_date || null,
@@ -383,7 +383,7 @@ export default function IssuedInvoicesPage() {
               <label className="block text-xs text-navy-600 dark:text-zinc-400 mb-1">Cliente *</label>
               <select value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })} className={inputCls}>
                 <option value="">Seleccionar...</option>
-                {clients.map((c) => <option key={c.id} value={c.id}>{c.name}{c.nif ? ` (${c.nif})` : ""}</option>)}
+                {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div>
