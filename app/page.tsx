@@ -16,6 +16,7 @@ import FeatureCard from "@/components/landing/FeatureCard";
 import BeforeAfterSection from "@/components/landing/BeforeAfterSection";
 import PainPointsSection from "@/components/landing/PainPointsSection";
 import ShaderBackground from "@/components/landing/ShaderBackground";
+import SolucionSection from "@/components/landing/SolucionSection";
 import GradientText from "@/components/ui/gradient-text";
 
 /* ─────────────────────────────────────────────────────────────────────
@@ -721,66 +722,6 @@ function LiveDemoPanel() {
   );
 }
 
-/* ─────────────────────────────────────────────────────────────────────
- *  SOLUCIÓN / FEATURES — Benefits
- * ──────────────────────────────────────────────────────────────────── */
-
-const benefits = [
-  {
-    Icon: IconMessage,
-    title: "Contestas a todos tus clientes en minutos, aunque estés fuera de la oficina",
-    desc: "WhatsApp y email automáticos. Las preguntas repetidas se responden solas. Las citas quedan confirmadas. Tú ni abres el móvil y el cliente ya sabe que estás al otro lado.",
-  },
-  {
-    Icon: IconZap,
-    title: "Envías el presupuesto el mismo día de la reunión",
-    desc: "Describes el servicio en lenguaje natural y la IA genera un presupuesto profesional con partidas, cantidades y precios en 30 segundos. Cero plantillas de Word. Cero cálculos a mano.",
-  },
-  {
-    Icon: IconRefresh,
-    title: "Ningún cliente se queda en el olvido",
-    desc: "Enlaze hace el seguimiento por ti. Recordatorios automáticos a los tres días, mensajes de cierre si la cosa se enfría, avisos cuando alguien contesta. Los presupuestos dejan de morir en silencio.",
-  },
-  {
-    Icon: IconTarget,
-    title: "Todo tu negocio cabe en un solo panel",
-    desc: "Clientes, proyectos, mensajes, presupuestos, facturas y operaciones. Un único sitio, todo conectado. Se acabaron las libretas sueltas y los «¿dónde lo tenía apuntado?».",
-  },
-];
-
-function Benefits() {
-  return (
-    <Section id="producto" tone="light">
-      <AnimatedBlock y={30} duration={650}>
-        <div className="mx-auto max-w-2xl text-center">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
-            La solución
-          </p>
-          <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 transition-colors md:text-[2.75rem]">
-            Todo lo que necesitas para vender mejor y gestionar mejor
-          </h2>
-          <p className="mt-4 text-[16px] leading-relaxed text-navy-500 transition-colors">
-            ENLAZE te ayuda a organizar el trabajo comercial y operativo de tu empresa para responder más rápido, crear presupuestos con más agilidad, hacer seguimiento sin olvidos y centralizar la información importante.
-          </p>
-        </div>
-      </AnimatedBlock>
-
-      <div className="mt-16 grid grid-cols-1 gap-5 md:grid-cols-2">
-        {benefits.map(({ Icon, title, desc }, i) => (
-          <AnimatedBlock key={i} delay={i * 100} y={40} duration={700} className="h-full">
-            <FeatureCard
-              icon={<Icon size={20} />}
-              iconVariant="navy"
-              padding="p-8"
-              title={title}
-              description={desc}
-            />
-          </AnimatedBlock>
-        ))}
-      </div>
-    </Section>
-  );
-}
 
 /* ─────────────────────────────────────────────────────────────────────
  *  How it works — 3 pasos, fondo navy
@@ -1185,7 +1126,7 @@ export default function Home() {
       <Navbar />
       <HeroMotion />
       <PainPointsSection />
-      <Benefits />
+      <SolucionSection />
       <HowItWorks />
       <BeforeAfterSection />
       <ForWhom />
