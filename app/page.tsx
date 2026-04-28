@@ -1,21 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import {
-  motion,
-  useReducedMotion,
-  useScroll,
-  useSpring,
-  useTransform,
-} from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import Logo from "@/components/Logo";
 import AnimatedBlock from "@/components/landing/AnimatedBlock";
 import Section from "@/components/landing/Section";
 import FeatureCard from "@/components/landing/FeatureCard";
 import BeforeAfterSection from "@/components/landing/BeforeAfterSection";
 import PainPointsSection from "@/components/landing/PainPointsSection";
-import ShaderBackground from "@/components/landing/ShaderBackground";
+import SoftAurora from "@/components/landing/SoftAurora";
 import SolucionSection from "@/components/landing/SolucionSection";
 import GradientText from "@/components/ui/gradient-text";
 
@@ -88,13 +82,6 @@ const IconCheck = (p: IconProps) => (
 const IconX = (p: IconProps) => (
   <Icon {...p}>
     <path d="M18 6 6 18M6 6l12 12" />
-  </Icon>
-);
-const IconFileText = (p: IconProps) => (
-  <Icon {...p}>
-    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" />
-    <path d="M14 3v5h5" />
-    <path d="M9 13h6M9 17h4" />
   </Icon>
 );
 const IconPlay = (p: IconProps) => (
@@ -228,81 +215,43 @@ function Navbar() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────
- *  HERO — HeroMotion: animaciones solo en capa decorativa
- *
- *  Arquitectura:
- *  - El layout del hero (texto, CTAs, demo) es 100 % ESTÁTICO. Cero
- *    transforms sobre cards, grids o contenedores.
- *  - Las animaciones de entrada (fade-in + slide-up) las hace AnimatedBlock
- *    con IntersectionObserver — una sola vez al entrar en viewport.
- *  - La única capa "animada" es la nube radial superior con parallax muy
- *    sutil (decorativa, absolute, fuera del flujo). Sin halos ni blurs
- *    detrás del mockup — el mockup ahora es la demo interactiva real.
- *  - useReducedMotion: si el sistema lo pide, el parallax se desactiva.
+ *  HERO — Centrado vertical en viewport sobre Soft Aurora.
+ *  Solo mensaje + CTAs. Cero distracciones.
  * ──────────────────────────────────────────────────────────────────── */
 
 function HeroMotion() {
-  const ref = useRef<HTMLElement>(null);
   const reduced = useReducedMotion();
-
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ["start start", "end start"],
-  });
-
-  // Suavizado "pesado" tipo Apple: sin rebote, con inercia.
-  const smooth = useSpring(scrollYProgress, {
-    stiffness: 80,
-    damping: 25,
-    mass: 0.6,
-  });
-
-  // Parallax MUY sutil sobre la nube radial superior (decorativa, absolute).
-  const bgY = useTransform(smooth, [0, 1], [0, -40]);
-
-  const bgStyle = reduced ? undefined : { y: bgY };
 
   return (
     <section
-      ref={ref}
-      className="relative isolate overflow-hidden pt-36 pb-24 md:pt-44 md:pb-32"
+      className="relative isolate flex min-h-screen items-center justify-center overflow-hidden bg-[#050b14] px-6 py-32 md:py-40"
     >
-      {/* Fondo animado WebGL — capa más profunda, no interactúa con el contenido */}
-      <ShaderBackground variant="dark" />
+      {/* Fondo animado WebGL — Soft Aurora (ReactBits). Full-width, detrás del contenido. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 z-0">
+        <SoftAurora
+          color1="#3b82f6"
+          color2="#10b981"
+          speed={1}
+          scale={1.6}
+          brightness={1}
+          noiseFrequency={2.5}
+          noiseAmplitude={1}
+          bandHeight={0.5}
+          bandSpread={1}
+          octaveDecay={0.1}
+          layerOffset={1}
+          colorSpeed={1}
+          enableMouseInteraction={false}
+          mouseInfluence={0.25}
+        />
+      </div>
 
-      {/* Capa decorativa — parallax SUTIL, absolute, fuera del flujo */}
       <motion.div
-        aria-hidden
-        style={bgStyle}
-        className="
-          pointer-events-none absolute inset-x-0 top-0 h-[720px] -z-10
-          bg-[radial-gradient(ellipse_at_top,rgba(0,200,150,0.10),transparent_55%),radial-gradient(ellipse_at_bottom,rgba(10,25,41,0.05),transparent_60%)]
-          will-change-transform
-        "
-      />
-      <div
-        aria-hidden
-        className="
-          pointer-events-none absolute inset-0 -z-10 opacity-[0.22]
-          [background-image:linear-gradient(to_right,#e8eef4_1px,transparent_1px),linear-gradient(to_bottom,#e8eef4_1px,transparent_1px)]
-          [background-size:64px_64px]
-          [mask-image:radial-gradient(ellipse_at_top,black_45%,transparent_75%)]
-        "
-      />
-
-      <div className="relative mx-auto max-w-6xl px-6">
-        {/* Glass card — contiene el bloque tipográfico para máxima legibilidad
-            sobre el shader oscuro. LiveDemoPanel queda fuera porque tiene su
-            propia superficie y un layout más ancho.
-
-            NOTA: animación SIEMPRE activa (sin guard reduced). En reduced-motion
-            duración baja a 0.01s → no se percibe pero el end-state se aplica. */}
-        <motion.div
-          initial={{ opacity: 0, y: 60 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: reduced ? 0.01 : 0.9, ease: "easeOut" }}
-          className="relative z-10 mx-auto max-w-4xl rounded-3xl border border-white/40 bg-white/85 px-6 py-10 shadow-2xl shadow-navy-900/10 backdrop-blur-md sm:px-10 sm:py-12 md:px-12 md:py-14"
-        >
+        initial={{ opacity: 0, y: 60 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: reduced ? 0.01 : 0.9, ease: "easeOut" }}
+        className="relative z-10 mx-auto w-full max-w-4xl rounded-3xl border border-white/40 bg-white/85 px-6 py-14 shadow-2xl shadow-navy-900/10 backdrop-blur-md sm:px-10 sm:py-16 md:px-14 md:py-20"
+      >
         <AnimatedBlock y={20} duration={600}>
           <div className="flex justify-center">
             <div className="inline-flex items-center gap-2 rounded-full border border-navy-100 bg-white/80 px-3.5 py-1.5 shadow-[0_1px_2px_rgba(10,25,41,0.04)] backdrop-blur transition-colors">
@@ -318,7 +267,7 @@ function HeroMotion() {
         </AnimatedBlock>
 
         <AnimatedBlock delay={80} y={30} duration={700}>
-          <h1 className="mx-auto mt-8 max-w-4xl text-center text-[2.5rem] font-semibold leading-[1.05] tracking-[-0.025em] text-navy-900 transition-colors md:text-[4rem] lg:text-[4.5rem]">
+          <h1 className="mx-auto mt-10 max-w-4xl text-center text-[2.5rem] font-semibold leading-[1.05] tracking-[-0.025em] text-navy-900 transition-colors md:text-[4rem] lg:text-[4.5rem]">
             Cierra más clientes{" "}
             <span className="relative inline-block whitespace-nowrap">
               <GradientText className="relative z-10">sin trabajar más horas</GradientText>
@@ -341,13 +290,13 @@ function HeroMotion() {
         </AnimatedBlock>
 
         <AnimatedBlock delay={160} y={28} duration={700}>
-          <p className="mx-auto mt-7 max-w-2xl text-center text-[17px] leading-relaxed text-navy-500 transition-colors md:text-[18px]">
+          <p className="mx-auto mt-8 max-w-2xl text-center text-[17px] leading-relaxed text-navy-500 transition-colors md:text-[18px]">
             ENLAZE centraliza clientes, presupuestos, seguimiento y operaciones en un solo lugar para empresas de servicios que quieren responder más rápido, vender mejor y tener más control del negocio.
           </p>
         </AnimatedBlock>
 
         <AnimatedBlock delay={240} y={24} duration={700}>
-          <div className="mt-10 flex flex-wrap justify-center gap-3">
+          <div className="mt-12 flex flex-wrap justify-center gap-3">
             <motion.span
               className="inline-block"
               whileHover={{ scale: 1.03 }}
@@ -394,7 +343,7 @@ function HeroMotion() {
         </AnimatedBlock>
 
         <AnimatedBlock delay={320} y={18} duration={700}>
-          <p className="mx-auto mt-6 max-w-xl text-center text-[14px] leading-relaxed text-navy-400 transition-colors">
+          <p className="mx-auto mt-8 max-w-xl text-center text-[14px] leading-relaxed text-navy-400 transition-colors">
             Menos WhatsApp perdido, menos Excel disperso y menos tiempo apagando fuegos. Más orden, más seguimiento y más ventas.
           </p>
 
@@ -402,326 +351,10 @@ function HeroMotion() {
             Sin tarjeta · Configuración en 2 minutos · Cancela cuando quieras
           </p>
         </AnimatedBlock>
-        </motion.div>
-
-        <AnimatedBlock delay={400} y={50} duration={800}>
-          <LiveDemoPanel />
-        </AnimatedBlock>
-      </div>
+      </motion.div>
     </section>
   );
 }
-
-/* ─────────────────────────────────────────────────────────────────────
- *  LiveDemoPanel — Demo interactiva del producto en el Hero
- *
- *  Coreografía en bucle (autónoma):
- *    1) typing      → el asistente "escribe" una descripción en la caja,
- *                     con cursor parpadeante.
- *    2) generating  → aparece el indicador "Generando presupuesto con IA"
- *                     con puntos animados.
- *    3) budget      → fade-in + slide-up del presupuesto completo, con
- *                     las partidas entrando escalonadas (stagger 90 ms).
- *    4) confirmed   → aparece la barra verde "Presupuesto enviado".
- *    (pausa ~4 s y vuelve al paso 1)
- *
- *  Reglas: solo opacity + translateY leve + typing. Sin scale, sin blur,
- *  sin transforms en contenedores de layout. Respeta prefers-reduced-motion.
- * ──────────────────────────────────────────────────────────────────── */
-
-const DEMO_TEXT =
-  "Mantenimiento oficina 120 m². Climatización, electricidad y fontanería, revisión trimestral 12 meses.";
-
-const DEMO_ITEMS: {
-  label: string;
-  qty: string;
-  unit: string;
-  total: string;
-}[] = [
-  {
-    label: "Diagnóstico y revisión inicial",
-    qty: "1 ud",
-    unit: "420,00",
-    total: "420,00",
-  },
-  {
-    label: "Mantenimiento climatización",
-    qty: "12 meses",
-    unit: "180,00",
-    total: "2.160,00",
-  },
-  {
-    label: "Mantenimiento electricidad",
-    qty: "12 meses",
-    unit: "140,00",
-    total: "1.680,00",
-  },
-  {
-    label: "Mantenimiento fontanería",
-    qty: "12 meses",
-    unit: "120,00",
-    total: "1.440,00",
-  },
-];
-
-type DemoPhase = "typing" | "generating" | "budget" | "confirmed";
-
-function LiveDemoPanel() {
-  const [typed, setTyped] = useState("");
-  const [phase, setPhase] = useState<DemoPhase>("typing");
-  const reduced = useReducedMotion();
-
-  useEffect(() => {
-    if (reduced) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTyped(DEMO_TEXT);
-      setPhase("confirmed");
-      return;
-    }
-
-    let cancelled = false;
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    let typingInterval: ReturnType<typeof setInterval> | null = null;
-
-    const stopAll = () => {
-      timers.forEach(clearTimeout);
-      timers.length = 0;
-      if (typingInterval) {
-        clearInterval(typingInterval);
-        typingInterval = null;
-      }
-    };
-
-    const runCycle = () => {
-      if (cancelled) return;
-      setTyped("");
-      setPhase("typing");
-
-      let i = 0;
-      typingInterval = setInterval(() => {
-        if (cancelled) return;
-        i += 1;
-        setTyped(DEMO_TEXT.slice(0, i));
-        if (i >= DEMO_TEXT.length && typingInterval) {
-          clearInterval(typingInterval);
-          typingInterval = null;
-
-          // Pasos encadenados tras terminar el typing:
-          timers.push(
-            setTimeout(() => !cancelled && setPhase("generating"), 500),
-            setTimeout(() => !cancelled && setPhase("budget"), 1500),
-            setTimeout(() => !cancelled && setPhase("confirmed"), 2800),
-            setTimeout(() => !cancelled && runCycle(), 7000) // pausa + loop
-          );
-        }
-      }, 34);
-    };
-
-    // Pequeña pausa inicial para que el panel termine de aparecer
-    timers.push(setTimeout(runCycle, 500));
-
-    return () => {
-      cancelled = true;
-      stopAll();
-    };
-  }, [reduced]);
-
-  const showCursor = phase === "typing";
-  const showGenerating = phase === "generating";
-  const showBudget = phase === "budget" || phase === "confirmed";
-  const showConfirmed = phase === "confirmed";
-
-  return (
-    <div className="relative mx-auto mt-20 max-w-3xl">
-      <div
-        className="
-          relative overflow-hidden rounded-2xl border border-navy-100 bg-white
-          shadow-[0_40px_80px_-30px_rgba(10,25,41,0.25),0_20px_40px_-20px_rgba(10,25,41,0.15)]
-        "
-      >
-        {/* Chrome estilo navegador */}
-        <div className="flex items-center justify-between border-b border-navy-100 bg-navy-50/60 px-4 py-3">
-          <div className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-navy-200" />
-            <span className="h-2.5 w-2.5 rounded-full bg-navy-200" />
-            <span className="h-2.5 w-2.5 rounded-full bg-navy-200" />
-          </div>
-          <div className="flex items-center gap-1.5 rounded-md border border-navy-100 bg-white px-3 py-1 text-[11px] text-navy-500">
-            <span className="h-1.5 w-1.5 rounded-full bg-brand-green" />
-            app.enlaze.com/presupuestos/nuevo
-          </div>
-          <div className="w-12" />
-        </div>
-
-        {/* Cabecera del proyecto/cliente */}
-        <div className="flex items-center justify-between border-b border-navy-100 bg-white px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-navy-900 text-white">
-              <IconFileText size={16} />
-            </div>
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-navy-400">
-                Nuevo presupuesto
-              </div>
-              <div className="mt-0.5 text-[14px] font-semibold text-navy-900">
-                Cliente: Reformas López
-              </div>
-            </div>
-          </div>
-          <div className="hidden items-center gap-2 rounded-full border border-brand-green/20 bg-brand-green/10 px-2.5 py-1 sm:inline-flex">
-            <IconSparkles size={12} className="text-brand-green" />
-            <span className="text-[11px] font-semibold text-brand-green">
-              Asistente IA activo
-            </span>
-          </div>
-        </div>
-
-        {/* Zona de input — typing con cursor parpadeante */}
-        <div className="border-b border-navy-100 bg-navy-50/30 px-6 py-5">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-navy-400">
-            Describe el servicio
-          </div>
-          <div className="mt-2 min-h-[52px] text-[13.5px] leading-relaxed text-navy-800">
-            <span className="whitespace-pre-wrap">{typed}</span>
-            <span
-              aria-hidden
-              className={`
-                ml-0.5 inline-block h-[1.05em] w-[2px] translate-y-[3px] align-middle bg-brand-green
-                ${
-                  showCursor
-                    ? "[animation:enlaze-cursor-blink_1s_steps(1,end)_infinite]"
-                    : "opacity-0"
-                }
-              `}
-            />
-          </div>
-        </div>
-
-        {/* Zona de resultado */}
-        <div className="relative min-h-[268px] px-6 py-5">
-          {/* Indicador "Generando presupuesto..." — absolute, no genera layout shift */}
-          <div
-            className="
-              absolute inset-x-6 top-5 flex items-center gap-2
-              transition-opacity duration-300
-            "
-            style={{ opacity: showGenerating ? 1 : 0 }}
-          >
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-green/10 text-brand-green">
-              <IconSparkles size={12} />
-            </span>
-            <span className="text-[13px] text-navy-500">
-              Generando presupuesto con IA
-            </span>
-            <span className="ml-1 flex items-end gap-0.5">
-              <span className="h-1 w-1 rounded-full bg-navy-300 [animation:enlaze-dot-bounce_0.9s_ease-in-out_0ms_infinite]" />
-              <span className="h-1 w-1 rounded-full bg-navy-300 [animation:enlaze-dot-bounce_0.9s_ease-in-out_150ms_infinite]" />
-              <span className="h-1 w-1 rounded-full bg-navy-300 [animation:enlaze-dot-bounce_0.9s_ease-in-out_300ms_infinite]" />
-            </span>
-          </div>
-
-          {/* Presupuesto generado */}
-          <div
-            style={{
-              opacity: showBudget ? 1 : 0,
-              transform: showBudget
-                ? "translate3d(0,0,0)"
-                : "translate3d(0,10px,0)",
-              transition:
-                "opacity 500ms cubic-bezier(0.22,1,0.36,1), transform 500ms cubic-bezier(0.22,1,0.36,1)",
-            }}
-          >
-            <div className="overflow-hidden rounded-xl border border-navy-100 bg-white">
-              <div className="grid grid-cols-12 gap-4 border-b border-navy-100 bg-navy-50/60 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-navy-500">
-                <div className="col-span-6">Partida</div>
-                <div className="col-span-2 text-right">Uds.</div>
-                <div className="col-span-2 text-right">Precio</div>
-                <div className="col-span-2 text-right">Total</div>
-              </div>
-              {DEMO_ITEMS.map((it, i) => (
-                <div
-                  key={i}
-                  className="grid grid-cols-12 gap-4 border-b border-navy-50 px-4 py-3 text-[12px] last:border-0"
-                  style={{
-                    opacity: showBudget ? 1 : 0,
-                    transform: showBudget
-                      ? "translate3d(0,0,0)"
-                      : "translate3d(0,8px,0)",
-                    transition:
-                      "opacity 420ms ease-out, transform 420ms ease-out",
-                    transitionDelay: showBudget ? `${140 + i * 90}ms` : "0ms",
-                  }}
-                >
-                  <div className="col-span-6 truncate font-medium text-navy-800">
-                    {it.label}
-                  </div>
-                  <div className="col-span-2 text-right tabular-nums text-navy-600">
-                    {it.qty}
-                  </div>
-                  <div className="col-span-2 text-right tabular-nums text-navy-600">
-                    €{it.unit}
-                  </div>
-                  <div className="col-span-2 text-right font-semibold tabular-nums text-navy-900">
-                    €{it.total}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div
-              className="mt-4 flex items-end justify-between gap-4"
-              style={{
-                opacity: showBudget ? 1 : 0,
-                transform: showBudget
-                  ? "translate3d(0,0,0)"
-                  : "translate3d(0,8px,0)",
-                transition: "opacity 420ms ease-out, transform 420ms ease-out",
-                transitionDelay: showBudget
-                  ? `${140 + DEMO_ITEMS.length * 90}ms`
-                  : "0ms",
-              }}
-            >
-              <div className="text-[11px] text-navy-500">
-                Generado automáticamente en{" "}
-                <span className="font-semibold text-navy-700">28 segundos</span>
-              </div>
-              <div className="rounded-xl border border-navy-100 bg-white px-4 py-3 text-right">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-navy-500">
-                  Total
-                </div>
-                <div className="mt-1 text-xl font-semibold tabular-nums tracking-tight text-navy-900">
-                  €5.700,00
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Barra de confirmación "Presupuesto enviado" */}
-        <div
-          className="flex items-center gap-2.5 border-t border-navy-100 bg-brand-green/[0.04] px-6 py-3"
-          style={{
-            opacity: showConfirmed ? 1 : 0,
-            transform: showConfirmed
-              ? "translate3d(0,0,0)"
-              : "translate3d(0,8px,0)",
-            transition:
-              "opacity 420ms cubic-bezier(0.22,1,0.36,1), transform 420ms cubic-bezier(0.22,1,0.36,1)",
-          }}
-        >
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-green text-white">
-            <IconCheck size={12} />
-          </span>
-          <span className="text-[13px] font-medium text-navy-800">
-            Presupuesto enviado a cliente@reformaslopez.es
-          </span>
-          <span className="ml-auto text-[11px] text-navy-500">Justo ahora</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 
 /* ─────────────────────────────────────────────────────────────────────
  *  How it works — 3 pasos, fondo navy
