@@ -46,10 +46,12 @@ export async function GET(req: NextRequest) {
   let scopes = ["https://www.googleapis.com/auth/userinfo.email"];
   if (moduleToConnect === "gmail") {
     scopes.push("https://www.googleapis.com/auth/gmail.readonly");
+    scopes.push("https://www.googleapis.com/auth/gmail.compose");
   } else if (moduleToConnect === "google_calendar") {
     scopes.push("https://www.googleapis.com/auth/calendar.readonly");
+    scopes.push("https://www.googleapis.com/auth/calendar.events");
   } else if (moduleToConnect === "google_sheets") {
-    scopes.push("https://www.googleapis.com/auth/spreadsheets.readonly");
+    scopes.push("https://www.googleapis.com/auth/spreadsheets");
     scopes.push("https://www.googleapis.com/auth/drive.readonly"); // Necesario para buscar la hoja por defecto
   } else if (moduleToConnect === "google_business") {
     scopes.push("https://www.googleapis.com/auth/business.manage");
@@ -57,8 +59,10 @@ export async function GET(req: NextRequest) {
     scopes = [
       "https://www.googleapis.com/auth/userinfo.email",
       "https://www.googleapis.com/auth/gmail.readonly",
+      "https://www.googleapis.com/auth/gmail.compose",
       "https://www.googleapis.com/auth/calendar.readonly",
-      "https://www.googleapis.com/auth/spreadsheets.readonly",
+      "https://www.googleapis.com/auth/calendar.events",
+      "https://www.googleapis.com/auth/spreadsheets",
       "https://www.googleapis.com/auth/drive.readonly"
     ];
   }

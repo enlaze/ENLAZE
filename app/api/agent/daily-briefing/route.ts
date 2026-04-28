@@ -6,8 +6,7 @@ export async function GET(req: NextRequest) {
     const auth = await verifyAgentOrBrowserRequest(req);
     if (isErrorResponse(auth)) return auth;
     
-    // We only need the userId to pass along, and potentially the auth header
-    const userId = req.nextUrl.searchParams.get("user_id");
+    const { userId } = auth;
     const authHeader = req.headers.get("authorization");
 
     // Construct the base URL robustly
