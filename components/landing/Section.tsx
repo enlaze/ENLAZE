@@ -32,7 +32,9 @@ export default function Section({
   bordered = false,
 }: SectionProps) {
   const toneClasses: Record<Tone, string> = {
-    light: "bg-white",
+    // light hereda el background del <main> (cream #f4f7f5) — así
+    // unificamos todas las secciones claras de la landing al mismo tono.
+    light: "",
     muted: "bg-navy-50/40",
     dark: "bg-navy-900",
     transparent: "",

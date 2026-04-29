@@ -260,7 +260,7 @@ function HeroMotion() {
                 <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-brand-green" />
               </span>
               <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-600 transition-colors">
-                Automatización para empresas de servicios
+                Hecho para autónomos y PYMEs de servicios
               </span>
             </div>
           </div>
@@ -268,9 +268,9 @@ function HeroMotion() {
 
         <AnimatedBlock delay={80} y={30} duration={700}>
           <h1 className="mx-auto mt-10 max-w-4xl text-center text-[2.5rem] font-semibold leading-[1.05] tracking-[-0.025em] text-navy-900 transition-colors md:text-[4rem] lg:text-[4.5rem]">
-            Cierra más clientes{" "}
+            Vende más, cobra antes,{" "}
             <span className="relative inline-block whitespace-nowrap">
-              <GradientText className="relative z-10">sin trabajar más horas</GradientText>
+              <GradientText className="relative z-10">vive mejor.</GradientText>
               <svg
                 aria-hidden
                 viewBox="0 0 300 12"
@@ -291,7 +291,7 @@ function HeroMotion() {
 
         <AnimatedBlock delay={160} y={28} duration={700}>
           <p className="mx-auto mt-8 max-w-2xl text-center text-[17px] leading-relaxed text-navy-500 transition-colors md:text-[18px]">
-            ENLAZE centraliza clientes, presupuestos, seguimiento y operaciones en un solo lugar para empresas de servicios que quieren responder más rápido, vender mejor y tener más control del negocio.
+            ENLAZE es el CRM hecho para autónomos y pequeñas empresas de servicios en España. Clientes, presupuestos, facturas y cobros en un solo sitio — sin Excel, sin WhatsApp olvidado, sin papeles.
           </p>
         </AnimatedBlock>
 
@@ -344,11 +344,11 @@ function HeroMotion() {
 
         <AnimatedBlock delay={320} y={18} duration={700}>
           <p className="mx-auto mt-8 max-w-xl text-center text-[14px] leading-relaxed text-navy-400 transition-colors">
-            Menos WhatsApp perdido, menos Excel disperso y menos tiempo apagando fuegos. Más orden, más seguimiento y más ventas.
+            Se acabó perseguir cobros, perder mensajes en WhatsApp y hacer presupuestos a mano. Ordena tu negocio y recupera tus tardes.
           </p>
 
           <p className="mt-4 text-center text-[13px] text-navy-500 transition-colors">
-            Sin tarjeta · Configuración en 2 minutos · Cancela cuando quieras
+            Sin tarjeta · Listo en 2 minutos · Verifactu incluido · Soporte en español
           </p>
         </AnimatedBlock>
       </motion.div>
@@ -670,7 +670,7 @@ function FinalCTA() {
 
 function Footer() {
   return (
-    <footer className="border-t border-navy-100 bg-white transition-colors">
+    <footer className="border-t border-navy-100 bg-[#f4f7f5] transition-colors">
       <div className="mx-auto max-w-6xl px-6 py-14">
         <div className="grid grid-cols-2 gap-10 md:grid-cols-4">
           <div className="col-span-2 md:col-span-1">
@@ -755,12 +755,27 @@ function FooterCol({
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-white text-navy-900 transition-colors antialiased">
+    <main className="min-h-screen bg-[#f4f7f5] text-navy-900 transition-colors antialiased">
       <Navbar />
       <HeroMotion />
+      {/* Bridge dark → cream — funde Hero (navy líquido) con PainPoints. */}
+      <div
+        aria-hidden
+        className="h-24 -mt-1 bg-gradient-to-b from-[#050b14] to-[#f4f7f5]"
+      />
       <PainPointsSection />
       <SolucionSection />
+      {/* Bridge cream → dark — funde Solucion con HowItWorks (navy-900). */}
+      <div
+        aria-hidden
+        className="h-24 -mb-1 bg-gradient-to-b from-[#f4f7f5] to-navy-900"
+      />
       <HowItWorks />
+      {/* Bridge dark → cream — funde HowItWorks con BeforeAfter. */}
+      <div
+        aria-hidden
+        className="h-24 -mt-1 bg-gradient-to-b from-navy-900 to-[#f4f7f5]"
+      />
       <BeforeAfterSection />
       <ForWhom />
       <FinalCTA />

@@ -317,8 +317,12 @@ export default function SolucionSection() {
           transform: translateX(-50%);
         }
         .sol-intro::before {
-          top: -260px;
-          background: radial-gradient(closest-side, rgba(16, 185, 129, 0.18), transparent 70%);
+          /* Movido a 80px para que el orb NO bleed en el top edge.
+             Antes estaba a -260px tintando los primeros 200 px de cream
+             con verde — eso creaba un cambio de color contra PainPoints
+             y se veía como un corte horizontal. */
+          top: 80px;
+          background: radial-gradient(closest-side, rgba(16, 185, 129, 0.16), transparent 70%);
         }
 
         .sol-container {

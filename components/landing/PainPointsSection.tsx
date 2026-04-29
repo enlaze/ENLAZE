@@ -194,11 +194,11 @@ export default function PainPointsSection() {
 
       <style jsx>{`
         .pp-section {
-          --pp-bg-0: #050b14;
-          --pp-ink: #eaf1f8;
-          --pp-ink-2: #b8c4d4;
-          --pp-warn: #f97362;
-          --pp-accent-2: #5eead4;
+          --pp-bg-0: #f4f7f5;
+          --pp-ink: #0a1929;
+          --pp-ink-2: #475467;
+          --pp-warn: #e85a48;
+          --pp-accent-2: #00a67a;
 
           position: relative;
           overflow: hidden;
@@ -214,36 +214,27 @@ export default function PainPointsSection() {
           position: absolute;
           inset: 0;
           z-index: -2;
+          /* Cream plano + UN solo accent en la zona central del top.
+             Sin radials/orbs cerca de los bordes inferiores → el bottom
+             de la sección queda cream PURO y se funde sin cortes con
+             el cream PURO del top de Solucion. */
           background:
-            radial-gradient(60% 50% at 20% 10%, rgba(16, 185, 129, 0.18), transparent 60%),
-            radial-gradient(55% 50% at 85% 90%, rgba(94, 234, 212, 0.1), transparent 60%),
-            radial-gradient(50% 60% at 50% 100%, rgba(249, 115, 98, 0.1), transparent 60%),
-            linear-gradient(180deg, #050b14 0%, #07111d 50%, #0a1828 100%);
+            radial-gradient(60% 40% at 30% 30%, rgba(0, 200, 150, 0.08), transparent 60%),
+            #f4f7f5;
         }
-        .pp-bg-shader::before,
-        .pp-bg-shader::after {
+        .pp-bg-shader::before {
           content: "";
           position: absolute;
           border-radius: 50%;
           filter: blur(80px);
-          opacity: 0.5;
+          opacity: 0.40;
           will-change: transform;
-        }
-        .pp-bg-shader::before {
-          width: 520px;
-          height: 520px;
-          left: -120px;
-          top: 120px;
-          background: radial-gradient(closest-side, rgba(16, 185, 129, 0.28), transparent 70%);
+          width: 460px;
+          height: 460px;
+          left: -100px;
+          top: 80px;
+          background: radial-gradient(closest-side, rgba(0, 200, 150, 0.16), transparent 70%);
           animation: pp-drift1 22s ease-in-out infinite;
-        }
-        .pp-bg-shader::after {
-          width: 620px;
-          height: 620px;
-          right: -160px;
-          bottom: -120px;
-          background: radial-gradient(closest-side, rgba(56, 189, 248, 0.18), transparent 70%);
-          animation: pp-drift2 28s ease-in-out infinite;
         }
         @keyframes pp-drift1 {
           0%, 100% { transform: translate(0, 0) scale(1); }
@@ -259,8 +250,8 @@ export default function PainPointsSection() {
           inset: 0;
           z-index: -1;
           pointer-events: none;
-          mix-blend-mode: overlay;
-          opacity: 0.1;
+          mix-blend-mode: multiply;
+          opacity: 0.04;
           background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.5 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
         }
 
@@ -310,7 +301,7 @@ export default function PainPointsSection() {
           color: var(--pp-ink);
         }
         .pp-grad {
-          background: linear-gradient(100deg, #5eead4 0%, #67e8f9 50%, #93c5fd 100%);
+          background: linear-gradient(100deg, #00a67a 0%, #0891b2 50%, #1e3a5f 100%);
           -webkit-background-clip: text;
           background-clip: text;
           color: transparent;
@@ -337,14 +328,12 @@ export default function PainPointsSection() {
         }
 
         .pp-card {
-          --card-glow: rgba(249, 115, 98, 0);
+          --card-glow: rgba(232, 90, 72, 0);
           position: relative;
           padding: 26px 26px 28px;
           border-radius: 18px;
-          background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015));
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          backdrop-filter: blur(18px) saturate(1.1);
-          -webkit-backdrop-filter: blur(18px) saturate(1.1);
+          background: #ffffff;
+          border: 1px solid rgba(10, 25, 41, 0.08);
           overflow: hidden;
           transition:
             transform 600ms cubic-bezier(0.22, 0.7, 0.18, 1),
@@ -356,7 +345,7 @@ export default function PainPointsSection() {
           transform: translateY(18px) scale(0.965);
           filter: blur(6px);
           box-shadow:
-            0 1px 0 rgba(255, 255, 255, 0.04) inset,
+            0 1px 2px rgba(10, 25, 41, 0.04),
             0 0 0 0 var(--card-glow);
         }
         .pp-card.in {
@@ -388,16 +377,16 @@ export default function PainPointsSection() {
         }
         .pp-card:hover::before { opacity: 1; }
 
-        .pp-grid.has-hover .pp-card { opacity: 0.55; }
+        .pp-grid.has-hover .pp-card { opacity: 0.6; }
         .pp-grid.has-hover .pp-card.is-hover {
           opacity: 1;
           transform: translateY(-6px) scale(1.012);
-          border-color: rgba(249, 115, 98, 0.45);
-          background: linear-gradient(180deg, rgba(249, 115, 98, 0.06), rgba(255, 255, 255, 0.02));
+          border-color: rgba(232, 90, 72, 0.40);
+          background: linear-gradient(180deg, #ffffff, rgba(232, 90, 72, 0.04));
           box-shadow:
-            0 1px 0 rgba(255, 255, 255, 0.06) inset,
-            0 22px 50px -20px rgba(249, 115, 98, 0.35),
-            0 8px 30px -10px rgba(0, 0, 0, 0.5);
+            0 1px 0 rgba(255, 255, 255, 0.6) inset,
+            0 22px 50px -20px rgba(232, 90, 72, 0.30),
+            0 8px 30px -10px rgba(10, 25, 41, 0.18);
         }
 
         .pp-icon-wrap {
@@ -477,7 +466,7 @@ export default function PainPointsSection() {
           right: 22px;
           font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
           font-size: 11px;
-          color: rgba(255, 255, 255, 0.28);
+          color: rgba(10, 25, 41, 0.30);
           letter-spacing: 0.06em;
         }
 
@@ -514,7 +503,7 @@ export default function PainPointsSection() {
         .pp-foot a {
           color: var(--pp-accent-2);
           text-decoration: none;
-          border-bottom: 1px dashed rgba(94, 234, 212, 0.4);
+          border-bottom: 1px dashed rgba(0, 166, 122, 0.4);
           padding-bottom: 1px;
         }
         .pp-arrow {
