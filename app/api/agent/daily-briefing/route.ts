@@ -9,8 +9,10 @@ export async function GET(req: NextRequest) {
     const { userId } = auth;
     const authHeader = req.headers.get("authorization");
 
-    // Construct the base URL robustly
-    const baseUrl = req.nextUrl.origin;
+    // Construct the base URL robustly using headers to guarantee exact Preview Deployment URL
+    const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
+    const protocol = req.headers.get("x-forwarded-proto") || "https";
+    const baseUrl = host ? `${protocol}://${host}` : req.nextUrl.origin;
 
     const isAgentMode = !!(authHeader && authHeader.startsWith("Bearer ") && authHeader.includes(process.env.AGENT_API_KEY || ""));
     console.log(`[Daily Briefing] Fetching summaries in parallel... (Mode: ${isAgentMode ? 'Agent API Key' : 'Browser Session'})`);
