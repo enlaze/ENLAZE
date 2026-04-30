@@ -40,8 +40,10 @@ export async function GET(req: NextRequest) {
     // Phase 1: If user configured a specific sheet ID in config, use it. Otherwise, search recent sheets.
     let targetSpreadsheetId = connection.config?.target_spreadsheet_id;
     let spreadsheetName = connection.config?.target_spreadsheet_name || "Hoja configurada";
+    let isFallback = false;
 
     if (!targetSpreadsheetId) {
+      isFallback = true;
       // Fallback: search for the latest modified spreadsheet
       const driveRes = await fetch("https://www.googleapis.com/drive/v3/files?q=mimeType='application/vnd.google-apps.spreadsheet'&orderBy=modifiedTime desc&pageSize=1", {
         headers: { Authorization: `Bearer ${accessToken}` }
@@ -116,6 +118,7 @@ export async function GET(req: NextRequest) {
       sample_data,
       summary: summaryText,
       last_sync_at: now,
+      is_fallback: isFallback,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

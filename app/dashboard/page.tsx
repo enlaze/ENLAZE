@@ -873,9 +873,17 @@ function DailyBriefingCard() {
           />
           <ModuleBadge 
             name="Sheets" 
-            status={modules?.sheets?.connected && !modules?.sheets?.spreadsheet_name ? "warning" : module_status?.sheets} 
+            status={
+              modules?.sheets?.is_fallback || (!modules?.sheets?.spreadsheet_name && modules?.sheets?.connected) 
+                ? "warning" 
+                : module_status?.sheets
+            } 
             connected={modules?.sheets?.connected}
-            value={modules?.sheets?.spreadsheet_name ? modules.sheets.spreadsheet_name : "Sin hoja configurada"} 
+            value={
+              modules?.sheets?.spreadsheet_name 
+                ? (modules?.sheets?.is_fallback ? "Modo automático" : modules.sheets.spreadsheet_name)
+                : "Sin hoja configurada"
+            } 
           />
         </div>
 
