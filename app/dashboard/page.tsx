@@ -737,13 +737,18 @@ function DailyBriefingCard() {
     async function fetchBriefing() {
       try {
         setLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) {
           setError(true);
           return;
         }
 
-        const res = await fetch(`/api/agent/daily-briefing`);
+        const headers: Record<string, string> = {};
+        if (session.access_token) {
+          headers["Authorization"] = `Bearer ${session.access_token}`;
+        }
+
+        const res = await fetch(`/api/agent/daily-briefing`, { headers });
         if (!res.ok) throw new Error("Briefing request failed");
         
         const json = await res.json();
