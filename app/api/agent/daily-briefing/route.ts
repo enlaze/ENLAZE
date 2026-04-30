@@ -21,8 +21,14 @@ export async function GET(req: NextRequest) {
       } else if (authHeader) {
         headers["Authorization"] = authHeader;
       }
+      
+      // Forward cookies to bypass Vercel Preview Protection
+      const cookieHeader = req.headers.get("cookie");
+      if (cookieHeader) {
+        headers["cookie"] = cookieHeader;
+      }
 
-      const res = await fetch(url, { headers });
+      const res = await fetch(url, { headers, cache: "no-store" });
       if (!res.ok) {
         throw new Error(`Failed with status: ${res.status}`);
       }
