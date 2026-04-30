@@ -222,9 +222,6 @@ export default function HowItWorks() {
                   </svg>
                 </div>
               </div>
-              <div className="label">
-                Enlaze <b>· Sistema</b>
-              </div>
             </div>
 
             {/* OUTPUT CHIPS (core -> right) */}
