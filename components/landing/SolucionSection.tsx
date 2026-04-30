@@ -203,6 +203,7 @@ export default function SolucionSection() {
 
   return (
     <div className="sol-root">
+      <div className="sol-grain" aria-hidden />
       <section
         className={`sol-intro${introIn ? " in" : ""}`}
         id="producto"
@@ -291,38 +292,54 @@ export default function SolucionSection() {
           --sol-accent: #10b981;
           --sol-accent-2: #059669;
 
+          position: relative;
+          /* isolation:isolate fuerza un stacking context propio para que el
+             grain con z-index:-1 quede contenido detrás del contenido de
+             sol-root pero por encima del fondo cream, sin escaparse al
+             contexto del padre. */
+          isolation: isolate;
           background: var(--sol-bg);
           color: var(--sol-ink);
           font-family: "Inter", system-ui, -apple-system, sans-serif;
           -webkit-font-smoothing: antialiased;
         }
 
+        /* Grain a nivel de sol-root: cubre intro + story + outro a la vez,
+           así no aparece ningún rectángulo contra los hijos. Fade en top
+           y bottom para que la textura no termine en seco contra PainPoints
+           ni contra el bridge a HowItWorks. */
+        .sol-grain {
+          position: absolute;
+          inset: 0;
+          z-index: -1;
+          pointer-events: none;
+          mix-blend-mode: multiply;
+          opacity: 0.04;
+          background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.5 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+          -webkit-mask-image: linear-gradient(
+            to bottom,
+            transparent 0,
+            #000 180px,
+            #000 calc(100% - 180px),
+            transparent 100%
+          );
+          mask-image: linear-gradient(
+            to bottom,
+            transparent 0,
+            #000 180px,
+            #000 calc(100% - 180px),
+            transparent 100%
+          );
+        }
+
         .sol-intro {
           position: relative;
           padding: 110px 24px 60px;
           text-align: center;
-          overflow: hidden;
-        }
-        .sol-intro::before,
-        .sol-intro::after {
-          content: "";
-          position: absolute;
-          pointer-events: none;
-          width: 720px;
-          height: 720px;
-          border-radius: 50%;
-          filter: blur(90px);
-          opacity: 0.55;
-          left: 50%;
-          transform: translateX(-50%);
-        }
-        .sol-intro::before {
-          /* Movido a 80px para que el orb NO bleed en el top edge.
-             Antes estaba a -260px tintando los primeros 200 px de cream
-             con verde — eso creaba un cambio de color contra PainPoints
-             y se veía como un corte horizontal. */
-          top: 80px;
-          background: radial-gradient(closest-side, rgba(16, 185, 129, 0.16), transparent 70%);
+          /* Sin orb decorativo aquí: cualquier radial-gradient con blur deja
+             un borde de halo perceptible que rompe la continuidad de cream
+             contra PainPoints. La decoración verde vive en sol-stage, que
+             es sticky a viewport completo y no crea bandas horizontales. */
         }
 
         .sol-container {
@@ -408,13 +425,12 @@ export default function SolucionSection() {
         }
 
         .sol-tint {
-          position: absolute;
-          inset: 0;
-          pointer-events: none;
-          background:
-            radial-gradient(60% 50% at 50% 50%, var(--tint-a, rgba(16, 185, 129, 0.1)), transparent 70%),
-            radial-gradient(40% 60% at 50% 100%, var(--tint-b, rgba(16, 185, 129, 0.05)), transparent 70%);
-          transition: background 1200ms cubic-bezier(0.22, 0.7, 0.18, 1);
+          /* Mantenemos el elemento (el JS escribe vars CSS sobre su ref)
+             pero sin pintar fondo. Cualquier tinta dentro de sol-stage
+             se ve como un rectángulo coloreado contra el cream del
+             intro/outro porque el stage tiene overflow:hidden y sus
+             bordes coinciden con el viewport sticky. */
+          display: none;
         }
 
         .sol-progress {
@@ -621,19 +637,11 @@ export default function SolucionSection() {
           filter: blur(90px);
           will-change: transform;
         }
-        .sol-b1 {
-          width: 520px;
-          height: 520px;
-          background: radial-gradient(closest-side, rgba(16, 185, 129, 0.22), transparent 70%);
-          left: -180px;
-          top: 20%;
-        }
+        /* Sin blobs visibles. El stage queda en cream uniforme y
+           desaparece el rectángulo verde que se veía contra sol-outro. */
+        .sol-b1,
         .sol-b2 {
-          width: 460px;
-          height: 460px;
-          background: radial-gradient(closest-side, rgba(16, 185, 129, 0.14), transparent 70%);
-          right: -140px;
-          bottom: 12%;
+          display: none;
         }
 
         .sol-scroll-cue {

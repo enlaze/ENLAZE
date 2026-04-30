@@ -11,6 +11,7 @@ import BeforeAfterSection from "@/components/landing/BeforeAfterSection";
 import PainPointsSection from "@/components/landing/PainPointsSection";
 import SoftAurora from "@/components/landing/SoftAurora";
 import SolucionSection from "@/components/landing/SolucionSection";
+import HowItWorks from "@/components/landing/HowItWorks";
 import GradientText from "@/components/ui/gradient-text";
 
 /* ─────────────────────────────────────────────────────────────────────
@@ -357,105 +358,6 @@ function HeroMotion() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────
- *  How it works — 3 pasos, fondo navy
- * ──────────────────────────────────────────────────────────────────── */
-
-const steps = [
-  {
-    n: "01",
-    Icon: IconPlus,
-    title: "Conecta tu WhatsApp y tu email",
-    desc: "Dos minutos, sin instalar nada. Enlaze entra como un miembro más del equipo, con tu número y tu dirección de siempre.",
-  },
-  {
-    n: "02",
-    Icon: IconUsers,
-    title: "Importa tus clientes y tus precios",
-    desc: "Sube tu lista en un Excel o pégala directamente. Enlaze aprende cómo presupuestas para que cada documento salga como lo harías tú.",
-  },
-  {
-    n: "03",
-    Icon: IconSparkles,
-    title: "Respira. A partir de aquí, el sistema trabaja",
-    desc: "Contesta a tus clientes, manda presupuestos el mismo día y hace el seguimiento solo. Tú te dedicas al servicio. Enlaze cierra la venta.",
-  },
-];
-
-function HowItWorks() {
-  return (
-    <section id="como-funciona" className="relative overflow-hidden bg-navy-900 py-28">
-      <div
-        aria-hidden
-        className="
-          pointer-events-none absolute inset-0
-          bg-[radial-gradient(ellipse_at_top_left,rgba(0,200,150,0.12),transparent_50%),radial-gradient(ellipse_at_bottom_right,rgba(0,200,150,0.08),transparent_55%)]
-        "
-      />
-      <div
-        aria-hidden
-        className="
-          pointer-events-none absolute inset-0 opacity-[0.08]
-          [background-image:linear-gradient(to_right,#ffffff_1px,transparent_1px),linear-gradient(to_bottom,#ffffff_1px,transparent_1px)]
-          [background-size:64px_64px]
-          [mask-image:radial-gradient(ellipse_at_center,black_40%,transparent_75%)]
-        "
-      />
-
-      <div className="relative mx-auto max-w-6xl px-6">
-        <AnimatedBlock y={30} duration={650}>
-          <div className="mx-auto max-w-2xl text-center">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
-              Cómo funciona
-            </p>
-            <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-white md:text-[2.75rem]">
-              Empezar es más fácil que lo que haces ahora
-            </h2>
-            <p className="mt-4 text-[16px] leading-relaxed text-navy-300">
-              Tres pasos. Ni formaciones de dos días, ni consultores, ni manuales de 80 páginas.
-            </p>
-          </div>
-        </AnimatedBlock>
-
-        <div className="mt-16 grid grid-cols-1 gap-6 md:grid-cols-3">
-          {steps.map(({ n, Icon, title, desc }, i) => (
-            <AnimatedBlock key={i} delay={i * 120} y={40} duration={700} className="h-full">
-              <article
-                className="
-                  group relative h-full overflow-hidden rounded-2xl
-                  border border-white/10 bg-white/[0.04] p-8
-                  backdrop-blur-sm
-                  transition-all duration-300
-                  hover:-translate-y-[2px] hover:border-brand-green/30 hover:bg-white/[0.06]
-                "
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
-                    Paso {n}
-                  </span>
-                  <div
-                    className="
-                      flex h-10 w-10 items-center justify-center rounded-xl
-                      bg-brand-green/10 text-brand-green ring-1 ring-inset ring-brand-green/20
-                    "
-                  >
-                    <Icon size={18} />
-                  </div>
-                </div>
-                <h3 className="mt-8 text-[18px] font-semibold tracking-tight text-white">
-                  {title}
-                </h3>
-                <p className="mt-3 text-[14.5px] leading-relaxed text-navy-300">{desc}</p>
-              </article>
-            </AnimatedBlock>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-
-/* ─────────────────────────────────────────────────────────────────────
  *  For whom — Enlaze es para ti si…
  * ──────────────────────────────────────────────────────────────────── */
 
@@ -765,16 +667,16 @@ export default function Home() {
       />
       <PainPointsSection />
       <SolucionSection />
-      {/* Bridge cream → dark — funde Solucion con HowItWorks (navy-900). */}
+      {/* Bridge cream → dark — funde Solucion con HowItWorks (#020617). */}
       <div
         aria-hidden
-        className="h-24 -mb-1 bg-gradient-to-b from-[#f4f7f5] to-navy-900"
+        className="h-24 -mb-1 bg-gradient-to-b from-[#f4f7f5] to-[#020617]"
       />
       <HowItWorks />
       {/* Bridge dark → cream — funde HowItWorks con BeforeAfter. */}
       <div
         aria-hidden
-        className="h-24 -mt-1 bg-gradient-to-b from-navy-900 to-[#f4f7f5]"
+        className="h-24 -mt-1 bg-gradient-to-b from-[#020617] to-[#f4f7f5]"
       />
       <BeforeAfterSection />
       <ForWhom />
