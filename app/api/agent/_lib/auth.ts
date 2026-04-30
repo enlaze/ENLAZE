@@ -85,12 +85,27 @@ export async function verifyAgentOrBrowserRequest(
     );
 
     let user = null;
+    let finalSupabase = serverSupabase;
 
     // 2. si Authorization trae otro bearer → intentar supabase.auth.getUser(bearer)
     if (authHeader && authHeader.startsWith("Bearer ")) {
       const token = authHeader.replace("Bearer ", "");
       const { data: tokenData } = await serverSupabase.auth.getUser(token);
       user = tokenData.user;
+      
+      if (user) {
+        // MUST create a client that explicitly sends this token in headers
+        // otherwise PostgREST queries will fail if cookies didn't parse correctly.
+        finalSupabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          {
+            global: {
+              headers: { Authorization: `Bearer ${token}` }
+            }
+          }
+        );
+      }
     }
 
     // 3. si eso falla → fallback a cookies/sesión
@@ -110,8 +125,8 @@ export async function verifyAgentOrBrowserRequest(
       return NextResponse.json({ error: "Unauthorized: Session user does not match user_id" }, { status: 403 });
     }
     
-    // Return the fully authenticated server client so RLS passes!
-    return { supabase: serverSupabase, userId };
+    // Return the authenticated client so RLS passes!
+    return { supabase: finalSupabase, userId };
   } catch (e) {
     return NextResponse.json({ error: "Unauthorized: Failed to verify session" }, { status: 401 });
   }
