@@ -12,17 +12,18 @@ export async function GET(req: NextRequest) {
     // Construct the base URL robustly
     const baseUrl = req.nextUrl.origin;
 
+    const isAgentMode = !!(authHeader && authHeader.startsWith("Bearer ") && authHeader.includes(process.env.AGENT_API_KEY || ""));
+    console.log(`[Daily Briefing] Fetching summaries in parallel... (Mode: ${isAgentMode ? 'Agent API Key' : 'Browser Session'})`);
+
     const fetchModule = async (modulePath: string) => {
       const url = `${baseUrl}/api/agent/${modulePath}/summary?user_id=${userId}`;
       const headers: Record<string, string> = {};
-      const expectedKey = process.env.AGENT_API_KEY;
-      if (expectedKey) {
-        headers["Authorization"] = `Bearer ${expectedKey}`;
-      } else if (authHeader) {
+      
+      if (authHeader) {
         headers["Authorization"] = authHeader;
       }
       
-      // Forward cookies to bypass Vercel Preview Protection
+      // Forward cookies exactly as received (vital for Vercel Preview Protection and browser auth)
       const cookieHeader = req.headers.get("cookie");
       if (cookieHeader) {
         headers["cookie"] = cookieHeader;
@@ -34,8 +35,6 @@ export async function GET(req: NextRequest) {
       }
       return res.json();
     };
-
-    console.log("[Daily Briefing] Fetching summaries in parallel...");
 
     // Execute fetches in parallel with Promise.allSettled
     const [gmailResult, calendarResult, sheetsResult] = await Promise.allSettled([
