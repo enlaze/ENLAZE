@@ -15,7 +15,8 @@ export async function GET(req: NextRequest) {
     const baseUrl = host ? `${protocol}://${host}` : req.nextUrl.origin;
 
     const isAgentMode = !!(authHeader && authHeader.startsWith("Bearer ") && authHeader.includes(process.env.AGENT_API_KEY || ""));
-    console.log(`[Daily Briefing] Fetching summaries in parallel... (Mode: ${isAgentMode ? 'Agent API Key' : 'Browser Session'})`);
+    const cookieHeader = req.headers.get("cookie");
+    console.log(`[Daily Briefing] Incoming request. AuthHeader present? ${!!authHeader} (Starts with Bearer? ${authHeader?.startsWith('Bearer ')}). Cookie present? ${!!cookieHeader}. (Mode: ${isAgentMode ? 'Agent API Key' : 'Browser Session'})`);
 
     const fetchModule = async (modulePath: string) => {
       const url = `${baseUrl}/api/agent/${modulePath}/summary?user_id=${userId}`;
@@ -26,10 +27,11 @@ export async function GET(req: NextRequest) {
       }
       
       // Forward cookies exactly as received (vital for Vercel Preview Protection and browser auth)
-      const cookieHeader = req.headers.get("cookie");
       if (cookieHeader) {
         headers["cookie"] = cookieHeader;
       }
+      
+      console.log(`[Daily Briefing] Fetching ${modulePath}. Forwarding Auth? ${!!headers["Authorization"]}. Forwarding Cookie? ${!!headers["cookie"]}`);
 
       const res = await fetch(url, { headers, cache: "no-store" });
       if (!res.ok) {

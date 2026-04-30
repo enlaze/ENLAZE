@@ -56,6 +56,7 @@ export async function verifyAgentOrBrowserRequest(
 
   // 1. si Authorization coincide con AGENT_API_KEY → llamada de agente
   if (expectedKey && authHeader === `Bearer ${expectedKey}`) {
+    console.log("[Auth] Mode: Agent API Key matched");
     let userId = req.nextUrl.searchParams.get("user_id");
     if (!userId) {
       return NextResponse.json(
@@ -90,10 +91,12 @@ export async function verifyAgentOrBrowserRequest(
     // 2. si Authorization trae otro bearer → intentar supabase.auth.getUser(bearer)
     if (authHeader && authHeader.startsWith("Bearer ")) {
       const token = authHeader.replace("Bearer ", "");
-      const { data: tokenData } = await serverSupabase.auth.getUser(token);
-      user = tokenData.user;
+      const { data: tokenData, error: tokenError } = await serverSupabase.auth.getUser(token);
+      user = tokenData?.user;
+      console.log(`[Auth] Mode: Browser Bearer Token. getUser() returned valid user? ${!!user} (Error? ${tokenError?.message || 'none'}) (Token prefix: ${token.substring(0, 5)}...)`);
       
       if (user) {
+        console.log(`[Auth] Mode: Browser Bearer Token. Instantiating explicit finalSupabase client.`);
         // MUST create a client that explicitly sends this token in headers
         // otherwise PostgREST queries will fail if cookies didn't parse correctly.
         finalSupabase = createClient(
@@ -110,12 +113,14 @@ export async function verifyAgentOrBrowserRequest(
 
     // 3. si eso falla → fallback a cookies/sesión
     if (!user) {
-      const { data: cookieData } = await serverSupabase.auth.getUser();
-      user = cookieData.user;
+      const { data: cookieData, error: cookieError } = await serverSupabase.auth.getUser();
+      user = cookieData?.user;
+      console.log(`[Auth] Mode: Browser Cookie Fallback. getUser() returned valid user? ${!!user} (Error? ${cookieError?.message || 'none'})`);
     }
 
     // 4. si todo falla → 401
     if (!user) {
+      console.log("[Auth] Mode: Failed. Returning 401 Unauthorized.");
       return NextResponse.json({ error: "Unauthorized: Invalid session or missing Agent API Key" }, { status: 401 });
     }
 
