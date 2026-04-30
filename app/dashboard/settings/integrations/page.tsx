@@ -204,6 +204,20 @@ export default function IntegrationsPage() {
         <p className="mt-1 text-sm text-navy-600 dark:text-zinc-400">Conecta las herramientas de tu negocio con el agente</p>
       </div>
 
+      <div className="mb-8 rounded-xl bg-amber-50 border border-amber-200 p-4 dark:bg-amber-950/20 dark:border-amber-800/50 max-w-3xl">
+        <div className="flex items-start gap-3">
+          <span className="text-xl">⚠️</span>
+          <div>
+            <h4 className="text-sm font-semibold text-amber-900 dark:text-amber-400">
+              Nuevos permisos requeridos
+            </h4>
+            <p className="text-sm text-amber-800 dark:text-amber-500 mt-1">
+              Hemos añadido la capacidad de que el agente pueda <strong>ejecutar acciones</strong> (escribir borradores, agendar eventos, rellenar hojas). Si conectaste tus cuentas antes, <strong>necesitas desconectarlas y volver a conectarlas</strong> para dar los nuevos permisos. De lo contrario, las acciones automáticas fallarán.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div className="space-y-6 max-w-3xl">
         {loading ? (
           <div className="animate-pulse flex space-x-4"><div className="h-20 bg-navy-100 dark:bg-zinc-800 rounded-xl w-full"></div></div>
