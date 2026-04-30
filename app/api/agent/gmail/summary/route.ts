@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyAgentRequest, isErrorResponse } from "../../_lib/auth";
+import { verifyAgentOrBrowserRequest, isErrorResponse } from "../../_lib/auth";
 import { getValidAccessToken } from "@/lib/services/google-api";
 async function syncModuleState(
   supabase: any,
@@ -62,7 +62,7 @@ async function syncModuleState(
  */
 export async function GET(req: NextRequest) {
   try {
-    const auth = verifyAgentRequest(req);
+    const auth = await verifyAgentOrBrowserRequest(req);
     if (isErrorResponse(auth)) return auth;
     const { supabase, userId } = auth;
 

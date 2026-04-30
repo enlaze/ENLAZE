@@ -85,6 +85,9 @@ export async function verifyAgentOrBrowserRequest(
       if (userId && userId !== user.id) {
         return NextResponse.json({ error: "Unauthorized: Session user does not match user_id" }, { status: 403 });
       }
+      
+      // Return the fully authenticated server client so RLS passes!
+      return { supabase: serverSupabase, userId };
     } catch (e) {
       return NextResponse.json({ error: "Unauthorized: Failed to verify session" }, { status: 401 });
     }
