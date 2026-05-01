@@ -14,6 +14,7 @@ import Loading from "@/components/ui/loading";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import DataTable, { type Column, type FilterDef } from "@/components/ui/data-table";
+import InfoFlipCard from "@/components/ui/InfoFlipCard";
 
 interface Supplier {
   id: string;
@@ -316,6 +317,13 @@ export default function SuppliersPage() {
       <PageHeader
         title={label("suppliers")}
         description="Gestiona tu red de proveedores, subcontratas y oficios"
+        titleAdornment={
+          <InfoFlipCard
+            label="Información sobre Proveedores"
+            what="Tu lista de proveedores y empresas con las que trabajas — los que te suministran materiales, subcontratas o cualquier contacto del que dependes para hacer tu trabajo."
+            howTo="Para tener en un solo sitio todos los contactos con los que trabajas, sin buscar en el móvil ni en emails antiguos. Sabes a quién llamar para cada cosa, tienes sus datos siempre a mano y puedes vincularlos a tus obras y pedidos para saber qué viene de quién."
+          />
+        }
         actions={
           <Button onClick={() => { resetForm(); setShowForm(true); }}>
             + Nuevo proveedor

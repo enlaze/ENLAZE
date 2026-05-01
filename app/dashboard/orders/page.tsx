@@ -15,6 +15,7 @@ import EmptyState from "@/components/ui/empty-state";
 import Loading from "@/components/ui/loading";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
+import InfoFlipCard from "@/components/ui/InfoFlipCard";
 
 interface Order {
   id: string;
@@ -160,6 +161,13 @@ export default function OrdersPage() {
       <PageHeader
         title={label("orders")}
         description="Gestión de pedidos a proveedores y subcontratas"
+        titleAdornment={
+          <InfoFlipCard
+            label="Información sobre Pedidos"
+            what="El registro de todo lo que encargas a tus proveedores — materiales, productos o cualquier cosa que necesitas para llevar a cabo tu trabajo."
+            howTo="Para no perder de vista qué has pedido, a quién, cuándo llega y cuánto te cuesta. Sabes en todo momento si un pedido está pendiente, en camino o ya recibido — sin llamar al proveedor para preguntar ni buscar entre emails y notas del móvil."
+          />
+        }
         actions={<Button onClick={() => setShowForm(!showForm)}>+ Nuevo pedido</Button>}
       />
 

@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Loading from "@/components/ui/loading";
 import { useToast } from "@/components/ui/toast";
+import InfoFlipCard from "@/components/ui/InfoFlipCard";
 
 const fallbackServiceTypes = [
   { value: "general", label: "General (todos los servicios)" },
@@ -111,6 +112,13 @@ export default function MarginsPage() {
       <PageHeader
         title="Margen comercial"
         description="Configura el porcentaje de beneficio que aplicas sobre el coste. El presupuesto del cliente incluirá este margen."
+        titleAdornment={
+          <InfoFlipCard
+            label="Información sobre Márgenes"
+            what="Tu radiografía financiera. Aquí ves cuánto ganas realmente en cada trabajo, descontando lo que te ha costado hacerlo — materiales, horas, proveedores."
+            howTo="Para saber si tu negocio es rentable de verdad, no solo si factura mucho. Hay trabajos que parecen buenos pero apenas dejan margen, y otros más pequeños que son muy rentables. Con esta sección descubres cuáles son cuáles y puedes tomar mejores decisiones sobre qué trabajos aceptar y a qué precio."
+          />
+        }
       />
 
       {/* Ejemplo visual */}

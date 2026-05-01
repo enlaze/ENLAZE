@@ -15,6 +15,7 @@ import { SkeletonKpi, SkeletonTable } from "@/components/ui/skeleton";
 import EmptyState from "@/components/ui/empty-state";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
+import InfoFlipCard from "@/components/ui/InfoFlipCard";
 
 interface ClientOption {
   id: string;
@@ -266,6 +267,13 @@ export default function ProjectsPage() {
       <PageHeader
         title={label("projects")}
         description={`Gestiona tus ${label("projects").toLowerCase()}, cliente asociado y control económico básico`}
+        titleAdornment={
+          <InfoFlipCard
+            label="Información sobre Obras"
+            what="El sitio donde gestionas cada proyecto o trabajo que tienes en marcha. Cada obra tiene su cliente, sus fechas, su presupuesto previsto y lo que realmente ha costado."
+            howTo="Para saber en todo momento cómo va cada trabajo — si está en planificación, en ejecución o terminado, cuánto se presupuestó y cuánto se ha gastado realmente. Así nunca pierdes el control de un proyecto ni te llevas sorpresas al final con los costes."
+          />
+        }
         actions={
           <Button onClick={() => { resetForm(); setShowForm(true); }}>
             + {label("project") === "Obra" ? "Nueva obra" : `Nuevo/a ${label("project").toLowerCase()}`}

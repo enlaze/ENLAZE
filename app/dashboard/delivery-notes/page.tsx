@@ -16,6 +16,7 @@ import Loading from "@/components/ui/loading";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import DataTable, { type Column, type FilterDef } from "@/components/ui/data-table";
+import InfoFlipCard from "@/components/ui/InfoFlipCard";
 
 interface DeliveryNote {
   id: string;
@@ -252,6 +253,13 @@ export default function DeliveryNotesPage() {
       <PageHeader
         title={label("delivery_notes")}
         description="Recepción de material y servicios"
+        titleAdornment={
+          <InfoFlipCard
+            label="Información sobre Albaranes"
+            what="El documento que confirma que un trabajo se ha entregado o un material se ha recibido. Es el justificante de que algo se hizo o llegó, antes de que se emita la factura."
+            howTo="Para tener constancia de cada entrega o trabajo realizado sin depender del papel. Cuando terminas un trabajo o recibes un pedido, quedas cubierto con un registro claro de qué se entregó, cuándo y a quién — y puedes convertirlo en factura cuando llegue el momento."
+          />
+        }
         actions={<Button onClick={() => setShowForm(!showForm)}>+ Nuevo albarán</Button>}
       />
 

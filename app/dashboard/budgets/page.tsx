@@ -12,6 +12,7 @@ import EmptyState from "@/components/ui/empty-state";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import DataTable, { type Column, type FilterDef } from "@/components/ui/data-table";
+import InfoFlipCard from "@/components/ui/InfoFlipCard";
 
 type Budget = {
   id: string;
@@ -213,6 +214,13 @@ export default function BudgetsPage() {
         title={label("budgets")}
         count={budgets.length}
         countLabel={`presupuesto${budgets.length !== 1 ? "s" : ""} en total`}
+        titleAdornment={
+          <InfoFlipCard
+            label="Información sobre Presupuestos"
+            what="El sitio donde creas y envías presupuestos a tus clientes de forma rápida y profesional. Sin Word, sin Excel, sin copiar y pegar de un sitio a otro."
+            howTo="Para preparar un presupuesto en minutos, enviárselo al cliente y saber en todo momento si lo ha visto, si lo ha aceptado o si está pendiente de respuesta. Cuando el cliente dice que sí, lo conviertes en factura con un solo clic — sin volver a escribir nada."
+          />
+        }
         actions={
           <div className="flex gap-2">
             <LinkButton href="/dashboard/budgets/generate" variant="secondary" size="md">

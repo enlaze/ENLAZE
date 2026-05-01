@@ -11,6 +11,7 @@ import EmptyState from "@/components/ui/empty-state";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import DataTable, { type Column, type FilterDef } from "@/components/ui/data-table";
+import InfoFlipCard from "@/components/ui/InfoFlipCard";
 
 /* ═══════════════ Types ═══════════════ */
 
@@ -331,7 +332,14 @@ export default function IssuedInvoicesPage() {
     <div className="max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-navy-900 dark:text-white">Facturas Emitidas</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-navy-900 dark:text-white">Facturas Emitidas</h1>
+            <InfoFlipCard
+              label="Información sobre Facturas emitidas"
+              what="El registro de todas las facturas que has enviado a tus clientes. Cada factura que emites queda guardada aquí con su importe, su estado y a quién va dirigida."
+              howTo="Para saber en todo momento qué has facturado, qué te han pagado ya y qué tienes pendiente de cobrar. Se acabó preguntar '¿me habrán pagado esta factura?' — de un vistazo ves qué está pagado, qué está pendiente y qué lleva demasiado tiempo sin cobrarse."
+            />
+          </div>
           <p className="text-sm text-navy-600 dark:text-zinc-400">Facturación a clientes con Verifactu y Facturae</p>
         </div>
         <div className="flex gap-2">

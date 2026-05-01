@@ -13,6 +13,7 @@ import Badge from "@/components/ui/badge";
 import { SkeletonKpi, SkeletonTable } from "@/components/ui/skeleton";
 import type { PriceListItem } from "@/lib/types/price";
 import { PRICE_LIST_COLUMNS, SOURCE_TYPE_LABELS } from "@/lib/types/price";
+import InfoFlipCard from "@/components/ui/InfoFlipCard";
 
 /* ─── Helpers ──────────────────────────────────────────────────────── */
 
@@ -758,13 +759,15 @@ export default function PricesPage() {
     <div className="max-w-[1400px] mx-auto">
       <PageHeader
         title={sectorConfig.priceLabel}
-        description={
-          isRetail
-            ? "Banco de precios retail: gestiona coste, venta, márgenes y proveedores de tu negocio"
-            : "Configura tus precios base para materiales, mano de obra y otros gastos"
-        }
         count={kpis.total}
         countLabel="precios"
+        titleAdornment={
+          <InfoFlipCard
+            label="Información sobre el Banco de precios"
+            what="Tu lista de servicios y materiales con sus precios ya guardados. Como una carta de precios propia que ENLAZE recuerda por ti."
+            howTo="Para no tener que escribir los mismos servicios una y otra vez cada vez que haces un presupuesto. Guardas aquí todo lo que ofreces — mano de obra, materiales, servicios — con su precio, y al crear un presupuesto solo tienes que elegirlos de la lista. Más rápido, sin errores y con los precios siempre actualizados."
+          />
+        }
         actions={
           <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3">
             {lastSyncDate && (

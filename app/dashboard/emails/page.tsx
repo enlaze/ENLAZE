@@ -7,6 +7,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { FormField, Input, Select, Textarea } from "@/components/ui/form-fields";
 import { Button } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
+import InfoFlipCard from "@/components/ui/InfoFlipCard";
 
 type Client = { id: string; name: string; email: string };
 type Message = { id: string; client_id: string; content: string; status: string; created_at: string; clients: { name: string; email: string } };
@@ -82,7 +83,17 @@ export default function EmailsPage() {
 
   return (
     <>
-      <PageHeader title="Emails" description="Envía emails automáticos a tus clientes" />
+      <PageHeader
+        title="Emails"
+        description="Envía emails automáticos a tus clientes"
+        titleAdornment={
+          <InfoFlipCard
+            label="Información sobre Emails"
+            what="Tu bandeja de entrada de correo conectada a ENLAZE. Todos los emails de tus clientes en un solo sitio, sin tener que abrir Gmail ni buscar entre cientos de correos."
+            howTo="Para leer y responder los correos de tus clientes sin salir de ENLAZE. Cada email queda vinculado a su cliente, así siempre sabes de qué se habló, qué se prometió y qué está pendiente — sin perder nada entre conversaciones."
+          />
+        }
+      />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-6">
           <Card>

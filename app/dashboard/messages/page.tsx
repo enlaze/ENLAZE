@@ -8,6 +8,7 @@ import { FormField, Select, Textarea } from "@/components/ui/form-fields";
 import { Button } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
 import EmptyState from "@/components/ui/empty-state";
+import InfoFlipCard from "@/components/ui/InfoFlipCard";
 
 type Client = { id: string; name: string; phone: string };
 type Message = { id: string; client_id: string; content: string; status: string; created_at: string; clients: { name: string; phone: string } };
@@ -67,7 +68,17 @@ export default function MessagesPage() {
 
   return (
     <>
-      <PageHeader title="WhatsApp" description="Envía mensajes a tus clientes por WhatsApp" />
+      <PageHeader
+        title="WhatsApp"
+        description="Envía mensajes a tus clientes por WhatsApp"
+        titleAdornment={
+          <InfoFlipCard
+            label="Información sobre WhatsApp"
+            what="Todos tus mensajes de WhatsApp con clientes en un solo sitio, directamente desde ENLAZE. Sin tener que buscar en el móvil ni perder conversaciones entre chats."
+            howTo="Para no dejar ningún mensaje sin contestar ni perder el hilo de lo que hablaste con cada cliente. Ves todas las conversaciones ordenadas, sabes cuáles tienes pendientes y siempre tienes a mano el historial antes de responder."
+          />
+        }
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-6">
