@@ -362,43 +362,89 @@ function HeroMotion() {
  * ──────────────────────────────────────────────────────────────────── */
 
 const fitYes = [
-  "Tienes una empresa de servicios: mantenimiento, asesoría, consultoría, agencia, clínica, instaladores, multiservicio...",
-  "Te tiras horas cada semana haciendo presupuestos a mano",
-  "Has perdido clientes por no llegar a contestar a tiempo",
-  "Tu información está repartida entre libretas, Excel y WhatsApp",
-  "Haces seguimiento «cuando me acuerdo» (es decir, casi nunca)",
-  "Facturas entre 50.000 € y 2 M € al año y quieres crecer sin doblar la oficina",
+  "Paso horas haciendo presupuestos que deberían llevarme minutos",
+  "He perdido algún cliente por no responder a tiempo",
+  "Mis datos viven entre el móvil, Excel y la cabeza",
+  "Facturo bien pero siempre cobro tarde",
+  "Quiero crecer sin contratar más personas",
 ];
 
-const fitNo = [
-  "Tienes menos de 3 clientes al mes (todavía no lo necesitas)",
-  "Buscas solo un programa para emitir facturas (hay opciones más simples)",
-  "No usas WhatsApp ni email para hablar con tus clientes",
+const serviceTypes = [
+  "Asesorías", "Consultoras", "Agencias", "Gestorías", "Clínicas",
+  "Instaladores", "Reformas", "Arquitectura", "Diseño", "Fotografía",
+  "Formación", "Mantenimiento", "Electricistas", "Fontaneros",
+  "Fisioterapia", "Psicología", "Informática", "Limpieza", "Multiservicio",
 ];
 
 function ForWhom() {
+  const reduced = useReducedMotion();
   return (
     <Section tone="light">
+      {/* Header */}
       <AnimatedBlock y={30} duration={650}>
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
-            Para quién es
+            ¿Es para mí?
           </p>
           <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 transition-colors md:text-[2.75rem]">
-            Diseñado para empresas de servicios que viven de atender bien y responder rápido
+            Hecho para quien vive de sus clientes.
           </h2>
           <p className="mt-4 text-[16px] leading-relaxed text-navy-500 transition-colors">
-            ENLAZE está pensado para negocios que trabajan con solicitudes, clientes, presupuestos, tareas y seguimiento diario.
+            No somos un software de facturas. Somos para quien necesita que sus clientes, presupuestos, facturas y cobros funcionen juntos — sin montar cinco herramientas distintas.
           </p>
         </div>
       </AnimatedBlock>
 
-      <div className="mt-16 grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <AnimatedBlock delay={80} y={40} duration={700} className="h-full lg:col-span-3">
-          {/* Sí */}
+      {/* Tags */}
+      <AnimatedBlock delay={100} y={20} duration={600}>
+        {reduced ? (
+          <div className="mt-10 flex flex-wrap justify-center gap-2">
+            {serviceTypes.map((type) => (
+              <span
+                key={type}
+                className="rounded-full border border-navy-100 bg-white px-3.5 py-1.5 text-[13px] font-medium text-navy-600 shadow-sm transition-colors"
+              >
+                {type}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div
+            className="forwhom-marquee mt-10 overflow-hidden"
+            aria-label="Sectores para los que sirve Enlaze"
+          >
+            <div className="forwhom-track flex w-max">
+              {[0, 1].map((copy) => (
+                <ul
+                  key={copy}
+                  className="flex shrink-0 items-center gap-2 pr-2"
+                  aria-hidden={copy === 1}
+                >
+                  {serviceTypes.map((type) => (
+                    <li
+                      key={`${copy}-${type}`}
+                      className="whitespace-nowrap rounded-full border border-navy-100 bg-white px-3.5 py-1.5 text-[13px] font-medium text-navy-600 shadow-sm transition-colors"
+                    >
+                      {type}
+                    </li>
+                  ))}
+                </ul>
+              ))}
+            </div>
+          </div>
+        )}
+        <p className="mt-5 text-center text-[13px] font-medium text-brand-green">
+          Si tienes clientes, ya es para ti.
+        </p>
+      </AnimatedBlock>
+
+
+      {/* YES card — centrada */}
+      <AnimatedBlock delay={150} y={40} duration={700}>
+        <div className="mx-auto mt-12 max-w-xl">
           <div
             className="
-              relative h-full overflow-hidden rounded-2xl
+              relative overflow-hidden rounded-2xl
               border border-brand-green/20 bg-white p-8 transition-colors md:p-10
               shadow-[0_1px_2px_rgba(10,25,41,0.04),0_24px_56px_-28px_rgba(0,200,150,0.25)]
             "
@@ -407,21 +453,16 @@ function ForWhom() {
               aria-hidden
               className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-green/60 to-transparent"
             />
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-green/10 text-brand-green ring-1 ring-inset ring-brand-green/20">
+            <div className="mb-6 flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-green/10 text-brand-green ring-1 ring-inset ring-brand-green/20">
                 <IconCheck size={18} />
               </div>
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
-                  Enlaze es para ti si…
-                </p>
-                <p className="text-[17px] font-semibold text-navy-900 transition-colors">
-                  Eres una empresa de servicios que ya factura pero no escala
-                </p>
-              </div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
+                Enlaze es para ti si…
+              </p>
             </div>
 
-            <ul className="mt-7 space-y-4">
+            <ul className="space-y-4">
               {fitYes.map((t, i) => (
                 <li key={i} className="flex items-start gap-3">
                   <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-green/15 text-brand-green">
@@ -432,41 +473,8 @@ function ForWhom() {
               ))}
             </ul>
           </div>
-        </AnimatedBlock>
-
-        <AnimatedBlock delay={180} y={40} duration={700} className="h-full lg:col-span-2">
-          {/* No */}
-          <div
-            className="
-              relative h-full overflow-hidden rounded-2xl
-              border border-navy-100 bg-navy-50/40 p-8 transition-colors md:p-10
-            "
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-navy-100 text-navy-500 ring-1 ring-inset ring-navy-200">
-                <IconX size={18} />
-              </div>
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-500 transition-colors">
-                  Todavía no, si…
-                </p>
-                <p className="text-[17px] font-semibold text-navy-900 transition-colors">Te conviene más otra cosa</p>
-              </div>
-            </div>
-
-            <ul className="mt-7 space-y-4">
-              {fitNo.map((t, i) => (
-                <li key={i} className="flex items-start gap-3">
-                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-navy-100 text-navy-500">
-                    <IconX size={12} />
-                  </span>
-                  <span className="text-[14px] leading-relaxed text-navy-600 transition-colors">{t}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </AnimatedBlock>
-      </div>
+        </div>
+      </AnimatedBlock>
     </Section>
   );
 }

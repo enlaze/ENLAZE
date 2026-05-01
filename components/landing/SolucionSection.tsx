@@ -66,9 +66,9 @@ const tints = [
   { a: "rgba(245,158,11,0.08)", b: "rgba(16,185,129,0.06)" },
 ];
 
-const HOLD_BEFORE = 0.2;
-const STEP_LEN = 1.0;
-const HOLD_AFTER = 0.8;
+const HOLD_BEFORE = 0.15;
+const STEP_LEN = 0.5;
+const HOLD_AFTER = 0.35;
 
 export default function SolucionSection() {
   const introRef = useRef<HTMLElement>(null);

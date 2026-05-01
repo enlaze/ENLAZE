@@ -189,3 +189,19 @@ html.dark ::selection {
     opacity: 1;
   }
 }
+
+/* Marquee de sectores en la sección "¿Es para mí?" (ForWhom) */
+.forwhom-track {
+  animation: forwhom-marquee 40s linear infinite;
+}
+.forwhom-marquee:hover .forwhom-track {
+  animation-play-state: paused;
+}
+@keyframes forwhom-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
