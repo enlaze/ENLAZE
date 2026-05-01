@@ -5,9 +5,9 @@ import { cookies } from "next/headers";
 const RAW_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_ID = RAW_GOOGLE_CLIENT_ID ? RAW_GOOGLE_CLIENT_ID.replace(/^["']|["']$/g, '').trim() : undefined;
 
-const APP_BASE_URL =
-  process.env.NEXT_PUBLIC_APP_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+// Force stable base URL for OAuth to avoid Google redirect_uri_mismatch
+const IS_VERCEL = !!process.env.VERCEL;
+const APP_BASE_URL = IS_VERCEL ? "https://enlaze.vercel.app" : "http://localhost:3000";
 
 const GOOGLE_REDIRECT_URI = `${APP_BASE_URL}/api/auth/google/callback`;
 
@@ -67,8 +67,9 @@ export async function GET(req: NextRequest) {
     ];
   }
 
-  // Pass state to prevent CSRF and remember the module
-  const stateObj = { userId: user.id, module: moduleToConnect };
+  // Pass state to prevent CSRF and remember the module + origin
+  const returnTo = req.nextUrl.origin;
+  const stateObj = { userId: user.id, module: moduleToConnect, returnTo };
   const stateString = Buffer.from(JSON.stringify(stateObj)).toString("base64");
 
   const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");

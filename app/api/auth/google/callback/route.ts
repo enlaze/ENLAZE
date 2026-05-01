@@ -6,11 +6,33 @@ import { encryptToken } from "@/lib/crypto";
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
-const APP_BASE_URL =
-  process.env.NEXT_PUBLIC_APP_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+// Force stable base URL for OAuth
+const IS_VERCEL = !!process.env.VERCEL;
+const APP_BASE_URL = IS_VERCEL ? "https://enlaze.vercel.app" : "http://localhost:3000";
 
 const GOOGLE_REDIRECT_URI = `${APP_BASE_URL}/api/auth/google/callback`;
+
+function isValidReturnUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+
+    if (parsed.origin === "http://localhost:3000") return true;
+    if (parsed.origin === "https://enlaze.vercel.app") return true;
+
+    const host = parsed.hostname;
+    if (
+      parsed.protocol === "https:" &&
+      host.startsWith("enlaze-") &&
+      host.endsWith("-enlazes-projects.vercel.app")
+    ) {
+      return true;
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -19,7 +41,8 @@ export async function GET(req: NextRequest) {
     const error = req.nextUrl.searchParams.get("error");
 
     if (error) {
-      return NextResponse.redirect(new URL(`/dashboard/settings/integrations?integration_error=${error}`, req.url));
+      // If we don't have safeReturnTo yet, just use APP_BASE_URL
+      return NextResponse.redirect(new URL(`${APP_BASE_URL}/dashboard/settings/integrations?integration_error=${error}`));
     }
 
     if (!code || !stateString) {
@@ -34,13 +57,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Invalid state parameter" }, { status: 400 });
     }
 
-    const { userId, module } = state;
+    const { userId, module, returnTo } = state;
     if (!userId || !module) {
       return NextResponse.json({ error: "Invalid state contents" }, { status: 400 });
     }
 
+    const safeReturnTo = (returnTo && isValidReturnUrl(returnTo)) ? returnTo : APP_BASE_URL;
+
     console.log(`[Google OAuth] Starting callback for User: ${userId}, Module: ${module}`);
     console.log(`[Google OAuth] Redirect URI used: ${GOOGLE_REDIRECT_URI}`);
+    console.log(`[Google OAuth] Return To URL: ${safeReturnTo}`);
 
     const cookieStore = await cookies();
     const supabase = createServerClient(
@@ -60,7 +86,7 @@ export async function GET(req: NextRequest) {
     // Verify authenticated session matches the state userId
     const { data: { user } } = await supabase.auth.getUser();
     if (!user || user.id !== userId) {
-      return NextResponse.redirect(new URL(`/dashboard/settings?integration_error=unauthorized`, req.url));
+      return NextResponse.redirect(new URL(`${safeReturnTo}/dashboard/settings/integrations?integration_error=unauthorized`));
     }
 
     // Exchange code for tokens
@@ -83,7 +109,7 @@ export async function GET(req: NextRequest) {
 
     if (!tokenResponse.ok) {
       console.error("[Google OAuth] Token exchange failed:", tokenData);
-      return NextResponse.redirect(new URL(`/dashboard/settings/integrations?integration_error=token_exchange_failed`, req.url));
+      return NextResponse.redirect(new URL(`${safeReturnTo}/dashboard/settings/integrations?integration_error=token_exchange_failed`));
     }
 
     const { access_token, refresh_token, expires_in } = tokenData;
@@ -164,9 +190,11 @@ export async function GET(req: NextRequest) {
     }
 
     console.log(`[Google OAuth] Successfully saved connection for ${module}`);
-    return NextResponse.redirect(new URL("/dashboard/settings/integrations?integration_success=true", req.url));
+    return NextResponse.redirect(new URL(`${safeReturnTo}/dashboard/settings/integrations?integration_success=true`));
   } catch (err: any) {
     console.error("Google OAuth Callback Error:", err);
-    return NextResponse.redirect(new URL(`/dashboard/settings/integrations?integration_error=${encodeURIComponent(err.message)}`, req.url));
+    // If safeReturnTo is not defined because state parsing failed, fallback to APP_BASE_URL
+    const fallbackUrl = APP_BASE_URL;
+    return NextResponse.redirect(new URL(`${fallbackUrl}/dashboard/settings/integrations?integration_error=${encodeURIComponent(err.message)}`));
   }
 }
