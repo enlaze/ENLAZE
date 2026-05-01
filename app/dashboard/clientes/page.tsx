@@ -10,6 +10,7 @@ import EmptyState from "@/components/ui/empty-state";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import DataTable, { type Column } from "@/components/ui/data-table";
+import InfoFlipCard from "@/components/ui/InfoFlipCard";
 
 type Client = {
   id: string;
@@ -190,6 +191,13 @@ export default function ClientsPage() {
         title="Clientes"
         count={clients.length}
         countLabel={`contacto${clients.length !== 1 ? "s" : ""} en total`}
+        titleAdornment={
+          <InfoFlipCard
+            label="Información sobre Clientes"
+            what="Tu agenda de contactos inteligente. Aquí viven todos tus clientes y leads — con su información de contacto, estado y todo el historial de lo que ha pasado con cada uno."
+            howTo="Para tener controlado quién es quién en tu negocio. Puedes ver de un vistazo qué clientes están activos, cuáles son leads que aún no han contratado, añadir notas, buscar cualquier contacto en segundos y acceder a todo lo que has hecho con ellos — presupuestos, facturas, conversaciones — sin buscar en el móvil ni en el correo."
+          />
+        }
         actions={
           <Button
             onClick={() => {

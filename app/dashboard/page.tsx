@@ -8,6 +8,7 @@ import { logError, formatErrorForUI } from "@/lib/error-handler";
 import ErrorAlert from "@/components/ErrorAlert";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { SkeletonCard, SkeletonKpi, SkeletonTable } from "@/components/ui/skeleton";
+import InfoFlipCard from "@/components/ui/InfoFlipCard";
 
 /* ─────────────────────────────────────────────────────────────────────
  *  Icons — Lucide-style (stroke 1.75, 24×24, rounded)
@@ -385,6 +386,11 @@ export default function DashboardHome() {
           <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-400 dark:text-zinc-500">
             Centro de control
           </span>
+          <InfoFlipCard
+            label="Información sobre el Centro de control"
+            what="Tu panel principal. Un vistazo rápido a todo lo que está pasando en tu negocio hoy — clientes, presupuestos, ingresos y tareas pendientes, sin tener que entrar en cada sección."
+            howTo="Para empezar el día sabiendo exactamente dónde estás. De un solo vistazo ves cuántos clientes tienes activos, qué presupuestos has enviado, cuánto has ingresado este mes y cómo evoluciona tu negocio — sin buscar nada, sin calcular nada."
+          />
         </div>
         <h1 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 dark:text-white md:text-[2.5rem]">
           {greeting()}, {userName}
