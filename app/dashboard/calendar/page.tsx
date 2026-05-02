@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
+import InfoFlipCard from "@/components/ui/InfoFlipCard";
 
 type Client = { id: string; name: string };
 type Event = { id: string; title: string; description: string; event_date: string; event_time: string; duration_minutes: number; status: string; client_id: string; clients: { name: string } | null };
@@ -92,6 +93,13 @@ export default function CalendarPage() {
       <PageHeader
         title="Calendario"
         description="Gestiona tus citas y eventos"
+        titleAdornment={
+          <InfoFlipCard
+            label="Información sobre Calendario"
+            what="Tu agenda de trabajo conectada al negocio. Aquí ves todas tus citas, visitas y tareas programadas en un calendario visual, vinculadas a tus clientes y obras."
+            howTo="Para organizar tu semana sin depender de Google Calendar ni de una libreta. Programas visitas, reuniones o recordatorios directamente desde ENLAZE y quedan asociados a su cliente — así cuando vas a una cita ya sabes quién es, qué se habló antes y qué tienes pendiente con ellos."
+          />
+        }
         actions={
           <Button onClick={() => { setShowForm(true); setForm({ ...form, event_date: selectedDate || today }); }}>
             + Nueva cita

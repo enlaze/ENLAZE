@@ -37,6 +37,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard/suppliers", label: "Proveedores", icon: "🔧", section: "Negocio" },
   { href: "/dashboard/orders", label: "Pedidos", icon: "📦", section: "Negocio" },
   { href: "/dashboard/delivery-notes", label: "Albaranes", icon: "📄", section: "Negocio" },
+  { href: "/dashboard/calendar", label: "Calendario", icon: "📅", section: "Negocio" },
 
   // FINANZAS
   { href: "/dashboard/suppliers/invoices", label: "Facturas recibidas", icon: "🧾", section: "Finanzas" },
@@ -45,7 +46,6 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard/margins", label: "Márgenes", icon: "📊", section: "Finanzas" },
 
   // SISTEMA
-  { href: "/dashboard/calendar", label: "Calendario", icon: "📅", section: "Sistema" },
   { href: "/dashboard/settings", label: "Ajustes", icon: "⚙️", section: "Sistema" },
   { href: "/dashboard/compliance", label: "Cumplimiento", icon: "🛡️", section: "Sistema" },
   { href: "/dashboard/audit-log", label: "Registro de actividad", icon: "📋", section: "Sistema" },
