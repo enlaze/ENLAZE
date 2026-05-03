@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import Logo from "@/components/Logo";
@@ -376,202 +376,647 @@ const serviceTypes = [
   "Fisioterapia", "Psicología", "Informática", "Limpieza", "Multiservicio",
 ];
 
+const ForWhomHTML = `
+<style>
+  :root{
+    --cream: #f4f7f5;
+    --cream-2: #ecf1ed;
+    --navy: #0a1929;
+    --ink: #0a1929;
+    --ink-2: #4a5868;
+    --ink-3: #7a8898;
+    --green: #00c896;
+    --green-2: #00b386;
+    --green-soft: #e6f9f2;
+    --white: #ffffff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--cream);color:var(--ink);font-family:'Geist',ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+
+  .section{
+    position:relative; overflow:hidden;
+    padding: 130px 24px 160px;
+    background: var(--cream);
+  }
+  /* Soft ambient light behind the section */
+  .section::before{
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background:
+      radial-gradient(45% 35% at 50% 18%, rgba(0,200,150,.07), transparent 65%),
+      radial-gradient(60% 50% at 50% 100%, rgba(0,200,150,.04), transparent 70%);
+  }
+  .wrap{max-width:1240px;margin:0 auto;position:relative; z-index:1;}
+
+  /* HEAD =============================================================== */
+  .head{ text-align:center; max-width: 760px; margin: 0 auto 56px; }
+  .eyebrow{
+    color: var(--green);
+    font-family:'Geist Mono', monospace;
+    font-size:12px; letter-spacing:.24em; text-transform:uppercase;
+    font-weight:500;
+  }
+  h2{
+    font-size: clamp(40px, 5vw, 60px);
+    line-height:1.06;
+    letter-spacing:-0.025em;
+    margin: 18px 0 18px;
+    font-weight: 600;
+    color: var(--navy);
+    text-wrap: balance;
+  }
+  .lede{
+    color: var(--ink-2); font-size: 16px; line-height: 1.65;
+    max-width: 620px; margin: 0 auto;
+  }
+
+  /* MARQUEE ============================================================ */
+  .marquee{
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14%, #000 86%, transparent 100%);
+            mask-image: linear-gradient(90deg, transparent 0, #000 14%, #000 86%, transparent 100%);
+    padding: 22px 0;
+  }
+  .track{
+    display: flex;
+    width: max-content;
+    gap: 14px;
+    animation: scroll 56s linear infinite;
+    will-change: transform;
+  }
+  .marquee:hover .track{ animation-play-state: paused; }
+  @keyframes scroll{
+    0%   { transform: translate3d(0,0,0); }
+    100% { transform: translate3d(-50%,0,0); }
+  }
+
+  /* PILL — glassmorphism + gradient border + hover lift */
+  .pill{
+    position: relative;
+    flex-shrink: 0;
+    padding: 12px 22px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255,255,255,.85), rgba(244,247,245,.7));
+    color: var(--navy);
+    font-size: 14.5px;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    white-space: nowrap;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.95),
+      inset 0 -1px 0 rgba(10,25,41,.03),
+      0 1px 2px rgba(10,25,41,.03),
+      0 8px 18px -10px rgba(10,25,41,.10);
+    transition: transform .35s cubic-bezier(.2,.7,.2,1),
+                box-shadow .35s ease,
+                color .35s ease;
+  }
+  /* gradient border using mask trick */
+  .pill::before{
+    content:"";
+    position:absolute; inset:0;
+    border-radius: 999px;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(0,200,150,.45), rgba(10,25,41,.10) 45%, rgba(10,25,41,.06));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    pointer-events:none;
+    transition: background .35s ease, opacity .35s ease;
+  }
+  .pill:hover{
+    transform: translateY(-3px) scale(1.03);
+    color: var(--green-2);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.95),
+      0 1px 2px rgba(10,25,41,.03),
+      0 14px 28px -10px rgba(0,200,150,.30),
+      0 6px 14px -6px rgba(0,200,150,.20);
+  }
+  .pill:hover::before{
+    background: linear-gradient(135deg, rgba(0,200,150,.85), rgba(0,200,150,.30) 60%, rgba(0,200,150,.15));
+  }
+
+  /* TAGLINE ============================================================ */
+  .tagline{
+    margin-top: 44px;
+    text-align: center;
+    color: var(--green);
+    font-family: 'Geist', sans-serif;
+    font-size: clamp(22px, 2.6vw, 30px);
+    letter-spacing: -0.012em;
+    font-weight: 600;
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    line-height: 1.2;
+  }
+  .tagline .pip{
+    width:11px; height:11px; border-radius:50%;
+    background: var(--green);
+    box-shadow: 0 0 0 5px rgba(0,200,150,.16), 0 0 16px rgba(0,200,150,.7);
+    animation: pulse 2.4s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+  .tagline .text{
+    background: linear-gradient(90deg, var(--green) 0%, var(--green-2) 50%, var(--green) 100%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    animation: shimmer 5s ease-in-out infinite;
+  }
+  @keyframes pulse{0%,100%{opacity:.55; transform:scale(1)}50%{opacity:1; transform:scale(1.2)}}
+  @keyframes shimmer{
+    0%,100% { background-position: 0% 50%; }
+    50%     { background-position: 100% 50%; }
+  }
+
+  /* CARD =============================================================== */
+  .card-wrap{
+    margin: 80px auto 0;
+    max-width: 560px;
+    position: relative;
+  }
+  /* halo behind card */
+  .card-wrap::before{
+    content:""; position:absolute; inset:-30px;
+    background: radial-gradient(50% 60% at 50% 60%, rgba(0,200,150,.18), transparent 70%);
+    pointer-events: none;
+    filter: blur(8px);
+    z-index: 0;
+  }
+
+  .card{
+    position: relative;
+    background: var(--white);
+    border: 1px solid rgba(0,200,150,.18);
+    border-radius: 20px;
+    padding: 28px 32px 30px;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,1) inset,
+      0 30px 60px -28px rgba(0,200,150,.30),
+      0 14px 30px -10px rgba(10,25,41,.08);
+    z-index: 1;
+    overflow: hidden;
+  }
+  /* Top decorative line */
+  .card::before{
+    content: "";
+    position: absolute;
+    top: 0; left: 12%; right: 12%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--green), transparent);
+    opacity: .9;
+  }
+
+  .card-head{
+    display:flex; align-items:center; gap: 12px;
+    padding-bottom: 18px;
+    border-bottom: 1px dashed rgba(10,25,41,.08);
+    margin-bottom: 18px;
+  }
+  .check-circle{
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: var(--white);
+    border: 1px solid rgba(0,200,150,.25);
+    display:grid; place-items:center;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 4px rgba(0,200,150,.08), 0 4px 12px -4px rgba(0,200,150,.20);
+    overflow: hidden;
+    padding: 6px;
+  }
+  .check-circle img{
+    width: 100%; height: 100%; object-fit: contain; display:block;
+  }
+  .card-head .title{
+    color: var(--green-2);
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+
+  .list{ list-style: none; margin:0; padding:0; display: flex; flex-direction: column; gap: 4px; }
+  .list li{
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 12px;
+    margin: 0 -12px;
+    border-radius: 12px;
+    color: var(--ink);
+    font-size: 15px;
+    line-height: 1.45;
+    transition: background .25s ease, transform .25s ease;
+  }
+  .list li:hover{
+    background: var(--green-soft);
+    transform: translateX(2px);
+  }
+  .list .ck{
+    flex-shrink: 0;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--green-soft);
+    border: 1px solid rgba(0,200,150,.30);
+    display: grid; place-items: center;
+    color: var(--green-2);
+  }
+
+  /* prefers-reduced-motion */
+  @media (prefers-reduced-motion: reduce){
+    .marquee{
+      -webkit-mask-image: none; mask-image: none;
+      padding: 0;
+    }
+    .track{
+      animation: none;
+      width: 100%;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+    }
+    .track > .copy-2{ display:none; }
+    .pill, .pill:hover{ transform: none; }
+    .tagline .pip{ animation: none; }
+    .tagline .text{ animation: none; background: none; -webkit-background-clip: initial; background-clip: initial; color: var(--green); }
+    .list li:hover{ transform: none; }
+  }
+</style>
+  <section class="section" aria-labelledby="es-para-mi-title">
+    <div class="wrap">
+
+      <!-- HEAD -->
+      <div class="head">
+        <div class="eyebrow">¿ES PARA MÍ?</div>
+        <h2 id="es-para-mi-title">Hecho para quien vive de sus clientes.</h2>
+        <p class="lede">No somos un software de facturas. Somos para quien necesita que sus clientes, presupuestos, facturas y cobros funcionen juntos — sin montar cinco herramientas distintas.</p>
+      </div>
+
+      <!-- MARQUEE -->
+      <div class="marquee" role="region" aria-label="Sectores que usan Enlaze">
+        <div class="track">
+          <span class="pill copy-1">Asesorías</span>
+          <span class="pill copy-1">Consultoras</span>
+          <span class="pill copy-1">Agencias</span>
+          <span class="pill copy-1">Gestorías</span>
+          <span class="pill copy-1">Clínicas</span>
+          <span class="pill copy-1">Instaladores</span>
+          <span class="pill copy-1">Reformas</span>
+          <span class="pill copy-1">Arquitectura</span>
+          <span class="pill copy-1">Diseño</span>
+          <span class="pill copy-1">Fotografía</span>
+          <span class="pill copy-1">Formación</span>
+          <span class="pill copy-1">Mantenimiento</span>
+          <span class="pill copy-1">Electricistas</span>
+          <span class="pill copy-1">Fontaneros</span>
+          <span class="pill copy-1">Fisioterapia</span>
+          <span class="pill copy-1">Psicología</span>
+          <span class="pill copy-1">Informática</span>
+          <span class="pill copy-1">Limpieza</span>
+          <span class="pill copy-1">Multiservicio</span>
+
+          <span class="pill copy-2" aria-hidden="true">Asesorías</span>
+          <span class="pill copy-2" aria-hidden="true">Consultoras</span>
+          <span class="pill copy-2" aria-hidden="true">Agencias</span>
+          <span class="pill copy-2" aria-hidden="true">Gestorías</span>
+          <span class="pill copy-2" aria-hidden="true">Clínicas</span>
+          <span class="pill copy-2" aria-hidden="true">Instaladores</span>
+          <span class="pill copy-2" aria-hidden="true">Reformas</span>
+          <span class="pill copy-2" aria-hidden="true">Arquitectura</span>
+          <span class="pill copy-2" aria-hidden="true">Diseño</span>
+          <span class="pill copy-2" aria-hidden="true">Fotografía</span>
+          <span class="pill copy-2" aria-hidden="true">Formación</span>
+          <span class="pill copy-2" aria-hidden="true">Mantenimiento</span>
+          <span class="pill copy-2" aria-hidden="true">Electricistas</span>
+          <span class="pill copy-2" aria-hidden="true">Fontaneros</span>
+          <span class="pill copy-2" aria-hidden="true">Fisioterapia</span>
+          <span class="pill copy-2" aria-hidden="true">Psicología</span>
+          <span class="pill copy-2" aria-hidden="true">Informática</span>
+          <span class="pill copy-2" aria-hidden="true">Limpieza</span>
+          <span class="pill copy-2" aria-hidden="true">Multiservicio</span>
+        </div>
+      </div>
+
+      <p class="tagline"><span class="pip"></span><span class="text">Si tienes clientes, ya es para ti.</span></p>
+
+      <!-- CARD -->
+      <div class="card-wrap">
+        <div class="card">
+          <div class="card-head">
+            <div class="check-circle" aria-hidden="true">
+              <img src="/logo.png" alt="" />
+            </div>
+            <div class="title">ENLAZE ES PARA TI SI…</div>
+          </div>
+
+          <ul class="list">
+            <li>
+              <span class="ck"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 12 5 5 9-11" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              Paso horas haciendo presupuestos que deberían llevarme minutos
+            </li>
+            <li>
+              <span class="ck"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 12 5 5 9-11" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              He perdido algún cliente por no responder a tiempo
+            </li>
+            <li>
+              <span class="ck"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 12 5 5 9-11" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              Mis datos viven entre el móvil, Excel y la cabeza
+            </li>
+            <li>
+              <span class="ck"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 12 5 5 9-11" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              Facturo bien pero siempre cobro tarde
+            </li>
+            <li>
+              <span class="ck"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 12 5 5 9-11" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              Quiero crecer sin contratar más personas
+            </li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </section>
+`;
+
 function ForWhom() {
-  const reduced = useReducedMotion();
-  return (
-    <Section tone="light">
-      {/* Header */}
-      <AnimatedBlock y={30} duration={650}>
-        <div className="mx-auto max-w-2xl text-center">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
-            ¿Es para mí?
-          </p>
-          <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 transition-colors md:text-[2.75rem]">
-            Hecho para quien vive de sus clientes.
-          </h2>
-          <p className="mt-4 text-[16px] leading-relaxed text-navy-500 transition-colors">
-            No somos un software de facturas. Somos para quien necesita que sus clientes, presupuestos, facturas y cobros funcionen juntos — sin montar cinco herramientas distintas.
-          </p>
-        </div>
-      </AnimatedBlock>
-
-      {/* Tags */}
-      <AnimatedBlock delay={100} y={20} duration={600}>
-        {reduced ? (
-          <div className="mt-10 flex flex-wrap justify-center gap-2">
-            {serviceTypes.map((type) => (
-              <span
-                key={type}
-                className="rounded-full border border-navy-100 bg-white px-3.5 py-1.5 text-[13px] font-medium text-navy-600 shadow-sm transition-colors"
-              >
-                {type}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <div
-            className="forwhom-marquee mt-10 overflow-hidden"
-            aria-label="Sectores para los que sirve Enlaze"
-          >
-            <div className="forwhom-track flex w-max">
-              {[0, 1].map((copy) => (
-                <ul
-                  key={copy}
-                  className="flex shrink-0 items-center gap-2 pr-2"
-                  aria-hidden={copy === 1}
-                >
-                  {serviceTypes.map((type) => (
-                    <li
-                      key={`${copy}-${type}`}
-                      className="whitespace-nowrap rounded-full border border-navy-100 bg-white px-3.5 py-1.5 text-[13px] font-medium text-navy-600 shadow-sm transition-colors"
-                    >
-                      {type}
-                    </li>
-                  ))}
-                </ul>
-              ))}
-            </div>
-          </div>
-        )}
-        <p className="mt-5 text-center text-[13px] font-medium text-brand-green">
-          Si tienes clientes, ya es para ti.
-        </p>
-      </AnimatedBlock>
-
-
-      {/* YES card — centrada */}
-      <AnimatedBlock delay={150} y={40} duration={700}>
-        <div className="mx-auto mt-12 max-w-xl">
-          <div
-            className="
-              relative overflow-hidden rounded-2xl
-              border border-brand-green/20 bg-white p-8 transition-colors md:p-10
-              shadow-[0_1px_2px_rgba(10,25,41,0.04),0_24px_56px_-28px_rgba(0,200,150,0.25)]
-            "
-          >
-            <div
-              aria-hidden
-              className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-green/60 to-transparent"
-            />
-            <div className="mb-6 flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-green/10 text-brand-green ring-1 ring-inset ring-brand-green/20">
-                <IconCheck size={18} />
-              </div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
-                Enlaze es para ti si…
-              </p>
-            </div>
-
-            <ul className="space-y-4">
-              {fitYes.map((t, i) => (
-                <li key={i} className="flex items-start gap-3">
-                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-green/15 text-brand-green">
-                    <IconCheck size={12} />
-                  </span>
-                  <span className="text-[14.5px] leading-relaxed text-navy-700 transition-colors">{t}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </AnimatedBlock>
-    </Section>
-  );
+  return <div dangerouslySetInnerHTML={{ __html: ForWhomHTML }} />;
 }
 
 /* ─────────────────────────────────────────────────────────────────────
  *  CTA FINAL
  * ──────────────────────────────────────────────────────────────────── */
 
-function FinalCTA() {
-  return (
-    <section className="relative overflow-hidden py-28 transition-colors">
-      <div
-        aria-hidden
-        className="
-          pointer-events-none absolute inset-0 -z-10
-          bg-[radial-gradient(ellipse_at_center,rgba(0,200,150,0.08),transparent_60%)]
-        "
-      />
-      <div className="mx-auto max-w-4xl px-6">
-        <AnimatedBlock y={40} duration={750}>
-          <div
-            className="
-              relative overflow-hidden rounded-3xl border border-navy-100 bg-gradient-to-b from-white to-navy-50/60 p-10 transition-colors md:p-16
-              shadow-[0_1px_2px_rgba(10,25,41,0.04),0_30px_60px_-30px_rgba(10,25,41,0.15)]
-            "
-          >
-            <div
-              aria-hidden
-              className="
-                pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full
-                bg-brand-green/10 blur-3xl
-              "
-            />
-            <div
-              aria-hidden
-              className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-green/60 to-transparent"
-            />
+const FinalCTAHTML = `
+<style>
+  .cta-scope{
+    --cta-cream: #f4f7f5;
+    --cta-navy: #050b14;
+    --cta-navy-2: #0a1422;
+    --cta-ink: #ffffff;
+    --cta-ink-2: #aab8c8;
+    --cta-ink-3: #6f8095;
+    --cta-green: #00c896;
+    --cta-green-2: #00b386;
+    --cta-green-3: #00d6a3;
+    color: var(--cta-ink);
+    font-family:'Geist',ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  .cta-scope *{box-sizing:border-box}
 
-            <div className="relative text-center">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-green">
-                Empieza hoy
-              </p>
-              <h2 className="mx-auto mt-4 max-w-2xl text-[2rem] font-semibold tracking-[-0.02em] text-navy-900 transition-colors md:text-[2.75rem]">
-                Tu próximo cliente ya te ha escrito. La pregunta es si vas a contestar a tiempo.
-              </h2>
-              <p className="mx-auto mt-5 max-w-xl text-[16px] leading-relaxed text-navy-500 transition-colors">
-                Crea tu cuenta en dos minutos. A partir de hoy, el sistema trabaja mientras tú te dedicas a lo que mejor sabes hacer.
-              </p>
+  .cta-scope .cream-stub{ display:none; }
 
-              <div className="mt-10 flex flex-wrap justify-center gap-3">
-                <Link
-                  href="/register"
-                  className="
-                    group inline-flex items-center gap-2
-                    rounded-xl bg-brand-green px-7 py-4 text-[14px] font-semibold text-white
-                    shadow-[0_10px_28px_-10px_rgba(0,200,150,0.55),0_2px_4px_-2px_rgba(0,200,150,0.4),inset_0_1px_0_rgba(255,255,255,0.18)]
-                    ring-1 ring-inset ring-white/10
-                    transition-all duration-200 ease-out
-                    hover:-translate-y-[1.5px] hover:bg-brand-green-dark
-                  "
-                >
-                  Empezar a cerrar más clientes
-                  <IconArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
-                </Link>
-                <Link
-                  href="/pricing"
-                  className="
-                    inline-flex items-center gap-2
-                    rounded-xl border border-navy-200 bg-white px-6 py-4 text-[14px] font-semibold text-navy-800
-                    transition-all duration-200
-                    hover:-translate-y-[1px] hover:border-navy-300 hover:bg-navy-50
-                  "
-                >
-                  Ver precios
-                </Link>
-              </div>
+  .cta-scope .section{
+    position:relative;
+    overflow:hidden;
+    background: var(--cta-navy);
+    padding: 160px 24px 160px;
+    isolation: isolate;
+  }
+  /* Smooth top transition from cream */
+  .cta-scope .section::before{
+    content:""; position:absolute; left:0; right:0; top:0; height: 110px;
+    background: linear-gradient(180deg, var(--cta-cream) 0%, var(--cta-navy) 100%);
+    pointer-events: none;
+    z-index: 1;
+  }
 
-              <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[12.5px] text-navy-500 transition-colors">
-                <span className="inline-flex items-center gap-1.5">
-                  <IconCheck size={14} className="text-brand-green" />
-                  Sin tarjeta de crédito
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <IconCheck size={14} className="text-brand-green" />
-                  Configuración en 2 minutos
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <IconCheck size={14} className="text-brand-green" />
-                  Cancela cuando quieras
-                </span>
-              </div>
-            </div>
-          </div>
-        </AnimatedBlock>
+  /* Animated background field */
+  .cta-scope .bg{ position:absolute; inset:0; pointer-events:none; z-index: 0; overflow:hidden; }
+  .cta-scope .bg .glow{
+    position:absolute; left:50%; top:50%;
+    width: 900px; height: 900px;
+    transform: translate(-50%,-50%);
+    background:
+      radial-gradient(closest-side, rgba(0,200,150,.22), transparent 70%);
+    filter: blur(20px);
+    animation: ctaGlowPulse 6s ease-in-out infinite;
+  }
+  .cta-scope .bg .glow.b{
+    width: 1300px; height: 1300px;
+    background: radial-gradient(closest-side, rgba(0,200,150,.10), transparent 70%);
+    animation-duration: 9s;
+    animation-delay: -3s;
+  }
+  @keyframes ctaGlowPulse{
+    0%,100% { opacity:.7; transform: translate(-50%,-50%) scale(1); }
+    50%     { opacity:1;  transform: translate(-50%,-50%) scale(1.06); }
+  }
+  .cta-scope .bg .grid{
+    position:absolute; inset:0;
+    background-image:
+      linear-gradient(to right, rgba(255,255,255,.04) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,255,255,.04) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: radial-gradient(ellipse 60% 60% at 50% 50%, #000 30%, transparent 85%);
+    -webkit-mask-image: radial-gradient(ellipse 60% 60% at 50% 50%, #000 30%, transparent 85%);
+  }
+  .cta-scope .bg .stars{ position:absolute; inset:0; }
+  .cta-scope .bg .stars i{
+    position:absolute; width:2px; height:2px; border-radius:50%;
+    background: #cdf5e6; opacity:.4;
+    box-shadow: 0 0 6px rgba(0,200,150,.6);
+    animation: ctaTw 6s ease-in-out infinite;
+  }
+  @keyframes ctaTw{ 0%,100%{opacity:.15} 50%{opacity:.7} }
+  .cta-scope .bg .noise{
+    position:absolute; inset:0;
+    opacity:.04; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+
+  .cta-scope .wrap{ position:relative; z-index:2; max-width: 920px; margin: 0 auto; text-align:center; }
+
+  /* Card with luminous border */
+  .cta-scope .card{
+    position: relative;
+    padding: 64px 56px 56px;
+    border-radius: 28px;
+    background: linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,.008));
+    border: 1px solid rgba(255,255,255,.08);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.06),
+      0 40px 120px -40px rgba(0,200,150,.20),
+      0 30px 80px -40px rgba(0,0,0,.5);
+    opacity: 0; transform: translateY(20px);
+    animation: ctaRise .9s cubic-bezier(.2,.7,.2,1) .15s forwards;
+  }
+  .cta-scope .card::before{
+    content:""; position:absolute; inset:-1px; border-radius: 29px; padding:1px;
+    background: linear-gradient(180deg, rgba(0,200,150,.45), rgba(255,255,255,.10) 30%, rgba(0,200,150,.25));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    pointer-events:none;
+  }
+  @keyframes ctaRise{ to{ opacity:1; transform:none; } }
+
+  .cta-scope .eyebrow{
+    display:inline-flex; align-items:center; gap:10px;
+    color: var(--cta-green);
+    font-family:'Geist Mono', monospace;
+    font-size: 12px; letter-spacing:.24em; text-transform:uppercase;
+    padding: 6px 12px;
+    border:1px solid rgba(0,200,150,.30);
+    border-radius:999px;
+    background: rgba(0,200,150,.08);
+  }
+  .cta-scope .eyebrow .dot{
+    width:6px;height:6px;border-radius:50%;background:var(--cta-green);
+    box-shadow:0 0 0 4px rgba(0,200,150,.18), 0 0 12px rgba(0,200,150,.7);
+    animation: ctaPulse 2.4s ease-in-out infinite;
+  }
+  @keyframes ctaPulse{0%,100%{opacity:.7}50%{opacity:1}}
+
+  .cta-scope h2{
+    margin: 24px auto 22px;
+    max-width: 780px;
+    font-size: clamp(36px, 4.6vw, 56px);
+    line-height: 1.08;
+    letter-spacing: -0.025em;
+    font-weight: 600;
+    color: var(--cta-ink);
+    text-wrap: balance;
+  }
+  .cta-scope .lede{
+    color: var(--cta-ink-2);
+    font-size: 17px; line-height: 1.6;
+    max-width: 580px; margin: 0 auto 36px;
+  }
+
+  .cta-scope .actions{
+    display:inline-flex; gap: 14px; flex-wrap: wrap; justify-content:center;
+  }
+  .cta-scope .btn{
+    display:inline-flex; align-items:center; gap:10px;
+    padding: 15px 22px;
+    border-radius: 12px;
+    font-size: 15px; font-weight: 600;
+    text-decoration: none;
+    transition: transform .25s, box-shadow .35s, background .3s, border-color .3s, color .3s;
+    cursor: pointer;
+    border: 1px solid transparent;
+    font-family: inherit;
+    position: relative;
+    overflow: hidden;
+  }
+  .cta-scope .btn.primary{
+    background: linear-gradient(180deg, var(--cta-green-3), var(--cta-green));
+    color: #053926;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.45),
+      0 10px 28px -8px rgba(0,200,150,.55),
+      0 0 0 1px rgba(0,200,150,.30);
+    animation: ctaBtnGlow 2.6s ease-in-out infinite;
+  }
+  @keyframes ctaBtnGlow{
+    0%,100% { box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 10px 28px -8px rgba(0,200,150,.55), 0 0 0 1px rgba(0,200,150,.30); }
+    50%     { box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 14px 36px -8px rgba(0,200,150,.75), 0 0 0 1px rgba(0,200,150,.45); }
+  }
+  /* shimmer sweep */
+  .cta-scope .btn.primary::before{
+    content:""; position:absolute; top:0; left:-60%; width:50%; height:100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.45), transparent);
+    transform: skewX(-20deg);
+    animation: ctaShimmer 3.2s ease-in-out infinite;
+  }
+  @keyframes ctaShimmer{
+    0%   { left: -60%; }
+    60%,100% { left: 130%; }
+  }
+  .cta-scope .btn.primary:hover{
+    transform: translateY(-2px);
+  }
+  .cta-scope .btn.secondary{
+    background: rgba(255,255,255,.04);
+    color: var(--cta-ink);
+    border-color: rgba(255,255,255,.20);
+    backdrop-filter: blur(4px);
+  }
+  .cta-scope .btn.secondary:hover{
+    background: rgba(255,255,255,.08);
+    border-color: rgba(255,255,255,.45);
+    transform: translateY(-2px);
+  }
+
+  .cta-scope .micro{
+    margin-top: 28px;
+    color: var(--cta-ink-3);
+    font-size: 13px;
+    display:flex; flex-wrap:wrap; justify-content:center; gap: 6px 22px;
+  }
+  .cta-scope .micro span{ display:inline-flex; align-items:center; gap:8px; }
+  .cta-scope .micro svg{ color: var(--cta-green); }
+
+  /* prefers-reduced-motion */
+  @media (prefers-reduced-motion: reduce){
+    .cta-scope .bg{ display:none; }
+    .cta-scope .card{ opacity:1; transform:none; animation:none; }
+    .cta-scope .btn.primary, .cta-scope .btn.primary::before, .cta-scope .eyebrow .dot{ animation:none; }
+  }
+
+  @media (max-width: 720px){
+    .cta-scope .card{ padding: 44px 24px 36px; }
+  }
+</style>
+<div class="cta-scope">
+  <div class="cream-stub"></div>
+
+  <section class="section" aria-labelledby="cta-title">
+    <div class="bg" aria-hidden="true">
+      <div class="glow b"></div>
+      <div class="glow"></div>
+      <div class="grid"></div>
+      <div class="stars" id="stars"></div>
+      <div class="noise"></div>
+    </div>
+
+    <div class="wrap">
+      <div class="card">
+        <span class="eyebrow"><span class="dot"></span> EMPIEZA HOY</span>
+        <h2 id="cta-title">Tu próximo cliente ya te ha escrito. La pregunta es si vas a contestar a tiempo.</h2>
+        <p class="lede">Crea tu cuenta en dos minutos. A partir de hoy, el sistema trabaja mientras tú te dedicas a lo que mejor sabes hacer.</p>
+
+        <div class="actions">
+          <a href="#" class="btn primary">
+            Empezar a cerrar más clientes
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 5l7 7-7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+          <a href="#" class="btn secondary">Ver precios</a>
+        </div>
+
+        <div class="micro">
+          <span><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="m5 12 5 5 9-11" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg> Sin tarjeta de crédito</span>
+          <span><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="m5 12 5 5 9-11" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg> Configuración en 2 minutos</span>
+          <span><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="m5 12 5 5 9-11" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg> Cancela cuando quieras</span>
+        </div>
       </div>
-    </section>
-  );
+    </div>
+  </section>
+</div>
+`;
+
+function FinalCTA() {
+  useEffect(() => {
+    const host = document.getElementById("stars");
+    if (!host || host.childElementCount > 0) return;
+    const N = 28;
+    for (let k = 0; k < N; k++) {
+      const i = document.createElement("i");
+      i.style.left = (Math.random() * 100).toFixed(2) + "%";
+      i.style.top = (Math.random() * 100).toFixed(2) + "%";
+      i.style.animationDelay = (-Math.random() * 6).toFixed(2) + "s";
+      i.style.opacity = (0.15 + Math.random() * 0.45).toFixed(2);
+      i.style.transform = "scale(" + (0.5 + Math.random() * 1.2).toFixed(2) + ")";
+      host.appendChild(i);
+    }
+  }, []);
+  return <div dangerouslySetInnerHTML={{ __html: FinalCTAHTML }} />;
 }
 
 /* ─────────────────────────────────────────────────────────────────────
@@ -580,14 +1025,11 @@ function FinalCTA() {
 
 function Footer() {
   return (
-    <footer className="border-t border-navy-100 bg-[#f4f7f5] transition-colors">
+    <footer className="bg-[#050b14] transition-colors">
       <div className="mx-auto max-w-6xl px-6 py-14">
         <div className="grid grid-cols-2 gap-10 md:grid-cols-4">
           <div className="col-span-2 md:col-span-1">
-            <Logo href="/" size={30} />
-            <p className="mt-4 max-w-xs text-[13px] leading-relaxed text-navy-500 transition-colors">
-              El sistema que contesta, presupuesta y hace el seguimiento por ti. Para empresas de servicios que quieren crecer sin añadir más horas de oficina.
-            </p>
+            <Logo href="/" size={30} wordmarkClassName="text-white" />
           </div>
 
           <FooterCol
@@ -617,11 +1059,11 @@ function Footer() {
           />
         </div>
 
-        <div className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-navy-100 pt-8 transition-colors sm:flex-row">
-          <p className="text-[12.5px] text-navy-500 transition-colors">
+        <div className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-8 transition-colors sm:flex-row">
+          <p className="text-[12.5px] text-navy-300 transition-colors">
             © 2026 Enlaze. Hecho con cuidado en España.
           </p>
-          <div className="flex items-center gap-2 text-[12.5px] text-navy-500 transition-colors">
+          <div className="flex items-center gap-2 text-[12.5px] text-navy-300 transition-colors">
             <span className="inline-flex h-1.5 w-1.5 rounded-full bg-brand-green" />
             Todos los sistemas operativos
           </div>
@@ -640,7 +1082,7 @@ function FooterCol({
 }) {
   return (
     <div>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-900 transition-colors">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white transition-colors">
         {title}
       </p>
       <ul className="mt-4 space-y-2.5">
@@ -648,7 +1090,7 @@ function FooterCol({
           <li key={l.label}>
             <a
               href={l.href}
-              className="text-[13px] text-navy-500 transition-colors hover:text-navy-900"
+              className="text-[13px] text-navy-300 transition-colors hover:text-white"
             >
               {l.label}
             </a>
