@@ -8,11 +8,17 @@ const GOOGLE_CLIENT_ID = RAW_GOOGLE_CLIENT_ID ? RAW_GOOGLE_CLIENT_ID.replace(/^[
 // APP_BASE_URL will be computed inside the handler based on the request origin
 
 export async function GET(req: NextRequest) {
-  // Determine environment from request origin
-  const origin = req.nextUrl.origin || "";
-  const isLocal = origin.includes("localhost") || origin.includes("127.0.0.1");
+  // Determine environment from request headers (more reliable than nextUrl.origin in Vercel)
+  const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || req.nextUrl.host || "";
+  const isLocal = host.includes("localhost") || host.includes("127.0.0.1");
   const APP_BASE_URL = isLocal ? "http://localhost:3000" : "https://enlaze.vercel.app";
   const GOOGLE_REDIRECT_URI = `${APP_BASE_URL}/api/auth/google/callback`;
+
+  console.log(`[Google OAuth Init] host received: ${host}`);
+  console.log(`[Google OAuth Init] origin received: ${req.nextUrl.origin}`);
+  console.log(`[Google OAuth Init] isLocal calculated: ${isLocal}`);
+  console.log(`[Google OAuth Init] APP_BASE_URL final: ${APP_BASE_URL}`);
+  console.log(`[Google OAuth Init] GOOGLE_REDIRECT_URI final: ${GOOGLE_REDIRECT_URI}`);
 
   const cookieStore = await cookies();
   const supabase = createServerClient(

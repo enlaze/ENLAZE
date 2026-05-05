@@ -31,11 +31,17 @@ function isValidReturnUrl(url: string) {
 }
 
 export async function GET(req: NextRequest) {
-  // Determine environment from request origin
-  const origin = req.nextUrl.origin || "";
-  const isLocal = origin.includes("localhost") || origin.includes("127.0.0.1");
+  // Determine environment from request headers (more reliable than nextUrl.origin in Vercel)
+  const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || req.nextUrl.host || "";
+  const isLocal = host.includes("localhost") || host.includes("127.0.0.1");
   const APP_BASE_URL = isLocal ? "http://localhost:3000" : "https://enlaze.vercel.app";
   const GOOGLE_REDIRECT_URI = `${APP_BASE_URL}/api/auth/google/callback`;
+
+  console.log(`[Google OAuth Callback] host received: ${host}`);
+  console.log(`[Google OAuth Callback] origin received: ${req.nextUrl.origin}`);
+  console.log(`[Google OAuth Callback] isLocal calculated: ${isLocal}`);
+  console.log(`[Google OAuth Callback] APP_BASE_URL final: ${APP_BASE_URL}`);
+  console.log(`[Google OAuth Callback] GOOGLE_REDIRECT_URI final: ${GOOGLE_REDIRECT_URI}`);
 
   try {
     const code = req.nextUrl.searchParams.get("code");
