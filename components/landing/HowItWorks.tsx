@@ -53,13 +53,6 @@ export default function HowItWorks() {
 
           {/* CINEMATIC STAGE */}
           <div className="stage" ref={stageRef}>
-            <span className="side-label left">
-              <span className="ln" /> Entrada
-            </span>
-            <span className="side-label right">
-              Salida <span className="ln" />
-            </span>
-
             {/* Connecting paths */}
             <svg
               className="flow"
@@ -469,35 +462,6 @@ export default function HowItWorks() {
             position: relative;
             height: 520px;
             margin-bottom: 60px;
-          }
-
-          /* Lateral labels */
-          .side-label {
-            position: absolute;
-            top: 50%;
-            transform: translateY(-50%);
-            font-family: "Geist Mono", monospace;
-            font-size: 10px;
-            letter-spacing: 0.28em;
-            text-transform: uppercase;
-            color: var(--ink-4);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            z-index: 2;
-          }
-          .side-label .ln {
-            width: 28px;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18));
-          }
-          .side-label.left { left: 0; }
-          .side-label.right {
-            right: 0;
-            flex-direction: row-reverse;
-          }
-          .side-label.right .ln {
-            background: linear-gradient(270deg, transparent, rgba(255, 255, 255, 0.18));
           }
 
           /* SVG flow */
