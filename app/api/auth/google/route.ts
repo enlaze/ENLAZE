@@ -5,13 +5,15 @@ import { cookies } from "next/headers";
 const RAW_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_ID = RAW_GOOGLE_CLIENT_ID ? RAW_GOOGLE_CLIENT_ID.replace(/^["']|["']$/g, '').trim() : undefined;
 
-// Force stable base URL for OAuth to avoid Google redirect_uri_mismatch
-const IS_VERCEL = !!process.env.VERCEL;
-const APP_BASE_URL = IS_VERCEL ? "https://enlaze.vercel.app" : "http://localhost:3000";
-
-const GOOGLE_REDIRECT_URI = `${APP_BASE_URL}/api/auth/google/callback`;
+// APP_BASE_URL will be computed inside the handler based on the request origin
 
 export async function GET(req: NextRequest) {
+  // Determine environment from request origin
+  const origin = req.nextUrl.origin || "";
+  const isLocal = origin.includes("localhost") || origin.includes("127.0.0.1");
+  const APP_BASE_URL = isLocal ? "http://localhost:3000" : "https://enlaze.vercel.app";
+  const GOOGLE_REDIRECT_URI = `${APP_BASE_URL}/api/auth/google/callback`;
+
   const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
