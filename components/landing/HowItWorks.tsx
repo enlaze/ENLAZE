@@ -292,10 +292,10 @@ export default function HowItWorks() {
                   <b>PASO</b>01
                 </span>
                 <div className="ico">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="#00c896">
-                    <rect x="8.5" y="2" width="2" height="3" rx="0.3" />
-                    <rect x="13.5" y="2" width="2" height="3" rx="0.3" />
-                    <path fillRule="evenodd" d="M5 5h14a1 1 0 0 1 1 1v13a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V6a1 1 0 0 1 1-1zM13 8L9 14h3l-1 4 5-6h-3z" />
+                  <svg width="44" height="44" viewBox="-2 0 52 52" fill="#00c896">
+                    <rect x="17" y="4" width="4" height="6" rx="0.6" />
+                    <rect x="27" y="4" width="4" height="6" rx="0.6" />
+                    <path fillRule="evenodd" d="M10 10h28a2 2 0 0 1 2 2v26a6 6 0 0 1-6 6H14a6 6 0 0 1-6-6V12a2 2 0 0 1 2-2zM26 16L18 28h6l-2 8 10-12h-6z" />
                   </svg>
                 </div>
               </div>
@@ -312,17 +312,16 @@ export default function HowItWorks() {
                   <b>PASO</b>02
                 </span>
                 <div className="ico">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="#00c896">
+                  <svg width="44" height="44" viewBox="-2 0 52 52" fill="#00c896">
                     <defs>
-                      <mask id="hiw-m2">
-                        <rect width="24" height="24" fill="white" />
-                        <rect x="14" y="7" width="6" height="1.5" rx="0.5" fill="black" />
-                        <rect x="14" y="11" width="6" height="1.5" rx="0.5" fill="black" />
-                        <rect x="14" y="15" width="4" height="1.5" rx="0.5" fill="black" />
+                      <mask id="hiw-tray-48">
+                        <rect width="52" height="52" fill="white" />
+                        <rect x="12" y="38" width="14" height="2" rx="1" fill="black" />
+                        <circle cx="34" cy="39" r="1.5" fill="black" />
                       </mask>
                     </defs>
-                    <rect x="12" y="3" width="10" height="18" rx="1.5" mask="url(#hiw-m2)" />
-                    <path d="M1 11h7V8l5 4-5 4v-3H1z" />
+                    <path d="M21 4h6v18h7l-10 12-10-12h7z" />
+                    <rect x="6" y="34" width="36" height="10" rx="2" mask="url(#hiw-tray-48)" />
                   </svg>
                 </div>
               </div>
@@ -340,10 +339,10 @@ export default function HowItWorks() {
                   <b>PASO</b>03
                 </span>
                 <div className="ico">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="#00c896">
-                    <path d="M3 12A9 9 0 0 1 17 5L21 8L16 6.5A7 7 0 0 0 5 12Z" />
-                    <path d="M21 12A9 9 0 0 1 7 19L3 16L8 18A7 7 0 0 0 19 12Z" />
-                    <path d="M9 12L11 14L15 10L16.5 11.5L11 17L7.5 13.5Z" />
+                  <svg width="44" height="44" viewBox="-2 -2 52 52" fill="#00c896">
+                    <path d="M6 24A18 18 0 0 1 34 10L42 16L32 13A14 14 0 0 0 10 24Z" />
+                    <path d="M42 24A18 18 0 0 1 14 38L6 32L16 36A14 14 0 0 0 38 24Z" />
+                    <path d="M18 24L22 28L30 20L33 23L22 34L15 27Z" />
                   </svg>
                 </div>
               </div>
@@ -759,12 +758,17 @@ export default function HowItWorks() {
             margin-right: 6px;
           }
           .step-card .ico {
-            width: 32px;
-            height: 32px;
+            width: 44px;
+            height: 44px;
             display: grid;
             place-items: center;
             margin-left: auto;
-            transition: filter 0.4s;
+          }
+          .step-card .ico svg {
+            display: block;
+            width: 44px;
+            height: 44px;
+            flex-shrink: 0;
           }
           .step-card:hover .ico {
             filter: drop-shadow(0 0 14px rgba(0, 200, 150, 0.45));
