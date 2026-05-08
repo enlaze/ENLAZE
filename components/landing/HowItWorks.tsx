@@ -208,11 +208,13 @@ export default function HowItWorks() {
               <div className="heartbeat b" />
               <div className="orb">
                 <div className="glyph">
-                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
-                    <path d="M5 12c2.5-4 4.5-6 7-6s4.5 2 7 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    <path d="M5 12c2.5 4 4.5 6 7 6s4.5-2 7-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    <circle cx="12" cy="12" r="2" fill="currentColor" />
-                  </svg>
+                  <img
+                    src="/logo.png"
+                    alt="Enlaze"
+                    width={128}
+                    height={128}
+                    draggable={false}
+                  />
                 </div>
               </div>
             </div>
@@ -290,8 +292,10 @@ export default function HowItWorks() {
                   <b>PASO</b>01
                 </span>
                 <div className="ico">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="#00c896">
+                    <rect x="8.5" y="2" width="2" height="3" rx="0.3" />
+                    <rect x="13.5" y="2" width="2" height="3" rx="0.3" />
+                    <path fillRule="evenodd" d="M5 5h14a1 1 0 0 1 1 1v13a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V6a1 1 0 0 1 1-1zM13 8L9 14h3l-1 4 5-6h-3z" />
                   </svg>
                 </div>
               </div>
@@ -308,11 +312,17 @@ export default function HowItWorks() {
                   <b>PASO</b>02
                 </span>
                 <div className="ico">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <circle cx="9" cy="8" r="3" stroke="currentColor" strokeWidth="1.8" />
-                    <circle cx="17" cy="10" r="2.4" stroke="currentColor" strokeWidth="1.8" />
-                    <path d="M3 19c.6-2.7 3-4 6-4s5.4 1.3 6 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                    <path d="M14.5 19c.4-1.6 2-2.6 4-2.6s3.6 1 4 2.6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="#00c896">
+                    <defs>
+                      <mask id="hiw-m2">
+                        <rect width="24" height="24" fill="white" />
+                        <rect x="14" y="7" width="6" height="1.5" rx="0.5" fill="black" />
+                        <rect x="14" y="11" width="6" height="1.5" rx="0.5" fill="black" />
+                        <rect x="14" y="15" width="4" height="1.5" rx="0.5" fill="black" />
+                      </mask>
+                    </defs>
+                    <rect x="12" y="3" width="10" height="18" rx="1.5" mask="url(#hiw-m2)" />
+                    <path d="M1 11h7V8l5 4-5 4v-3H1z" />
                   </svg>
                 </div>
               </div>
@@ -330,9 +340,10 @@ export default function HowItWorks() {
                   <b>PASO</b>03
                 </span>
                 <div className="ico">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="#00c896">
+                    <path d="M3 12A9 9 0 0 1 17 5L21 8L16 6.5A7 7 0 0 0 5 12Z" />
+                    <path d="M21 12A9 9 0 0 1 7 19L3 16L8 18A7 7 0 0 0 19 12Z" />
+                    <path d="M9 12L11 14L15 10L16.5 11.5L11 17L7.5 13.5Z" />
                   </svg>
                 </div>
               </div>
@@ -546,69 +557,49 @@ export default function HowItWorks() {
             position: absolute;
             inset: 22px;
             border-radius: 50%;
-            background:
-              radial-gradient(circle at 50% 32%, rgba(52, 211, 154, 0.55), rgba(6, 182, 212, 0.16) 50%, transparent 75%),
-              linear-gradient(180deg, #0c2335, #050d18);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: linear-gradient(180deg, #0a1929, #050b14);
+            border: 1px solid rgba(255, 255, 255, 0.08);
             box-shadow:
-              inset 0 1px 0 rgba(255, 255, 255, 0.07),
-              inset 0 0 60px rgba(6, 182, 212, 0.16),
-              0 0 0 1px rgba(16, 185, 129, 0.14),
-              0 0 80px rgba(16, 185, 129, 0.25),
-              0 0 160px rgba(6, 182, 212, 0.14);
+              inset 0 1px 0 rgba(255, 255, 255, 0.05),
+              inset 0 0 60px rgba(0, 0, 0, 0.55),
+              0 0 0 1px rgba(255, 255, 255, 0.04),
+              0 30px 70px rgba(0, 0, 0, 0.6);
             display: grid;
             place-items: center;
             overflow: hidden;
             animation: hiw-breathe 4s ease-in-out infinite;
           }
-          .core .orb::before {
-            content: "";
-            position: absolute;
-            inset: -2px;
-            background: conic-gradient(from 0deg, transparent 0 60%, rgba(16, 185, 129, 0.5) 70%, transparent 80%);
-            filter: blur(8px);
-            animation: hiw-rot 8s linear infinite;
-            opacity: 0.55;
-          }
           @keyframes hiw-breathe {
             0%, 100% {
               box-shadow:
-                inset 0 1px 0 rgba(255, 255, 255, 0.07),
-                inset 0 0 60px rgba(6, 182, 212, 0.14),
-                0 0 0 1px rgba(16, 185, 129, 0.12),
-                0 0 70px rgba(16, 185, 129, 0.22),
-                0 0 140px rgba(6, 182, 212, 0.1);
+                inset 0 1px 0 rgba(255, 255, 255, 0.05),
+                inset 0 0 60px rgba(0, 0, 0, 0.55),
+                0 0 0 1px rgba(255, 255, 255, 0.04),
+                0 30px 70px rgba(0, 0, 0, 0.6);
             }
             50% {
               box-shadow:
-                inset 0 1px 0 rgba(255, 255, 255, 0.09),
-                inset 0 0 70px rgba(6, 182, 212, 0.22),
-                0 0 0 1px rgba(16, 185, 129, 0.2),
-                0 0 100px rgba(16, 185, 129, 0.36),
-                0 0 180px rgba(6, 182, 212, 0.18);
+                inset 0 1px 0 rgba(255, 255, 255, 0.07),
+                inset 0 0 70px rgba(0, 0, 0, 0.6),
+                0 0 0 1px rgba(255, 255, 255, 0.06),
+                0 36px 84px rgba(0, 0, 0, 0.65);
             }
           }
           .core.react .orb {
             box-shadow:
-              inset 0 1px 0 rgba(255, 255, 255, 0.1),
-              inset 0 0 80px rgba(6, 182, 212, 0.28),
-              0 0 0 1px rgba(16, 185, 129, 0.28),
-              0 0 120px rgba(16, 185, 129, 0.45),
-              0 0 200px rgba(6, 182, 212, 0.25);
+              inset 0 1px 0 rgba(255, 255, 255, 0.08),
+              inset 0 0 80px rgba(0, 0, 0, 0.6),
+              0 0 0 1px rgba(255, 255, 255, 0.08),
+              0 36px 90px rgba(0, 0, 0, 0.7);
             transition: box-shadow 0.5s ease;
           }
           .core .glyph {
             position: relative;
             z-index: 2;
-            width: 72px;
-            height: 72px;
+            width: 144px;
+            height: 144px;
             display: grid;
             place-items: center;
-            color: #0a1929;
-            background: linear-gradient(180deg, #34d39a, #10b981);
-            border-radius: 20px;
-            box-shadow: 0 12px 32px rgba(16, 185, 129, 0.45),
-              inset 0 1px 0 rgba(255, 255, 255, 0.4);
           }
           .core .label {
             position: absolute;
@@ -770,17 +761,13 @@ export default function HowItWorks() {
           .step-card .ico {
             width: 32px;
             height: 32px;
-            border-radius: 9px;
             display: grid;
             place-items: center;
-            background: linear-gradient(180deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.03));
-            color: var(--emerald);
-            border: 1px solid rgba(16, 185, 129, 0.2);
             margin-left: auto;
-            transition: box-shadow 0.4s;
+            transition: filter 0.4s;
           }
           .step-card:hover .ico {
-            box-shadow: 0 0 22px rgba(16, 185, 129, 0.28);
+            filter: drop-shadow(0 0 14px rgba(0, 200, 150, 0.45));
           }
           .step-card h3 {
             margin: 14px 0 8px;
