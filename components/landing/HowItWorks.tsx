@@ -292,10 +292,10 @@ export default function HowItWorks() {
                   <b>PASO</b>01
                 </span>
                 <div className="ico">
-                  <svg width="44" height="44" viewBox="-2 0 52 52" fill="#00c896">
-                    <rect x="17" y="4" width="4" height="6" rx="0.6" />
-                    <rect x="27" y="4" width="4" height="6" rx="0.6" />
-                    <path fillRule="evenodd" d="M10 10h28a2 2 0 0 1 2 2v26a6 6 0 0 1-6 6H14a6 6 0 0 1-6-6V12a2 2 0 0 1 2-2zM26 16L18 28h6l-2 8 10-12h-6z" />
+                  <svg width="40" height="40" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="20" y="4" width="6" height="12" rx="2" fill="#00c896" />
+                    <rect x="38" y="4" width="6" height="12" rx="2" fill="#00c896" />
+                    <path fillRule="evenodd" clipRule="evenodd" fill="#00c896" d="M14 16 h36 a4 4 0 0 1 4 4 v10 a18 18 0 0 1 -18 18 h-2 v8 a4 4 0 0 1 -8 0 v-8 h-2 a18 18 0 0 1 -18 -18 v-10 a4 4 0 0 1 4 -4 z M36 22 L24 36 h6 l-3 8 l13 -14 h-6 l3 -8 z" />
                   </svg>
                 </div>
               </div>
@@ -312,16 +312,10 @@ export default function HowItWorks() {
                   <b>PASO</b>02
                 </span>
                 <div className="ico">
-                  <svg width="44" height="44" viewBox="-2 0 52 52" fill="#00c896">
-                    <defs>
-                      <mask id="hiw-tray-48">
-                        <rect width="52" height="52" fill="white" />
-                        <rect x="12" y="38" width="14" height="2" rx="1" fill="black" />
-                        <circle cx="34" cy="39" r="1.5" fill="black" />
-                      </mask>
-                    </defs>
-                    <path d="M21 4h6v18h7l-10 12-10-12h7z" />
-                    <rect x="6" y="34" width="36" height="10" rx="2" mask="url(#hiw-tray-48)" />
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#00c896" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
                   </svg>
                 </div>
               </div>
@@ -339,10 +333,10 @@ export default function HowItWorks() {
                   <b>PASO</b>03
                 </span>
                 <div className="ico">
-                  <svg width="44" height="44" viewBox="-2 -2 52 52" fill="#00c896">
-                    <path d="M6 24A18 18 0 0 1 34 10L42 16L32 13A14 14 0 0 0 10 24Z" />
-                    <path d="M42 24A18 18 0 0 1 14 38L6 32L16 36A14 14 0 0 0 38 24Z" />
-                    <path d="M18 24L22 28L30 20L33 23L22 34L15 27Z" />
+                  <svg width="40" height="40" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path fill="#00c896" d="M32 4 a28 28 0 0 1 26 18 l-6 2 l8 8 l8 -8 l-6 2 A28 28 0 0 0 32 0 z" transform="translate(-4 4)" />
+                    <path fill="#00c896" d="M32 60 a28 28 0 0 1 -26 -18 l6 -2 l-8 -8 l-8 8 l6 -2 A28 28 0 0 0 32 64 z" transform="translate(4 -4)" />
+                    <path fillRule="evenodd" clipRule="evenodd" fill="#00c896" d="M32 14 a18 18 0 1 1 0 36 a18 18 0 0 1 0 -36 z M24 32 l3 -3 l4 4 l9 -10 l3 3 l-12 13 z" />
                   </svg>
                 </div>
               </div>
@@ -758,17 +752,19 @@ export default function HowItWorks() {
             margin-right: 6px;
           }
           .step-card .ico {
-            width: 44px;
-            height: 44px;
+            width: 40px;
+            height: 40px;
             display: grid;
             place-items: center;
             margin-left: auto;
+            flex-shrink: 0;
           }
           .step-card .ico svg {
             display: block;
-            width: 44px;
-            height: 44px;
+            width: 40px;
+            height: 40px;
             flex-shrink: 0;
+            overflow: visible;
           }
           .step-card:hover .ico {
             filter: drop-shadow(0 0 14px rgba(0, 200, 150, 0.45));
