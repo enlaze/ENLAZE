@@ -15,9 +15,15 @@ const pains: Pain[] = [
     title: "Contestas cuando puedes, no cuando el cliente quiere.",
     desc: "Entre un cliente y otro, los mensajes se acumulan. Y el que no espera, ya está hablando con tu competencia.",
     svg: (
-      <svg viewBox="0 0 24 24">
-        <path d="M21 12a8 8 0 1 1-3.2-6.4L21 4v5h-5" />
-        <path d="M8 12h8M8 16h5" />
+      <svg viewBox="0 0 64 64">
+        <path d="M14 14 h32 a6 6 0 0 1 6 6 v18 a6 6 0 0 1 -6 6 h-9 l-6 6 l1 -6 h-18 a6 6 0 0 1 -6 -6 v-18 a6 6 0 0 1 6 -6 z" />
+        <circle cx="30" cy="29" r="9" />
+        <path d="M30 22 v1.6 M37 29 h-1.6 M30 36 v-1.6 M23 29 h1.6" />
+        <path d="M30 29 l-5 -2" />
+        <path d="M30 29 l0 -5.5" strokeWidth="1.4" />
+        <circle cx="30" cy="29" r="0.9" fill="currentColor" stroke="none" />
+        <circle cx="44" cy="22" r="2.2" fill="currentColor" stroke="none" />
+        <circle cx="44" cy="22" r="4.5" strokeDasharray="1.8 2.4" />
       </svg>
     ),
   },
@@ -26,10 +32,16 @@ const pains: Pain[] = [
     title: "Haces presupuestos el domingo por la noche.",
     desc: "Te toca sacrificar el fin de semana para enviar lo que deberías haber mandado el martes. Otra vez.",
     svg: (
-      <svg viewBox="0 0 24 24">
-        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
-        <circle cx="17" cy="6" r="0.6" fill="currentColor" />
-        <circle cx="20" cy="9" r="0.6" fill="currentColor" />
+      <svg viewBox="0 0 64 64">
+        <path d="M48 14 a10 10 0 1 0 8 14 a8 8 0 0 1 -8 -14 z" />
+        <path d="M50 36 l0 3 M48.5 37.5 h3" strokeWidth="1.2" />
+        <path d="M14 16 l0 2 M13 17 h2" strokeWidth="1.2" />
+        <path d="M16 22 h18 l8 8 v22 a3 3 0 0 1 -3 3 h-23 a3 3 0 0 1 -3 -3 v-27 a3 3 0 0 1 3 -3 z" />
+        <path d="M34 22 v6 a2 2 0 0 0 2 2 h6" />
+        <path d="M21 38 h10 M21 42 h14" />
+        <rect x="20" y="46" width="18" height="6" rx="1.4" />
+        <path d="M24 49 h0.4 M28 49 h0.4 M32 49 h0.4" strokeWidth="1.6" />
+        <path d="M26 35 a2.4 2.4 0 1 0 0 -3 M24 33.2 h3.4 M24 34.4 h3.4" strokeWidth="1.4" />
       </svg>
     ),
   },
@@ -38,9 +50,16 @@ const pains: Pain[] = [
     title: "Los presupuestos se quedan sin respuesta.",
     desc: "No tienes tiempo de hacer seguimiento. 6 de cada 10 trabajos se pierden solo por silencio.",
     svg: (
-      <svg viewBox="0 0 24 24">
-        <path d="M4 7h12a3 3 0 0 1 3 3v4a3 3 0 0 1-3 3h-3l-4 3v-3H6a3 3 0 0 1-2-1" />
-        <path d="M3 4l18 18" />
+      <svg viewBox="0 0 64 64">
+        <path d="M10 18 h16 l6 6 v18 a3 3 0 0 1 -3 3 h-19 a3 3 0 0 1 -3 -3 v-21 a3 3 0 0 1 3 -3 z" />
+        <path d="M26 18 v4 a2 2 0 0 0 2 2 h4" />
+        <path d="M14 30 h10 M14 34 h12 M14 38 h8" />
+        <path d="M30 24 l8 -4" />
+        <path d="M38 20 l-2 -1 M38 20 l-1 2" strokeWidth="1.5" />
+        <path d="M40 22 C 46 22, 50 26, 50 32" strokeDasharray="1.8 2.4" />
+        <path d="M48 38 a3 3 0 1 1 3 3 v2" />
+        <circle cx="51" cy="46.5" r="0.9" fill="currentColor" stroke="none" />
+        <path d="M42 46 a4 4 0 0 1 4 4" strokeDasharray="1.8 2.4" strokeWidth="1.4" />
       </svg>
     ),
   },
@@ -49,13 +68,22 @@ const pains: Pain[] = [
     title: "Tu información vive en cinco sitios distintos.",
     desc: "Una libreta, el WhatsApp de alguien, un Excel, la memoria del equipo y una carpeta perdida. Nadie sabe dónde está qué.",
     svg: (
-      <svg viewBox="0 0 24 24">
-        <circle cx="5" cy="6" r="2" />
-        <circle cx="19" cy="6" r="2" />
-        <circle cx="5" cy="18" r="2" />
-        <circle cx="19" cy="18" r="2" />
-        <circle cx="12" cy="12" r="2" />
-        <path d="M7 6h6m4 0h0M7 18h10M5 8v8m14-8v8" />
+      <svg viewBox="0 0 64 64">
+        <rect x="9" y="10" width="11" height="18" rx="2" />
+        <path d="M13 25 h3" strokeWidth="1.4" />
+        <path d="M36 12 h6 l2 3 h10 a2 2 0 0 1 2 2 v8 a2 2 0 0 1 -2 2 h-18 a2 2 0 0 1 -2 -2 v-11 a2 2 0 0 1 2 -2 z" />
+        <rect x="22" y="26" width="20" height="14" rx="2" />
+        <path d="M22 31 h20 M28 26 v14 M35 26 v14" strokeWidth="1.3" />
+        <rect x="8" y="38" width="13" height="16" rx="1.6" />
+        <path d="M11 42 h7 M11 46 h7 M11 50 h5" strokeWidth="1.3" />
+        <path d="M8 41 h13 M8 51 h13" strokeWidth="0.9" />
+        <path d="M44 42 h11 v8 l-3 3 h-8 z" />
+        <path d="M52 50 h3 l-3 3 z" fill="currentColor" stroke="none" opacity="0.1" />
+        <path d="M21 19 h11" strokeDasharray="1.8 2.4" strokeWidth="1.3" />
+        <path d="M14 32 v6" strokeDasharray="1.8 2.4" strokeWidth="1.3" />
+        <path d="M44 30 v8" strokeDasharray="1.8 2.4" strokeWidth="1.3" />
+        <path d="M22 46 h20" strokeDasharray="1.8 2.4" strokeWidth="1.3" />
+        <circle cx="32" cy="20" r="1" fill="currentColor" stroke="none" />
       </svg>
     ),
   },
@@ -64,10 +92,21 @@ const pains: Pain[] = [
     title: "Cada reunión son dos horas de papeleo después.",
     desc: "Apuntar, preparar presupuesto, enviarlo, recordar quién dijo qué. Y mañana, vuelta a empezar.",
     svg: (
-      <svg viewBox="0 0 24 24">
-        <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9z" />
-        <path d="M14 3v6h5" />
-        <path d="M9 13h6M9 17h4" />
+      <svg viewBox="0 0 64 64">
+        <rect x="12" y="8" width="28" height="20" rx="3" />
+        <path d="M12 14 h28" />
+        <path d="M19 6 v6 M33 6 v6" />
+        <circle cx="22" cy="20" r="2.2" />
+        <path d="M18 26 a4 4 0 0 1 8 0" strokeWidth="1.4" />
+        <circle cx="32" cy="20" r="2.2" />
+        <path d="M28 26 a4 4 0 0 1 8 0" strokeWidth="1.4" />
+        <path d="M40 22 C 48 22, 50 28, 50 34" />
+        <path d="M48 32 l2 2 l2 -2" strokeWidth="1.5" />
+        <rect x="36" y="34" width="20" height="22" rx="2" />
+        <path d="M40 30 h16 a2 2 0 0 1 2 2 v22" strokeWidth="1.3" opacity="0.55" />
+        <path d="M44 26 h16 a2 2 0 0 1 2 2 v22" strokeWidth="1.3" opacity="0.3" />
+        <rect x="39" y="38" width="3" height="3" rx="0.6" />
+        <path d="M44 40 h9 M39 45 h14 M39 49 h11 M39 53 h6" />
       </svg>
     ),
   },
@@ -76,9 +115,18 @@ const pains: Pain[] = [
     title: "Trabajas más, facturas lo mismo.",
     desc: "Tus horas ya no dan para más. Contratar oficina no te compensa. Y el techo se hace cada mes más bajo.",
     svg: (
-      <svg viewBox="0 0 24 24">
-        <path d="M3 17l5-5 4 4 4-7 5 8" />
-        <path d="M3 21h18" />
+      <svg viewBox="0 0 64 64">
+        <path d="M8 50 h48" />
+        <path d="M14 46 C 16 38, 22 28, 30 16" />
+        <path d="M28 18 l2 -2 l2 2" strokeWidth="1.6" />
+        <circle cx="30" cy="13" r="3.6" />
+        <path d="M30 11 v2 l1.4 1" strokeWidth="1.3" />
+        <path d="M14 42 h36" />
+        <path d="M48 40 l2 2 l-2 2" strokeWidth="1.6" />
+        <circle cx="42" cy="42" r="3.6" />
+        <path d="M40.5 41 a2 2 0 1 0 0 2 M39.5 41.6 h3 M39.5 42.6 h3" strokeWidth="1.2" />
+        <path d="M30 50 v-3" strokeDasharray="1.8 2.4" strokeWidth="1.3" />
+        <path d="M30 50 l-2 6 M30 50 l2 6" strokeWidth="1.2" opacity="0.5" />
       </svg>
     ),
   },
@@ -433,8 +481,8 @@ export default function PainPointsSection() {
           pointer-events: none;
         }
         .pp-icon-wrap :global(svg) {
-          width: 22px;
-          height: 22px;
+          width: 28px;
+          height: 28px;
           stroke: currentColor;
           fill: none;
           stroke-width: 1.8;

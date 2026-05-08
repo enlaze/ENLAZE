@@ -15,8 +15,9 @@ const cards: Card[] = [
     body:
       "WhatsApp y email automáticos. Las preguntas repetidas se responden solas. Las citas quedan confirmadas. Tú ni abres el móvil y el cliente ya sabe que estás al otro lado.",
     svg: (
-      <svg viewBox="0 0 24 24">
-        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+      <svg viewBox="0 0 64 64">
+        <path d="M14 12 h36 a6 6 0 0 1 6 6 v22 a6 6 0 0 1 -6 6 h-20 l-8 7 l1 -7 h-9 a6 6 0 0 1 -6 -6 v-22 a6 6 0 0 1 6 -6 z" />
+        <path d="M36 16 L24 32 L31 32 L28 42 L40 26 L33 26 Z" fill="currentColor" stroke="none" />
       </svg>
     ),
   },
@@ -25,8 +26,17 @@ const cards: Card[] = [
     body:
       "Describes el servicio en lenguaje natural y la IA genera un presupuesto profesional con partidas, cantidades y precios en 30 segundos. Cero plantillas de Word. Cero cálculos a mano.",
     svg: (
-      <svg viewBox="0 0 24 24">
-        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+      <svg viewBox="0 0 64 64">
+        <path d="M40 4 L28 22 L34 22 L31 32 L44 14 L38 14 Z" fill="currentColor" stroke="none" />
+        <circle cx="46" cy="10" r="1" fill="currentColor" stroke="none" />
+        <circle cx="24" cy="20" r="0.9" fill="currentColor" stroke="none" />
+        <circle cx="50" cy="22" r="0.9" fill="currentColor" stroke="none" />
+        <path d="M14 26 h20 l8 8 v18 a3 3 0 0 1 -3 3 h-25 a3 3 0 0 1 -3 -3 v-23 a3 3 0 0 1 3 -3 z" />
+        <path d="M34 26 v6 a2 2 0 0 0 2 2 h6" />
+        <path d="M19 38 h10 M19 42 h14 M19 46 h8" />
+        <rect x="18" y="49" width="22" height="5" rx="1.4" fill="currentColor" stroke="none" opacity="0.1" />
+        <path d="M22 51.5 h0.4 M26 51.5 h0.4" strokeWidth="1.6" />
+        <path d="M34 49.6 a2 2 0 1 0 0 3 M32.6 50.6 h3 M32.6 51.6 h3" strokeWidth="1.2" />
       </svg>
     ),
   },
@@ -35,10 +45,17 @@ const cards: Card[] = [
     body:
       "Enlaze hace el seguimiento por ti. Recordatorios automáticos a los tres días, mensajes de cierre si la cosa se enfría, avisos cuando alguien contesta. Los presupuestos dejan de morir en silencio.",
     svg: (
-      <svg viewBox="0 0 24 24">
-        <polyline points="23 4 23 10 17 10" />
-        <polyline points="1 20 1 14 7 14" />
-        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+      <svg viewBox="0 0 64 64">
+        <path d="M10 32 a22 22 0 0 1 4 -12.5" opacity="0.45" />
+        <path d="M54 32 a22 22 0 0 1 -4 12.5" opacity="0.45" />
+        <path d="M44 21 A14 14 0 0 0 18 22" />
+        <path d="M18 16 v6 h6" strokeWidth="1.6" />
+        <path d="M20 43 A14 14 0 0 0 46 42" />
+        <path d="M46 48 v-6 h-6" strokeWidth="1.6" />
+        <circle cx="32" cy="32" r="6" fill="currentColor" stroke="none" opacity="0.1" />
+        <path d="M28.5 32 l2.5 2.5 l4 -4.5" />
+        <circle cx="46" cy="32" r="1.2" fill="currentColor" stroke="none" />
+        <circle cx="18" cy="32" r="1.2" fill="currentColor" stroke="none" />
       </svg>
     ),
   },
@@ -47,13 +64,29 @@ const cards: Card[] = [
     body:
       "Clientes, proyectos, mensajes, presupuestos, facturas y operaciones. Un único sitio, todo conectado. Se acabaron las libretas sueltas y los «¿dónde lo tenía apuntado?».",
     svg: (
-      <svg viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="10" />
-        <circle cx="12" cy="12" r="4" />
-        <line x1="12" y1="2" x2="12" y2="4" />
-        <line x1="12" y1="20" x2="12" y2="22" />
-        <line x1="2" y1="12" x2="4" y2="12" />
-        <line x1="20" y1="12" x2="22" y2="12" />
+      <svg viewBox="0 0 64 64">
+        <rect x="4" y="8" width="56" height="48" rx="5" />
+        <circle cx="9" cy="13" r="0.9" fill="currentColor" stroke="none" />
+        <circle cx="12" cy="13" r="0.9" fill="currentColor" stroke="none" />
+        <path d="M4 18 H60" opacity="0.45" />
+        <circle cx="13" cy="28" r="3" />
+        <path d="M19 27 H29" strokeWidth="1.6" />
+        <path d="M19 31 H26" strokeWidth="1.4" opacity="0.45" />
+        <path d="M36 22 h18 a2 2 0 0 1 2 2 v6 a2 2 0 0 1 -2 2 h-13 l-3 3 v-3 h-2 a2 2 0 0 1 -2 -2 v-6 a2 2 0 0 1 2 -2 z" />
+        <circle cx="42" cy="27" r="0.8" fill="currentColor" stroke="none" />
+        <circle cx="46" cy="27" r="0.8" fill="currentColor" stroke="none" />
+        <circle cx="50" cy="27" r="0.8" fill="currentColor" stroke="none" />
+        <path d="M7 40 h11 l3 3 v9 a1.5 1.5 0 0 1 -1.5 1.5 h-12.5 a1.5 1.5 0 0 1 -1.5 -1.5 v-11 a1.5 1.5 0 0 1 1.5 -1.5 z" />
+        <path d="M18 40 v3 h3" />
+        <path d="M9 47 H17" strokeWidth="1.4" />
+        <path d="M9 50.5 H14" strokeWidth="1.3" opacity="0.45" />
+        <path d="M14 44 a1.6 1.6 0 1 0 0 -2 M13 42.6 h2 M13 43.4 h2" strokeWidth="1.1" />
+        <path d="M34 52 H56" opacity="0.45" />
+        <path d="M37 52 v-4" strokeWidth="2.2" />
+        <path d="M42 52 v-7" strokeWidth="2.2" />
+        <path d="M47 52 v-5" strokeWidth="2.2" />
+        <path d="M52 52 v-9" strokeWidth="2.2" />
+        <path d="M50 41 l2 -2 l2 1.6" strokeWidth="1.3" />
       </svg>
     ),
   },
@@ -598,8 +631,8 @@ export default function SolucionSection() {
           z-index: 0;
         }
         .sol-icon-wrap svg {
-          width: 26px;
-          height: 26px;
+          width: 32px;
+          height: 32px;
           stroke: currentColor;
           fill: none;
           stroke-width: 1.8;

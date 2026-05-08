@@ -75,6 +75,46 @@ html {
   transition: background-color 0.25s ease, color 0.25s ease;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   BrandIntro — critical CSS must live here (not inside the
+   client component as styled-jsx) so it ships in the initial
+   HTML <head> and applies on the very first paint. styled-jsx
+   inside a client component without a StyleRegistry is only
+   inserted after hydration, which leaves a flash of the
+   unstyled overlay (huge logo on white) for ~100ms.
+   ───────────────────────────────────────────────────────────── */
+#intro {
+  position: fixed;
+  inset: 0;
+  background: #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+#intro #logo {
+  width: 80px;
+  height: 80px;
+  flex-shrink: 0;
+  opacity: 0;
+  animation: brandIntroFadeInOut 1400ms ease 0ms forwards;
+}
+#intro #logo img {
+  display: block;
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+}
+@keyframes brandIntroFadeInOut {
+  0%   { opacity: 0; }
+  40%  { opacity: 1; }
+  65%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #intro #logo { animation: none; opacity: 1; }
+}
+
 /* Remove the default blue focus ring that clashes with the
    zinc palette on dashboard inputs; components add their own. */
 html.dark input:focus,
