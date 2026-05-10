@@ -182,6 +182,36 @@ const RegistroActividadIcon = (
   </svg>
 );
 
+const AsistenteIAIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <path d="M5 7.5A2.5 2.5 0 0 1 7.5 5h7.25A2.5 2.5 0 0 1 17.25 7.5v4.25a2.5 2.5 0 0 1-2.5 2.5H10l-3.25 2.5v-2.5H7.5A2.5 2.5 0 0 1 5 11.75V7.5Z" />
+    <path d="M18 4.25 18.85 6.4 21 7.25 18.85 8.1 18 10.25 17.15 8.1 15 7.25 17.15 6.4 18 4.25Z" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+const FacturasRecibidasIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <path d="M6 4.5h7.5L17 8v9.25A2.25 2.25 0 0 1 14.75 19.5H6A2.25 2.25 0 0 1 3.75 17.25v-10.5A2.25 2.25 0 0 1 6 4.5Z" />
+    <path d="M13.25 4.5v3.5h3.5" />
+    <path d="M6.75 8.5v8" strokeOpacity=".55" />
+    <path d="M9 10.75h5.5" />
+    <path d="M9 13.5h5" />
+    <path d="M9 16.25h3.5" />
+    <circle cx="18" cy="6" r="3" fill="currentColor" stroke="none" />
+    <path d="M19.35 5.15 18 6.5l-1.35-1.35M18 6.3V3.6" stroke="#fff" strokeWidth="1.6" />
+  </svg>
+);
+
+const PagosTesoreriaIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <rect x="3.5" y="6" width="14" height="6" rx="1.25" />
+    <rect x="6.5" y="13" width="14" height="6" rx="1.25" />
+    <path d="M6 9h3" strokeOpacity=".55" />
+    <circle cx="17.25" cy="13" r="3.4" fill="currentColor" stroke="none" />
+    <path d="M18.55 11.7c-.55-.45-1.55-.5-2.05.05-.55.6-.55 2 0 2.6.5.55 1.5.5 2.05.05M15.6 12.55h2.05M15.6 13.45h2.05" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
 const NAV_ITEMS: NavItem[] = [
   // Centro de control — sin sección, siempre arriba del todo
   { href: "/dashboard", label: "Centro de control", icon: ControlCenterIcon, section: null },
@@ -190,7 +220,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard/clientes", label: "Clientes", icon: ClientesIcon, section: "General" },
   { href: "/dashboard/messages", label: "WhatsApp", icon: WhatsAppIcon, section: "General" },
   { href: "/dashboard/emails", label: "Emails", icon: EmailsIcon, section: "General" },
-  { href: "/dashboard/agent", label: "Asistente IA", icon: "🤖", section: "General" },
+  { href: "/dashboard/agent", label: "Asistente IA", icon: AsistenteIAIcon, section: "General" },
 
   // NEGOCIO
   { href: "/dashboard/budgets", label: "Presupuestos", icon: PresupuestosIcon, section: "Negocio" },
@@ -202,9 +232,9 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard/calendar", label: "Calendario", icon: CalendarioIcon, section: "Negocio" },
 
   // FINANZAS
-  { href: "/dashboard/suppliers/invoices", label: "Facturas recibidas", icon: "🧾", section: "Finanzas" },
+  { href: "/dashboard/suppliers/invoices", label: "Facturas recibidas", icon: FacturasRecibidasIcon, section: "Finanzas" },
   { href: "/dashboard/issued-invoices", label: "Facturas emitidas", icon: FacturasEmitidasIcon, section: "Finanzas" },
-  { href: "/dashboard/payments", label: "Pagos y tesorería", icon: "💵", section: "Finanzas" },
+  { href: "/dashboard/payments", label: "Pagos y tesorería", icon: PagosTesoreriaIcon, section: "Finanzas" },
   { href: "/dashboard/margins", label: "Márgenes", icon: MargenesIcon, section: "Finanzas" },
 
   // SISTEMA
