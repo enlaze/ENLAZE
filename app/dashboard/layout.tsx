@@ -16,18 +16,53 @@ import { useToast } from "@/components/ui/toast";
 type NavItem = {
   href: string;
   label: string;
-  icon: string;
+  icon: React.ReactNode;
   section: "General" | "Negocio" | "Finanzas" | "Sistema" | null;
 };
 
+const ControlCenterIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <rect x="3" y="3" width="9" height="9" rx="1.6" />
+    <rect x="14" y="3" width="7" height="6" rx="1.4" />
+    <rect x="14" y="11" width="7" height="10" rx="1.4" />
+    <rect x="3" y="14" width="9" height="7" rx="1.4" />
+    <circle cx="6.5" cy="6.5" r="1.1" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+const ClientesIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <circle cx="16.5" cy="7.5" r="2.6" />
+    <path d="M11 20.5c0-2.7 2.4-4.8 5.5-4.8 1.6 0 3 .55 4 1.5" />
+    <circle cx="9" cy="8.5" r="3.2" />
+    <path d="M3 20.5c0-3 2.7-5.4 6-5.4s6 2.4 6 5.4" />
+    <circle cx="13.4" cy="14.6" r="1.35" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+const WhatsAppIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <path d="M5 4.5h11A3.5 3.5 0 0 1 19.5 8v5.5A3.5 3.5 0 0 1 16 17H10l-3.6 2.7A.6.6 0 0 1 5.5 19.2V17A3.5 3.5 0 0 1 2 13.5V8a3.5 3.5 0 0 1 3-3.5z" />
+    <path d="M6.5 11l1.6-2.2L10 12.6l1.7-3.6 1.7 3.4 1.4-1.4h2.7" />
+  </svg>
+);
+
+const EmailsIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <rect x="3" y="6.5" width="18" height="13" rx="2.2" />
+    <path d="M3.5 8.5l8 5.4a1 1 0 0 0 1 0l8-5.4" />
+    <circle cx="12" cy="13" r="1.2" fill="currentColor" stroke="none" />
+  </svg>
+);
+
 const NAV_ITEMS: NavItem[] = [
   // Centro de control — sin sección, siempre arriba del todo
-  { href: "/dashboard", label: "Centro de control", icon: "📊", section: null },
+  { href: "/dashboard", label: "Centro de control", icon: ControlCenterIcon, section: null },
 
   // GENERAL
-  { href: "/dashboard/clientes", label: "Clientes", icon: "👥", section: "General" },
-  { href: "/dashboard/messages", label: "WhatsApp", icon: "💬", section: "General" },
-  { href: "/dashboard/emails", label: "Emails", icon: "📧", section: "General" },
+  { href: "/dashboard/clientes", label: "Clientes", icon: ClientesIcon, section: "General" },
+  { href: "/dashboard/messages", label: "WhatsApp", icon: WhatsAppIcon, section: "General" },
+  { href: "/dashboard/emails", label: "Emails", icon: EmailsIcon, section: "General" },
   { href: "/dashboard/agent", label: "Asistente IA", icon: "🤖", section: "General" },
 
   // NEGOCIO
