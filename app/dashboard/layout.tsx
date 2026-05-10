@@ -128,6 +128,60 @@ const CalendarioIcon = (
   </svg>
 );
 
+const FacturasEmitidasIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <path d="M6 4.5h7.5L17 8v9.25A2.25 2.25 0 0 1 14.75 19.5H6A2.25 2.25 0 0 1 3.75 17.25v-10.5A2.25 2.25 0 0 1 6 4.5Z" />
+    <path d="M13.25 4.5v3.5h3.5" />
+    <path d="M6.75 8.5v8" strokeOpacity=".55" />
+    <path d="M9 10.75h5.5" />
+    <path d="M9 13.5h5" />
+    <path d="M9 16.25h3.5" />
+    <circle cx="18" cy="6" r="3" fill="currentColor" stroke="none" />
+    <path d="M16.65 6.85L18 5.5l1.35 1.35M18 5.7v2.7" stroke="#fff" strokeWidth="1.6" />
+  </svg>
+);
+
+const MargenesIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <path d="M3.5 19.5h17" />
+    <rect x="5.5" y="11.25" width="4" height="8.25" rx="1" />
+    <rect x="14.5" y="6.5" width="4" height="13" rx="1" fill="currentColor" fillOpacity=".14" stroke="currentColor" />
+    <path d="M11 8.5h2.5" />
+    <path d="M11.9 7.5 10.9 8.5l1 1" />
+    <path d="M12.6 9.5l1-1-1-1" />
+  </svg>
+);
+
+const AjustesIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <path d="M4 7h13" />
+    <path d="M4 12h15" />
+    <path d="M4 17h11" />
+    <circle cx="9" cy="7" r="2.1" fill="currentColor" stroke="none" />
+    <circle cx="15" cy="12" r="2.1" fill="currentColor" stroke="none" />
+    <circle cx="7" cy="17" r="2.1" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+const CumplimientoIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <path d="M12 3.5 5 5.75v5.5c0 4.25 3.1 7.6 7 9.25 3.9-1.65 7-5 7-9.25v-5.5L12 3.5Z" />
+    <path d="M9 12.25 11.25 14.5" />
+    <circle cx="13.25" cy="12.5" r=".7" fill="currentColor" stroke="none" opacity=".55" />
+  </svg>
+);
+
+const RegistroActividadIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <circle cx="5.5" cy="7" r="1.7" fill="currentColor" stroke="none" />
+    <path d="M9.25 7h10.25" />
+    <circle cx="5.5" cy="12" r="1.15" fill="currentColor" stroke="none" />
+    <path d="M8.75 12h9.25" />
+    <circle cx="5.5" cy="17" r="1.15" fill="currentColor" stroke="none" />
+    <path d="M8.75 17h7.5" />
+  </svg>
+);
+
 const NAV_ITEMS: NavItem[] = [
   // Centro de control — sin sección, siempre arriba del todo
   { href: "/dashboard", label: "Centro de control", icon: ControlCenterIcon, section: null },
@@ -149,14 +203,14 @@ const NAV_ITEMS: NavItem[] = [
 
   // FINANZAS
   { href: "/dashboard/suppliers/invoices", label: "Facturas recibidas", icon: "🧾", section: "Finanzas" },
-  { href: "/dashboard/issued-invoices", label: "Facturas emitidas", icon: "📑", section: "Finanzas" },
+  { href: "/dashboard/issued-invoices", label: "Facturas emitidas", icon: FacturasEmitidasIcon, section: "Finanzas" },
   { href: "/dashboard/payments", label: "Pagos y tesorería", icon: "💵", section: "Finanzas" },
-  { href: "/dashboard/margins", label: "Márgenes", icon: "📊", section: "Finanzas" },
+  { href: "/dashboard/margins", label: "Márgenes", icon: MargenesIcon, section: "Finanzas" },
 
   // SISTEMA
-  { href: "/dashboard/settings", label: "Ajustes", icon: "⚙️", section: "Sistema" },
-  { href: "/dashboard/compliance", label: "Cumplimiento", icon: "🛡️", section: "Sistema" },
-  { href: "/dashboard/audit-log", label: "Registro de actividad", icon: "📋", section: "Sistema" },
+  { href: "/dashboard/settings", label: "Ajustes", icon: AjustesIcon, section: "Sistema" },
+  { href: "/dashboard/compliance", label: "Cumplimiento", icon: CumplimientoIcon, section: "Sistema" },
+  { href: "/dashboard/audit-log", label: "Registro de actividad", icon: RegistroActividadIcon, section: "Sistema" },
 ];
 
 const SECTION_ORDER: Array<NavItem["section"]> = [null, "General", "Negocio", "Finanzas", "Sistema"];
