@@ -55,6 +55,79 @@ const EmailsIcon = (
   </svg>
 );
 
+const PresupuestosIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <path d="M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+    <line x1="8.4" y1="5.5" x2="8.4" y2="18.5" strokeWidth="1.6" />
+    <line x1="11" y1="9" x2="14.5" y2="9" />
+    <line x1="11" y1="13" x2="16" y2="13" />
+    <text x="15.7" y="9.9" fontFamily="Geist Mono, monospace" fontSize="3.6" fontWeight="600" fill="currentColor" stroke="none">€</text>
+  </svg>
+);
+
+const BancoPreciosIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <rect x="4" y="4.5" width="13" height="3.2" rx="1" />
+    <rect x="4" y="9.4" width="13" height="3.2" rx="1" />
+    <rect x="4" y="14.3" width="16" height="5.2" rx="1.2" />
+    <path d="M16.4 16.2l1.6-1.6 1.4 1.4-1.6 1.6z" fill="currentColor" stroke="none" transform="translate(-.3 .3)" />
+  </svg>
+);
+
+const ObrasIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <path d="M5 20V8.5l5-3 5 3V20" />
+    <line x1="3.5" y1="20" x2="20.5" y2="20" />
+    <line x1="10" y1="12" x2="10" y2="16" />
+    <path d="M16 14.5h4v5.5" />
+    <circle cx="10" cy="12" r=".9" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+const ProveedoresIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <rect x="2.5" y="8" width="11" height="8" rx="1" />
+    <path d="M13.5 11h4l3.5 3v2h-7.5z" />
+    <circle cx="6.5" cy="17.5" r="1.4" />
+    <circle cx="16.5" cy="17.5" r="1.4" />
+    <path d="M9 5.5l-2.2 2L9 9.5" />
+    <line x1="6.8" y1="7.5" x2="11.5" y2="7.5" />
+  </svg>
+);
+
+const PedidosIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <path d="M3.5 8L12 4l8.5 4-8.5 4z" />
+    <path d="M3.5 8v9l8.5 4 8.5-4V8" />
+    <line x1="12" y1="12" x2="12" y2="21" />
+    <line x1="7.5" y1="14.4" x2="10.5" y2="15.8" />
+    <line x1="7.5" y1="16.4" x2="10.5" y2="17.8" />
+    <line x1="7.5" y1="18.4" x2="10.5" y2="19.8" />
+  </svg>
+);
+
+const AlbaranesIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <path d="M5 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+    <line x1="6" y1="7.5" x2="14" y2="7.5" />
+    <line x1="6" y1="10.5" x2="14" y2="10.5" />
+    <line x1="6" y1="13.5" x2="11" y2="13.5" />
+    <circle cx="17.6" cy="17.4" r="2.6" stroke="currentColor" />
+    <path d="M16.6 17.4l.7.8 1.6-1.7" strokeWidth="1.4" />
+  </svg>
+);
+
+const CalendarioIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <rect x="3.5" y="5" width="17" height="15" rx="2" />
+    <line x1="3.5" y1="9" x2="20.5" y2="9" />
+    <line x1="8" y1="3.5" x2="8" y2="6.5" />
+    <line x1="16" y1="3.5" x2="16" y2="6.5" />
+    <circle cx="9" cy="13.5" r="1.4" fill="currentColor" stroke="none" />
+    <line x1="12" y1="16.5" x2="17" y2="16.5" strokeWidth="1.6" />
+  </svg>
+);
+
 const NAV_ITEMS: NavItem[] = [
   // Centro de control — sin sección, siempre arriba del todo
   { href: "/dashboard", label: "Centro de control", icon: ControlCenterIcon, section: null },
@@ -66,13 +139,13 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard/agent", label: "Asistente IA", icon: "🤖", section: "General" },
 
   // NEGOCIO
-  { href: "/dashboard/budgets", label: "Presupuestos", icon: "📋", section: "Negocio" },
-  { href: "/dashboard/prices", label: "Banco de precios", icon: "💰", section: "Negocio" },
-  { href: "/dashboard/projects", label: "Obras", icon: "🏗️", section: "Negocio" },
-  { href: "/dashboard/suppliers", label: "Proveedores", icon: "🔧", section: "Negocio" },
-  { href: "/dashboard/orders", label: "Pedidos", icon: "📦", section: "Negocio" },
-  { href: "/dashboard/delivery-notes", label: "Albaranes", icon: "📄", section: "Negocio" },
-  { href: "/dashboard/calendar", label: "Calendario", icon: "📅", section: "Negocio" },
+  { href: "/dashboard/budgets", label: "Presupuestos", icon: PresupuestosIcon, section: "Negocio" },
+  { href: "/dashboard/prices", label: "Banco de precios", icon: BancoPreciosIcon, section: "Negocio" },
+  { href: "/dashboard/projects", label: "Obras", icon: ObrasIcon, section: "Negocio" },
+  { href: "/dashboard/suppliers", label: "Proveedores", icon: ProveedoresIcon, section: "Negocio" },
+  { href: "/dashboard/orders", label: "Pedidos", icon: PedidosIcon, section: "Negocio" },
+  { href: "/dashboard/delivery-notes", label: "Albaranes", icon: AlbaranesIcon, section: "Negocio" },
+  { href: "/dashboard/calendar", label: "Calendario", icon: CalendarioIcon, section: "Negocio" },
 
   // FINANZAS
   { href: "/dashboard/suppliers/invoices", label: "Facturas recibidas", icon: "🧾", section: "Finanzas" },
