@@ -307,10 +307,18 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
   // Build nav items from canonical list, optionally filtered by sector visibility.
   // If the sector config returns an explicit list of modules, only those hrefs
   // (plus always-visible system items) are shown. Otherwise we show everything.
+  // The sector config can also override the label per href (e.g. "Presupuestos"
+  // → "Propuestas" for Servicios Profesionales).
   const sectorModules = visibleModules();
   const sectorHrefs = new Set(sectorModules.map((m) => m.href));
+  const sectorLabelByHref = new Map(sectorModules.map((m) => [m.href, m.label]));
   const navItems = sectorModules.length > 0
-    ? NAV_ITEMS.filter((item) => sectorHrefs.has(item.href) || ALWAYS_VISIBLE_HREFS.has(item.href))
+    ? NAV_ITEMS
+        .filter((item) => sectorHrefs.has(item.href) || ALWAYS_VISIBLE_HREFS.has(item.href))
+        .map((item) => {
+          const sectorLabel = sectorLabelByHref.get(item.href);
+          return sectorLabel ? { ...item, label: sectorLabel } : item;
+        })
     : NAV_ITEMS;
 
   // Group by section, preserving SECTION_ORDER.
