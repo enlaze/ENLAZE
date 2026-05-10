@@ -5,13 +5,21 @@ import { cookies } from "next/headers";
 const RAW_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_ID = RAW_GOOGLE_CLIENT_ID ? RAW_GOOGLE_CLIENT_ID.replace(/^["']|["']$/g, '').trim() : undefined;
 
-const APP_BASE_URL =
-  process.env.NEXT_PUBLIC_APP_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
-
-const GOOGLE_REDIRECT_URI = `${APP_BASE_URL}/api/auth/google/callback`;
+// APP_BASE_URL will be computed inside the handler based on the request origin
 
 export async function GET(req: NextRequest) {
+  // Determine environment from request headers (more reliable than nextUrl.origin in Vercel)
+  const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || req.nextUrl.host || "";
+  const isLocal = host.includes("localhost") || host.includes("127.0.0.1");
+  const APP_BASE_URL = isLocal ? "http://localhost:3000" : "https://enlaze.vercel.app";
+  const GOOGLE_REDIRECT_URI = `${APP_BASE_URL}/api/auth/google/callback`;
+
+  console.log(`[Google OAuth Init] host received: ${host}`);
+  console.log(`[Google OAuth Init] origin received: ${req.nextUrl.origin}`);
+  console.log(`[Google OAuth Init] isLocal calculated: ${isLocal}`);
+  console.log(`[Google OAuth Init] APP_BASE_URL final: ${APP_BASE_URL}`);
+  console.log(`[Google OAuth Init] GOOGLE_REDIRECT_URI final: ${GOOGLE_REDIRECT_URI}`);
+
   const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -67,8 +75,9 @@ export async function GET(req: NextRequest) {
     ];
   }
 
-  // Pass state to prevent CSRF and remember the module
-  const stateObj = { userId: user.id, module: moduleToConnect };
+  // Pass state to prevent CSRF and remember the module + origin
+  const returnTo = req.nextUrl.origin;
+  const stateObj = { userId: user.id, module: moduleToConnect, returnTo };
   const stateString = Buffer.from(JSON.stringify(stateObj)).toString("base64");
 
   const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");

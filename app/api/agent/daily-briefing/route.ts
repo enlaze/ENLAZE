@@ -9,24 +9,29 @@ export async function GET(req: NextRequest) {
     const { userId } = auth;
     const authHeader = req.headers.get("authorization");
 
-    // Construct the base URL robustly
-    const baseUrl = req.nextUrl.origin;
+    // Construct the base URL robustly using headers to guarantee exact Preview Deployment URL
+    const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
+    const protocol = req.headers.get("x-forwarded-proto") || "https";
+    const baseUrl = host ? `${protocol}://${host}` : req.nextUrl.origin;
+
+    const isAgentMode = !!(authHeader && authHeader.startsWith("Bearer ") && authHeader.includes(process.env.AGENT_API_KEY || ""));
+    const cookieHeader = req.headers.get("cookie");
+    console.log(`[Daily Briefing] Incoming request. AuthHeader present? ${!!authHeader} (Starts with Bearer? ${authHeader?.startsWith('Bearer ')}). Cookie present? ${!!cookieHeader}. (Mode: ${isAgentMode ? 'Agent API Key' : 'Browser Session'})`);
 
     const fetchModule = async (modulePath: string) => {
       const url = `${baseUrl}/api/agent/${modulePath}/summary?user_id=${userId}`;
       const headers: Record<string, string> = {};
-      const expectedKey = process.env.AGENT_API_KEY;
-      if (expectedKey) {
-        headers["Authorization"] = `Bearer ${expectedKey}`;
-      } else if (authHeader) {
+      
+      if (authHeader) {
         headers["Authorization"] = authHeader;
       }
       
-      // Forward cookies to bypass Vercel Preview Protection
-      const cookieHeader = req.headers.get("cookie");
+      // Forward cookies exactly as received (vital for Vercel Preview Protection and browser auth)
       if (cookieHeader) {
         headers["cookie"] = cookieHeader;
       }
+      
+      console.log(`[Daily Briefing] Fetching ${modulePath}. Forwarding Auth? ${!!headers["Authorization"]}. Forwarding Cookie? ${!!headers["cookie"]}`);
 
       const res = await fetch(url, { headers, cache: "no-store" });
       if (!res.ok) {
@@ -34,8 +39,6 @@ export async function GET(req: NextRequest) {
       }
       return res.json();
     };
-
-    console.log("[Daily Briefing] Fetching summaries in parallel...");
 
     // Execute fetches in parallel with Promise.allSettled
     const [gmailResult, calendarResult, sheetsResult] = await Promise.allSettled([
