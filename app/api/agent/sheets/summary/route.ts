@@ -38,8 +38,13 @@ export async function GET(req: NextRequest) {
     }
 
     // Phase 1: If user configured a specific sheet ID in config, use it. Otherwise, search recent sheets.
-    let targetSpreadsheetId = connection.config?.target_spreadsheet_id;
-    let spreadsheetName = connection.config?.target_spreadsheet_name || "Hoja configurada";
+    let config = connection.config || {};
+    if (typeof config === 'string') {
+      try { config = JSON.parse(config); } catch (e) { config = {}; }
+    }
+    
+    let targetSpreadsheetId = config.target_spreadsheet_id;
+    let spreadsheetName = config.target_spreadsheet_name || "Hoja configurada";
     let isFallback = false;
 
     if (!targetSpreadsheetId) {

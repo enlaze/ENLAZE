@@ -165,7 +165,7 @@ export default function IntegrationsPage() {
 
       await supabase
         .from("agent_connections")
-        .update({ config: JSON.stringify(newConfig) })
+        .update({ config: newConfig })
         .eq("user_id", user.id)
         .eq("module", module);
         

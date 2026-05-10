@@ -27,7 +27,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Google Sheets no está conectado" }, { status: 400 });
     }
 
-    const targetSpreadsheetId = connection.config?.target_spreadsheet_id;
+    let config = connection.config || {};
+    if (typeof config === 'string') {
+      try { config = JSON.parse(config); } catch (e) { config = {}; }
+    }
+
+    const targetSpreadsheetId = config.target_spreadsheet_id;
     if (!targetSpreadsheetId) {
       return NextResponse.json({ 
         error: "No hay hoja configurada. Por favor, selecciona una hoja en Ajustes > Integraciones antes de insertar datos." 
