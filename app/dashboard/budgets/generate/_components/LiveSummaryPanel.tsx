@@ -5,13 +5,16 @@ import { useBudgetGenerate } from "./BudgetGenerateProvider";
 
 export function LiveSummaryPanel() {
   const { state } = useBudgetGenerate();
-  const { totals, marginPercent, sector, providerOptions, selectedProviderId, materials } = state;
+  const { totals, marginPercent, sector, providerOptions, selectedProviderId, materials, isRealDataMode } = state;
   const isConstruction = sector === "construccion";
 
   const totalWithIva = totals.clientPrice * (1 + state.ivaPercent / 100);
 
   const activeProvider = providerOptions?.find(p => p.id === selectedProviderId);
   const includedMaterialsCount = materials?.filter(m => m.included).length || 0;
+  
+  // Real data check
+  const isMaterialBasketReal = isRealDataMode && activeProvider?.isRealData;
 
   return (
     <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-navy-100 dark:border-zinc-800 shadow-sm p-6 sticky top-24">
@@ -22,8 +25,13 @@ export function LiveSummaryPanel() {
           <div className="w-8 h-8 rounded-full bg-white dark:bg-zinc-700 flex items-center justify-center shadow-sm text-lg">
             🏢
           </div>
-          <div>
-            <div className="text-[10px] text-navy-500 dark:text-zinc-400 uppercase tracking-wider font-bold">Proveedor activo</div>
+          <div className="flex-1">
+            <div className="flex justify-between items-center">
+              <div className="text-[10px] text-navy-500 dark:text-zinc-400 uppercase tracking-wider font-bold">Proveedor activo</div>
+              {isMaterialBasketReal && (
+                <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 px-1.5 rounded">Catálogo Real</span>
+              )}
+            </div>
             <div className="text-sm font-bold text-navy-900 dark:text-white">{activeProvider.name}</div>
           </div>
         </div>
@@ -42,7 +50,12 @@ export function LiveSummaryPanel() {
             <span className="text-navy-600 dark:text-zinc-400">
               Materiales ({includedMaterialsCount})
             </span>
-            <span className="font-semibold text-navy-900 dark:text-white">{totals.materialsCost.toFixed(2)} €</span>
+            <div className="flex items-center gap-2">
+              {!isMaterialBasketReal && (
+                <span className="text-[10px] uppercase font-bold text-amber-500 bg-amber-50 dark:bg-amber-900/20 px-1 rounded" title="Precios simulados/estimados">Estimado</span>
+              )}
+              <span className="font-semibold text-navy-900 dark:text-white">{totals.materialsCost.toFixed(2)} €</span>
+            </div>
           </div>
         )}
         
@@ -84,6 +97,12 @@ export function LiveSummaryPanel() {
                   <li>Sugerencia: Sube el margen un 5% ({activeProvider?.name} tiene un plazo rápido de entrega que el cliente suele valorar).</li>
                   {materials?.some(m => !m.included) && (
                     <li>Has excluido materiales sugeridos. Asegúrate de tener stock propio.</li>
+                  )}
+                  {isMaterialBasketReal && activeProvider?.materialsCount === 0 && (
+                    <li>No hemos encontrado materiales reales en tu base de datos para este proveedor.</li>
+                  )}
+                  {!isMaterialBasketReal && (
+                    <li>💡 Conecta tus catálogos de compra para evitar precios estimados y basar el margen en tus costes reales.</li>
                   )}
                 </>
               ) : (

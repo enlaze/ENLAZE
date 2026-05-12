@@ -46,8 +46,18 @@ export function ProvidersStep() {
                     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path></svg>
                   </div>
                 )}
-                <h3 className="font-bold text-navy-900 dark:text-white mb-1">{provider.name}</h3>
-                <p className="text-xs text-navy-500 dark:text-zinc-400 mb-3 line-clamp-1">{provider.description}</p>
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="font-bold text-navy-900 dark:text-white">{provider.name}</h3>
+                  {provider.isRealData && (
+                    <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Real</span>
+                  )}
+                </div>
+                <p className="text-xs text-navy-500 dark:text-zinc-400 mb-2 line-clamp-1">{provider.description}</p>
+                {provider.materialsCount !== undefined && (
+                  <p className="text-xs text-navy-500 dark:text-zinc-400 mb-3 font-medium">
+                    {provider.materialsCount} materiales disponibles
+                  </p>
+                )}
                 <div className="flex justify-between items-end">
                   <div>
                     <div className="text-[10px] text-navy-400 dark:text-zinc-500 uppercase tracking-wider">Cesta estimada</div>
@@ -115,7 +125,14 @@ export function ProvidersStep() {
                       />
                     </td>
                     <td className="p-3">
-                      <p className="text-sm font-medium text-navy-900 dark:text-white">{m.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-navy-900 dark:text-white">{m.name}</p>
+                        {m.isRealData && (
+                          <span className="bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400 text-[9px] px-1 rounded-sm uppercase tracking-wider font-semibold" title="Dato de tu catálogo">
+                            Real
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="p-3">
                       <input 

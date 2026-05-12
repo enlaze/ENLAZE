@@ -27,6 +27,8 @@ export interface ProviderOption {
   stockLevel: "Alto" | "Medio" | "Bajo" | "A consultar";
   rating: number;
   isRecommended?: boolean;
+  materialsCount?: number;
+  isRealData?: boolean;
 }
 
 export interface Material {
@@ -38,6 +40,7 @@ export interface Material {
   subtotal: number;
   included: boolean;
   provider_id?: string;
+  isRealData?: boolean;
 }
 
 export interface BudgetState {
@@ -56,8 +59,10 @@ export interface BudgetState {
   // Provider Data
   selectedProviderId: string | null;
   providerOptions: ProviderOption[];
-  materials: Material[];
+  materials: Material[]; // Active visible materials
+  allFetchedMaterials: Material[]; // Internal cache for real data
   useSuggestedMaterials: boolean;
+  isRealDataMode: boolean;
   // Totals
   totals: {
     directCost: number;
@@ -130,18 +135,20 @@ export function BudgetGenerateProvider({
     ],
     selectedProviderId: "leroy",
     providerOptions: [
-      { id: "leroy", name: "Leroy Merlin", description: "Materiales de construcción y reforma", estimatedPrice: 1250, deliveryTime: "24-48h", stockLevel: "Alto", rating: 4.8, isRecommended: true },
-      { id: "obramat", name: "Obramat", description: "Almacén profesional", estimatedPrice: 1180, deliveryTime: "48-72h", stockLevel: "Medio", rating: 4.5 },
-      { id: "local", name: "Proveedor Local", description: "Distribuidores de zona", estimatedPrice: 1320, deliveryTime: "A consultar", stockLevel: "A consultar", rating: 4.0 },
+      { id: "leroy", name: "Leroy Merlin", description: "Materiales de construcción y reforma", estimatedPrice: 1250, deliveryTime: "24-48h", stockLevel: "Alto", rating: 4.8, isRecommended: true, isRealData: false, materialsCount: 5 },
+      { id: "obramat", name: "Obramat", description: "Almacén profesional", estimatedPrice: 1180, deliveryTime: "48-72h", stockLevel: "Medio", rating: 4.5, isRealData: false, materialsCount: 5 },
+      { id: "local", name: "Proveedor Local", description: "Distribuidores de zona", estimatedPrice: 1320, deliveryTime: "A consultar", stockLevel: "A consultar", rating: 4.0, isRealData: false, materialsCount: 5 },
     ],
     materials: [
-      { id: "m1", name: "Azulejo porcelánico 60x60cm", quantity: 26, unit: "m2", unit_price: 18.5, subtotal: 481, included: true, provider_id: "leroy" },
-      { id: "m2", name: "Cemento cola porcelánico", quantity: 5, unit: "sacos", unit_price: 12.0, subtotal: 60, included: true, provider_id: "leroy" },
-      { id: "m3", name: "Pintura plástica blanca mate", quantity: 2, unit: "cubos 15L", unit_price: 35.0, subtotal: 70, included: true, provider_id: "leroy" },
-      { id: "m4", name: "Cableado eléctrico libre halógenos", quantity: 1, unit: "rollo 100m", unit_price: 45.0, subtotal: 45, included: true, provider_id: "leroy" },
-      { id: "m5", name: "Plato de ducha resina 120x70", quantity: 1, unit: "ud", unit_price: 180.0, subtotal: 180, included: true, provider_id: "leroy" },
+      { id: "m1", name: "Azulejo porcelánico 60x60cm", quantity: 26, unit: "m2", unit_price: 18.5, subtotal: 481, included: true, provider_id: "leroy", isRealData: false },
+      { id: "m2", name: "Cemento cola porcelánico", quantity: 5, unit: "sacos", unit_price: 12.0, subtotal: 60, included: true, provider_id: "leroy", isRealData: false },
+      { id: "m3", name: "Pintura plástica blanca mate", quantity: 2, unit: "cubos 15L", unit_price: 35.0, subtotal: 70, included: true, provider_id: "leroy", isRealData: false },
+      { id: "m4", name: "Cableado eléctrico libre halógenos", quantity: 1, unit: "rollo 100m", unit_price: 45.0, subtotal: 45, included: true, provider_id: "leroy", isRealData: false },
+      { id: "m5", name: "Plato de ducha resina 120x70", quantity: 1, unit: "ud", unit_price: 180.0, subtotal: 180, included: true, provider_id: "leroy", isRealData: false },
     ],
+    allFetchedMaterials: [],
     useSuggestedMaterials: true,
+    isRealDataMode: false,
     totals: {
       directCost: 0,
       materialsCost: 0,
@@ -196,11 +203,13 @@ export function BudgetGenerateProvider({
               id: provId,
               name: normName,
               description: normName === "Proveedor Genérico" ? "Materiales sin asignar" : "Catálogo propio",
-              estimatedPrice: 0, // Derive below if needed
+              estimatedPrice: 0, 
               deliveryTime: "Consultar",
               stockLevel: "A consultar",
               rating: 4.5,
-              isRecommended: normName === "Leroy Merlin" || normName === "Obramat"
+              isRecommended: normName === "Leroy Merlin" || normName === "Obramat",
+              materialsCount: 0,
+              isRealData: true
             });
           }
           
@@ -212,18 +221,36 @@ export function BudgetGenerateProvider({
             unit_price: item.unit_price || 0,
             subtotal: item.unit_price || 0,
             included: true,
-            provider_id: provId
+            provider_id: provId,
+            isRealData: true
           });
+
+          // Update counts and estimated basket price for this provider
+          const p = providersMap.get(provId)!;
+          p.materialsCount! += 1;
+          p.estimatedPrice += (item.unit_price || 0); // initial 1 ud estimation
         });
 
         const newProviderOptions = Array.from(providersMap.values());
         if (newProviderOptions.length === 0) return;
 
+        // Sort: Recommended first, then by materials count
+        newProviderOptions.sort((a, b) => {
+          if (a.isRecommended && !b.isRecommended) return -1;
+          if (!a.isRecommended && b.isRecommended) return 1;
+          return (b.materialsCount || 0) - (a.materialsCount || 0);
+        });
+
+        const activeId = newProviderOptions[0].id;
+        const visibleMaterials = realMaterials.filter(m => m.provider_id === activeId);
+
         setState(prev => ({
           ...prev,
           providerOptions: newProviderOptions,
-          selectedProviderId: newProviderOptions[0].id,
-          materials: realMaterials
+          selectedProviderId: activeId,
+          allFetchedMaterials: realMaterials,
+          materials: visibleMaterials,
+          isRealDataMode: true
         }));
 
       } catch (err) {
@@ -235,28 +262,33 @@ export function BudgetGenerateProvider({
     return () => { mounted = false; };
   }, [state.sector]);
 
-  // Recalculate materials when provider changes (Mock Logic for V1)
+  // Update visible materials when provider changes
   useEffect(() => {
     if (!state.selectedProviderId) return;
     
-    // Simulate fetching different prices based on provider
-    const multiplier = state.selectedProviderId === "obramat" ? 0.9 : state.selectedProviderId === "local" ? 1.1 : 1.0;
-    
-    setState(prev => {
-      const newMaterials = prev.materials.map(m => {
-        // Mock: just change the price slightly to show interactivity
-        const basePrice = m.id === "m1" ? 18.5 : m.id === "m2" ? 12.0 : m.id === "m3" ? 35.0 : m.id === "m4" ? 45.0 : 180.0;
-        const newUnitPrice = basePrice * multiplier;
-        return {
-          ...m,
-          unit_price: newUnitPrice,
-          subtotal: m.quantity * newUnitPrice,
-          provider_id: state.selectedProviderId!
-        };
+    if (state.isRealDataMode) {
+      // In real data mode, we switch the basket to the specific provider's catalog
+      const newVisible = state.allFetchedMaterials.filter(m => m.provider_id === state.selectedProviderId);
+      setState(prev => ({ ...prev, materials: newVisible }));
+    } else {
+      // Mock Logic for V1: adjust prices dynamically to simulate provider shift
+      const multiplier = state.selectedProviderId === "obramat" ? 0.9 : state.selectedProviderId === "local" ? 1.1 : 1.0;
+      
+      setState(prev => {
+        const newMaterials = prev.materials.map(m => {
+          const basePrice = m.id === "m1" ? 18.5 : m.id === "m2" ? 12.0 : m.id === "m3" ? 35.0 : m.id === "m4" ? 45.0 : 180.0;
+          const newUnitPrice = basePrice * multiplier;
+          return {
+            ...m,
+            unit_price: newUnitPrice,
+            subtotal: m.quantity * newUnitPrice,
+            provider_id: state.selectedProviderId!
+          };
+        });
+        return { ...prev, materials: newMaterials };
       });
-      return { ...prev, materials: newMaterials };
-    });
-  }, [state.selectedProviderId]);
+    }
+  }, [state.selectedProviderId, state.isRealDataMode]);
 
   // Calculate totals whenever partidas, materials or margin change
   useEffect(() => {
