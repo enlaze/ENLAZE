@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
 import { normalizeSector } from "@/lib/sector-config";
+import { createClient } from "@/lib/supabase-browser";
 
 export interface Partida {
   id: string;
@@ -148,6 +149,91 @@ export function BudgetGenerateProvider({
       profit: 0,
     }
   });
+
+  // HYDRATE WITH REAL DATA (Fase 4.1)
+  useEffect(() => {
+    if (state.sector !== "construccion") return;
+
+    let mounted = true;
+    const fetchRealData = async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data, error } = await supabase
+          .from("price_items")
+          .select("id, name, unit, unit_price, supplier_name")
+          .eq("user_id", user.id)
+          .eq("sector", "construccion")
+          .eq("category", "material")
+          .eq("is_active", true)
+          .limit(30); // Limitar para el subconjunto sugerido inicial
+
+        if (error || !data || data.length === 0) return; // Fallback to mock
+
+        if (!mounted) return;
+
+        // Normalization logic for providers
+        function normalizeSupplierName(name: string | null | undefined): string {
+          if (!name || name.trim() === "") return "Proveedor Genérico";
+          const upper = name.trim().toUpperCase();
+          if (upper.includes("LEROY")) return "Leroy Merlin";
+          if (upper.includes("OBRAMAT") || upper.includes("BRICOMART")) return "Obramat";
+          if (upper.includes("SALTOKI")) return "Saltoki";
+          return name.trim();
+        }
+
+        const providersMap = new Map<string, ProviderOption>();
+        const realMaterials: Material[] = [];
+
+        data.forEach(item => {
+          const normName = normalizeSupplierName(item.supplier_name);
+          const provId = normName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+          
+          if (!providersMap.has(provId)) {
+            providersMap.set(provId, {
+              id: provId,
+              name: normName,
+              description: normName === "Proveedor Genérico" ? "Materiales sin asignar" : "Catálogo propio",
+              estimatedPrice: 0, // Derive below if needed
+              deliveryTime: "Consultar",
+              stockLevel: "A consultar",
+              rating: 4.5,
+              isRecommended: normName === "Leroy Merlin" || normName === "Obramat"
+            });
+          }
+          
+          realMaterials.push({
+            id: item.id,
+            name: item.name,
+            quantity: 1, // Default quantity for suggested basket
+            unit: item.unit || "ud",
+            unit_price: item.unit_price || 0,
+            subtotal: item.unit_price || 0,
+            included: true,
+            provider_id: provId
+          });
+        });
+
+        const newProviderOptions = Array.from(providersMap.values());
+        if (newProviderOptions.length === 0) return;
+
+        setState(prev => ({
+          ...prev,
+          providerOptions: newProviderOptions,
+          selectedProviderId: newProviderOptions[0].id,
+          materials: realMaterials
+        }));
+
+      } catch (err) {
+        console.error("[BudgetGenerateProvider] Error fetching real prices:", err);
+      }
+    };
+
+    fetchRealData();
+    return () => { mounted = false; };
+  }, [state.sector]);
 
   // Recalculate materials when provider changes (Mock Logic for V1)
   useEffect(() => {

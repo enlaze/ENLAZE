@@ -51,7 +51,11 @@ export function ProvidersStep() {
                 <div className="flex justify-between items-end">
                   <div>
                     <div className="text-[10px] text-navy-400 dark:text-zinc-500 uppercase tracking-wider">Cesta estimada</div>
-                    <span className="text-sm font-bold text-navy-900 dark:text-white">{provider.estimatedPrice.toFixed(2)} €</span>
+                    {provider.estimatedPrice > 0 ? (
+                      <span className="text-sm font-bold text-navy-900 dark:text-white">{provider.estimatedPrice.toFixed(2)} €</span>
+                    ) : (
+                      <span className="text-xs font-medium text-navy-500 dark:text-zinc-400 italic">Dinámica</span>
+                    )}
                   </div>
                   <div className="text-right">
                     <div className="text-[10px] text-navy-400 dark:text-zinc-500 uppercase tracking-wider">{provider.deliveryTime}</div>
