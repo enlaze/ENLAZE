@@ -1,8 +1,7 @@
-"use client";
-
-import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from "react";
 import { normalizeSector } from "@/lib/sector-config";
 import { createClient } from "@/lib/supabase-browser";
+import { useToast } from "@/components/ui/toast";
 
 export interface Partida {
   id: string;
@@ -44,6 +43,7 @@ export interface Material {
 }
 
 export interface BudgetState {
+  draftId: string | null;
   currentStep: number;
   sector: string;
   // Common Data
@@ -85,18 +85,22 @@ interface BudgetContextProps {
   setSelectedProvider: (id: string) => void;
   updateMaterial: (id: string, updates: Partial<Material>) => void;
   setUseSuggestedMaterials: (val: boolean) => void;
+  saveDraft: (manual?: boolean) => Promise<void>;
+  loadDraft: (statePayload: BudgetState) => void;
 }
 
 const BudgetContext = createContext<BudgetContextProps | undefined>(undefined);
 
 export function BudgetGenerateProvider({ 
-  children, 
-  initialSector = "construccion" 
+  children,
+  initialSector = "construccion"
 }: { 
   children: ReactNode;
   initialSector?: string;
 }) {
+  const toast = useToast();
   const [state, setState] = useState<BudgetState>({
+    draftId: null,
     currentStep: 0,
     sector: normalizeSector(initialSector),
     clientId: "",
@@ -264,16 +268,20 @@ export function BudgetGenerateProvider({
 
   // Update visible materials when provider changes
   useEffect(() => {
+    // Skip if we just loaded a draft that has its own material list visible already
     if (!state.selectedProviderId) return;
     
     if (state.isRealDataMode) {
-      // In real data mode, we switch the basket to the specific provider's catalog
       const newVisible = state.allFetchedMaterials.filter(m => m.provider_id === state.selectedProviderId);
-      setState(prev => ({ ...prev, materials: newVisible }));
+      // Only set if different length to prevent loop re-renders
+      if (state.materials.length === 0 || state.materials[0]?.provider_id !== state.selectedProviderId) {
+        setState(prev => ({ ...prev, materials: newVisible }));
+      }
     } else {
-      // Mock Logic for V1: adjust prices dynamically to simulate provider shift
+      // Mock logic
       const multiplier = state.selectedProviderId === "obramat" ? 0.9 : state.selectedProviderId === "local" ? 1.1 : 1.0;
-      
+      if (state.materials.length > 0 && state.materials[0]?.provider_id === state.selectedProviderId) return;
+
       setState(prev => {
         const newMaterials = prev.materials.map(m => {
           const basePrice = m.id === "m1" ? 18.5 : m.id === "m2" ? 12.0 : m.id === "m3" ? 35.0 : m.id === "m4" ? 45.0 : 180.0;
@@ -288,7 +296,7 @@ export function BudgetGenerateProvider({
         return { ...prev, materials: newMaterials };
       });
     }
-  }, [state.selectedProviderId, state.isRealDataMode]);
+  }, [state.selectedProviderId, state.isRealDataMode, state.allFetchedMaterials]);
 
   // Calculate totals whenever partidas, materials or margin change
   useEffect(() => {
@@ -400,7 +408,87 @@ export function BudgetGenerateProvider({
     setState(prev => ({ ...prev, useSuggestedMaterials: val }));
   };
 
-  const nextStep = () => setState(prev => ({ ...prev, currentStep: prev.currentStep + 1 }));
+  /* ─── Persistencia y Borradores ─── */
+  const saveDraft = async (manual = false) => {
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const snapshot = { ...state };
+      let draftId = state.draftId;
+
+      if (!draftId) {
+        // Insert new draft
+        const { data, error } = await supabase.from("budgets").insert({
+          user_id: user.id,
+          status: "borrador",
+          title: "Borrador de Presupuesto (Wizard)",
+          subtotal: state.totals.directCost,
+          iva_percent: state.ivaPercent,
+          iva_amount: state.totals.directCost * (state.ivaPercent / 100),
+          total: state.totals.directCost * (1 + state.ivaPercent / 100),
+          wizard_state: snapshot
+        }).select("id").single();
+
+        if (error) throw error;
+        draftId = data.id;
+        setState(prev => ({ ...prev, draftId }));
+      } else {
+        // Update existing draft
+        const { error } = await supabase.from("budgets").update({
+          subtotal: state.totals.directCost,
+          iva_amount: state.totals.directCost * (state.ivaPercent / 100),
+          total: state.totals.directCost * (1 + state.ivaPercent / 100),
+          wizard_state: snapshot,
+          updated_at: new Date().toISOString()
+        }).eq("id", draftId);
+
+        if (error) throw error;
+      }
+
+      if (manual) {
+        toast.success("Borrador guardado correctamente");
+      }
+    } catch (err) {
+      console.error("Error saving draft:", err);
+      if (manual) toast.error("Error al guardar el borrador");
+    }
+  };
+
+  const loadDraft = (savedState: BudgetState) => {
+    setState(savedState);
+  };
+
+  // Debounced Autosave (1.5s)
+  const isFirstRender = useRef(true);
+  const saveTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
+    if (saveTimeout.current) clearTimeout(saveTimeout.current);
+    
+    saveTimeout.current = setTimeout(() => {
+      // Solo hacer autosave silencioso si ya hay un draftId (fue creado manualmente antes o en un paso previo)
+      // Opcional: Descomentar para forzar creación en la primera pulsación.
+      // if (state.draftId) {
+      saveDraft(false);
+      // }
+    }, 1500);
+
+    return () => {
+      if (saveTimeout.current) clearTimeout(saveTimeout.current);
+    };
+  }, [state]);
+
+  const nextStep = () => {
+    setState(prev => ({ ...prev, currentStep: prev.currentStep + 1 }));
+    saveDraft(false); // Force save on step change
+  };
   const prevStep = () => setState(prev => ({ ...prev, currentStep: Math.max(0, prev.currentStep - 1) }));
   const goToStep = (step: number) => setState(prev => ({ ...prev, currentStep: step }));
 
@@ -408,7 +496,8 @@ export function BudgetGenerateProvider({
     <BudgetContext.Provider value={{ 
       state, updateState, updateSectorData, nextStep, prevStep, goToStep,
       addPartida, updatePartida, removePartida,
-      setSelectedProvider, updateMaterial, setUseSuggestedMaterials
+      setSelectedProvider, updateMaterial, setUseSuggestedMaterials,
+      saveDraft, loadDraft
     }}>
       {children}
     </BudgetContext.Provider>
