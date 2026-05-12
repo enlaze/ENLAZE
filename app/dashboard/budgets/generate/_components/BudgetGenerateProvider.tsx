@@ -17,6 +17,28 @@ export interface Partida {
   status?: "incluida" | "estimada" | "opcional";
 }
 
+export interface ProviderOption {
+  id: string;
+  name: string;
+  description: string;
+  estimatedPrice: number;
+  deliveryTime: string;
+  stockLevel: "Alto" | "Medio" | "Bajo" | "A consultar";
+  rating: number;
+  isRecommended?: boolean;
+}
+
+export interface Material {
+  id: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  subtotal: number;
+  included: boolean;
+  provider_id?: string;
+}
+
 export interface BudgetState {
   currentStep: number;
   sector: string;
@@ -31,10 +53,14 @@ export interface BudgetState {
   // Partidas
   partidas: Partida[];
   // Provider Data
-  selectedProvider: string | null;
+  selectedProviderId: string | null;
+  providerOptions: ProviderOption[];
+  materials: Material[];
+  useSuggestedMaterials: boolean;
   // Totals
   totals: {
     directCost: number;
+    materialsCost: number;
     clientPrice: number;
     profit: number;
   };
@@ -50,6 +76,9 @@ interface BudgetContextProps {
   addPartida: (partida: Partial<Partida>) => void;
   updatePartida: (id: string, updates: Partial<Partida>) => void;
   removePartida: (id: string) => void;
+  setSelectedProvider: (id: string) => void;
+  updateMaterial: (id: string, updates: Partial<Material>) => void;
+  setUseSuggestedMaterials: (val: boolean) => void;
 }
 
 const BudgetContext = createContext<BudgetContextProps | undefined>(undefined);
@@ -98,31 +127,84 @@ export function BudgetGenerateProvider({
         status: "incluida"
       }
     ],
-    selectedProvider: null,
+    selectedProviderId: "leroy",
+    providerOptions: [
+      { id: "leroy", name: "Leroy Merlin", description: "Materiales de construcción y reforma", estimatedPrice: 1250, deliveryTime: "24-48h", stockLevel: "Alto", rating: 4.8, isRecommended: true },
+      { id: "obramat", name: "Obramat", description: "Almacén profesional", estimatedPrice: 1180, deliveryTime: "48-72h", stockLevel: "Medio", rating: 4.5 },
+      { id: "local", name: "Proveedor Local", description: "Distribuidores de zona", estimatedPrice: 1320, deliveryTime: "A consultar", stockLevel: "A consultar", rating: 4.0 },
+    ],
+    materials: [
+      { id: "m1", name: "Azulejo porcelánico 60x60cm", quantity: 26, unit: "m2", unit_price: 18.5, subtotal: 481, included: true, provider_id: "leroy" },
+      { id: "m2", name: "Cemento cola porcelánico", quantity: 5, unit: "sacos", unit_price: 12.0, subtotal: 60, included: true, provider_id: "leroy" },
+      { id: "m3", name: "Pintura plástica blanca mate", quantity: 2, unit: "cubos 15L", unit_price: 35.0, subtotal: 70, included: true, provider_id: "leroy" },
+      { id: "m4", name: "Cableado eléctrico libre halógenos", quantity: 1, unit: "rollo 100m", unit_price: 45.0, subtotal: 45, included: true, provider_id: "leroy" },
+      { id: "m5", name: "Plato de ducha resina 120x70", quantity: 1, unit: "ud", unit_price: 180.0, subtotal: 180, included: true, provider_id: "leroy" },
+    ],
+    useSuggestedMaterials: true,
     totals: {
       directCost: 0,
+      materialsCost: 0,
       clientPrice: 0,
       profit: 0,
     }
   });
 
-  // Calculate totals whenever partidas or margin change
+  // Recalculate materials when provider changes (Mock Logic for V1)
+  useEffect(() => {
+    if (!state.selectedProviderId) return;
+    
+    // Simulate fetching different prices based on provider
+    const multiplier = state.selectedProviderId === "obramat" ? 0.9 : state.selectedProviderId === "local" ? 1.1 : 1.0;
+    
+    setState(prev => {
+      const newMaterials = prev.materials.map(m => {
+        // Mock: just change the price slightly to show interactivity
+        const basePrice = m.id === "m1" ? 18.5 : m.id === "m2" ? 12.0 : m.id === "m3" ? 35.0 : m.id === "m4" ? 45.0 : 180.0;
+        const newUnitPrice = basePrice * multiplier;
+        return {
+          ...m,
+          unit_price: newUnitPrice,
+          subtotal: m.quantity * newUnitPrice,
+          provider_id: state.selectedProviderId!
+        };
+      });
+      return { ...prev, materials: newMaterials };
+    });
+  }, [state.selectedProviderId]);
+
+  // Calculate totals whenever partidas, materials or margin change
   useEffect(() => {
     let directCost = 0;
     let clientPrice = 0;
+    let materialsCost = 0;
     
     state.partidas.forEach(p => {
-      directCost += p.subtotal_cost;
-      clientPrice += p.subtotal_client;
+      if (p.status !== "opcional") {
+        directCost += p.subtotal_cost;
+        clientPrice += p.subtotal_client;
+      }
     });
+
+    state.materials.forEach(m => {
+      if (m.included) {
+        materialsCost += m.subtotal;
+      }
+    });
+
+    // In a real scenario, materials cost might be already included in directCost,
+    // but for this wizard demo, we will add them up to show the impact.
+    directCost += materialsCost;
+    const marginMultiplier = 1 + (state.marginPercent / 100);
+    // Add margin over materials too
+    clientPrice += (materialsCost * marginMultiplier);
 
     const profit = clientPrice - directCost;
 
     setState(prev => ({
       ...prev,
-      totals: { directCost, clientPrice, profit }
+      totals: { directCost, materialsCost, clientPrice, profit }
     }));
-  }, [state.partidas, state.marginPercent]);
+  }, [state.partidas, state.materials, state.marginPercent]);
 
   const updateState = (updates: Partial<BudgetState>) => {
     setState(prev => ({ ...prev, ...updates }));
@@ -180,6 +262,26 @@ export function BudgetGenerateProvider({
     setState(prev => ({ ...prev, partidas: prev.partidas.filter(p => p.id !== id) }));
   };
 
+  const setSelectedProvider = (id: string) => {
+    setState(prev => ({ ...prev, selectedProviderId: id }));
+  };
+
+  const updateMaterial = (id: string, updates: Partial<Material>) => {
+    setState(prev => ({
+      ...prev,
+      materials: prev.materials.map(m => {
+        if (m.id !== id) return m;
+        const updated = { ...m, ...updates };
+        updated.subtotal = updated.quantity * updated.unit_price;
+        return updated;
+      })
+    }));
+  };
+
+  const setUseSuggestedMaterials = (val: boolean) => {
+    setState(prev => ({ ...prev, useSuggestedMaterials: val }));
+  };
+
   const nextStep = () => setState(prev => ({ ...prev, currentStep: prev.currentStep + 1 }));
   const prevStep = () => setState(prev => ({ ...prev, currentStep: Math.max(0, prev.currentStep - 1) }));
   const goToStep = (step: number) => setState(prev => ({ ...prev, currentStep: step }));
@@ -187,7 +289,8 @@ export function BudgetGenerateProvider({
   return (
     <BudgetContext.Provider value={{ 
       state, updateState, updateSectorData, nextStep, prevStep, goToStep,
-      addPartida, updatePartida, removePartida
+      addPartida, updatePartida, removePartida,
+      setSelectedProvider, updateMaterial, setUseSuggestedMaterials
     }}>
       {children}
     </BudgetContext.Provider>
