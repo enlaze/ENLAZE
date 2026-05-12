@@ -12,7 +12,8 @@ import { ScopeStep } from "./_components/steps/ScopeStep";
 import { ItemsStep } from "./_components/steps/ItemsStep";
 import { ProvidersStep } from "./_components/steps/ProvidersStep";
 import { createClient } from "@/lib/supabase-browser";
-import { Button } from "@/components/ui/button";
+import { Button, LinkButton } from "@/components/ui/button";
+import { generateBudgetPDFHTML, printPDF } from "@/lib/pdf-generator";
 
 function DraftRecoveryManager() {
   const { loadDraft, saveDraft, state } = useBudgetGenerate();
@@ -79,7 +80,10 @@ function DraftRecoveryManager() {
 
 // Separamos el contenido que necesita el contexto en un componente interno
 function WizardContent() {
-  const { state, saveDraft } = useBudgetGenerate();
+  const { state, saveDraft, finalizeBudget } = useBudgetGenerate();
+  const [finalizedId, setFinalizedId] = useState<string | null>(null);
+  const [isFinalizing, setIsFinalizing] = useState(false);
+  
   const isConstruction = state.sector === "construccion";
 
   // Pasos dinámicos por sector
@@ -92,6 +96,69 @@ function WizardContent() {
     { id: "services", label: "Servicios y packs" },
     { id: "equipment", label: "Equipamiento" },
   ];
+
+  const handleFinalize = async () => {
+    setIsFinalizing(true);
+    const id = await finalizeBudget();
+    setIsFinalizing(false);
+    if (id) {
+      setFinalizedId(id);
+    }
+  };
+
+  const handleExportPDF = async (mode: 'client' | 'internal') => {
+    // Reconstruir un objeto Budget y Items mínimos para el PDF desde el estado
+    const budgetMock: any = {
+      budget_number: `PRE-WIZARD-${new Date().getFullYear()}`, // Fallback si no queremos hacer fetch extra
+      title: "Presupuesto Generado",
+      service_type: state.sector,
+      status: "pendiente",
+      created_at: new Date().toISOString(),
+      subtotal: state.totals.directCost,
+      iva_percent: state.ivaPercent,
+      iva_amount: state.totals.directCost * (state.ivaPercent / 100),
+      total: state.totals.clientPrice * (1 + state.ivaPercent / 100),
+    };
+
+    const itemsMock: any[] = state.partidas.filter(p => p.status !== "opcional").map(p => ({
+      concept: p.concept,
+      description: p.description,
+      category: p.category,
+      quantity: p.quantity,
+      unit: p.unit,
+      unit_price: p.unit_price_client,
+      subtotal: p.subtotal_client,
+      subtotal_cost: p.subtotal_cost
+    }));
+
+    const html = generateBudgetPDFHTML(budgetMock, itemsMock, mode);
+    printPDF(html);
+  };
+
+  if (finalizedId) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 bg-white dark:bg-zinc-900 border border-brand-green/30 rounded-2xl animate-in fade-in zoom-in-95 mt-8 shadow-sm">
+        <div className="w-20 h-20 bg-brand-green/20 rounded-full flex items-center justify-center mb-6">
+          <span className="text-4xl">🎉</span>
+        </div>
+        <h2 className="text-2xl font-bold text-navy-900 dark:text-white mb-2">¡Presupuesto Finalizado!</h2>
+        <p className="text-navy-600 dark:text-zinc-400 text-center max-w-md mb-8">
+          Tu presupuesto ha sido guardado oficialmente. Puedes visualizarlo en el panel estándar o exportar el PDF ahora mismo.
+        </p>
+        <div className="flex flex-wrap justify-center gap-4">
+          <LinkButton href={`/dashboard/budgets/${finalizedId}`} className="bg-navy-900 hover:bg-navy-800 text-white dark:bg-zinc-800 dark:hover:bg-zinc-700">
+            Abrir presupuesto clásico
+          </LinkButton>
+          <Button variant="secondary" onClick={() => handleExportPDF('client')}>
+            Exportar PDF Cliente
+          </Button>
+          <Button variant="secondary" onClick={() => handleExportPDF('internal')} className="border-brand-green/50 text-brand-green hover:bg-brand-green/10">
+            Exportar PDF Interno
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   const renderStep = () => {
     if (isConstruction) {
@@ -126,8 +193,12 @@ function WizardContent() {
           <Button variant="secondary" onClick={() => saveDraft(true)} disabled={!state.draftId && state.currentStep === 0}>
             Guardar borrador
           </Button>
-          <Button className="bg-brand-green hover:bg-brand-green/90 text-navy-900 font-bold border-0 shadow-md">
-            Finalizar presupuesto
+          <Button 
+            className="bg-brand-green hover:bg-brand-green/90 text-navy-900 font-bold border-0 shadow-md"
+            onClick={handleFinalize}
+            disabled={isFinalizing || state.partidas.length === 0}
+          >
+            {isFinalizing ? "Finalizando..." : "Finalizar presupuesto"}
           </Button>
         </div>
       </div>

@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, ReactNode, useEffect, useCa
 import { normalizeSector } from "@/lib/sector-config";
 import { createClient } from "@/lib/supabase-browser";
 import { useToast } from "@/components/ui/toast";
+import { saveDocumentVersion, getNextVersion } from "@/lib/document-versions";
+import { logActivity } from "@/lib/activity-log";
 
 export interface Partida {
   id: string;
@@ -87,6 +89,7 @@ interface BudgetContextProps {
   setUseSuggestedMaterials: (val: boolean) => void;
   saveDraft: (manual?: boolean) => Promise<void>;
   loadDraft: (statePayload: BudgetState) => void;
+  finalizeBudget: () => Promise<string | null>;
 }
 
 const BudgetContext = createContext<BudgetContextProps | undefined>(undefined);
@@ -456,6 +459,73 @@ export function BudgetGenerateProvider({
     }
   };
 
+  const finalizeBudget = async (): Promise<string | null> => {
+    try {
+      await saveDraft(false); // Asegurarse de que tenemos el ID y el último estado
+      
+      const supabase = createClient();
+      const budgetId = state.draftId;
+      if (!budgetId) throw new Error("No hay borrador para finalizar");
+
+      // 1. Obtener la siguiente versión (si ya existía y lo abrieron, o si es la 1)
+      const nextVer = await getNextVersion(supabase, "budget", budgetId);
+
+      // 2. Limpiar items antiguos si hubiera (por si era un presupuesto que se volvió a abrir)
+      await supabase.from("budget_items").delete().eq("budget_id", budgetId);
+
+      // 3. Insertar las partidas reales
+      const itemsToInsert = state.partidas.filter(p => p.status !== "opcional").map(p => ({
+        budget_id: budgetId,
+        concept: p.concept,
+        description: p.description,
+        quantity: p.quantity,
+        unit: p.unit,
+        category: p.category,
+        unit_price: p.unit_price_client,
+        subtotal: p.subtotal_client
+      }));
+
+      if (itemsToInsert.length > 0) {
+        const { error: itemsErr } = await supabase.from("budget_items").insert(itemsToInsert);
+        if (itemsErr) throw itemsErr;
+      }
+
+      // 4. Actualizar el estado a pendiente y la versión
+      const { error: upErr } = await supabase.from("budgets").update({
+        status: "pendiente",
+        version: nextVer,
+        updated_at: new Date().toISOString()
+      }).eq("id", budgetId);
+      if (upErr) throw upErr;
+
+      // 5. Guardar Snapshot de Version y Activity Log
+      const { data: finalBudget } = await supabase.from("budgets").select("*").eq("id", budgetId).single();
+      
+      saveDocumentVersion(supabase, {
+        entity_type: "budget",
+        entity_id: budgetId,
+        version: nextVer,
+        snapshot: finalBudget as unknown as Record<string, unknown>,
+        change_summary: `Versión ${nextVer} generada desde el Asistente.`
+      });
+
+      logActivity(supabase, {
+        action: `budget.status_changed`,
+        entity_type: "budget",
+        entity_id: budgetId,
+        metadata: { from: "borrador", to: "pendiente" },
+      });
+
+      toast.success("Presupuesto finalizado correctamente");
+      return budgetId;
+
+    } catch (err) {
+      console.error("Error finalizing budget:", err);
+      toast.error("Error al finalizar el presupuesto");
+      return null;
+    }
+  };
+
   const loadDraft = (savedState: BudgetState) => {
     setState(savedState);
   };
@@ -497,7 +567,7 @@ export function BudgetGenerateProvider({
       state, updateState, updateSectorData, nextStep, prevStep, goToStep,
       addPartida, updatePartida, removePartida,
       setSelectedProvider, updateMaterial, setUseSuggestedMaterials,
-      saveDraft, loadDraft
+      saveDraft, loadDraft, finalizeBudget
     }}>
       {children}
     </BudgetContext.Provider>
