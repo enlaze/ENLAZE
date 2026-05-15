@@ -33,7 +33,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.ENLAZE_BASE_URL || 'http://localhost:3000' }}/api/agent/users?sector=comercio_local",
+        "url": "=https://enlaze.vercel.app/api/agent/users?sector=comercio_local",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {
@@ -107,7 +107,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.ENLAZE_BASE_URL || 'http://localhost:3000' }}/api/agent/config",
+        "url": "=https://enlaze.vercel.app/api/agent/config",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -155,7 +155,7 @@
             {
               "id": "a2",
               "name": "_auth_base_url",
-              "value": "={{ $vars.ENLAZE_BASE_URL || $env.ENLAZE_BASE_URL || 'http://localhost:3000' }}",
+              "value": "={{ $vars.ENLAZE_BASE_URL || 'https://enlaze.vercel.app' }}",
               "type": "string"
             }
           ]
@@ -188,7 +188,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $json._auth_base_url }}/api/agent/ingest",
+        "url": "=https://enlaze.vercel.app/api/agent/ingest",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -216,7 +216,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2468,
+        1808,
         96
       ],
       "credentials": {
@@ -235,7 +235,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2692,
+        2032,
         96
       ]
     },
@@ -269,7 +269,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.ENLAZE_BASE_URL || 'http://localhost:3000' }}/api/webhooks/comercio-local",
+        "url": "https://enlaze.vercel.app/api/webhooks/comercio-local",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "{\n  \"action\": \"update_prices\",\n  \"sector\": \"comercio_local\",\n  \"data\": {\n    \"prices\": {{$json.prices}}\n  }\n}",
@@ -322,7 +322,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.ENLAZE_BASE_URL || 'http://localhost:3000' }}/api/webhooks/comercio-local",
+        "url": "https://enlaze.vercel.app/api/webhooks/comercio-local",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "{\n  \"action\": \"update_prices\",\n  \"sector\": \"comercio_local\",\n  \"data\": {\n    \"prices\": {{$json.prices}}\n  }\n}",
@@ -344,75 +344,6 @@
           "name": "ENLAZE Agent API Key"
         }
       }
-    },
-    {
-      "parameters": {
-        "jsCode": "// Build the request body for Anthropic's /v1/messages with Haiku 4.5.\n// Keeps the full payload from Run User Modules in `_original_payload` so the\n// next node can merge the AI response without losing any field.\n\nconst payload = $json;\nconst config = {\n  business_name: payload.business_name,\n  business_type: payload.business_type,\n  city: payload.city,\n  sector: payload.sector,\n};\n\n// Extract only the bits Claude needs. No dumping the whole 100KB payload.\nconst ctx = {\n  config,\n  date: payload.timestamp ? payload.timestamp.split('T')[0] : new Date().toISOString().split('T')[0],\n  mechanical_summary: payload.daily_summary || {},\n  high_priority_tasks: (payload.tasks?.items || []).filter(t => t.priority === 'high').slice(0, 8),\n  medium_priority_tasks: (payload.tasks?.items || []).filter(t => t.priority === 'medium').slice(0, 5),\n  cost_alerts: (payload.cost_monitor?.alerts || []).slice(0, 6),\n  competitive_signals: (payload.competitive?.signals || []).slice(0, 6),\n  radar_news: (payload.radar?.news || []).slice(0, 6).map(n => ({ title: n.title, source: n.source, summary: n.summary || n.desc })),\n  radar_subsidies: (payload.radar?.subsidies || []).slice(0, 5),\n  radar_regulations: (payload.radar?.regulations || []).slice(0, 5),\n  reputation_urgent: (payload.reputation?.reviews?.urgent || []).slice(0, 4),\n  inbox_awaiting_reply: (payload.inbox?.awaiting_reply || []).slice(0, 4),\n  market_indicators: payload.market || {},\n  recommendations: (payload.recommendations || []).slice(0, 5),\n};\n\nconst systemPrompt = [\n  \"Eres el analista de negocio de ENLAZE, una plataforma de automatizacion para comercio local en Espana.\",\n  \"Generas un briefing diario en castellano para el duenio de un pequenio negocio.\",\n  \"Tono: claro, directo, accionable. Nada de relleno, nada de marketing.\",\n  \"Hablas de tu a tu, sin formalismos. Castellano peninsular.\",\n  \"Devuelves SIEMPRE un JSON valido que cumpla exactamente el esquema indicado, sin texto antes ni despues.\"\n].join(\" \");\n\nconst userPrompt = [\n  \"Genera el briefing diario para este negocio basandote en el contexto proporcionado.\",\n  \"\",\n  \"ESQUEMA DE SALIDA (JSON estricto, sin markdown, sin comentarios):\",\n  \"{\",\n  '  \"headline\": \"una frase de maximo 18 palabras que resuma el dia\",',\n  '  \"narrative\": \"2 o 3 parrafos cortos de prosa explicando que pasa hoy, por que importa y como esta el negocio (3-6 frases en total)\",',\n  '  \"top_actions\": [',\n  '    { \"action\": \"que hacer\", \"why\": \"por que importa hoy\", \"when\": \"cuando\", \"impact\": \"alto|medio|bajo\" }',\n  \"  ],\",\n  '  \"watch_outs\": [\"riesgo 1\", \"riesgo 2\"],',\n  '  \"opportunities\": [\"oportunidad 1\", \"oportunidad 2\"],',\n  '  \"mood\": \"positivo|neutro|tenso|alerta\"',\n  \"}\",\n  \"\",\n  \"REGLAS:\",\n  \"- Maximo 4 top_actions. Si hay menos, devuelve menos.\",\n  \"- Maximo 3 watch_outs y 3 opportunities.\",\n  \"- No inventes datos. Si el contexto no menciona algo, no lo afirmes.\",\n  \"- Si no hay tareas urgentes y no hay alertas, dilo con naturalidad (no fuerces drama).\",\n  \"- Refierete al negocio por su nombre cuando ayude.\",\n  \"\",\n  \"CONTEXTO DEL NEGOCIO Y DEL DIA:\",\n  JSON.stringify(ctx, null, 2)\n].join(\"\\n\");\n\nconst body = {\n  model: \"claude-haiku-4-5-20251001\",\n  max_tokens: 1024,\n  system: systemPrompt,\n  messages: [\n    { role: \"user\", content: userPrompt }\n  ]\n};\n\nreturn [{\n  json: {\n    _anthropic_body: body,\n    _original_payload: payload\n  }\n}];"
-      },
-      "id": "claude-build-prompt-001",
-      "name": "Build Claude Prompt",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1804,
-        96
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.anthropic.com/v1/messages",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "content-type",
-              "value": "application/json"
-            },
-            {
-              "name": "anthropic-version",
-              "value": "2023-06-01"
-            },
-            {
-              "name": "x-api-key",
-              "value": "={{ $vars.ANTHROPIC_API_KEY || $env.ANTHROPIC_API_KEY }}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json._anthropic_body) }}",
-        "options": {
-          "response": {
-            "response": {
-              "responseFormat": "json"
-            }
-          },
-          "timeout": 30000
-        }
-      },
-      "id": "claude-generate-briefing-001",
-      "name": "Generate AI Briefing",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        2024,
-        96
-      ],
-      "continueOnFail": true
-    },
-    {
-      "parameters": {
-        "jsCode": "// Merge Claude's JSON response back into the original payload from\n// Run User Modules. Adds new fields, never overwrites existing ones, so the\n// Next.js frontend keeps working untouched.\n\nconst claudeResp = $json;\n// The Build Claude Prompt node stashed the original payload here. After the\n// HTTP node it's still on $json because we kept it on the same item.\nconst original = $('Build Claude Prompt').item.json._original_payload;\n\nlet ai = null;\nlet aiError = null;\n\ntry {\n  // Anthropic returns { content: [{ type: 'text', text: '...' }], ... }\n  const textBlock = (claudeResp.content || []).find(c => c.type === 'text');\n  const raw = textBlock ? textBlock.text : '';\n\n  // Defensive: strip code fences if Claude wrapped JSON in markdown.\n  const cleaned = raw.trim()\n    .replace(/^```(?:json)?\\s*/i, '')\n    .replace(/\\s*```\\s*$/i, '');\n\n  ai = JSON.parse(cleaned);\n} catch (err) {\n  aiError = String(err && err.message || err);\n}\n\nconst out = { ...original };\nout.daily_summary = { ...(original.daily_summary || {}) };\n\nif (ai) {\n  out.daily_summary.ai_briefing = {\n    headline: ai.headline || null,\n    narrative: ai.narrative || null,\n    top_actions: Array.isArray(ai.top_actions) ? ai.top_actions : [],\n    watch_outs: Array.isArray(ai.watch_outs) ? ai.watch_outs : [],\n    opportunities: Array.isArray(ai.opportunities) ? ai.opportunities : [],\n    mood: ai.mood || null,\n    model: 'claude-haiku-4-5-20251001',\n    generated_at: new Date().toISOString(),\n  };\n  // Convenience top-level mirrors so the frontend doesn't have to dig.\n  out.daily_summary.ai_headline = ai.headline || null;\n  out.daily_summary.ai_top_actions = Array.isArray(ai.top_actions) ? ai.top_actions : [];\n} else {\n  out.daily_summary.ai_briefing = {\n    error: aiError || 'no_response',\n    model: 'claude-haiku-4-5-20251001',\n    generated_at: new Date().toISOString(),\n  };\n}\n\nreturn [{ json: out }];"
-      },
-      "id": "claude-merge-briefing-001",
-      "name": "Merge AI Briefing",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2244,
-        96
-      ]
     }
   ],
   "pinData": {},
@@ -519,7 +450,7 @@
       "main": [
         [
           {
-            "node": "Build Claude Prompt",
+            "node": "Send to ENLAZE",
             "type": "main",
             "index": 0
           }
@@ -575,39 +506,6 @@
         [
           {
             "node": "POST to ENLAZE Webhook (Luz)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Build Claude Prompt": {
-      "main": [
-        [
-          {
-            "node": "Generate AI Briefing",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Generate AI Briefing": {
-      "main": [
-        [
-          {
-            "node": "Merge AI Briefing",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Merge AI Briefing": {
-      "main": [
-        [
-          {
-            "node": "Send to ENLAZE",
             "type": "main",
             "index": 0
           }
