@@ -120,7 +120,9 @@ function WizardContent() {
       total: state.totals.clientPrice * (1 + state.ivaPercent / 100),
     };
 
-    const itemsMock: any[] = state.partidas.filter(p => p.status !== "opcional").map(p => ({
+    const marginMultiplier = 1 + (state.marginPercent / 100);
+
+    const partidasMock: any[] = state.partidas.filter(p => p.status !== "opcional").map(p => ({
       concept: p.concept,
       description: p.description,
       category: p.category,
@@ -130,6 +132,19 @@ function WizardContent() {
       subtotal: p.subtotal_client,
       subtotal_cost: p.subtotal_cost
     }));
+
+    const materialsMock: any[] = state.materials.filter(m => m.included).map(m => ({
+      concept: m.name,
+      description: "Material sugerido",
+      category: "material",
+      quantity: m.quantity,
+      unit: m.unit,
+      unit_price: m.unit_price * marginMultiplier,
+      subtotal: m.subtotal * marginMultiplier,
+      subtotal_cost: m.unit_price * m.quantity // El coste base sin margen
+    }));
+
+    const itemsMock = [...partidasMock, ...materialsMock];
 
     const html = generateBudgetPDFHTML(budgetMock, itemsMock, mode);
     printPDF(html);
@@ -189,14 +204,20 @@ function WizardContent() {
       <div className="flex justify-between items-center mb-6">
         <GenerateStepper steps={steps} />
         
-        <div className="hidden sm:flex gap-2">
+        <div className={`hidden sm:flex gap-3 items-center ${isFinalizing ? 'opacity-50 pointer-events-none' : ''}`}>
+          {state.lastSavedAt && (
+            <span className="text-xs text-navy-400 dark:text-zinc-500 font-medium">
+              Guardado a las {state.lastSavedAt}
+            </span>
+          )}
           <Button variant="secondary" onClick={() => saveDraft(true)} disabled={!state.draftId && state.currentStep === 0}>
             Guardar borrador
           </Button>
           <Button 
             className="bg-brand-green hover:bg-brand-green/90 text-navy-900 font-bold border-0 shadow-md"
             onClick={handleFinalize}
-            disabled={isFinalizing || state.partidas.length === 0}
+            disabled={isFinalizing || state.partidas.length === 0 || !state.title || !state.clientId || !state.projectId}
+            title={(!state.title || !state.clientId || !state.projectId) ? "Completa el título, cliente y obra en el Paso 1" : ""}
           >
             {isFinalizing ? "Finalizando..." : "Finalizar presupuesto"}
           </Button>

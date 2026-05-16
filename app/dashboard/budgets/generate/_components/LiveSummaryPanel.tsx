@@ -4,7 +4,7 @@ import React from "react";
 import { useBudgetGenerate } from "./BudgetGenerateProvider";
 
 export function LiveSummaryPanel() {
-  const { state } = useBudgetGenerate();
+  const { state, nextStep } = useBudgetGenerate();
   const { totals, marginPercent, sector, providerOptions, selectedProviderId, materials, isRealDataMode } = state;
   const isConstruction = sector === "construccion";
 
@@ -116,7 +116,10 @@ export function LiveSummaryPanel() {
       </div>
       
       <div className="mt-6 flex flex-col gap-2">
-        <button className="w-full py-3 bg-brand-green text-navy-900 font-bold rounded-xl hover:opacity-90 transition">
+        <button 
+          className="w-full py-3 bg-brand-green text-navy-900 font-bold rounded-xl hover:opacity-90 transition"
+          onClick={nextStep}
+        >
           Siguiente paso
         </button>
         <button className="w-full py-2 bg-transparent text-navy-600 dark:text-zinc-400 font-medium hover:text-navy-900 dark:hover:text-white transition text-sm">

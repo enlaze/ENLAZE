@@ -46,14 +46,22 @@ export interface Material {
 
 export interface BudgetState {
   draftId: string | null;
+  lastSavedAt: string | null;
   currentStep: number;
   sector: string;
   // Common Data
+  title: string;
   clientId: string;
   projectId: string;
+  serviceType: string;
+  startDate: string | null;
+  endDate: string | null;
   description: string;
   ivaPercent: number;
   marginPercent: number;
+  
+  validationError: string | null;
+  
   // Dynamic Sector Data
   sectorData: Record<string, any>;
   // Partidas
@@ -104,13 +112,20 @@ export function BudgetGenerateProvider({
   const toast = useToast();
   const [state, setState] = useState<BudgetState>({
     draftId: null,
+    lastSavedAt: null,
     currentStep: 0,
     sector: normalizeSector(initialSector),
+    title: "",
     clientId: "",
     projectId: "",
+    serviceType: "",
+    startDate: null,
+    endDate: null,
     description: "",
     ivaPercent: 21,
     marginPercent: 20,
+    validationError: null,
+    
     sectorData: {},
     partidas: [
       {
@@ -166,8 +181,6 @@ export function BudgetGenerateProvider({
 
   // HYDRATE WITH REAL DATA (Fase 4.1)
   useEffect(() => {
-    if (state.sector !== "construccion") return;
-
     let mounted = true;
     const fetchRealData = async () => {
       try {
@@ -175,11 +188,13 @@ export function BudgetGenerateProvider({
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
+        const activeSector = state.sector || "construccion";
+
         const { data, error } = await supabase
           .from("price_items")
           .select("id, name, unit, unit_price, supplier_name")
           .eq("user_id", user.id)
-          .eq("sector", "construccion")
+          .eq("sector", activeSector)
           .eq("category", "material")
           .eq("is_active", true)
           .limit(30); // Limitar para el subconjunto sugerido inicial
@@ -192,9 +207,11 @@ export function BudgetGenerateProvider({
         function normalizeSupplierName(name: string | null | undefined): string {
           if (!name || name.trim() === "") return "Proveedor Genérico";
           const upper = name.trim().toUpperCase();
-          if (upper.includes("LEROY")) return "Leroy Merlin";
-          if (upper.includes("OBRAMAT") || upper.includes("BRICOMART")) return "Obramat";
-          if (upper.includes("SALTOKI")) return "Saltoki";
+          if (activeSector === "construccion") {
+            if (upper.includes("LEROY")) return "Leroy Merlin";
+            if (upper.includes("OBRAMAT") || upper.includes("BRICOMART")) return "Obramat";
+            if (upper.includes("SALTOKI")) return "Saltoki";
+          }
           return name.trim();
         }
 
@@ -426,7 +443,10 @@ export function BudgetGenerateProvider({
         const { data, error } = await supabase.from("budgets").insert({
           user_id: user.id,
           status: "borrador",
-          title: "Borrador de Presupuesto (Wizard)",
+          title: state.title || "Borrador de Presupuesto (Wizard)",
+          client_id: state.clientId || null,
+          project_id: state.projectId || null,
+          service_type: state.serviceType || state.sector || "general",
           subtotal: state.totals.directCost,
           iva_percent: state.ivaPercent,
           iva_amount: state.totals.directCost * (state.ivaPercent / 100),
@@ -436,10 +456,18 @@ export function BudgetGenerateProvider({
 
         if (error) throw error;
         draftId = data.id;
-        setState(prev => ({ ...prev, draftId }));
+        setState(prev => ({ 
+          ...prev, 
+          draftId,
+          lastSavedAt: new Date().toLocaleTimeString("es-ES", { hour: '2-digit', minute: '2-digit' })
+        }));
       } else {
         // Update existing draft
         const { error } = await supabase.from("budgets").update({
+          title: state.title || "Borrador de Presupuesto (Wizard)",
+          client_id: state.clientId || null,
+          project_id: state.projectId || null,
+          service_type: state.serviceType || state.sector || "general",
           subtotal: state.totals.directCost,
           iva_amount: state.totals.directCost * (state.ivaPercent / 100),
           total: state.totals.directCost * (1 + state.ivaPercent / 100),
@@ -448,6 +476,11 @@ export function BudgetGenerateProvider({
         }).eq("id", draftId);
 
         if (error) throw error;
+        
+        setState(prev => ({ 
+          ...prev, 
+          lastSavedAt: new Date().toLocaleTimeString("es-ES", { hour: '2-digit', minute: '2-digit' })
+        }));
       }
 
       if (manual) {
@@ -473,8 +506,10 @@ export function BudgetGenerateProvider({
       // 2. Limpiar items antiguos si hubiera (por si era un presupuesto que se volvió a abrir)
       await supabase.from("budget_items").delete().eq("budget_id", budgetId);
 
-      // 3. Insertar las partidas reales
-      const itemsToInsert = state.partidas.filter(p => p.status !== "opcional").map(p => ({
+      // 3. Insertar las partidas reales + materiales
+      const marginMultiplier = 1 + (state.marginPercent / 100);
+
+      const partidasToInsert = state.partidas.filter(p => p.status !== "opcional").map(p => ({
         budget_id: budgetId,
         concept: p.concept,
         description: p.description,
@@ -485,6 +520,19 @@ export function BudgetGenerateProvider({
         subtotal: p.subtotal_client
       }));
 
+      const materialsToInsert = state.materials.filter(m => m.included).map(m => ({
+        budget_id: budgetId,
+        concept: m.name,
+        description: "Material sugerido",
+        quantity: m.quantity,
+        unit: m.unit,
+        category: "material",
+        unit_price: m.unit_price * marginMultiplier,
+        subtotal: m.subtotal * marginMultiplier
+      }));
+
+      const itemsToInsert = [...partidasToInsert, ...materialsToInsert];
+
       if (itemsToInsert.length > 0) {
         const { error: itemsErr } = await supabase.from("budget_items").insert(itemsToInsert);
         if (itemsErr) throw itemsErr;
@@ -494,6 +542,10 @@ export function BudgetGenerateProvider({
       const { error: upErr } = await supabase.from("budgets").update({
         status: "pendiente",
         version: nextVer,
+        title: state.title || "Borrador de Presupuesto (Wizard)",
+        client_id: state.clientId || null,
+        project_id: state.projectId || null,
+        service_type: state.serviceType || state.sector || "general",
         updated_at: new Date().toISOString()
       }).eq("id", budgetId);
       if (upErr) throw upErr;
@@ -555,12 +607,39 @@ export function BudgetGenerateProvider({
     };
   }, [state]);
 
+  const validateStep = (stepIndex: number): boolean => {
+    if (stepIndex === 0) {
+      if (!state.title) {
+        setState(prev => ({ ...prev, validationError: "Falta el título del presupuesto." }));
+        return false;
+      }
+      if (!state.clientId) {
+        setState(prev => ({ ...prev, validationError: "Debes seleccionar un cliente." }));
+        return false;
+      }
+      if (!state.projectId) {
+        setState(prev => ({ ...prev, validationError: "Selecciona una obra/proyecto o crea una nueva para continuar." }));
+        return false;
+      }
+    }
+    setState(prev => ({ ...prev, validationError: null }));
+    return true;
+  };
+
   const nextStep = () => {
-    setState(prev => ({ ...prev, currentStep: prev.currentStep + 1 }));
+    if (!validateStep(state.currentStep)) return;
+    setState(prev => ({ ...prev, currentStep: prev.currentStep + 1, validationError: null }));
     saveDraft(false); // Force save on step change
   };
-  const prevStep = () => setState(prev => ({ ...prev, currentStep: Math.max(0, prev.currentStep - 1) }));
-  const goToStep = (step: number) => setState(prev => ({ ...prev, currentStep: step }));
+  const prevStep = () => setState(prev => ({ ...prev, currentStep: Math.max(0, prev.currentStep - 1), validationError: null }));
+  const goToStep = (step: number) => {
+    if (step > state.currentStep) {
+      for (let i = state.currentStep; i < step; i++) {
+        if (!validateStep(i)) return;
+      }
+    }
+    setState(prev => ({ ...prev, currentStep: step, validationError: null }));
+  };
 
   return (
     <BudgetContext.Provider value={{ 
