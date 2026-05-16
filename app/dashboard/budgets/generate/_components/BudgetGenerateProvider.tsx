@@ -46,6 +46,7 @@ export interface Material {
 
 export interface BudgetState {
   draftId: string | null;
+  lastSavedAt: string | null;
   currentStep: number;
   sector: string;
   // Common Data
@@ -104,6 +105,7 @@ export function BudgetGenerateProvider({
   const toast = useToast();
   const [state, setState] = useState<BudgetState>({
     draftId: null,
+    lastSavedAt: null,
     currentStep: 0,
     sector: normalizeSector(initialSector),
     clientId: "",
@@ -436,7 +438,11 @@ export function BudgetGenerateProvider({
 
         if (error) throw error;
         draftId = data.id;
-        setState(prev => ({ ...prev, draftId }));
+        setState(prev => ({ 
+          ...prev, 
+          draftId,
+          lastSavedAt: new Date().toLocaleTimeString("es-ES", { hour: '2-digit', minute: '2-digit' })
+        }));
       } else {
         // Update existing draft
         const { error } = await supabase.from("budgets").update({
@@ -448,6 +454,11 @@ export function BudgetGenerateProvider({
         }).eq("id", draftId);
 
         if (error) throw error;
+        
+        setState(prev => ({ 
+          ...prev, 
+          lastSavedAt: new Date().toLocaleTimeString("es-ES", { hour: '2-digit', minute: '2-digit' })
+        }));
       }
 
       if (manual) {
@@ -473,8 +484,10 @@ export function BudgetGenerateProvider({
       // 2. Limpiar items antiguos si hubiera (por si era un presupuesto que se volvió a abrir)
       await supabase.from("budget_items").delete().eq("budget_id", budgetId);
 
-      // 3. Insertar las partidas reales
-      const itemsToInsert = state.partidas.filter(p => p.status !== "opcional").map(p => ({
+      // 3. Insertar las partidas reales + materiales
+      const marginMultiplier = 1 + (state.marginPercent / 100);
+
+      const partidasToInsert = state.partidas.filter(p => p.status !== "opcional").map(p => ({
         budget_id: budgetId,
         concept: p.concept,
         description: p.description,
@@ -484,6 +497,19 @@ export function BudgetGenerateProvider({
         unit_price: p.unit_price_client,
         subtotal: p.subtotal_client
       }));
+
+      const materialsToInsert = state.materials.filter(m => m.included).map(m => ({
+        budget_id: budgetId,
+        concept: m.name,
+        description: "Material sugerido",
+        quantity: m.quantity,
+        unit: m.unit,
+        category: "material",
+        unit_price: m.unit_price * marginMultiplier,
+        subtotal: m.subtotal * marginMultiplier
+      }));
+
+      const itemsToInsert = [...partidasToInsert, ...materialsToInsert];
 
       if (itemsToInsert.length > 0) {
         const { error: itemsErr } = await supabase.from("budget_items").insert(itemsToInsert);
