@@ -176,8 +176,6 @@ export function BudgetGenerateProvider({
 
   // HYDRATE WITH REAL DATA (Fase 4.1)
   useEffect(() => {
-    if (state.sector !== "construccion") return;
-
     let mounted = true;
     const fetchRealData = async () => {
       try {
@@ -185,11 +183,13 @@ export function BudgetGenerateProvider({
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
+        const activeSector = state.sector || "construccion";
+
         const { data, error } = await supabase
           .from("price_items")
           .select("id, name, unit, unit_price, supplier_name")
           .eq("user_id", user.id)
-          .eq("sector", "construccion")
+          .eq("sector", activeSector)
           .eq("category", "material")
           .eq("is_active", true)
           .limit(30); // Limitar para el subconjunto sugerido inicial
@@ -202,9 +202,11 @@ export function BudgetGenerateProvider({
         function normalizeSupplierName(name: string | null | undefined): string {
           if (!name || name.trim() === "") return "Proveedor Genérico";
           const upper = name.trim().toUpperCase();
-          if (upper.includes("LEROY")) return "Leroy Merlin";
-          if (upper.includes("OBRAMAT") || upper.includes("BRICOMART")) return "Obramat";
-          if (upper.includes("SALTOKI")) return "Saltoki";
+          if (activeSector === "construccion") {
+            if (upper.includes("LEROY")) return "Leroy Merlin";
+            if (upper.includes("OBRAMAT") || upper.includes("BRICOMART")) return "Obramat";
+            if (upper.includes("SALTOKI")) return "Saltoki";
+          }
           return name.trim();
         }
 
