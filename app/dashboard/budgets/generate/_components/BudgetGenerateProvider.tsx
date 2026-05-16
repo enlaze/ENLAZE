@@ -50,8 +50,12 @@ export interface BudgetState {
   currentStep: number;
   sector: string;
   // Common Data
+  title: string;
   clientId: string;
   projectId: string;
+  serviceType: string;
+  startDate: string | null;
+  endDate: string | null;
   description: string;
   ivaPercent: number;
   marginPercent: number;
@@ -108,8 +112,12 @@ export function BudgetGenerateProvider({
     lastSavedAt: null,
     currentStep: 0,
     sector: normalizeSector(initialSector),
+    title: "",
     clientId: "",
     projectId: "",
+    serviceType: "",
+    startDate: null,
+    endDate: null,
     description: "",
     ivaPercent: 21,
     marginPercent: 20,
@@ -428,7 +436,10 @@ export function BudgetGenerateProvider({
         const { data, error } = await supabase.from("budgets").insert({
           user_id: user.id,
           status: "borrador",
-          title: "Borrador de Presupuesto (Wizard)",
+          title: state.title || "Borrador de Presupuesto (Wizard)",
+          client_id: state.clientId || null,
+          project_id: state.projectId || null,
+          service_type: state.serviceType || state.sector || "general",
           subtotal: state.totals.directCost,
           iva_percent: state.ivaPercent,
           iva_amount: state.totals.directCost * (state.ivaPercent / 100),
@@ -446,6 +457,10 @@ export function BudgetGenerateProvider({
       } else {
         // Update existing draft
         const { error } = await supabase.from("budgets").update({
+          title: state.title || "Borrador de Presupuesto (Wizard)",
+          client_id: state.clientId || null,
+          project_id: state.projectId || null,
+          service_type: state.serviceType || state.sector || "general",
           subtotal: state.totals.directCost,
           iva_amount: state.totals.directCost * (state.ivaPercent / 100),
           total: state.totals.directCost * (1 + state.ivaPercent / 100),
@@ -520,6 +535,10 @@ export function BudgetGenerateProvider({
       const { error: upErr } = await supabase.from("budgets").update({
         status: "pendiente",
         version: nextVer,
+        title: state.title || "Borrador de Presupuesto (Wizard)",
+        client_id: state.clientId || null,
+        project_id: state.projectId || null,
+        service_type: state.serviceType || state.sector || "general",
         updated_at: new Date().toISOString()
       }).eq("id", budgetId);
       if (upErr) throw upErr;

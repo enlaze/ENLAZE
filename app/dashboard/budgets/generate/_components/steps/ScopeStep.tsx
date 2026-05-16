@@ -1,11 +1,66 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useBudgetGenerate } from "../BudgetGenerateProvider";
 import { Card } from "@/components/ui/card";
+import { createClient } from "@/lib/supabase-browser";
+import { useSector } from "@/lib/sector-context";
+
+interface ClientOption {
+  id: string;
+  name: string;
+}
+
+interface ProjectOption {
+  id: string;
+  name: string;
+  client_id: string | null;
+}
+
+const inputCls =
+  "w-full bg-white text-navy-900 rounded-lg px-4 py-2.5 border border-navy-200 focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 focus:outline-none dark:bg-zinc-900 dark:text-white dark:border-zinc-700 text-sm";
+const labelCls = "block text-sm font-medium text-navy-700 dark:text-zinc-300 mb-1";
 
 export function ScopeStep() {
   const { state, updateState } = useBudgetGenerate();
+  const { serviceTypes } = useSector();
+  const supabase = createClient();
+  
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadData() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const [clientsRes, projectsRes] = await Promise.all([
+        supabase.from("clients").select("id, name").eq("user_id", user.id).order("name"),
+        supabase.from("projects").select("id, name, client_id").eq("user_id", user.id).order("name")
+      ]);
+      
+      if (clientsRes.data) setClients(clientsRes.data);
+      if (projectsRes.data) setProjects(projectsRes.data);
+      setLoading(false);
+    }
+    loadData();
+  }, []);
+
+  // Filter projects by selected client if any
+  const visibleProjects = state.clientId 
+    ? projects.filter(p => p.client_id === state.clientId)
+    : projects;
+
+  // Auto-clear project if client changes and project doesn't belong to client
+  useEffect(() => {
+    if (state.clientId && state.projectId) {
+      const projectStillValid = projects.some(p => p.id === state.projectId && p.client_id === state.clientId);
+      if (!projectStillValid) {
+        updateState({ projectId: "" });
+      }
+    }
+  }, [state.clientId, state.projectId, projects]);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -15,9 +70,80 @@ export function ScopeStep() {
           Define el tipo de proyecto y el nivel de calidad deseado. La IA utilizará esto para sugerir partidas y materiales.
         </p>
         
-        <div className="space-y-4">
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="md:col-span-2">
+              <label className={labelCls}>Título del presupuesto <span className="text-red-500">*</span></label>
+              <input
+                type="text"
+                value={state.title || ""}
+                onChange={(e) => updateState({ title: e.target.value })}
+                placeholder="Ej: Reforma baño completo"
+                className={inputCls}
+                required
+              />
+            </div>
+            
+            <div>
+              <label className={labelCls}>Cliente asociado</label>
+              <select 
+                value={state.clientId || ""} 
+                onChange={(e) => updateState({ clientId: e.target.value })} 
+                className={inputCls}
+                disabled={loading}
+              >
+                <option value="">Sin asignar</option>
+                {clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
+              </select>
+            </div>
+            
+            <div>
+              <label className={labelCls}>Obra/Proyecto asociado</label>
+              <select 
+                value={state.projectId || ""} 
+                onChange={(e) => updateState({ projectId: e.target.value })} 
+                className={inputCls}
+                disabled={loading}
+              >
+                <option value="">Sin asignar</option>
+                {visibleProjects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className={labelCls}>Tipo de obra</label>
+              <select 
+                value={state.serviceType || state.sector || ""} 
+                onChange={(e) => updateState({ serviceType: e.target.value })} 
+                className={inputCls}
+              >
+                {(() => {
+                  const sTypes = serviceTypes();
+                  const fallbackServiceTypes = [
+                    { value: "reforma", label: "Reforma integral" },
+                    { value: "fontaneria", label: "Fontanería" },
+                    { value: "electricidad", label: "Electricidad" },
+                    { value: "general", label: "General" },
+                  ];
+                  const activeServiceTypes = sTypes.length > 0 ? sTypes : fallbackServiceTypes;
+                  return activeServiceTypes.map((s) => <option key={s.value} value={s.value}>{s.label}</option>);
+                })()}
+              </select>
+            </div>
+            
+            <div>
+              <label className={labelCls}>Fecha prevista de inicio</label>
+              <input 
+                type="date" 
+                value={state.startDate || ""} 
+                onChange={(e) => updateState({ startDate: e.target.value })} 
+                className={inputCls} 
+              />
+            </div>
+          </div>
+
           <div>
-            <label className="block text-sm font-medium text-navy-700 dark:text-zinc-300 mb-1">Descripción general</label>
+            <label className={labelCls}>Descripción general para la IA</label>
             <textarea 
               className="w-full bg-white dark:bg-zinc-900 border border-navy-200 dark:border-zinc-700 rounded-lg p-3 text-sm focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green outline-none min-h-[100px]"
               placeholder="Ej: Reforma integral de piso de 80m2 con cambio de distribución..."

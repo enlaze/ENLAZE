@@ -216,7 +216,8 @@ function WizardContent() {
           <Button 
             className="bg-brand-green hover:bg-brand-green/90 text-navy-900 font-bold border-0 shadow-md"
             onClick={handleFinalize}
-            disabled={isFinalizing || state.partidas.length === 0}
+            disabled={isFinalizing || state.partidas.length === 0 || !state.title || !state.clientId || !state.projectId}
+            title={(!state.title || !state.clientId || !state.projectId) ? "Completa el título, cliente y obra en el Paso 1" : ""}
           >
             {isFinalizing ? "Finalizando..." : "Finalizar presupuesto"}
           </Button>
