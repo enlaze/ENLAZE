@@ -33,7 +33,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.ENLAZE_BASE_URL || 'http://localhost:3000' }}/api/agent/users?sector=comercio_local",
+        "url": "http://localhost:3000/api/agent/users?sector=comercio_local",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {
@@ -54,7 +54,7 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "ENLAZE_API_CREDENTIAL",
+          "id": "CZm0WYP8vSEW6Asn",
           "name": "ENLAZE Agent API Key"
         }
       }
@@ -107,7 +107,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.ENLAZE_BASE_URL || 'http://localhost:3000' }}/api/agent/config",
+        "url": "http://localhost:3000/api/agent/config",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -137,7 +137,7 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "ENLAZE_API_CREDENTIAL",
+          "id": "CZm0WYP8vSEW6Asn",
           "name": "ENLAZE Agent API Key"
         }
       }
@@ -155,7 +155,7 @@
             {
               "id": "a2",
               "name": "_auth_base_url",
-              "value": "={{ $vars.ENLAZE_BASE_URL || $env.ENLAZE_BASE_URL || 'http://localhost:3000' }}",
+              "value": "http://localhost:3000",
               "type": "string"
             }
           ]
@@ -188,7 +188,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $json._auth_base_url }}/api/agent/ingest",
+        "url": "http://localhost:3000/api/agent/ingest",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -221,7 +221,7 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "ENLAZE_API_CREDENTIAL",
+          "id": "CZm0WYP8vSEW6Asn",
           "name": "ENLAZE Agent API Key"
         }
       }
@@ -251,7 +251,11 @@
       "position": [
         272,
         352
-      ]
+      ],
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
     },
     {
       "parameters": {
@@ -269,10 +273,10 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.ENLAZE_BASE_URL || 'http://localhost:3000' }}/api/webhooks/comercio-local",
+        "url": "http://localhost:3000/api/webhooks/comercio-local",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "{\n  \"action\": \"update_prices\",\n  \"sector\": \"comercio_local\",\n  \"data\": {\n    \"prices\": {{$json.prices}}\n  }\n}",
+        "jsonBody": "={{ JSON.stringify({ action: 'update_prices', sector: 'comercio_local', data: { prices: $json.prices } }) }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {}
@@ -287,7 +291,7 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "ENLAZE_API_CREDENTIAL",
+          "id": "CZm0WYP8vSEW6Asn",
           "name": "ENLAZE Agent API Key"
         }
       }
@@ -295,7 +299,27 @@
     {
       "parameters": {
         "url": "https://api.preciodelaluz.org/v1/prices/avg?zone=PCB",
-        "options": {}
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "ENLAZE-Agent/6.3 (n8n)"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        }
       },
       "id": "e8a1b2c3-elec-4321-8888-abcdef123456",
       "name": "Fetch Precio Luz (España)",
@@ -304,7 +328,11 @@
       "position": [
         272,
         550
-      ]
+      ],
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
     },
     {
       "parameters": {
@@ -322,10 +350,10 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.ENLAZE_BASE_URL || 'http://localhost:3000' }}/api/webhooks/comercio-local",
+        "url": "http://localhost:3000/api/webhooks/comercio-local",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "{\n  \"action\": \"update_prices\",\n  \"sector\": \"comercio_local\",\n  \"data\": {\n    \"prices\": {{$json.prices}}\n  }\n}",
+        "jsonBody": "={{ JSON.stringify({ action: 'update_prices', sector: 'comercio_local', data: { prices: $json.prices } }) }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {}
@@ -340,14 +368,14 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "ENLAZE_API_CREDENTIAL",
+          "id": "CZm0WYP8vSEW6Asn",
           "name": "ENLAZE Agent API Key"
         }
       }
     },
     {
       "parameters": {
-        "jsCode": "// Build the request body for Anthropic's /v1/messages with Haiku 4.5.\n// Keeps the full payload from Run User Modules in `_original_payload` so the\n// next node can merge the AI response without losing any field.\n\nconst payload = $json;\nconst config = {\n  business_name: payload.business_name,\n  business_type: payload.business_type,\n  city: payload.city,\n  sector: payload.sector,\n};\n\n// Extract only the bits Claude needs. No dumping the whole 100KB payload.\nconst ctx = {\n  config,\n  date: payload.timestamp ? payload.timestamp.split('T')[0] : new Date().toISOString().split('T')[0],\n  mechanical_summary: payload.daily_summary || {},\n  high_priority_tasks: (payload.tasks?.items || []).filter(t => t.priority === 'high').slice(0, 8),\n  medium_priority_tasks: (payload.tasks?.items || []).filter(t => t.priority === 'medium').slice(0, 5),\n  cost_alerts: (payload.cost_monitor?.alerts || []).slice(0, 6),\n  competitive_signals: (payload.competitive?.signals || []).slice(0, 6),\n  radar_news: (payload.radar?.news || []).slice(0, 6).map(n => ({ title: n.title, source: n.source, summary: n.summary || n.desc })),\n  radar_subsidies: (payload.radar?.subsidies || []).slice(0, 5),\n  radar_regulations: (payload.radar?.regulations || []).slice(0, 5),\n  reputation_urgent: (payload.reputation?.reviews?.urgent || []).slice(0, 4),\n  inbox_awaiting_reply: (payload.inbox?.awaiting_reply || []).slice(0, 4),\n  market_indicators: payload.market || {},\n  recommendations: (payload.recommendations || []).slice(0, 5),\n};\n\nconst systemPrompt = [\n  \"Eres el analista de negocio de ENLAZE, una plataforma de automatizacion para comercio local en Espana.\",\n  \"Generas un briefing diario en castellano para el duenio de un pequenio negocio.\",\n  \"Tono: claro, directo, accionable. Nada de relleno, nada de marketing.\",\n  \"Hablas de tu a tu, sin formalismos. Castellano peninsular.\",\n  \"Devuelves SIEMPRE un JSON valido que cumpla exactamente el esquema indicado, sin texto antes ni despues.\"\n].join(\" \");\n\nconst userPrompt = [\n  \"Genera el briefing diario para este negocio basandote en el contexto proporcionado.\",\n  \"\",\n  \"ESQUEMA DE SALIDA (JSON estricto, sin markdown, sin comentarios):\",\n  \"{\",\n  '  \"headline\": \"una frase de maximo 18 palabras que resuma el dia\",',\n  '  \"narrative\": \"2 o 3 parrafos cortos de prosa explicando que pasa hoy, por que importa y como esta el negocio (3-6 frases en total)\",',\n  '  \"top_actions\": [',\n  '    { \"action\": \"que hacer\", \"why\": \"por que importa hoy\", \"when\": \"cuando\", \"impact\": \"alto|medio|bajo\" }',\n  \"  ],\",\n  '  \"watch_outs\": [\"riesgo 1\", \"riesgo 2\"],',\n  '  \"opportunities\": [\"oportunidad 1\", \"oportunidad 2\"],',\n  '  \"mood\": \"positivo|neutro|tenso|alerta\"',\n  \"}\",\n  \"\",\n  \"REGLAS:\",\n  \"- Maximo 4 top_actions. Si hay menos, devuelve menos.\",\n  \"- Maximo 3 watch_outs y 3 opportunities.\",\n  \"- No inventes datos. Si el contexto no menciona algo, no lo afirmes.\",\n  \"- Si no hay tareas urgentes y no hay alertas, dilo con naturalidad (no fuerces drama).\",\n  \"- Refierete al negocio por su nombre cuando ayude.\",\n  \"\",\n  \"CONTEXTO DEL NEGOCIO Y DEL DIA:\",\n  JSON.stringify(ctx, null, 2)\n].join(\"\\n\");\n\nconst body = {\n  model: \"claude-haiku-4-5-20251001\",\n  max_tokens: 1024,\n  system: systemPrompt,\n  messages: [\n    { role: \"user\", content: userPrompt }\n  ]\n};\n\nreturn [{\n  json: {\n    _anthropic_body: body,\n    _original_payload: payload\n  }\n}];"
+        "jsCode": "// Build the request body for Anthropic's /v1/messages with Haiku 4.5.\n// Keeps the full payload from Run User Modules in `_original_payload` so the\n// next node can merge the AI response without losing any field.\n\nconst payload = $json;\nconst config = {\n  business_name: payload.business_name,\n  business_type: payload.business_type,\n  city: payload.city,\n  sector: payload.sector,\n};\n\n// Extract only the bits Claude needs. No dumping the whole 100KB payload.\nconst ctx = {\n  config,\n  date: payload.timestamp ? payload.timestamp.split('T')[0] : new Date().toISOString().split('T')[0],\n  mechanical_summary: payload.daily_summary || {},\n  high_priority_tasks: (payload.tasks?.items || []).filter(t => t.priority === 'high').slice(0, 8),\n  medium_priority_tasks: (payload.tasks?.items || []).filter(t => t.priority === 'medium').slice(0, 5),\n  cost_alerts: (payload.cost_monitor?.alerts || []).slice(0, 6),\n  competitive_signals: (payload.competitive?.signals || []).slice(0, 6),\n  radar_news: (payload.radar?.news || []).slice(0, 6).map(n => ({ title: n.title, source: n.source, summary: n.summary || n.desc })),\n  radar_subsidies: (payload.radar?.subsidies || []).slice(0, 5),\n  radar_regulations: (payload.radar?.regulations || []).slice(0, 5),\n  reputation_urgent: (payload.reputation?.reviews?.urgent || []).slice(0, 4),\n  inbox_awaiting_reply: (payload.inbox?.awaiting_reply || []).slice(0, 4),\n  market_indicators: payload.market || {},\n  recommendations: (payload.recommendations || []).slice(0, 5),\n};\n\nconst systemPrompt = [\n  \"Eres el analista de negocio de ENLAZE, una plataforma de automatizacion para comercio local en Espana.\",\n  \"Generas un briefing diario en castellano para el duenio de un pequenio negocio.\",\n  \"Tono: claro, directo, accionable. Nada de relleno, nada de marketing.\",\n  \"Hablas de tu a tu, sin formalismos. Castellano peninsular.\",\n  \"Devuelves SIEMPRE un JSON valido que cumpla exactamente el esquema indicado, sin texto antes ni despues.\"\n].join(\" \");\n\nconst userPrompt = [\n  \"Genera el briefing diario para este negocio basandote en el contexto proporcionado.\",\n  \"\",\n  \"ESQUEMA DE SALIDA (JSON estricto, sin markdown, sin comentarios):\",\n  \"{\",\n  '  \"headline\": \"una frase de maximo 18 palabras que resuma el dia\",',\n  '  \"narrative\": \"2 o 3 parrafos cortos de prosa explicando que pasa hoy, por que importa y como esta el negocio (3-6 frases en total)\",',\n  '  \"top_actions\": [',\n  '    { \"action\": \"que hacer\", \"why\": \"por que importa hoy\", \"when\": \"cuando\", \"impact\": \"alto|medio|bajo\" }',\n  \"  ],\",\n  '  \"watch_outs\": [\"riesgo 1\", \"riesgo 2\"],',\n  '  \"opportunities\": [\"oportunidad 1\", \"oportunidad 2\"],',\n  '  \"mood\": \"positivo|neutro|tenso|alerta\"',\n  \"}\",\n  \"\",\n  \"REGLAS:\",\n  \"- HOY es \" + ctx.date + \". Nunca digas que un evento es \\\"inminente\\\", \\\"esta semana\\\" o \\\"el domingo\\\" sin contrastar primero la fecha real del evento contra HOY. Si un evento (Dia de la Madre, San Valentin, Navidad, rebajas, etc.) ya ha pasado este ano, NO lo menciones como oportunidad futura.\",\n  \"- Maximo 4 top_actions. Si hay menos, devuelve menos.\",\n  \"- Maximo 3 watch_outs y 3 opportunities.\",\n  \"- No inventes datos. Si el contexto no menciona algo, no lo afirmes.\",\n  \"- Si no hay tareas urgentes y no hay alertas, dilo con naturalidad (no fuerces drama).\",\n  \"- Refierete al negocio por su nombre cuando ayude.\",\n  \"\",\n  \"CONTEXTO DEL NEGOCIO Y DEL DIA:\",\n  JSON.stringify(ctx, null, 2)\n].join(\"\\n\");\n\nconst body = {\n  model: \"claude-haiku-4-5-20251001\",\n  max_tokens: 1024,\n  system: systemPrompt,\n  messages: [\n    { role: \"user\", content: userPrompt }\n  ]\n};\n\nreturn [{\n  json: {\n    _anthropic_body: body,\n    _original_payload: payload\n  }\n}];"
       },
       "id": "claude-build-prompt-001",
       "name": "Build Claude Prompt",

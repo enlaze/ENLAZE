@@ -12,6 +12,25 @@ import EmptyState from "@/components/ui/empty-state";
 
 /* ─── Types ─── */
 
+interface AIAction {
+  action: string;
+  why: string;
+  when?: string;
+  impact?: "alto" | "medio" | "bajo" | string;
+}
+
+interface AIBriefing {
+  headline?: string;
+  narrative?: string;
+  top_actions?: AIAction[];
+  watch_outs?: string[];
+  opportunities?: string[];
+  mood?: string;
+  model?: string;
+  generated_at?: string;
+  error?: string;
+}
+
 interface DailySummary {
   id: string;
   headline: string;
@@ -20,6 +39,11 @@ interface DailySummary {
   risks_count: number;
   score: number;
   execution_date: string;
+  raw_payload?: {
+    daily_summary?: {
+      ai_briefing?: AIBriefing;
+    };
+  };
 }
 
 interface AgentNews {
@@ -196,35 +220,106 @@ export default function AgentDashboardPage() {
       />
 
       {/* Daily summary */}
-      {summary && (
-        <Card className="mb-6 border-l-4 border-l-brand-green">
-          <div className="flex items-start justify-between mb-3">
-            <div>
-              <p className="text-xs text-navy-500 uppercase tracking-wider mb-1">Resumen del día · {fmtDate(summary.execution_date)}</p>
-              <p className="text-navy-900 font-medium">{summary.headline}</p>
+      {summary && (() => {
+        const ai = summary.raw_payload?.daily_summary?.ai_briefing;
+        const aiOk = ai && !ai.error;
+        const impactDot = (impact?: string) =>
+          impact === "alto" ? "bg-red-500"
+            : impact === "medio" ? "bg-yellow-500"
+            : "bg-brand-green";
+        return (
+          <Card className="mb-6 border-l-4 border-l-brand-green">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <p className="text-xs text-navy-500 uppercase tracking-wider mb-1">
+                  Resumen del día · {fmtDate(summary.execution_date)}
+                  {aiOk && (
+                    <span className="ml-2 text-brand-green normal-case tracking-normal">
+                      · generado por IA
+                    </span>
+                  )}
+                </p>
+                <p className="text-navy-900 font-medium text-base">
+                  {aiOk ? ai.headline : summary.headline}
+                </p>
+              </div>
+              <div className="flex items-center gap-1 bg-navy-50 rounded-full px-3 py-1 shrink-0">
+                <span className="text-xs text-navy-500">Score</span>
+                <span className="text-sm font-bold text-navy-900">{summary.score}</span>
+                <span className="text-xs text-navy-400">/100</span>
+              </div>
             </div>
-            <div className="flex items-center gap-1 bg-navy-50 rounded-full px-3 py-1">
-              <span className="text-xs text-navy-500">Score</span>
-              <span className="text-sm font-bold text-navy-900">{summary.score}</span>
-              <span className="text-xs text-navy-400">/100</span>
+
+            {aiOk && ai.narrative && (
+              <p className="text-sm text-navy-700 whitespace-pre-line mb-3">
+                {ai.narrative}
+              </p>
+            )}
+
+            {aiOk && ai.top_actions && ai.top_actions.length > 0 ? (
+              <div className="space-y-2">
+                {ai.top_actions.map((a, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <span className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${impactDot(a.impact)}`} />
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-navy-900">{a.action}</div>
+                      <div className="text-xs text-navy-500">
+                        {a.why}
+                        {a.when && <span className="ml-1">· {a.when}</span>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : summary.priority_actions.length > 0 && (
+              <div className="space-y-1.5">
+                {summary.priority_actions.map((action, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <span className="mt-0.5 h-2 w-2 rounded-full bg-brand-green shrink-0" />
+                    <span className="text-sm text-navy-700">{action}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {aiOk && (
+              (ai.opportunities && ai.opportunities.length > 0) ||
+              (ai.watch_outs && ai.watch_outs.length > 0)
+            ) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 pt-3 border-t border-navy-100">
+                {ai.opportunities && ai.opportunities.length > 0 && (
+                  <div>
+                    <div className="text-xs uppercase text-navy-500 tracking-wider mb-1">Oportunidades</div>
+                    <ul className="space-y-1">
+                      {ai.opportunities.map((o, i) => (
+                        <li key={i} className="text-xs text-navy-700">• {o}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {ai.watch_outs && ai.watch_outs.length > 0 && (
+                  <div>
+                    <div className="text-xs uppercase text-navy-500 tracking-wider mb-1">A vigilar</div>
+                    <ul className="space-y-1">
+                      {ai.watch_outs.map((w, i) => (
+                        <li key={i} className="text-xs text-navy-700">• {w}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-4 mt-3 pt-3 border-t border-navy-100">
+              <span className="text-xs text-navy-500">{summary.opportunities_count} oportunidades</span>
+              <span className="text-xs text-navy-500">{summary.risks_count} riesgos</span>
+              {aiOk && ai.mood && (
+                <span className="text-xs text-navy-400 ml-auto">tono: {ai.mood}</span>
+              )}
             </div>
-          </div>
-          {summary.priority_actions.length > 0 && (
-            <div className="space-y-1.5">
-              {summary.priority_actions.map((action, i) => (
-                <div key={i} className="flex items-start gap-2">
-                  <span className="mt-0.5 h-2 w-2 rounded-full bg-brand-green shrink-0" />
-                  <span className="text-sm text-navy-700">{action}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="flex gap-4 mt-3 pt-3 border-t border-navy-100">
-            <span className="text-xs text-navy-500">{summary.opportunities_count} oportunidades</span>
-            <span className="text-xs text-navy-500">{summary.risks_count} riesgos</span>
-          </div>
-        </Card>
-      )}
+          </Card>
+        );
+      })()}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
