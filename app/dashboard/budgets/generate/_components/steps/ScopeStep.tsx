@@ -29,6 +29,10 @@ export function ScopeStep() {
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
+  const [isSavingProject, setIsSavingProject] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -56,11 +60,39 @@ export function ScopeStep() {
   useEffect(() => {
     if (state.clientId && state.projectId) {
       const projectStillValid = projects.some(p => p.id === state.projectId && p.client_id === state.clientId);
-      if (!projectStillValid) {
+      if (!projectStillValid && state.projectId !== "NEW") {
         updateState({ projectId: "" });
       }
     }
   }, [state.clientId, state.projectId, projects]);
+
+  const handleCreateProject = async () => {
+    if (!newProjectName.trim() || !state.clientId) return;
+    setIsSavingProject(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase.from("projects").insert({
+        name: newProjectName.trim(),
+        client_id: state.clientId,
+        user_id: user.id,
+        service_type: state.serviceType || state.sector || "general",
+        start_date: state.startDate || null,
+      }).select("id, name, client_id").single();
+
+      if (data && !error) {
+        setProjects(prev => [...prev, data]);
+        updateState({ projectId: data.id });
+        setIsCreatingProject(false);
+        setNewProjectName("");
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSavingProject(false);
+    }
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -99,15 +131,62 @@ export function ScopeStep() {
             
             <div>
               <label className={labelCls}>Obra/Proyecto asociado</label>
-              <select 
-                value={state.projectId || ""} 
-                onChange={(e) => updateState({ projectId: e.target.value })} 
-                className={inputCls}
-                disabled={loading}
-              >
-                <option value="">Sin asignar</option>
-                {visibleProjects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
-              </select>
+              {!isCreatingProject ? (
+                <div className="flex gap-2">
+                  <select 
+                    value={state.projectId || ""} 
+                    onChange={(e) => {
+                      if (e.target.value === "NEW") {
+                        setIsCreatingProject(true);
+                        updateState({ projectId: "" });
+                      } else {
+                        updateState({ projectId: e.target.value });
+                      }
+                    }} 
+                    className={inputCls}
+                    disabled={loading || !state.clientId}
+                  >
+                    {!state.clientId ? (
+                      <option value="">Selecciona un cliente primero</option>
+                    ) : (
+                      <>
+                        <option value="">{visibleProjects.length === 0 ? "Sin obras (Crea una nueva)" : "Sin asignar"}</option>
+                        {visibleProjects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+                        <option value="NEW" className="font-bold text-brand-green bg-brand-green/10">
+                          + Crear nueva obra/proyecto
+                        </option>
+                      </>
+                    )}
+                  </select>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    placeholder="Nombre de la nueva obra..."
+                    className={inputCls}
+                    autoFocus
+                  />
+                  <button 
+                    onClick={handleCreateProject}
+                    disabled={!newProjectName.trim() || isSavingProject}
+                    className="bg-brand-green hover:bg-brand-green/90 text-navy-900 px-3 rounded-lg font-bold disabled:opacity-50 whitespace-nowrap text-sm"
+                  >
+                    {isSavingProject ? "..." : "Crear"}
+                  </button>
+                  <button 
+                    onClick={() => setIsCreatingProject(false)}
+                    className="bg-navy-100 hover:bg-navy-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 px-3 rounded-lg text-sm"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+              {state.validationError && state.validationError.includes("obra") && (
+                <p className="text-red-500 text-xs mt-1 font-medium">{state.validationError}</p>
+              )}
             </div>
 
             <div>
@@ -151,6 +230,12 @@ export function ScopeStep() {
               onChange={(e) => updateState({ description: e.target.value })}
             />
           </div>
+          
+          {state.validationError && (
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm font-medium">
+              {state.validationError}
+            </div>
+          )}
         </div>
       </Card>
       

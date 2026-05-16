@@ -59,6 +59,9 @@ export interface BudgetState {
   description: string;
   ivaPercent: number;
   marginPercent: number;
+  
+  validationError: string | null;
+  
   // Dynamic Sector Data
   sectorData: Record<string, any>;
   // Partidas
@@ -121,6 +124,8 @@ export function BudgetGenerateProvider({
     description: "",
     ivaPercent: 21,
     marginPercent: 20,
+    validationError: null,
+    
     sectorData: {},
     partidas: [
       {
@@ -602,12 +607,39 @@ export function BudgetGenerateProvider({
     };
   }, [state]);
 
+  const validateStep = (stepIndex: number): boolean => {
+    if (stepIndex === 0) {
+      if (!state.title) {
+        setState(prev => ({ ...prev, validationError: "Falta el título del presupuesto." }));
+        return false;
+      }
+      if (!state.clientId) {
+        setState(prev => ({ ...prev, validationError: "Debes seleccionar un cliente." }));
+        return false;
+      }
+      if (!state.projectId) {
+        setState(prev => ({ ...prev, validationError: "Selecciona una obra/proyecto o crea una nueva para continuar." }));
+        return false;
+      }
+    }
+    setState(prev => ({ ...prev, validationError: null }));
+    return true;
+  };
+
   const nextStep = () => {
-    setState(prev => ({ ...prev, currentStep: prev.currentStep + 1 }));
+    if (!validateStep(state.currentStep)) return;
+    setState(prev => ({ ...prev, currentStep: prev.currentStep + 1, validationError: null }));
     saveDraft(false); // Force save on step change
   };
-  const prevStep = () => setState(prev => ({ ...prev, currentStep: Math.max(0, prev.currentStep - 1) }));
-  const goToStep = (step: number) => setState(prev => ({ ...prev, currentStep: step }));
+  const prevStep = () => setState(prev => ({ ...prev, currentStep: Math.max(0, prev.currentStep - 1), validationError: null }));
+  const goToStep = (step: number) => {
+    if (step > state.currentStep) {
+      for (let i = state.currentStep; i < step; i++) {
+        if (!validateStep(i)) return;
+      }
+    }
+    setState(prev => ({ ...prev, currentStep: step, validationError: null }));
+  };
 
   return (
     <BudgetContext.Provider value={{ 
