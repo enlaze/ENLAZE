@@ -62,6 +62,36 @@ const CONSTRUCTION_FALLBACK_PARTIDAS: Partida[] = [
   { id: "p15", concept: "Seguridad y medios auxiliares", description: "Andamios, EPIs y medidas de seguridad.", quantity: 1, unit: "PA", category: "otros", unit_price: 400, subtotal_cost: 400, unit_price_client: 480, subtotal_client: 480, status: "incluida" }
 ];
 
+const CONSTRUCTION_FALLBACK_MATERIALS: Material[] = [
+  { id: "fm1", name: "Mortero de cemento M-7.5 (saco 25kg)", quantity: 20, unit: "sacos", unit_price: 3.50, subtotal: 70, included: true, provider_id: "leroy-merlin", isRealData: false },
+  { id: "fm2", name: "Ladrillo hueco doble 24x11.5x7cm", quantity: 200, unit: "ud", unit_price: 0.35, subtotal: 70, included: true, provider_id: "obramat", isRealData: false },
+  { id: "fm3", name: "Placa de yeso laminado 13mm (Pladur N)", quantity: 30, unit: "ud", unit_price: 5.80, subtotal: 174, included: true, provider_id: "leroy-merlin", isRealData: false },
+  { id: "fm4", name: "Tuberia multicapa 16mm (rollo 100m)", quantity: 2, unit: "rollos", unit_price: 65.0, subtotal: 130, included: true, provider_id: "saltoki", isRealData: false },
+  { id: "fm5", name: "Tuberia PVC evacuacion 110mm (3m)", quantity: 6, unit: "ud", unit_price: 8.50, subtotal: 51, included: true, provider_id: "saltoki", isRealData: false },
+  { id: "fm6", name: "Cable H07V-K 2.5mm2 (rollo 100m)", quantity: 3, unit: "rollos", unit_price: 32.0, subtotal: 96, included: true, provider_id: "leroy-merlin", isRealData: false },
+  { id: "fm7", name: "Mecanismos electricos (kit basico: enchufes+interruptores)", quantity: 1, unit: "kit", unit_price: 180.0, subtotal: 180, included: true, provider_id: "leroy-merlin", isRealData: false },
+  { id: "fm8", name: "Cuadro electrico + protecciones (magnetotermicos+diferencial)", quantity: 1, unit: "ud", unit_price: 220.0, subtotal: 220, included: true, provider_id: "saltoki", isRealData: false },
+  { id: "fm9", name: "Azulejo porcelanico 60x60cm (blanco mate)", quantity: 30, unit: "m2", unit_price: 18.50, subtotal: 555, included: true, provider_id: "leroy-merlin", isRealData: false },
+  { id: "fm10", name: "Cemento cola porcelanico flexible (saco 25kg)", quantity: 8, unit: "sacos", unit_price: 12.0, subtotal: 96, included: true, provider_id: "obramat", isRealData: false },
+  { id: "fm11", name: "Pintura plastica blanca mate (cubo 15L)", quantity: 4, unit: "cubos", unit_price: 35.0, subtotal: 140, included: true, provider_id: "leroy-merlin", isRealData: false },
+  { id: "fm12", name: "Imprimacion fijadora (cubo 15L)", quantity: 2, unit: "cubos", unit_price: 28.0, subtotal: 56, included: true, provider_id: "leroy-merlin", isRealData: false },
+  { id: "fm13", name: "Inodoro compacto salida dual", quantity: 1, unit: "ud", unit_price: 145.0, subtotal: 145, included: true, provider_id: "leroy-merlin", isRealData: false },
+  { id: "fm14", name: "Lavabo sobre encimera + monomando", quantity: 1, unit: "ud", unit_price: 120.0, subtotal: 120, included: true, provider_id: "leroy-merlin", isRealData: false },
+  { id: "fm15", name: "Plato de ducha resina antideslizante 120x70cm", quantity: 1, unit: "ud", unit_price: 185.0, subtotal: 185, included: true, provider_id: "obramat", isRealData: false },
+  { id: "fm16", name: "Mampara de ducha frontal 120cm", quantity: 1, unit: "ud", unit_price: 210.0, subtotal: 210, included: true, provider_id: "leroy-merlin", isRealData: false },
+  { id: "fm17", name: "Puerta interior ciega lacada blanca", quantity: 5, unit: "ud", unit_price: 145.0, subtotal: 725, included: true, provider_id: "leroy-merlin", isRealData: false },
+  { id: "fm18", name: "Lamina impermeabilizante para zonas humedas (rollo 20m2)", quantity: 2, unit: "rollos", unit_price: 42.0, subtotal: 84, included: true, provider_id: "obramat", isRealData: false },
+  { id: "fm19", name: "Silicona neutra sanitaria (cartucho 300ml)", quantity: 6, unit: "ud", unit_price: 5.50, subtotal: 33, included: true, provider_id: "leroy-merlin", isRealData: false },
+  { id: "fm20", name: "Contenedor de escombros 6m3 (alquiler+transporte+vertedero)", quantity: 2, unit: "ud", unit_price: 280.0, subtotal: 560, included: true, provider_id: "referencia-mercado", isRealData: false },
+];
+
+const FALLBACK_PROVIDERS: ProviderOption[] = [
+  { id: "leroy-merlin", name: "Leroy Merlin", description: "Gran superficie de bricolaje y construccion", estimatedPrice: 0, deliveryTime: "24-48h", stockLevel: "Alto", rating: 4.8, isRecommended: true, materialsCount: 0, isRealData: false },
+  { id: "obramat", name: "Obramat", description: "Almacen profesional de materiales", estimatedPrice: 0, deliveryTime: "48-72h", stockLevel: "Medio", rating: 4.5, isRecommended: false, materialsCount: 0, isRealData: false },
+  { id: "saltoki", name: "Saltoki", description: "Distribuidor profesional de fontaneria y electricidad", estimatedPrice: 0, deliveryTime: "24-72h", stockLevel: "Alto", rating: 4.6, isRecommended: false, materialsCount: 0, isRealData: false },
+  { id: "referencia-mercado", name: "Referencia mercado", description: "Precios de referencia del mercado espanol", estimatedPrice: 0, deliveryTime: "Variable", stockLevel: "A consultar", rating: 4.0, isRecommended: false, materialsCount: 0, isRealData: false },
+];
+
 export interface BudgetState {
   draftId: string | null;
   lastSavedAt: string | null;
@@ -197,19 +227,9 @@ export function BudgetGenerateProvider({
         status: "incluida"
       }
     ],
-    selectedProviderId: "leroy",
-    providerOptions: [
-      { id: "leroy", name: "Leroy Merlin", description: "Materiales de construcción y reforma", estimatedPrice: 1250, deliveryTime: "24-48h", stockLevel: "Alto", rating: 4.8, isRecommended: true, isRealData: false, materialsCount: 5 },
-      { id: "obramat", name: "Obramat", description: "Almacén profesional", estimatedPrice: 1180, deliveryTime: "48-72h", stockLevel: "Medio", rating: 4.5, isRealData: false, materialsCount: 5 },
-      { id: "local", name: "Proveedor Local", description: "Distribuidores de zona", estimatedPrice: 1320, deliveryTime: "A consultar", stockLevel: "A consultar", rating: 4.0, isRealData: false, materialsCount: 5 },
-    ],
-    materials: [
-      { id: "m1", name: "Azulejo porcelánico 60x60cm", quantity: 26, unit: "m2", unit_price: 18.5, subtotal: 481, included: true, provider_id: "leroy", isRealData: false },
-      { id: "m2", name: "Cemento cola porcelánico", quantity: 5, unit: "sacos", unit_price: 12.0, subtotal: 60, included: true, provider_id: "leroy", isRealData: false },
-      { id: "m3", name: "Pintura plástica blanca mate", quantity: 2, unit: "cubos 15L", unit_price: 35.0, subtotal: 70, included: true, provider_id: "leroy", isRealData: false },
-      { id: "m4", name: "Cableado eléctrico libre halógenos", quantity: 1, unit: "rollo 100m", unit_price: 45.0, subtotal: 45, included: true, provider_id: "leroy", isRealData: false },
-      { id: "m5", name: "Plato de ducha resina 120x70", quantity: 1, unit: "ud", unit_price: 180.0, subtotal: 180, included: true, provider_id: "leroy", isRealData: false },
-    ],
+    selectedProviderId: null,
+    providerOptions: [],
+    materials: [],
     allFetchedMaterials: [],
     useSuggestedMaterials: true,
     isRealDataMode: false,
@@ -266,11 +286,8 @@ export function BudgetGenerateProvider({
           return rawName.trim();
         }
 
-        // Initialize with existing mock options so they don't disappear if real data only has "generic" items
+        // Initialize providers map from real data only
         const providersMap = new Map<string, ProviderOption>();
-        state.providerOptions.forEach(p => {
-          providersMap.set(p.id, { ...p, materialsCount: 0 });
-        });
 
         const realMaterials: Material[] = [];
 
@@ -344,36 +361,18 @@ export function BudgetGenerateProvider({
 
   // Update visible materials when provider changes
   useEffect(() => {
-    // Skip if we just loaded a draft that has its own material list visible already
     if (!state.selectedProviderId) return;
     // NEVER overwrite AI-generated materials with provider filtering
     if (state.materialsFromAI) return;
 
-    if (state.isRealDataMode) {
+    if (state.isRealDataMode && state.allFetchedMaterials.length > 0) {
       const newVisible = state.allFetchedMaterials.filter(m => m.provider_id === state.selectedProviderId);
-      // Only set if different length to prevent loop re-renders
+      // Only update if provider actually changed
       if (state.materials.length === 0 || state.materials[0]?.provider_id !== state.selectedProviderId) {
         setState(prev => ({ ...prev, materials: newVisible }));
       }
-    } else {
-      // Mock logic
-      const multiplier = state.selectedProviderId === "obramat" ? 0.9 : state.selectedProviderId === "local" ? 1.1 : 1.0;
-      if (state.materials.length > 0 && state.materials[0]?.provider_id === state.selectedProviderId) return;
-
-      setState(prev => {
-        const newMaterials = prev.materials.map(m => {
-          const basePrice = m.id === "m1" ? 18.5 : m.id === "m2" ? 12.0 : m.id === "m3" ? 35.0 : m.id === "m4" ? 45.0 : 180.0;
-          const newUnitPrice = basePrice * multiplier;
-          return {
-            ...m,
-            unit_price: newUnitPrice,
-            subtotal: m.quantity * newUnitPrice,
-            provider_id: state.selectedProviderId!
-          };
-        });
-        return { ...prev, materials: newMaterials };
-      });
     }
+    // No more mock logic — materials come from AI or fallback
   }, [state.selectedProviderId, state.isRealDataMode, state.allFetchedMaterials]);
 
   // Calculate totals whenever partidas, materials or margin change
@@ -692,7 +691,13 @@ export function BudgetGenerateProvider({
       return true;
     }
 
-    setState(prev => ({ ...prev, isAnalyzing: true, analysisError: null }));
+    // When forcing regeneration, clear the materialsFromAI guard so the new results apply
+    setState(prev => ({
+      ...prev,
+      isAnalyzing: true,
+      analysisError: null,
+      ...(forceRegenerate ? { materialsFromAI: false } : {}),
+    }));
 
     try {
       const res = await fetch("/api/agent/budget-analysis", {
@@ -824,6 +829,38 @@ export function BudgetGenerateProvider({
         }
       }
 
+      // --- Fallback materials for construction if AI returned empty ---
+      let finalMaterials = newMaterials;
+      let finalProviders = newProviders;
+      if (finalMaterials.length === 0 && state.sector === "construccion") {
+        finalMaterials = CONSTRUCTION_FALLBACK_MATERIALS;
+        // Build providers from fallback materials
+        const fbProvMap = new Map<string, { name: string; count: number; total: number }>();
+        finalMaterials.forEach(m => {
+          const pid = m.provider_id || "referencia-mercado";
+          const existing = fbProvMap.get(pid) || { name: pid, count: 0, total: 0 };
+          existing.count += 1;
+          existing.total += m.subtotal;
+          fbProvMap.set(pid, existing);
+        });
+        finalProviders = FALLBACK_PROVIDERS.map(fp => ({
+          ...fp,
+          materialsCount: fbProvMap.get(fp.id)?.count || 0,
+          estimatedPrice: fbProvMap.get(fp.id)?.total || 0,
+        })).filter(fp => (fp.materialsCount || 0) > 0);
+        // Mark first as recommended
+        if (finalProviders.length > 0) {
+          finalProviders.sort((a, b) => (b.materialsCount || 0) - (a.materialsCount || 0));
+          finalProviders[0].isRecommended = true;
+        }
+      }
+
+      // --- Fallback partidas for construction if AI returned too few ---
+      let finalPartidas = newPartidas;
+      if (finalPartidas.length < 5 && state.sector === "construccion") {
+        finalPartidas = CONSTRUCTION_FALLBACK_PARTIDAS;
+      }
+
       // --- Timeline ---
       const calendarPhases = data.calendar_phases || [];
       const totalDays = calendarPhases.reduce((s: number, p: any) => s + (p.duration_days || 0), 0);
@@ -831,18 +868,37 @@ export function BudgetGenerateProvider({
         total_duration_days: totalDays,
         total_duration_weeks: Math.ceil(totalDays / 5), // working weeks
         confidence: 0.7,
-        notes: "Estimación orientativa según alcance declarado.",
+        notes: "Estimacion orientativa segun alcance declarado.",
       } : undefined);
+
+      // --- Calculate end date from startDate + total_duration_days ---
+      let calculatedEndDate: string | null = null;
+      const durationDays = estimatedTimeline?.total_duration_days || totalDays;
+      if (state.startDate && durationDays > 0) {
+        const start = new Date(state.startDate);
+        if (!isNaN(start.getTime())) {
+          // Add working days (skip weekends)
+          let addedDays = 0;
+          const endDate = new Date(start);
+          while (addedDays < durationDays) {
+            endDate.setDate(endDate.getDate() + 1);
+            const dow = endDate.getDay();
+            if (dow !== 0 && dow !== 6) addedDays++;
+          }
+          calculatedEndDate = endDate.toISOString().split("T")[0];
+        }
+      }
 
       setState(prev => ({
         ...prev,
         isAnalyzing: false,
         lastAnalysisHash: currentHash,
-        materialsFromAI: newMaterials.length > 0,
-        partidas: newPartidas.length > 0 ? newPartidas : prev.partidas,
-        materials: newMaterials.length > 0 ? newMaterials : prev.materials,
-        providerOptions: newProviders.length > 0 ? newProviders : prev.providerOptions,
-        selectedProviderId: newProviders.length > 0 ? newProviders[0].id : prev.selectedProviderId,
+        materialsFromAI: finalMaterials.length > 0,
+        partidas: finalPartidas.length > 0 ? finalPartidas : prev.partidas,
+        materials: finalMaterials.length > 0 ? finalMaterials : prev.materials,
+        providerOptions: finalProviders.length > 0 ? finalProviders : prev.providerOptions,
+        selectedProviderId: finalProviders.length > 0 ? finalProviders[0].id : prev.selectedProviderId,
+        endDate: calculatedEndDate || prev.endDate,
         aiInsights: {
           summary: data.summary,
           confidence_score: data.confidence_score,

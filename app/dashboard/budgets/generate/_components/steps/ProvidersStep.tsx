@@ -72,6 +72,15 @@ export function ProvidersStep() {
           </div>
         )}
 
+        {providerOptions.length === 0 && (
+          <div className="text-center py-10 bg-navy-50 dark:bg-zinc-900/50 rounded-xl border border-dashed border-navy-200 dark:border-zinc-700 mb-8">
+            <span className="text-3xl mb-2 block">🏪</span>
+            <h4 className="text-sm font-bold text-navy-900 dark:text-white">Sin proveedores disponibles</h4>
+            <p className="text-xs text-navy-500 dark:text-zinc-400 mt-1 max-w-xs mx-auto">
+              Los proveedores se generan automaticamente con el analisis IA. Vuelve al paso anterior y usa "Generar con IA".
+            </p>
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           {providerOptions.map(provider => {
             const isSelected = selectedProviderId === provider.id;
@@ -135,13 +144,13 @@ export function ProvidersStep() {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
             <h3 className="text-lg font-bold text-navy-900 dark:text-white">Selecciona los materiales</h3>
             <div className="flex bg-navy-50 dark:bg-zinc-800 p-1 rounded-lg">
-              <button 
+              <button
                 onClick={() => setUseSuggestedMaterials(true)}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition ${useSuggestedMaterials ? "bg-white dark:bg-zinc-700 shadow-sm text-navy-900 dark:text-white" : "text-navy-500 dark:text-zinc-400 hover:text-navy-700"}`}
               >
                 Sugeridos IA
               </button>
-              <button 
+              <button
                 onClick={() => setUseSuggestedMaterials(false)}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition ${!useSuggestedMaterials ? "bg-white dark:bg-zinc-700 shadow-sm text-navy-900 dark:text-white" : "text-navy-500 dark:text-zinc-400 hover:text-navy-700"}`}
               >
@@ -149,65 +158,75 @@ export function ProvidersStep() {
               </button>
             </div>
           </div>
-          
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-navy-50 dark:bg-zinc-800/50 border-y border-navy-100 dark:border-zinc-800 text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase tracking-wider">
-                  <th className="p-3 w-10 text-center">Inc.</th>
-                  <th className="p-3">Material</th>
-                  <th className="p-3 w-24 text-right">Cant.</th>
-                  <th className="p-3 w-20">Ud.</th>
-                  <th className="p-3 w-28 text-right">Coste Ud.</th>
-                  <th className="p-3 w-28 text-right">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-navy-100 dark:divide-zinc-800 bg-white dark:bg-zinc-900">
-                {materials.map((m) => (
-                  <tr key={m.id} className={`hover:bg-navy-50/50 dark:hover:bg-zinc-800/50 transition-colors ${!m.included ? 'opacity-50' : ''}`}>
-                    <td className="p-3 text-center">
-                      <input 
-                        type="checkbox" 
-                        checked={m.included}
-                        onChange={(e) => updateMaterial(m.id, { included: e.target.checked })}
-                        className="rounded border-navy-300 text-brand-green focus:ring-brand-green/20"
-                      />
-                    </td>
-                    <td className="p-3">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-navy-900 dark:text-white">{m.name}</p>
-                        {m.isRealData && (
-                          <span className="bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400 text-[9px] px-1 rounded-sm uppercase tracking-wider font-semibold" title="Dato de tu catálogo">
-                            Real
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="p-3">
-                      <input 
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={m.quantity}
-                        onChange={(e) => updateMaterial(m.id, { quantity: parseFloat(e.target.value) || 0 })}
-                        disabled={!m.included}
-                        className="w-full text-right font-medium text-navy-900 dark:text-white bg-transparent border border-transparent hover:border-navy-200 dark:hover:border-zinc-700 rounded p-1 focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green text-sm disabled:opacity-50"
-                      />
-                    </td>
-                    <td className="p-3 text-sm text-navy-600 dark:text-zinc-400">
-                      {m.unit}
-                    </td>
-                    <td className="p-3 text-right text-sm text-navy-600 dark:text-zinc-400">
-                      {m.unit_price.toFixed(2)} €
-                    </td>
-                    <td className="p-3 text-right font-bold text-navy-900 dark:text-white text-sm">
-                      {m.subtotal.toFixed(2)} €
-                    </td>
+
+          {materials.length === 0 ? (
+            <div className="text-center py-10 bg-navy-50 dark:bg-zinc-900/50 rounded-xl border border-dashed border-navy-200 dark:border-zinc-700">
+              <span className="text-3xl mb-2 block">📦</span>
+              <h4 className="text-sm font-bold text-navy-900 dark:text-white">Sin materiales disponibles</h4>
+              <p className="text-xs text-navy-500 dark:text-zinc-400 mt-1 max-w-xs mx-auto">
+                Los materiales se generan automaticamente con la IA o desde tu catalogo de precios. Vuelve al paso anterior y usa "Generar con IA" para obtener una lista completa.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-navy-50 dark:bg-zinc-800/50 border-y border-navy-100 dark:border-zinc-800 text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase tracking-wider">
+                    <th className="p-3 w-10 text-center">Inc.</th>
+                    <th className="p-3">Material</th>
+                    <th className="p-3 w-24 text-right">Cant.</th>
+                    <th className="p-3 w-20">Ud.</th>
+                    <th className="p-3 w-28 text-right">Coste Ud.</th>
+                    <th className="p-3 w-28 text-right">Total</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-navy-100 dark:divide-zinc-800 bg-white dark:bg-zinc-900">
+                  {materials.map((m) => (
+                    <tr key={m.id} className={`hover:bg-navy-50/50 dark:hover:bg-zinc-800/50 transition-colors ${!m.included ? 'opacity-50' : ''}`}>
+                      <td className="p-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={m.included}
+                          onChange={(e) => updateMaterial(m.id, { included: e.target.checked })}
+                          className="rounded border-navy-300 text-brand-green focus:ring-brand-green/20"
+                        />
+                      </td>
+                      <td className="p-3">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-navy-900 dark:text-white">{m.name}</p>
+                          {m.isRealData && (
+                            <span className="bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400 text-[9px] px-1 rounded-sm uppercase tracking-wider font-semibold" title="Dato de tu catalogo">
+                              Real
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={m.quantity}
+                          onChange={(e) => updateMaterial(m.id, { quantity: parseFloat(e.target.value) || 0 })}
+                          disabled={!m.included}
+                          className="w-full text-right font-medium text-navy-900 dark:text-white bg-transparent border border-transparent hover:border-navy-200 dark:hover:border-zinc-700 rounded p-1 focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green text-sm disabled:opacity-50"
+                        />
+                      </td>
+                      <td className="p-3 text-sm text-navy-600 dark:text-zinc-400">
+                        {m.unit}
+                      </td>
+                      <td className="p-3 text-right text-sm text-navy-600 dark:text-zinc-400">
+                        {m.unit_price.toFixed(2)} EUR
+                      </td>
+                      <td className="p-3 text-right font-bold text-navy-900 dark:text-white text-sm">
+                        {m.subtotal.toFixed(2)} EUR
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </Card>
     </div>
