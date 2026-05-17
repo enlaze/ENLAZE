@@ -30,6 +30,7 @@ export interface ProviderOption {
   isRecommended?: boolean;
   materialsCount?: number;
   isRealData?: boolean;
+  sourceType?: string;
 }
 
 export interface Material {
@@ -42,6 +43,7 @@ export interface Material {
   included: boolean;
   provider_id?: string;
   isRealData?: boolean;
+  sourceType?: string;
 }
 
 const CONSTRUCTION_FALLBACK_PARTIDAS: Partida[] = [
@@ -307,6 +309,14 @@ export function BudgetGenerateProvider({
           const normName = normalizeSupplierName(item);
           const provId = normName === "Proveedor Genérico" ? "generic" : normName === "Referencia mercado" ? "market" : normName.toLowerCase().replace(/[^a-z0-9]/g, '-');
 
+          let itemSourceType = item.source_type;
+          if (!itemSourceType) {
+            if (normName === "Banco ENLAZE base") itemSourceType = "default";
+            else if (normName === "Referencia mercado") itemSourceType = "market_reference";
+            else if (normName === "Leroy Merlin" || normName === "OBRAMAT") itemSourceType = "n8n_sync";
+            else itemSourceType = "unknown";
+          }
+
           if (!providersMap.has(provId)) {
             providersMap.set(provId, {
               id: provId,
@@ -318,7 +328,8 @@ export function BudgetGenerateProvider({
               rating: 4.5,
               isRecommended: false,
               materialsCount: 0,
-              isRealData: true
+              isRealData: true,
+              sourceType: itemSourceType
             });
           }
 
@@ -331,7 +342,8 @@ export function BudgetGenerateProvider({
             subtotal: item.unit_price || 0,
             included: true,
             provider_id: provId,
-            isRealData: true
+            isRealData: true,
+            sourceType: itemSourceType
           });
 
           // Update counts and estimated basket price for this provider
@@ -342,6 +354,11 @@ export function BudgetGenerateProvider({
 
         const newProviderOptions = Array.from(providersMap.values());
         if (newProviderOptions.length === 0) return;
+
+        // Recommender logic: if there is a n8n provider, recommend it. Else fallback to base if there are no n8n.
+        const n8nProv = newProviderOptions.find(p => p.sourceType === "n8n_sync");
+        if (n8nProv) n8nProv.isRecommended = true;
+        else if (newProviderOptions.length > 0) newProviderOptions[0].isRecommended = true;
 
         // Sort: Recommended first, then by materials count
         newProviderOptions.sort((a, b) => {
@@ -752,7 +769,7 @@ export function BudgetGenerateProvider({
       });
 
       // Map materials AND build provider options from them
-      const provMap = new Map<string, { name: string; count: number; total: number; isReal: boolean }>();
+      const provMap = new Map<string, { name: string; count: number; total: number; isReal: boolean; sourceType: string }>();
       const newMaterials: Material[] = (data.suggested_materials || []).map((item: any, idx: number) => {
         const rawSupplier = item.supplier_name || "Referencia mercado";
         const provId = rawSupplier.toLowerCase().replace(/[^a-z0-9]/g, '-') || "generic";
@@ -760,8 +777,16 @@ export function BudgetGenerateProvider({
         const qty = item.quantity || 1;
         const isReal = item.source !== "fallback";
 
+        let sourceType = item.source_type;
+        if (!sourceType) {
+          if (rawSupplier === "Banco ENLAZE base") sourceType = "default";
+          else if (rawSupplier === "Referencia mercado") sourceType = "market_reference";
+          else if (rawSupplier === "Leroy Merlin" || rawSupplier === "OBRAMAT") sourceType = "n8n_sync";
+          else sourceType = "unknown";
+        }
+
         // Aggregate provider stats
-        const existing = provMap.get(provId) || { name: rawSupplier, count: 0, total: 0, isReal };
+        const existing = provMap.get(provId) || { name: rawSupplier, count: 0, total: 0, isReal, sourceType };
         existing.count += 1;
         existing.total += qty * cost;
         provMap.set(provId, existing);
@@ -776,6 +801,7 @@ export function BudgetGenerateProvider({
           included: true,
           provider_id: provId,
           isRealData: isReal,
+          sourceType,
         };
       });
 
@@ -790,10 +816,16 @@ export function BudgetGenerateProvider({
           deliveryTime: "Consultar",
           stockLevel: "A consultar" as const,
           rating: 4.5,
-          isRecommended: idx === 0,
+          isRecommended: false,
           materialsCount: info.count,
           isRealData: info.isReal,
+          sourceType: info.sourceType,
         }));
+
+        // Recommender logic: if there is a n8n provider, recommend it. Else fallback to base if there are no n8n.
+        const n8nProv = newProviders.find(p => p.sourceType === "n8n_sync");
+        if (n8nProv) n8nProv.isRecommended = true;
+        else if (newProviders.length > 0) newProviders[0].isRecommended = true;
       }
 
       // --- Pricing sanity check for construction ---

@@ -9,6 +9,15 @@ export function ProvidersStep() {
   const { providerOptions, selectedProviderId, materials, useSuggestedMaterials } = state;
   const [showCompare, setShowCompare] = useState(false);
 
+  const getBadgeProps = (sourceType?: string, isRealData?: boolean) => {
+    if (sourceType === "n8n_sync") return { label: "REAL", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800" };
+    if (sourceType === "default") return { label: "BASE", className: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700" };
+    if (sourceType === "market_reference") return { label: "REFERENCIA", className: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800" };
+    if (sourceType === "fallback" || sourceType === "unknown") return { label: "ESTIMADO", className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800" };
+    if (isRealData) return { label: "REAL", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800" };
+    return { label: "SIN FUENTE", className: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400 border-gray-200 dark:border-gray-700" };
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <Card>
@@ -43,7 +52,7 @@ export function ProvidersStep() {
                   <div key={p.id} className={`bg-white dark:bg-zinc-900 p-4 rounded-lg border ${selectedProviderId === p.id ? 'border-brand-green' : 'border-navy-100 dark:border-zinc-800'}`}>
                     <div className="flex justify-between items-start mb-2">
                       <h4 className="font-bold text-navy-900 dark:text-white">{p.name}</h4>
-                      {p.isRealData && <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Real</span>}
+                      <span className={`${getBadgeProps(p.sourceType, p.isRealData).className} text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider`}>{getBadgeProps(p.sourceType, p.isRealData).label}</span>
                     </div>
                     <ul className="text-sm text-navy-600 dark:text-zinc-400 mb-4 space-y-1">
                       <li><strong>Materiales:</strong> {p.materialsCount || 0} disponibles</li>
@@ -106,9 +115,7 @@ export function ProvidersStep() {
                 )}
                 <div className="flex items-center gap-2 mb-1">
                   <h3 className="font-bold text-navy-900 dark:text-white">{provider.name}</h3>
-                  {provider.isRealData && (
-                    <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Real</span>
-                  )}
+                  <span className={`${getBadgeProps(provider.sourceType, provider.isRealData).className} text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider`}>{getBadgeProps(provider.sourceType, provider.isRealData).label}</span>
                 </div>
                 <p className="text-xs text-navy-500 dark:text-zinc-400 mb-2 line-clamp-1">{provider.description}</p>
                 {provider.materialsCount !== undefined && provider.materialsCount > 0 ? (
@@ -198,11 +205,9 @@ export function ProvidersStep() {
                       <td className="p-3">
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-medium text-navy-900 dark:text-white">{m.name}</p>
-                          {m.isRealData && (
-                            <span className="bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400 text-[9px] px-1 rounded-sm uppercase tracking-wider font-semibold" title="Dato de tu catalogo">
-                              Real
-                            </span>
-                          )}
+                          <span className={`${getBadgeProps(m.sourceType, m.isRealData).className} border text-[9px] px-1 rounded-sm uppercase tracking-wider font-semibold`} title="Fuente de datos">
+                            {getBadgeProps(m.sourceType, m.isRealData).label}
+                          </span>
                         </div>
                       </td>
                       <td className="p-3">

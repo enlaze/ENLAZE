@@ -18,14 +18,50 @@ export function LiveSummaryPanel() {
   const isMaterialBasketReal = isRealDataMode && activeProvider?.isRealData && activeProvider?.name !== "Banco ENLAZE base" && activeProvider?.name !== "Referencia mercado";
 
   // EUR/m2 calculation
-  const detectedArea = state.aiInsights?.detected_area_m2;
+  let detectedArea = state.aiInsights?.detected_area_m2;
+  if (!detectedArea && isConstruction) {
+    const match = (state.description || "").match(/(\d+)\s*(m2|metros|m²)/i);
+    if (match) detectedArea = parseInt(match[1], 10);
+  }
   const pricePerM2 = detectedArea && detectedArea > 0 ? totals.clientPrice / detectedArea : null;
-  const priceRange = state.aiInsights?.estimated_price_range;
+
+  let priceRange = state.aiInsights?.estimated_price_range;
+  if (!priceRange && detectedArea && detectedArea > 0 && isConstruction) {
+    const serviceType = (state.serviceType || state.description || "").toLowerCase();
+    let minExpected = 400;
+    let maxExpected = 900;
+    if (serviceType.includes("integral") || serviceType.includes("completa")) {
+      minExpected = 500; maxExpected = 1200;
+    } else if (serviceType.includes("baño") || serviceType.includes("cocina")) {
+      minExpected = 600; maxExpected = 1500;
+    } else if (serviceType.includes("parcial") || serviceType.includes("pintura")) {
+      minExpected = 100; maxExpected = 400;
+    }
+    priceRange = { min: detectedArea * minExpected, max: detectedArea * maxExpected };
+  }
+
+  // Timeline calculation
+  let estimatedTimeline = state.aiInsights?.estimated_timeline;
+  if (!estimatedTimeline && isConstruction) {
+    const serviceType = (state.serviceType || state.description || "").toLowerCase();
+    let minWeeks = 4;
+    let maxWeeks = 6;
+    if (serviceType.includes("integral") || serviceType.includes("completa")) {
+      if (totals.clientPrice > 80000) { minWeeks = 10; maxWeeks = 14; }
+      else if (totals.clientPrice > 40000) { minWeeks = 6; maxWeeks = 10; }
+      else { minWeeks = 4; maxWeeks = 6; }
+    } else if (serviceType.includes("baño") || serviceType.includes("cocina")) {
+      minWeeks = 2; maxWeeks = 4;
+    } else {
+      minWeeks = 1; maxWeeks = 2;
+    }
+    estimatedTimeline = { total_duration_weeks: maxWeeks, total_duration_days: maxWeeks * 5 };
+  }
 
   let endDateValue = state.endDate ? new Date(state.endDate) : null;
-  if (!endDateValue && state.startDate && state.aiInsights?.estimated_timeline?.total_duration_days) {
+  if (!endDateValue && state.startDate && estimatedTimeline?.total_duration_days) {
     endDateValue = new Date(state.startDate);
-    endDateValue.setDate(endDateValue.getDate() + state.aiInsights.estimated_timeline.total_duration_days);
+    endDateValue.setDate(endDateValue.getDate() + parseInt(estimatedTimeline.total_duration_days.toString(), 10));
   }
 
   const endDateFormatted = endDateValue
@@ -34,6 +70,23 @@ export function LiveSummaryPanel() {
   const startDateFormatted = state.startDate
     ? new Date(state.startDate).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })
     : null;
+
+  // Data sources
+  let dataSources = state.aiInsights?.data_sources;
+  if (!dataSources) {
+    const n8nCount = providerOptions?.filter(p => p.sourceType === "n8n_sync").reduce((sum, p) => sum + (p.materialsCount || 0), 0) || 0;
+    const defaultCount = providerOptions?.filter(p => p.sourceType === "default" || p.sourceType === "market_reference").reduce((sum, p) => sum + (p.materialsCount || 0), 0) || 0;
+    dataSources = {
+      n8n_items_count: n8nCount,
+      default_items_count: defaultCount,
+      using_fallback: n8nCount === 0,
+      fallback_reason: "Catálogo real insuficiente: usando banco base y referencias estimadas",
+      real_suppliers: [],
+      price_items_count: n8nCount + defaultCount,
+      sector_price_count: 0,
+      sector_regulation_count: 0
+    };
+  }
 
   return (
     <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-navy-100 dark:border-zinc-800 shadow-sm p-6 sticky top-24">
@@ -134,7 +187,7 @@ export function LiveSummaryPanel() {
         )}
 
         {/* Timeline and dates */}
-        {(startDateFormatted || endDateFormatted || state.aiInsights?.estimated_timeline) && (
+        {(startDateFormatted || endDateFormatted || estimatedTimeline) && (
           <div className="bg-navy-50 dark:bg-zinc-800/50 p-3 rounded-xl mt-1">
             <div className="text-xs font-bold text-navy-600 dark:text-zinc-400 uppercase tracking-wider mb-2">Calendario</div>
             {startDateFormatted && (
@@ -149,11 +202,11 @@ export function LiveSummaryPanel() {
                 <span className="font-medium text-navy-900 dark:text-white">{endDateFormatted}</span>
               </div>
             )}
-            {state.aiInsights?.estimated_timeline && (
+            {estimatedTimeline && (
               <div className="flex justify-between items-center text-sm mt-1">
                 <span className="text-navy-500 dark:text-zinc-400">Duracion</span>
                 <span className="font-medium text-navy-900 dark:text-white">
-                  {state.aiInsights.estimated_timeline.total_duration_weeks} semanas ({state.aiInsights.estimated_timeline.total_duration_days} dias)
+                  {estimatedTimeline.total_duration_weeks} semanas ({estimatedTimeline.total_duration_days} dias)
                 </span>
               </div>
             )}
@@ -166,7 +219,7 @@ export function LiveSummaryPanel() {
         )}
       </div>
 
-      {state.aiInsights?.data_sources && (
+      {dataSources && (
         <div className="bg-navy-50 dark:bg-zinc-800/50 border border-navy-100 dark:border-zinc-800 rounded-xl p-4 mb-6">
           <h4 className="text-xs font-bold text-navy-800 dark:text-zinc-300 uppercase tracking-wider mb-2 flex items-center">
             <span className="mr-2">📊</span> Fuentes de datos
@@ -174,15 +227,15 @@ export function LiveSummaryPanel() {
           <ul className="text-[11px] text-navy-600 dark:text-zinc-400 space-y-1">
             <li className="flex justify-between">
               <span>Datos reales sincronizados (n8n):</span>
-              <span className="font-bold text-navy-900 dark:text-white">{state.aiInsights.data_sources.n8n_items_count} precios</span>
+              <span className="font-bold text-navy-900 dark:text-white">{dataSources.n8n_items_count} precios</span>
             </li>
             <li className="flex justify-between">
               <span>Banco base ENLAZE:</span>
-              <span className="font-bold text-navy-900 dark:text-white">{state.aiInsights.data_sources.default_items_count} referencias</span>
+              <span className="font-bold text-navy-900 dark:text-white">{dataSources.default_items_count} referencias</span>
             </li>
-            {state.aiInsights.data_sources.using_fallback && (
+            {dataSources.using_fallback && (
               <li className="text-amber-600 dark:text-amber-400 mt-1 font-medium">
-                ⚠️ {state.aiInsights.data_sources.fallback_reason}
+                ⚠️ {dataSources.fallback_reason}
               </li>
             )}
           </ul>
