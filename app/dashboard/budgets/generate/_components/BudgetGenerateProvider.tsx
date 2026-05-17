@@ -108,7 +108,19 @@ export interface BudgetState {
     regulatory_notes?: any[];
     calendar_phases?: any[];
     missing_questions?: string[];
+    estimated_timeline?: {
+      total_duration_days?: number;
+      total_duration_weeks?: number;
+      confidence?: number;
+      notes?: string;
+    };
+    price_warnings?: string[];
+    pricing_confidence?: number;
+    estimated_price_range?: { min: number; max: number };
+    detected_area_m2?: number | null;
   } | null;
+  /** When true, materials came from AI and should NOT be overwritten by the provider useEffect */
+  materialsFromAI: boolean;
 }
 
 interface BudgetContextProps {
@@ -127,7 +139,7 @@ interface BudgetContextProps {
   saveDraft: (manual?: boolean) => Promise<void>;
   loadDraft: (statePayload: BudgetState) => void;
   finalizeBudget: () => Promise<string | null>;
-  analyzeWithAI: () => Promise<boolean>;
+  analyzeWithAI: (force?: boolean) => Promise<boolean>;
 }
 
 const BudgetContext = createContext<BudgetContextProps | undefined>(undefined);
@@ -211,6 +223,7 @@ export function BudgetGenerateProvider({
     analysisError: null,
     lastAnalysisHash: null,
     aiInsights: null,
+    materialsFromAI: false,
   });
 
   // HYDRATE WITH REAL DATA (Fase 4.1)
@@ -333,7 +346,9 @@ export function BudgetGenerateProvider({
   useEffect(() => {
     // Skip if we just loaded a draft that has its own material list visible already
     if (!state.selectedProviderId) return;
-    
+    // NEVER overwrite AI-generated materials with provider filtering
+    if (state.materialsFromAI) return;
+
     if (state.isRealDataMode) {
       const newVisible = state.allFetchedMaterials.filter(m => m.provider_id === state.selectedProviderId);
       // Only set if different length to prevent loop re-renders
@@ -669,13 +684,12 @@ export function BudgetGenerateProvider({
     return true;
   };
 
-  const analyzeWithAI = async (): Promise<boolean> => {
-    if (!state.description || state.description.trim().length < 5) return true; // Just proceed if no useful description
-    
-    // Hash based on description + sector + service type to avoid repeated calls
+  const analyzeWithAI = async (forceRegenerate = false): Promise<boolean> => {
+    if (!state.description || state.description.trim().length < 5) return true;
+
     const currentHash = `${state.sector}-${state.serviceType}-${state.description}`.trim();
-    if (state.lastAnalysisHash === currentHash && !state.analysisError) {
-      return true; // Already analyzed
+    if (!forceRegenerate && state.lastAnalysisHash === currentHash && !state.analysisError) {
+      return true;
     }
 
     setState(prev => ({ ...prev, isAnalyzing: true, analysisError: null }));
@@ -687,7 +701,9 @@ export function BudgetGenerateProvider({
         body: JSON.stringify({
           sector: state.sector,
           description: state.description,
-          service_type: state.serviceType
+          service_type: state.serviceType,
+          current_partidas: state.partidas.map(p => ({ concept: p.concept, subtotal: p.subtotal_cost })),
+          current_materials: state.materials.map(m => ({ name: m.name, subtotal: m.subtotal }))
         })
       });
 
@@ -697,65 +713,159 @@ export function BudgetGenerateProvider({
       }
 
       const data = await res.json();
-      
-      // Map suggested_items to Partidas
-      const newPartidas = (data.suggested_items || []).map((item: any, idx: number) => ({
-        id: `ai-p-${idx}`,
-        concept: item.concept || item.title || "Partida",
-        description: item.description || "",
-        quantity: item.quantity || 1,
-        unit: item.unit || "ud",
-        category: item.category || "mano_obra",
-        unit_price: item.unit_cost || item.unit_price || 0,
-        subtotal_cost: (item.quantity || 1) * (item.unit_cost || item.unit_price || 0),
-        unit_price_client: (item.unit_cost || item.unit_price || 0) * (1 + (state.marginPercent / 100)),
-        subtotal_client: (item.quantity || 1) * (item.unit_cost || item.unit_price || 0) * (1 + (state.marginPercent / 100)),
-        status: "incluida"
-      }));
+      const marginMultiplier = 1 + (state.marginPercent / 100);
 
-      // Map materials
-      const newMaterials = (data.suggested_materials || []).map((item: any, idx: number) => {
-        let provId = "generic";
-        if (item.supplier_name) {
-           provId = item.supplier_name.toLowerCase().replace(/[^a-z0-9]/g, '-');
-        }
+      // Map suggested_items to Partidas
+      const newPartidas: Partida[] = (data.suggested_items || []).map((item: any, idx: number) => {
+        const cost = item.unit_cost || item.unit_price || 0;
+        const qty = item.quantity || 1;
+        return {
+          id: `ai-p-${idx}`,
+          concept: item.concept || item.title || "Partida",
+          description: item.description || "",
+          quantity: qty,
+          unit: item.unit || "ud",
+          category: item.category || "mano_obra",
+          unit_price: cost,
+          subtotal_cost: qty * cost,
+          unit_price_client: cost * marginMultiplier,
+          subtotal_client: qty * cost * marginMultiplier,
+          status: "incluida" as const,
+        };
+      });
+
+      // Map materials AND build provider options from them
+      const provMap = new Map<string, { name: string; count: number; total: number; isReal: boolean }>();
+      const newMaterials: Material[] = (data.suggested_materials || []).map((item: any, idx: number) => {
+        const rawSupplier = item.supplier_name || "Referencia mercado";
+        const provId = rawSupplier.toLowerCase().replace(/[^a-z0-9]/g, '-') || "generic";
+        const cost = item.unit_cost || item.unit_price || 0;
+        const qty = item.quantity || 1;
+        const isReal = item.source !== "fallback";
+
+        // Aggregate provider stats
+        const existing = provMap.get(provId) || { name: rawSupplier, count: 0, total: 0, isReal };
+        existing.count += 1;
+        existing.total += qty * cost;
+        provMap.set(provId, existing);
+
         return {
           id: `ai-m-${idx}`,
           name: item.concept || item.title || "Material",
-          quantity: item.quantity || 1,
+          quantity: qty,
           unit: item.unit || "ud",
-          unit_price: item.unit_cost || item.unit_price || 0,
-          subtotal: (item.quantity || 1) * (item.unit_cost || item.unit_price || 0),
+          unit_price: cost,
+          subtotal: qty * cost,
           included: true,
           provider_id: provId,
-          isRealData: item.source !== "fallback"
+          isRealData: isReal,
         };
       });
+
+      // Build provider options from AI materials
+      let newProviders: ProviderOption[] = [];
+      if (provMap.size > 0) {
+        newProviders = Array.from(provMap.entries()).map(([id, info], idx) => ({
+          id,
+          name: info.name,
+          description: info.isReal ? "Proveedor sugerido por IA" : "Referencia de mercado / estimado",
+          estimatedPrice: info.total,
+          deliveryTime: "Consultar",
+          stockLevel: "A consultar" as const,
+          rating: 4.5,
+          isRecommended: idx === 0,
+          materialsCount: info.count,
+          isRealData: info.isReal,
+        }));
+      }
+
+      // --- Pricing sanity check for construction ---
+      const detectedArea = data.detected_scope?.area_m2 || null;
+      const totalPartidasCost = newPartidas.reduce((s, p) => s + p.subtotal_cost, 0);
+      const totalMaterialsCost = newMaterials.reduce((s, m) => s + m.subtotal, 0);
+      const totalCostNoIva = (totalPartidasCost + totalMaterialsCost) * marginMultiplier;
+
+      let priceWarnings: string[] = data.price_warnings || [];
+      let pricingConfidence = data.pricing_confidence || data.confidence_score || 75;
+      let priceRange = data.estimated_price_range || null;
+
+      if (state.sector === "construccion" && detectedArea && detectedArea > 0) {
+        const pricePerM2 = totalCostNoIva / detectedArea;
+        const serviceType = (state.serviceType || state.description || "").toLowerCase();
+
+        let minExpected = 400; // €/m² default
+        let maxExpected = 900;
+
+        if (serviceType.includes("integral") || serviceType.includes("completa")) {
+          minExpected = 500; maxExpected = 1200;
+        } else if (serviceType.includes("baño") || serviceType.includes("cocina")) {
+          minExpected = 600; maxExpected = 1500;
+        } else if (serviceType.includes("parcial") || serviceType.includes("pintura")) {
+          minExpected = 100; maxExpected = 400;
+        }
+
+        if (pricePerM2 < minExpected) {
+          priceWarnings.push(
+            `Presupuesto posiblemente infravalorado: ${pricePerM2.toFixed(0)} €/m² vs rango habitual ${minExpected}-${maxExpected} €/m². Revisa instalaciones, baños, cocina, carpinterías, calidades, licencias y gestión de residuos.`
+          );
+          pricingConfidence = Math.min(pricingConfidence, 50);
+        } else if (pricePerM2 > maxExpected) {
+          priceWarnings.push(
+            `Presupuesto posiblemente sobrevalorado: ${pricePerM2.toFixed(0)} €/m² vs rango habitual ${minExpected}-${maxExpected} €/m².`
+          );
+          pricingConfidence = Math.min(pricingConfidence, 65);
+        }
+
+        if (!priceRange) {
+          priceRange = {
+            min: Math.round(detectedArea * minExpected),
+            max: Math.round(detectedArea * maxExpected),
+          };
+        }
+      }
+
+      // --- Timeline ---
+      const calendarPhases = data.calendar_phases || [];
+      const totalDays = calendarPhases.reduce((s: number, p: any) => s + (p.duration_days || 0), 0);
+      const estimatedTimeline = data.estimated_timeline || (totalDays > 0 ? {
+        total_duration_days: totalDays,
+        total_duration_weeks: Math.ceil(totalDays / 5), // working weeks
+        confidence: 0.7,
+        notes: "Estimación orientativa según alcance declarado.",
+      } : undefined);
 
       setState(prev => ({
         ...prev,
         isAnalyzing: false,
         lastAnalysisHash: currentHash,
+        materialsFromAI: newMaterials.length > 0,
         partidas: newPartidas.length > 0 ? newPartidas : prev.partidas,
         materials: newMaterials.length > 0 ? newMaterials : prev.materials,
+        providerOptions: newProviders.length > 0 ? newProviders : prev.providerOptions,
+        selectedProviderId: newProviders.length > 0 ? newProviders[0].id : prev.selectedProviderId,
         aiInsights: {
           summary: data.summary,
           confidence_score: data.confidence_score,
           regulatory_notes: data.regulatory_notes || [],
-          calendar_phases: data.calendar_phases || [],
-          missing_questions: data.missing_questions || []
-        }
+          calendar_phases: calendarPhases,
+          missing_questions: data.missing_questions || [],
+          estimated_timeline: estimatedTimeline,
+          price_warnings: priceWarnings,
+          pricing_confidence: pricingConfidence,
+          estimated_price_range: priceRange,
+          detected_area_m2: detectedArea,
+        },
       }));
       return true;
 
     } catch (error: any) {
       console.error("AI Analysis failed:", error);
-      setState(prev => ({ 
-        ...prev, 
-        isAnalyzing: false, 
-        analysisError: error.message 
+      setState(prev => ({
+        ...prev,
+        isAnalyzing: false,
+        analysisError: error.message
       }));
-      return false; // AI failed, so we'll fallback
+      return false;
     }
   };
 

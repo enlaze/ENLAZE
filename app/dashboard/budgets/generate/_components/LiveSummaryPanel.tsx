@@ -108,8 +108,27 @@ export function LiveSummaryPanel() {
               </ul>
             </li>
           )}
+          {state.aiInsights?.price_warnings && state.aiInsights.price_warnings.length > 0 && (
+            <li className="mb-2">
+              <strong className="block text-xs uppercase text-red-600 dark:text-red-400 mb-1">⚠️ Avisos de precio:</strong>
+              <ul className="list-disc pl-4 space-y-1 text-red-700 dark:text-red-300">
+                {state.aiInsights.price_warnings.map((w, idx) => (
+                  <li key={idx}>{w}</li>
+                ))}
+              </ul>
+            </li>
+          )}
+          {state.aiInsights?.estimated_timeline && (
+            <li className="mb-2">
+              <strong className="block text-xs uppercase opacity-80 mb-1">⏱ Tiempo estimado:</strong>
+              <span className="text-sm font-medium">{state.aiInsights.estimated_timeline.total_duration_weeks} semanas ({state.aiInsights.estimated_timeline.total_duration_days} días)</span>
+              {state.aiInsights.estimated_timeline.notes && (
+                <p className="text-[10px] opacity-70 mt-0.5">{state.aiInsights.estimated_timeline.notes}</p>
+              )}
+            </li>
+          )}
           {state.aiInsights?.calendar_phases && state.aiInsights.calendar_phases.length > 0 && (
-            <li>
+            <li className="mb-2">
               <strong className="block text-xs uppercase opacity-80 mb-1">Fases sugeridas:</strong>
               <span className="text-xs">{state.aiInsights.calendar_phases.length} fases ({state.aiInsights.calendar_phases.reduce((a: number, b: any) => a + (b.duration_days || 0), 0)} días aprox)</span>
             </li>

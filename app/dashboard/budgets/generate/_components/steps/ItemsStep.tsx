@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import { useBudgetGenerate, Partida } from "../BudgetGenerateProvider";
 import { Card } from "@/components/ui/card";
+import { useToast } from "@/components/ui/toast";
 
 export function ItemsStep() {
-  const { state, addPartida, updatePartida, removePartida } = useBudgetGenerate();
+  const { state, addPartida, updatePartida, removePartida, analyzeWithAI } = useBudgetGenerate();
   const { partidas } = state;
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -29,8 +30,12 @@ export function ItemsStep() {
             >
               + Añadir partida
             </button>
-            <button className="hidden sm:flex px-4 py-2 bg-brand-green/20 text-brand-green border border-brand-green/30 rounded-lg text-sm font-bold items-center gap-2 hover:bg-brand-green/30 transition">
-              <span>✨</span> Generar con IA
+            <button 
+              onClick={() => analyzeWithAI(true)}
+              disabled={state.isAnalyzing}
+              className="hidden sm:flex px-4 py-2 bg-brand-green/20 text-brand-green border border-brand-green/30 rounded-lg text-sm font-bold items-center gap-2 hover:bg-brand-green/30 transition disabled:opacity-50"
+            >
+              {state.isAnalyzing ? "✨ Regenerando propuesta con IA..." : "✨ Generar con IA"}
             </button>
           </div>
         </div>
