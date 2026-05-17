@@ -92,9 +92,11 @@ const { action, sector, data } = normalizedBody;
                 source: price.source || "n8n",
                 description: price.description || "",
                 last_updated: new Date().toISOString(),
-                metadata: price.metadata || {},
-                supplier_name: supplierName,
-                source_type: sourceType,
+                metadata: {
+                  ...(price.metadata || {}),
+                  supplier_name: supplierName,
+                  source_type: sourceType,
+                },
               })
               .eq("id", existing.id);
           } else {
@@ -108,9 +110,11 @@ const { action, sector, data } = normalizedBody;
               category: price.category || "",
               subcategory: price.subcategory || "",
               source: price.source || "n8n",
-              metadata: price.metadata || {},
-              supplier_name: supplierName,
-              source_type: sourceType,
+              metadata: {
+                ...(price.metadata || {}),
+                supplier_name: supplierName,
+                source_type: sourceType,
+              },
             });
           }
         }
