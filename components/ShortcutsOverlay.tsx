@@ -43,7 +43,6 @@ const GROUPS: ShortcutGroup[] = [
       { keys: ["G", "P"], label: "Ir a Pagos" },
       { keys: ["G", "V"], label: "Ir a Proveedores" },
       { keys: ["G", "R"], label: "Ir a Facturas recibidas" },
-      { keys: ["G", "A"], label: "Ir a Asistente IA" },
       { keys: ["G", "S"], label: "Ir a Ajustes" },
       { keys: ["G", "X"], label: "Ir a Cumplimiento" },
     ],

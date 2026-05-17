@@ -182,13 +182,6 @@ const RegistroActividadIcon = (
   </svg>
 );
 
-const AsistenteIAIcon = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-    <path d="M5 7.5A2.5 2.5 0 0 1 7.5 5h7.25A2.5 2.5 0 0 1 17.25 7.5v4.25a2.5 2.5 0 0 1-2.5 2.5H10l-3.25 2.5v-2.5H7.5A2.5 2.5 0 0 1 5 11.75V7.5Z" />
-    <path d="M18 4.25 18.85 6.4 21 7.25 18.85 8.1 18 10.25 17.15 8.1 15 7.25 17.15 6.4 18 4.25Z" fill="currentColor" stroke="none" />
-  </svg>
-);
-
 const FacturasRecibidasIcon = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
     <path d="M6 4.5h7.5L17 8v9.25A2.25 2.25 0 0 1 14.75 19.5H6A2.25 2.25 0 0 1 3.75 17.25v-10.5A2.25 2.25 0 0 1 6 4.5Z" />
@@ -220,7 +213,6 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard/clientes", label: "Clientes", icon: ClientesIcon, section: "General" },
   { href: "/dashboard/messages", label: "WhatsApp", icon: WhatsAppIcon, section: "General" },
   { href: "/dashboard/emails", label: "Emails", icon: EmailsIcon, section: "General" },
-  { href: "/dashboard/agent", label: "Asistente IA", icon: AsistenteIAIcon, section: "General" },
 
   // NEGOCIO
   { href: "/dashboard/budgets", label: "Presupuestos", icon: PresupuestosIcon, section: "Negocio" },

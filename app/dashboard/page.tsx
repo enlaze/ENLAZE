@@ -9,6 +9,11 @@ import ErrorAlert from "@/components/ErrorAlert";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { SkeletonCard, SkeletonKpi, SkeletonTable } from "@/components/ui/skeleton";
 import InfoFlipCard from "@/components/ui/InfoFlipCard";
+import {
+  AgentDataProvider,
+  AgentBriefingHero,
+  AgentTabsPanel,
+} from "@/components/dashboard/AgentExperience";
 
 /* ─────────────────────────────────────────────────────────────────────
  *  Icons — Lucide-style (stroke 1.75, 24×24, rounded)
@@ -375,7 +380,8 @@ export default function DashboardHome() {
 
   return (
     <ErrorBoundary name="dashboard-home">
-      <div className="space-y-8">
+      <AgentDataProvider>
+        <div className="space-y-8">
       {/* ── 1. Header / Greeting ─────────────────────────────────── */}
       <div>
         <div className="flex items-center gap-2">
@@ -400,11 +406,11 @@ export default function DashboardHome() {
         </p>
       </div>
 
+      {/* ── Briefing del agente (hero) ─────────────────────────── */}
+      <AgentBriefingHero />
+
       {/* ── Onboarding checklist (auto-hides when all steps done) ── */}
       <OnboardingChecklist />
-
-      {/* ── Daily Briefing ── */}
-      <DailyBriefingCard />
 
       {/* ── 2. KPI Cards ─────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
@@ -529,7 +535,10 @@ export default function DashboardHome() {
         </section>
       </div>
 
-      {/* ── 5. Quick links ───────────────────────────────────────── */}
+      {/* ── 5. Tablas del agente (noticias, señales, …) ───────── */}
+      <AgentTabsPanel />
+
+      {/* ── 6. Quick links ───────────────────────────────────────── */}
       <section>
         <h2 className="mb-4 text-[12px] font-semibold uppercase tracking-[0.12em] text-navy-400 dark:text-zinc-500">
           Accesos rápidos
@@ -541,7 +550,8 @@ export default function DashboardHome() {
           <QuickLink icon={<IcoCalendar size={18} />} label="Ver calendario" href="/dashboard/calendar" />
         </div>
       </section>
-      </div>
+        </div>
+      </AgentDataProvider>
     </ErrorBoundary>
   );
 }
@@ -733,237 +743,3 @@ function QuickLink({ icon, label, href }: { icon: React.ReactNode; label: string
   );
 }
 
-function DailyBriefingCard() {
-  const supabase = createClient();
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<any>(null);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    async function fetchBriefing() {
-      try {
-        setLoading(true);
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user) {
-          setError(true);
-          return;
-        }
-
-        const headers: Record<string, string> = {};
-        if (session.access_token) {
-          headers["Authorization"] = `Bearer ${session.access_token}`;
-        }
-
-        const res = await fetch(`/api/agent/daily-briefing`, { headers });
-        if (!res.ok) throw new Error("Briefing request failed");
-        
-        const json = await res.json();
-        setData(json);
-      } catch (err) {
-        console.error("Failed to load daily briefing:", err);
-        setError(true);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchBriefing();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="rounded-2xl border border-navy-100 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 animate-pulse">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="h-6 w-6 rounded-full bg-navy-100 dark:bg-zinc-800" />
-          <div className="h-5 w-32 rounded bg-navy-100 dark:bg-zinc-800" />
-        </div>
-        <div className="space-y-2 mb-6">
-          <div className="h-4 w-full rounded bg-navy-50 dark:bg-zinc-800" />
-          <div className="h-4 w-3/4 rounded bg-navy-50 dark:bg-zinc-800" />
-        </div>
-        <div className="flex gap-3">
-          <div className="h-8 w-24 rounded-lg bg-navy-100 dark:bg-zinc-800" />
-          <div className="h-8 w-24 rounded-lg bg-navy-100 dark:bg-zinc-800" />
-          <div className="h-8 w-24 rounded-lg bg-navy-100 dark:bg-zinc-800" />
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="rounded-2xl border border-red-100 bg-red-50 p-6 dark:border-red-900/30 dark:bg-red-900/10">
-        <p className="text-[14px] font-medium text-red-800 dark:text-red-400">
-          No se ha podido cargar tu resumen diario.
-        </p>
-      </div>
-    );
-  }
-
-  const { summary, modules, module_status } = data;
-  const isAllDisconnected = !modules || (!modules.gmail?.connected && !modules.calendar?.connected && !modules.sheets?.connected);
-
-  if (isAllDisconnected) {
-    return (
-      <div className="rounded-2xl border border-brand-green/20 bg-brand-green/5 p-6 shadow-sm dark:border-brand-green/10 dark:bg-brand-green/5 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div>
-          <h2 className="text-[16px] font-semibold text-navy-900 dark:text-white flex items-center gap-2 mb-1">
-            <span className="text-xl">✨</span> Resumen de Inteligencia
-          </h2>
-          <p className="text-[13.5px] text-navy-600 dark:text-zinc-400">
-            Aún no tienes el agente conectado. Integra tu correo, calendario y datos para ver tu resumen de hoy.
-          </p>
-        </div>
-        <Link 
-          href="/dashboard/settings/integrations" 
-          className="shrink-0 px-4 py-2 rounded-lg bg-brand-green text-white hover:bg-brand-green/90 text-sm font-medium transition-colors"
-        >
-          Conectar herramientas
-        </Link>
-      </div>
-    );
-  }
-
-  // --- Siguiente mejor acción heurística ---
-  let nextAction = null;
-  if (modules?.sheets && modules.sheets.connected && !modules.sheets.spreadsheet_id) {
-    nextAction = {
-      message: "💡 Configura una hoja para que el agente pueda analizar ventas o stock.",
-      actionLabel: "Configurar hoja",
-      actionUrl: "/dashboard/settings/integrations",
-      isInternal: true
-    };
-  } else if (modules?.gmail && modules.gmail.connected && modules.gmail.priority_threads?.length > 0) {
-    nextAction = {
-      message: `🚨 Tienes ${modules.gmail.priority_threads.length} correos urgentes sin leer.`,
-      actionLabel: "Abrir Gmail",
-      actionUrl: "https://mail.google.com/mail/u/0/#inbox",
-      isInternal: false
-    };
-  } else if (modules?.calendar && modules.calendar.connected && (modules.calendar.daily_agenda?.free_hours || 0) >= 2) {
-    nextAction = {
-      message: `⏱️ Hoy tienes ${modules.calendar.daily_agenda.free_hours} horas libres.`,
-      actionLabel: "Ver agenda",
-      actionUrl: "https://calendar.google.com",
-      isInternal: false
-    };
-  } else {
-    nextAction = {
-      message: "✅ El día está bajo control. ¡Sigue así!",
-      actionLabel: null,
-      actionUrl: null,
-      isInternal: false
-    };
-  }
-
-  return (
-    <section className="relative overflow-hidden rounded-2xl border border-brand-green/20 bg-gradient-to-br from-white to-brand-green/5 shadow-sm dark:border-brand-green/20 dark:from-zinc-900 dark:to-brand-green/5">
-      <div className="p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-xl">✨</span>
-          <h2 className="text-[16px] font-semibold text-navy-900 dark:text-white">Resumen de hoy</h2>
-        </div>
-        
-        <p className="text-[15px] leading-relaxed text-navy-800 dark:text-zinc-300 mb-6">
-          {summary}
-        </p>
-
-        {/* --- Badges Estáticos --- */}
-        <div className="flex flex-wrap gap-3 mb-6">
-          <ModuleBadge 
-            name="Gmail" 
-            status={module_status?.gmail} 
-            connected={modules?.gmail?.connected}
-            value={modules?.gmail?.unread_count !== undefined ? `${modules.gmail.unread_count} sin leer` : "No conectado"} 
-          />
-          <ModuleBadge 
-            name="Calendar" 
-            status={module_status?.calendar} 
-            connected={modules?.calendar?.connected}
-            value={modules?.calendar?.today_events?.length !== undefined ? `${modules.calendar.today_events.length} eventos` : "No conectado"} 
-          />
-          <ModuleBadge 
-            name="Sheets" 
-            status={
-              modules?.sheets?.is_fallback || (!modules?.sheets?.spreadsheet_name && modules?.sheets?.connected) 
-                ? "warning" 
-                : module_status?.sheets
-            } 
-            connected={modules?.sheets?.connected}
-            value={
-              modules?.sheets?.spreadsheet_name 
-                ? (modules?.sheets?.is_fallback ? "Modo automático" : modules.sheets.spreadsheet_name)
-                : "Sin hoja configurada"
-            } 
-          />
-        </div>
-
-        {/* --- Siguiente mejor acción --- */}
-        <div className="bg-white/60 dark:bg-zinc-800/60 rounded-xl p-4 border border-navy-100 dark:border-zinc-700/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <p className="text-[14px] font-medium text-navy-900 dark:text-white">
-            {nextAction.message}
-          </p>
-          {nextAction.actionLabel && (
-            nextAction.isInternal ? (
-              <Link href={nextAction.actionUrl} className="shrink-0 px-4 py-1.5 text-sm font-medium bg-brand-green text-white rounded-lg hover:bg-brand-green/90 transition-colors">
-                {nextAction.actionLabel}
-              </Link>
-            ) : (
-              <a href={nextAction.actionUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 px-4 py-1.5 text-sm font-medium bg-brand-green text-white rounded-lg hover:bg-brand-green/90 transition-colors">
-                {nextAction.actionLabel}
-              </a>
-            )
-          )}
-        </div>
-      </div>
-      
-      {/* --- Acciones rápidas adicionales --- */}
-      <div className="bg-navy-50/50 dark:bg-zinc-800/30 px-6 py-4 border-t border-brand-green/10 flex flex-wrap items-center gap-3">
-        <span className="text-[12px] font-semibold uppercase tracking-wider text-navy-500 dark:text-zinc-500 mr-2">
-          Enlaces rápidos:
-        </span>
-        
-        {modules?.gmail?.connected && (
-          <a href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noopener noreferrer" className="text-[13px] font-medium text-navy-700 hover:text-brand-green dark:text-zinc-300 transition-colors">
-            Abrir Gmail
-          </a>
-        )}
-        
-        {modules?.calendar?.connected && (
-          <a href="https://calendar.google.com" target="_blank" rel="noopener noreferrer" className="text-[13px] font-medium text-navy-700 hover:text-brand-green dark:text-zinc-300 transition-colors">
-            Ver Agenda
-          </a>
-        )}
-        
-        {modules?.sheets?.connected && modules.sheets.spreadsheet_id ? (
-          <a href={`https://docs.google.com/spreadsheets/d/${modules.sheets.spreadsheet_id}`} target="_blank" rel="noopener noreferrer" className="text-[13px] font-medium text-navy-700 hover:text-brand-green dark:text-zinc-300 transition-colors">
-            Abrir Hoja
-          </a>
-        ) : (
-          <Link href="/dashboard/settings/integrations" className="text-[13px] font-medium text-navy-700 hover:text-brand-green dark:text-zinc-300 transition-colors">
-            Integraciones
-          </Link>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function ModuleBadge({ name, status, connected, value }: { name: string, status?: string, connected?: boolean, value: string }) {
-  const isError = status === "error" || !connected;
-  const isWarning = status === "warning";
-  
-  const bgClass = isError ? "bg-red-50 dark:bg-red-900/10" : isWarning ? "bg-amber-50 dark:bg-amber-900/10" : "bg-white dark:bg-zinc-800/50";
-  const borderClass = isError ? "border-red-200 dark:border-red-800/50" : isWarning ? "border-amber-200 dark:border-amber-800/50" : "border-navy-100 dark:border-zinc-700/50";
-  const dotClass = isError ? "bg-red-500" : isWarning ? "bg-amber-400" : "bg-brand-green";
-  const textClass = isError ? "text-red-700 dark:text-red-400" : isWarning ? "text-amber-700 dark:text-amber-400" : "text-navy-700 dark:text-zinc-300";
-
-  return (
-    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${bgClass} ${borderClass} shadow-sm`}>
-      <span className={`h-2 w-2 rounded-full ${dotClass}`} />
-      <span className={`text-[12px] font-medium ${textClass}`}>
-        {name}: <span className="opacity-80 font-normal">{!connected ? "No conectado" : value}</span>
-      </span>
-    </div>
-  );
-}

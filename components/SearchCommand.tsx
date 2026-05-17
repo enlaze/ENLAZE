@@ -48,7 +48,6 @@ const quickActions = [
   { label: "Cumplimiento", href: "/dashboard/compliance", icon: "🛡️", keys: "G X" },
   { label: "Proveedores", href: "/dashboard/suppliers", icon: "🔧", keys: "G V" },
   { label: "Facturas recibidas", href: "/dashboard/suppliers/invoices", icon: "🧾", keys: "G R" },
-  { label: "Asistente IA", href: "/dashboard/agent", icon: "🤖", keys: "G A" },
   { label: "Ajustes", href: "/dashboard/settings", icon: "⚙️", keys: "G S" },
 ];
 
