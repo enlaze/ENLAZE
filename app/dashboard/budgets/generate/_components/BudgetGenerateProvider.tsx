@@ -107,9 +107,9 @@ export interface BudgetState {
   description: string;
   ivaPercent: number;
   marginPercent: number;
-  
+
   validationError: string | null;
-  
+
   // Dynamic Sector Data
   sectorData: Record<string, any>;
   // Partidas
@@ -148,6 +148,16 @@ export interface BudgetState {
     pricing_confidence?: number;
     estimated_price_range?: { min: number; max: number };
     detected_area_m2?: number | null;
+    data_sources?: {
+      price_items_count: number;
+      n8n_items_count: number;
+      default_items_count: number;
+      sector_price_count: number;
+      sector_regulation_count: number;
+      real_suppliers: string[];
+      using_fallback: boolean;
+      fallback_reason: string;
+    };
   } | null;
   /** When true, materials came from AI and should NOT be overwritten by the provider useEffect */
   materialsFromAI: boolean;
@@ -174,10 +184,10 @@ interface BudgetContextProps {
 
 const BudgetContext = createContext<BudgetContextProps | undefined>(undefined);
 
-export function BudgetGenerateProvider({ 
+export function BudgetGenerateProvider({
   children,
   initialSector = "construccion"
-}: { 
+}: {
   children: ReactNode;
   initialSector?: string;
 }) {
@@ -197,7 +207,7 @@ export function BudgetGenerateProvider({
     ivaPercent: 21,
     marginPercent: 20,
     validationError: null,
-    
+
     sectorData: {},
     partidas: [
       {
@@ -272,17 +282,19 @@ export function BudgetGenerateProvider({
 
         // Normalization logic for providers
         function normalizeSupplierName(item: any): string {
+          const rawSource = [item.supplier_name, item.source_url, item.description, item.name, item.category, item.source, item.provider, item.metadata?.source].join(" ").toLowerCase();
+
+          if (activeSector === "construccion") {
+            if (rawSource.includes("leroy")) return "Leroy Merlin";
+            if (rawSource.includes("obramat") || rawSource.includes("bricomart")) return "OBRAMAT";
+            if (rawSource.includes("saltoki")) return "Saltoki";
+            if (rawSource.includes("cype")) return "CYPE / Banco de precios";
+            if (rawSource.includes("referencia-mercado") || rawSource.includes("referencia")) return "Referencia mercado";
+            if (item.source_type === "default") return "Banco ENLAZE base";
+          }
+
           const rawName = item.supplier_name || item.source || item.provider || item.provider_name || item.supplier || (item.metadata?.source);
           if (!rawName || typeof rawName !== 'string' || rawName.trim() === "") return "Proveedor Genérico";
-          
-          const upper = rawName.trim().toUpperCase();
-          if (activeSector === "construccion") {
-            if (upper.includes("LEROY") || upper.includes("MERLIN")) return "Leroy Merlin";
-            if (upper.includes("OBRAMAT") || upper.includes("BRICOMART")) return "Obramat";
-            if (upper.includes("SALTOKI")) return "Saltoki";
-            if (upper.includes("CYPE")) return "CYPE / Banco de precios";
-            if (upper.includes("MERCADO") || upper.includes("REFERENCIA")) return "Referencia mercado";
-          }
           return rawName.trim();
         }
 
@@ -294,13 +306,13 @@ export function BudgetGenerateProvider({
         data.forEach(item => {
           const normName = normalizeSupplierName(item);
           const provId = normName === "Proveedor Genérico" ? "generic" : normName === "Referencia mercado" ? "market" : normName.toLowerCase().replace(/[^a-z0-9]/g, '-');
-          
+
           if (!providersMap.has(provId)) {
             providersMap.set(provId, {
               id: provId,
               name: normName,
               description: normName === "Proveedor Genérico" ? "Materiales sin asignar" : "Catálogo propio / Importado",
-              estimatedPrice: 0, 
+              estimatedPrice: 0,
               deliveryTime: "Consultar",
               stockLevel: "A consultar",
               rating: 4.5,
@@ -309,7 +321,7 @@ export function BudgetGenerateProvider({
               isRealData: true
             });
           }
-          
+
           realMaterials.push({
             id: item.id,
             name: item.name,
@@ -380,7 +392,7 @@ export function BudgetGenerateProvider({
     let directCost = 0;
     let clientPrice = 0;
     let materialsCost = 0;
-    
+
     state.partidas.forEach(p => {
       if (p.status !== "opcional") {
         directCost += p.subtotal_cost;
@@ -513,8 +525,8 @@ export function BudgetGenerateProvider({
 
         if (error) throw error;
         draftId = data.id;
-        setState(prev => ({ 
-          ...prev, 
+        setState(prev => ({
+          ...prev,
           draftId,
           lastSavedAt: new Date().toLocaleTimeString("es-ES", { hour: '2-digit', minute: '2-digit' })
         }));
@@ -533,9 +545,9 @@ export function BudgetGenerateProvider({
         }).eq("id", draftId);
 
         if (error) throw error;
-        
-        setState(prev => ({ 
-          ...prev, 
+
+        setState(prev => ({
+          ...prev,
           lastSavedAt: new Date().toLocaleTimeString("es-ES", { hour: '2-digit', minute: '2-digit' })
         }));
       }
@@ -552,7 +564,7 @@ export function BudgetGenerateProvider({
   const finalizeBudget = async (): Promise<string | null> => {
     try {
       await saveDraft(false); // Asegurarse de que tenemos el ID y el último estado
-      
+
       const supabase = createClient();
       const budgetId = state.draftId;
       if (!budgetId) throw new Error("No hay borrador para finalizar");
@@ -609,7 +621,7 @@ export function BudgetGenerateProvider({
 
       // 5. Guardar Snapshot de Version y Activity Log
       const { data: finalBudget } = await supabase.from("budgets").select("*").eq("id", budgetId).single();
-      
+
       saveDocumentVersion(supabase, {
         entity_type: "budget",
         entity_id: budgetId,
@@ -650,7 +662,7 @@ export function BudgetGenerateProvider({
     }
 
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
-    
+
     saveTimeout.current = setTimeout(() => {
       // Solo hacer autosave silencioso si ya hay un draftId (fue creado manualmente antes o en un paso previo)
       // Opcional: Descomentar para forzar creación en la primera pulsación.
@@ -910,6 +922,7 @@ export function BudgetGenerateProvider({
           pricing_confidence: pricingConfidence,
           estimated_price_range: priceRange,
           detected_area_m2: detectedArea,
+          data_sources: data.data_sources,
         },
       }));
       return true;
@@ -927,15 +940,15 @@ export function BudgetGenerateProvider({
 
   const nextStep = async () => {
     if (!validateStep(state.currentStep)) return;
-    
+
     // AI Analysis when moving from step 0 to step 1
     if (state.currentStep === 0) {
       const isDefaultPartidas = state.partidas.length === 0 || (state.partidas.length === 2 && state.partidas[0].id === "example-1");
-      
+
       // Only run analysis if we have default partidas
       if (isDefaultPartidas) {
         const success = await analyzeWithAI();
-        
+
         // If AI failed or returned nothing, and we're in construction, inject fallback
         if (!success && (state.sector === "construccion" || !state.sector)) {
           const isReforma = state.serviceType?.toLowerCase().includes("reforma") || !state.serviceType;
@@ -943,11 +956,11 @@ export function BudgetGenerateProvider({
             toast.info("Aviso", {
               description: "Usando plantilla local V1 porque el análisis IA no ha respondido."
             });
-            setState(prev => ({ 
-              ...prev, 
-              currentStep: prev.currentStep + 1, 
+            setState(prev => ({
+              ...prev,
+              currentStep: prev.currentStep + 1,
               validationError: null,
-              partidas: CONSTRUCTION_FALLBACK_PARTIDAS 
+              partidas: CONSTRUCTION_FALLBACK_PARTIDAS
             }));
             saveDraft(false);
             return;
@@ -965,7 +978,7 @@ export function BudgetGenerateProvider({
       for (let i = state.currentStep; i < step; i++) {
         if (!validateStep(i)) return;
       }
-      
+
       if (state.currentStep === 0 && step > 0) {
          const isDefaultPartidas = state.partidas.length === 0 || (state.partidas.length === 2 && state.partidas[0].id === "example-1");
          if (isDefaultPartidas) {
@@ -987,7 +1000,7 @@ export function BudgetGenerateProvider({
   };
 
   return (
-    <BudgetContext.Provider value={{ 
+    <BudgetContext.Provider value={{
       state, updateState, updateSectorData, nextStep, prevStep, goToStep,
       addPartida, updatePartida, removePartida,
       setSelectedProvider, updateMaterial, setUseSuggestedMaterials,

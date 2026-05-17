@@ -61,6 +61,26 @@ const { action, sector, data } = normalizedBody;
             .eq("title", price.title)
             .single();
 
+          const rawSource = [price.source, price.source_url, price.description, price.title, price.name].join(" ").toLowerCase();
+          let supplierName = "Banco ENLAZE base";
+          let sourceType = price.source_type === "default" ? "default" : "n8n_sync";
+
+          if (rawSource.includes("leroy")) {
+            supplierName = "Leroy Merlin";
+            sourceType = "n8n_sync";
+          } else if (rawSource.includes("obramat") || rawSource.includes("bricomart")) {
+            supplierName = "OBRAMAT";
+            sourceType = "n8n_sync";
+          } else if (rawSource.includes("cype")) {
+            supplierName = "CYPE / Banco de precios";
+            sourceType = "banco_precios";
+          } else if (rawSource.includes("referencia-mercado") || rawSource.includes("referencia")) {
+            supplierName = "Referencia mercado";
+            sourceType = "market_reference";
+          } else if (price.source_type === "default") {
+            supplierName = "Banco ENLAZE base";
+          }
+
           if (existing) {
             await supabase
               .from("sector_data")
@@ -73,6 +93,8 @@ const { action, sector, data } = normalizedBody;
                 description: price.description || "",
                 last_updated: new Date().toISOString(),
                 metadata: price.metadata || {},
+                supplier_name: supplierName,
+                source_type: sourceType,
               })
               .eq("id", existing.id);
           } else {
@@ -87,6 +109,8 @@ const { action, sector, data } = normalizedBody;
               subcategory: price.subcategory || "",
               source: price.source || "n8n",
               metadata: price.metadata || {},
+              supplier_name: supplierName,
+              source_type: sourceType,
             });
           }
         }

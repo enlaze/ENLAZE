@@ -14,16 +14,22 @@ export function LiveSummaryPanel() {
   const includedMaterialsCount = materials?.filter(m => m.included).length || 0;
 
   // Real data check
-  const isMaterialBasketReal = isRealDataMode && activeProvider?.isRealData;
+  // Real data check (don't show as real if it's default/fallback)
+  const isMaterialBasketReal = isRealDataMode && activeProvider?.isRealData && activeProvider?.name !== "Banco ENLAZE base" && activeProvider?.name !== "Referencia mercado";
 
   // EUR/m2 calculation
   const detectedArea = state.aiInsights?.detected_area_m2;
   const pricePerM2 = detectedArea && detectedArea > 0 ? totals.clientPrice / detectedArea : null;
   const priceRange = state.aiInsights?.estimated_price_range;
 
-  // End date display
-  const endDateFormatted = state.endDate
-    ? new Date(state.endDate).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })
+  let endDateValue = state.endDate ? new Date(state.endDate) : null;
+  if (!endDateValue && state.startDate && state.aiInsights?.estimated_timeline?.total_duration_days) {
+    endDateValue = new Date(state.startDate);
+    endDateValue.setDate(endDateValue.getDate() + state.aiInsights.estimated_timeline.total_duration_days);
+  }
+
+  const endDateFormatted = endDateValue
+    ? endDateValue.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })
     : null;
   const startDateFormatted = state.startDate
     ? new Date(state.startDate).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })
@@ -159,6 +165,29 @@ export function LiveSummaryPanel() {
           </div>
         )}
       </div>
+
+      {state.aiInsights?.data_sources && (
+        <div className="bg-navy-50 dark:bg-zinc-800/50 border border-navy-100 dark:border-zinc-800 rounded-xl p-4 mb-6">
+          <h4 className="text-xs font-bold text-navy-800 dark:text-zinc-300 uppercase tracking-wider mb-2 flex items-center">
+            <span className="mr-2">📊</span> Fuentes de datos
+          </h4>
+          <ul className="text-[11px] text-navy-600 dark:text-zinc-400 space-y-1">
+            <li className="flex justify-between">
+              <span>Datos reales sincronizados (n8n):</span>
+              <span className="font-bold text-navy-900 dark:text-white">{state.aiInsights.data_sources.n8n_items_count} precios</span>
+            </li>
+            <li className="flex justify-between">
+              <span>Banco base ENLAZE:</span>
+              <span className="font-bold text-navy-900 dark:text-white">{state.aiInsights.data_sources.default_items_count} referencias</span>
+            </li>
+            {state.aiInsights.data_sources.using_fallback && (
+              <li className="text-amber-600 dark:text-amber-400 mt-1 font-medium">
+                ⚠️ {state.aiInsights.data_sources.fallback_reason}
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
 
       <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-xl p-4">
         <h4 className="text-xs font-bold text-amber-800 dark:text-amber-500 uppercase tracking-wider mb-2 flex items-center">

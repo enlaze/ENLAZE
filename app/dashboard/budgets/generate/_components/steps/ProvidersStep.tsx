@@ -111,9 +111,13 @@ export function ProvidersStep() {
                   )}
                 </div>
                 <p className="text-xs text-navy-500 dark:text-zinc-400 mb-2 line-clamp-1">{provider.description}</p>
-                {provider.materialsCount !== undefined && (
+                {provider.materialsCount !== undefined && provider.materialsCount > 0 ? (
                   <p className="text-xs text-navy-500 dark:text-zinc-400 mb-3 font-medium">
                     {provider.materialsCount} materiales disponibles
+                  </p>
+                ) : (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mb-3 font-medium flex items-center gap-1">
+                    <span>⚠️</span> Sin materiales para este alcance
                   </p>
                 )}
                 <div className="flex justify-between items-end">

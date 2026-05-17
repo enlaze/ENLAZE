@@ -54,13 +54,27 @@ export async function POST(request: Request) {
     const sectorConfig = getSectorConfig(activeSector);
 
     // 1. Fetch user's own price_items (private)
-    const { data: priceItems } = await supabase
+    const { data: priceItemsData } = await supabase
       .from("price_items")
-      .select("name, category, unit_price, unit, supplier_name")
+      .select("name, category, unit_price, unit, supplier_name, source_type, source_url, description")
       .eq("user_id", user.id)
       .eq("sector", activeSector)
       .eq("is_active", true)
       .limit(200);
+
+    const priceItems = (priceItemsData || []).map(p => {
+      let supplierName = p.supplier_name;
+      if (!supplierName) {
+        const rawSource = [p.source_url, p.source_type, p.description, p.name, p.category].join(" ").toLowerCase();
+        if (rawSource.includes("leroy")) supplierName = "Leroy Merlin";
+        else if (rawSource.includes("obramat") || rawSource.includes("bricomart")) supplierName = "OBRAMAT";
+        else if (rawSource.includes("cype")) supplierName = "CYPE / Banco de precios";
+        else if (rawSource.includes("referencia-mercado") || rawSource.includes("referencia")) supplierName = "Referencia mercado";
+        else if (p.source_type === "default") supplierName = "Banco ENLAZE base";
+        else supplierName = "Proveedor sin identificar";
+      }
+      return { ...p, supplier_name: supplierName };
+    });
 
     // 2. Fetch global market data (sector_data) — try both normalized and raw sector
     const { data: sectorData } = await supabase
@@ -299,6 +313,21 @@ REGLAS:
         notes: "Estimacion calculada desde las fases del calendario."
       };
     }
+
+    const n8nItemsCount = priceItems.filter(p => p.source_type === "n8n_sync" || (p.source_url && p.source_url.includes("n8n")) || p.supplier_name === "Leroy Merlin" || p.supplier_name === "OBRAMAT").length;
+    const defaultItemsCount = priceItems.filter(p => p.source_type === "default" || p.supplier_name === "Banco ENLAZE base").length;
+    const realSuppliers = Array.from(new Set(priceItems.map(p => p.supplier_name).filter(s => s === "Leroy Merlin" || s === "OBRAMAT")));
+
+    result.data_sources = {
+      price_items_count: priceItems.length,
+      n8n_items_count: n8nItemsCount,
+      default_items_count: defaultItemsCount,
+      sector_price_count: refPrices.length,
+      sector_regulation_count: regulations.length,
+      real_suppliers: realSuppliers,
+      using_fallback: n8nItemsCount < 10,
+      fallback_reason: n8nItemsCount < 10 ? `Catalogo real insuficiente: solo ${n8nItemsCount} precios n8n sincronizados` : ""
+    };
 
     // Log summary for debugging
     console.log(`[budget-analysis] OK: ${result.suggested_items.length} partidas, ${result.suggested_materials.length} materials, area=${result.detected_scope?.area_m2}m2`);
