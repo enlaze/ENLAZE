@@ -88,39 +88,52 @@ export function LiveSummaryPanel() {
           <span className="mr-2">✨</span> Insights IA
         </h4>
         <ul className="text-sm text-amber-900 dark:text-amber-400 space-y-2">
-          {state.partidas.length === 0 ? (
-            <li>Añade partidas para que la IA calcule el margen óptimo.</li>
-          ) : (
+          {state.aiInsights?.missing_questions && state.aiInsights.missing_questions.length > 0 && (
+            <li className="mb-2">
+              <strong className="block text-xs uppercase opacity-80 mb-1">Preguntas al cliente:</strong>
+              <ul className="list-disc pl-4 space-y-1">
+                {state.aiInsights.missing_questions.map((q, idx) => (
+                  <li key={idx}>{q}</li>
+                ))}
+              </ul>
+            </li>
+          )}
+          {state.aiInsights?.regulatory_notes && state.aiInsights.regulatory_notes.length > 0 && (
+            <li className="mb-2">
+              <strong className="block text-xs uppercase opacity-80 mb-1">Avisos normativos:</strong>
+              <ul className="list-disc pl-4 space-y-1">
+                {state.aiInsights.regulatory_notes.map((n: any, idx: number) => (
+                  <li key={idx}><strong>{n.title}:</strong> {n.description}</li>
+                ))}
+              </ul>
+            </li>
+          )}
+          {state.aiInsights?.calendar_phases && state.aiInsights.calendar_phases.length > 0 && (
+            <li>
+              <strong className="block text-xs uppercase opacity-80 mb-1">Fases sugeridas:</strong>
+              <span className="text-xs">{state.aiInsights.calendar_phases.length} fases ({state.aiInsights.calendar_phases.reduce((a: number, b: any) => a + (b.duration_days || 0), 0)} días aprox)</span>
+            </li>
+          )}
+          {!state.aiInsights && state.partidas.length === 0 ? (
+            <li>Describe el alcance para que la IA genere recomendaciones personalizadas.</li>
+          ) : !state.aiInsights && state.partidas.length > 0 && isConstruction ? (
             <>
-              {isConstruction ? (
-                <>
-                  <li>Sugerencia: Sube el margen un 5% ({activeProvider?.name} tiene un plazo rápido de entrega que el cliente suele valorar).</li>
-                  {materials?.some(m => !m.included) && (
-                    <li>Has excluido materiales sugeridos. Asegúrate de tener stock propio.</li>
-                  )}
-                  {isMaterialBasketReal && activeProvider?.materialsCount === 0 && (
-                    <li>No hemos encontrado materiales reales en tu base de datos para este proveedor.</li>
-                  )}
-                  {!isMaterialBasketReal && (
-                    <li>💡 Conecta tus catálogos de compra para evitar precios estimados y basar el margen en tus costes reales.</li>
-                  )}
-                </>
-              ) : (
-                <>
-                  <li>Sugerencia: Añade un fee de mantenimiento recurrente para aumentar el LTV del cliente.</li>
-                </>
+              <li>Sugerencia: Revisa los precios de los materiales con los proveedores reales.</li>
+              {!isMaterialBasketReal && (
+                <li>💡 Conecta tus catálogos de compra para evitar precios estimados.</li>
               )}
             </>
-          )}
+          ) : null}
         </ul>
       </div>
       
       <div className="mt-6 flex flex-col gap-2">
         <button 
-          className="w-full py-3 bg-brand-green text-navy-900 font-bold rounded-xl hover:opacity-90 transition"
+          className="w-full py-3 bg-brand-green text-navy-900 font-bold rounded-xl hover:opacity-90 transition disabled:opacity-50"
           onClick={nextStep}
+          disabled={state.isAnalyzing}
         >
-          Siguiente paso
+          {state.isAnalyzing ? "✨ Analizando petición..." : "Siguiente paso"}
         </button>
         <button className="w-full py-2 bg-transparent text-navy-600 dark:text-zinc-400 font-medium hover:text-navy-900 dark:hover:text-white transition text-sm">
           Guardar borrador

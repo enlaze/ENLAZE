@@ -98,6 +98,17 @@ export interface BudgetState {
     clientPrice: number;
     profit: number;
   };
+  // AI Analysis
+  isAnalyzing: boolean;
+  analysisError: string | null;
+  lastAnalysisHash: string | null;
+  aiInsights: {
+    summary?: string;
+    confidence_score?: number;
+    regulatory_notes?: any[];
+    calendar_phases?: any[];
+    missing_questions?: string[];
+  } | null;
 }
 
 interface BudgetContextProps {
@@ -116,6 +127,7 @@ interface BudgetContextProps {
   saveDraft: (manual?: boolean) => Promise<void>;
   loadDraft: (statePayload: BudgetState) => void;
   finalizeBudget: () => Promise<string | null>;
+  analyzeWithAI: () => Promise<boolean>;
 }
 
 const BudgetContext = createContext<BudgetContextProps | undefined>(undefined);
@@ -194,7 +206,11 @@ export function BudgetGenerateProvider({
       materialsCost: 0,
       clientPrice: 0,
       profit: 0,
-    }
+    },
+    isAnalyzing: false,
+    analysisError: null,
+    lastAnalysisHash: null,
+    aiInsights: null,
   });
 
   // HYDRATE WITH REAL DATA (Fase 4.1)
@@ -653,22 +669,124 @@ export function BudgetGenerateProvider({
     return true;
   };
 
-  const nextStep = () => {
+  const analyzeWithAI = async (): Promise<boolean> => {
+    if (!state.description || state.description.trim().length < 5) return true; // Just proceed if no useful description
+    
+    // Hash based on description + sector + service type to avoid repeated calls
+    const currentHash = `${state.sector}-${state.serviceType}-${state.description}`.trim();
+    if (state.lastAnalysisHash === currentHash && !state.analysisError) {
+      return true; // Already analyzed
+    }
+
+    setState(prev => ({ ...prev, isAnalyzing: true, analysisError: null }));
+
+    try {
+      const res = await fetch("/api/agent/budget-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sector: state.sector,
+          description: state.description,
+          service_type: state.serviceType
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Error al analizar la petición");
+      }
+
+      const data = await res.json();
+      
+      // Map suggested_items to Partidas
+      const newPartidas = (data.suggested_items || []).map((item: any, idx: number) => ({
+        id: `ai-p-${idx}`,
+        concept: item.concept || item.title || "Partida",
+        description: item.description || "",
+        quantity: item.quantity || 1,
+        unit: item.unit || "ud",
+        category: item.category || "mano_obra",
+        unit_price: item.unit_cost || item.unit_price || 0,
+        subtotal_cost: (item.quantity || 1) * (item.unit_cost || item.unit_price || 0),
+        unit_price_client: (item.unit_cost || item.unit_price || 0) * (1 + (state.marginPercent / 100)),
+        subtotal_client: (item.quantity || 1) * (item.unit_cost || item.unit_price || 0) * (1 + (state.marginPercent / 100)),
+        status: "incluida"
+      }));
+
+      // Map materials
+      const newMaterials = (data.suggested_materials || []).map((item: any, idx: number) => {
+        let provId = "generic";
+        if (item.supplier_name) {
+           provId = item.supplier_name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+        }
+        return {
+          id: `ai-m-${idx}`,
+          name: item.concept || item.title || "Material",
+          quantity: item.quantity || 1,
+          unit: item.unit || "ud",
+          unit_price: item.unit_cost || item.unit_price || 0,
+          subtotal: (item.quantity || 1) * (item.unit_cost || item.unit_price || 0),
+          included: true,
+          provider_id: provId,
+          isRealData: item.source !== "fallback"
+        };
+      });
+
+      setState(prev => ({
+        ...prev,
+        isAnalyzing: false,
+        lastAnalysisHash: currentHash,
+        partidas: newPartidas.length > 0 ? newPartidas : prev.partidas,
+        materials: newMaterials.length > 0 ? newMaterials : prev.materials,
+        aiInsights: {
+          summary: data.summary,
+          confidence_score: data.confidence_score,
+          regulatory_notes: data.regulatory_notes || [],
+          calendar_phases: data.calendar_phases || [],
+          missing_questions: data.missing_questions || []
+        }
+      }));
+      return true;
+
+    } catch (error: any) {
+      console.error("AI Analysis failed:", error);
+      setState(prev => ({ 
+        ...prev, 
+        isAnalyzing: false, 
+        analysisError: error.message 
+      }));
+      return false; // AI failed, so we'll fallback
+    }
+  };
+
+  const nextStep = async () => {
     if (!validateStep(state.currentStep)) return;
     
-    // Inject construction fallback items if moving to step 1 and items are default
-    if (state.currentStep === 0 && (state.sector === "construccion" || !state.sector)) {
-      const isReforma = state.serviceType?.toLowerCase().includes("reforma") || !state.serviceType;
+    // AI Analysis when moving from step 0 to step 1
+    if (state.currentStep === 0) {
       const isDefaultPartidas = state.partidas.length === 0 || (state.partidas.length === 2 && state.partidas[0].id === "example-1");
-      if (isReforma && isDefaultPartidas) {
-        setState(prev => ({ 
-          ...prev, 
-          currentStep: prev.currentStep + 1, 
-          validationError: null,
-          partidas: CONSTRUCTION_FALLBACK_PARTIDAS 
-        }));
-        saveDraft(false);
-        return;
+      
+      // Only run analysis if we have default partidas
+      if (isDefaultPartidas) {
+        const success = await analyzeWithAI();
+        
+        // If AI failed or returned nothing, and we're in construction, inject fallback
+        if (!success && (state.sector === "construccion" || !state.sector)) {
+          const isReforma = state.serviceType?.toLowerCase().includes("reforma") || !state.serviceType;
+          if (isReforma) {
+            toast.info("Aviso", {
+              description: "Usando plantilla local V1 porque el análisis IA no ha respondido."
+            });
+            setState(prev => ({ 
+              ...prev, 
+              currentStep: prev.currentStep + 1, 
+              validationError: null,
+              partidas: CONSTRUCTION_FALLBACK_PARTIDAS 
+            }));
+            saveDraft(false);
+            return;
+          }
+        }
       }
     }
 
@@ -676,13 +794,30 @@ export function BudgetGenerateProvider({
     saveDraft(false); // Force save on step change
   };
   const prevStep = () => setState(prev => ({ ...prev, currentStep: Math.max(0, prev.currentStep - 1), validationError: null }));
-  const goToStep = (step: number) => {
+  const goToStep = async (step: number) => {
     if (step > state.currentStep) {
       for (let i = state.currentStep; i < step; i++) {
         if (!validateStep(i)) return;
       }
+      
+      if (state.currentStep === 0 && step > 0) {
+         const isDefaultPartidas = state.partidas.length === 0 || (state.partidas.length === 2 && state.partidas[0].id === "example-1");
+         if (isDefaultPartidas) {
+           const success = await analyzeWithAI();
+           if (!success && (state.sector === "construccion" || !state.sector)) {
+              const isReforma = state.serviceType?.toLowerCase().includes("reforma") || !state.serviceType;
+              if (isReforma) {
+                toast.info("Aviso", {
+                  description: "Usando plantilla local V1 porque el análisis IA no ha respondido."
+                });
+                setState(prev => ({ ...prev, partidas: CONSTRUCTION_FALLBACK_PARTIDAS }));
+              }
+           }
+         }
+      }
     }
     setState(prev => ({ ...prev, currentStep: step, validationError: null }));
+    saveDraft(false);
   };
 
   return (
@@ -690,7 +825,7 @@ export function BudgetGenerateProvider({
       state, updateState, updateSectorData, nextStep, prevStep, goToStep,
       addPartida, updatePartida, removePartida,
       setSelectedProvider, updateMaterial, setUseSuggestedMaterials,
-      saveDraft, loadDraft, finalizeBudget
+      saveDraft, loadDraft, finalizeBudget, analyzeWithAI
     }}>
       {children}
     </BudgetContext.Provider>
