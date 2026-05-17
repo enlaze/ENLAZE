@@ -44,6 +44,24 @@ export interface Material {
   isRealData?: boolean;
 }
 
+const CONSTRUCTION_FALLBACK_PARTIDAS: Partida[] = [
+  { id: "p1", concept: "Demoliciones y retirada de escombros", description: "Demolición de elementos existentes y gestión de residuos.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 1500, subtotal_cost: 1500, unit_price_client: 1800, subtotal_client: 1800, status: "incluida" },
+  { id: "p2", concept: "Albañilería y tabiquería", description: "Ayudas de albañilería, apertura de regatas y formación de tabiquería.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 2200, subtotal_cost: 2200, unit_price_client: 2640, subtotal_client: 2640, status: "incluida" },
+  { id: "p3", concept: "Fontanería", description: "Instalación completa de fontanería y saneamiento.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 1800, subtotal_cost: 1800, unit_price_client: 2160, subtotal_client: 2160, status: "incluida" },
+  { id: "p4", concept: "Electricidad", description: "Instalación eléctrica completa, mecanismos y cuadro.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 2500, subtotal_cost: 2500, unit_price_client: 3000, subtotal_client: 3000, status: "incluida" },
+  { id: "p5", concept: "Revestimientos y alicatados", description: "Alicatado de paramentos verticales.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 1900, subtotal_cost: 1900, unit_price_client: 2280, subtotal_client: 2280, status: "incluida" },
+  { id: "p6", concept: "Solados y pavimentos", description: "Suministro y colocación de pavimento.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 2100, subtotal_cost: 2100, unit_price_client: 2520, subtotal_client: 2520, status: "incluida" },
+  { id: "p7", concept: "Pintura", description: "Preparación de paredes y pintura plástica.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 1600, subtotal_cost: 1600, unit_price_client: 1920, subtotal_client: 1920, status: "incluida" },
+  { id: "p8", concept: "Carpintería interior", description: "Suministro y colocación de puertas.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 1800, subtotal_cost: 1800, unit_price_client: 2160, subtotal_client: 2160, status: "incluida" },
+  { id: "p9", concept: "Carpintería exterior", description: "Suministro y colocación de ventanas.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 3200, subtotal_cost: 3200, unit_price_client: 3840, subtotal_client: 3840, status: "incluida" },
+  { id: "p10", concept: "Sanitarios y grifería", description: "Suministro y colocación de sanitarios.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 1200, subtotal_cost: 1200, unit_price_client: 1440, subtotal_client: 1440, status: "incluida" },
+  { id: "p11", concept: "Cocina y equipamiento", description: "Montaje de muebles de cocina y electrodomésticos.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 2800, subtotal_cost: 2800, unit_price_client: 3360, subtotal_client: 3360, status: "incluida" },
+  { id: "p12", concept: "Iluminación", description: "Suministro e instalación de luminarias.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 800, subtotal_cost: 800, unit_price_client: 960, subtotal_client: 960, status: "incluida" },
+  { id: "p13", concept: "Limpieza final", description: "Limpieza fin de obra.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 350, subtotal_cost: 350, unit_price_client: 420, subtotal_client: 420, status: "incluida" },
+  { id: "p14", concept: "Gestión de residuos", description: "Tasas y gestión de residuos en vertedero.", quantity: 1, unit: "PA", category: "otros", unit_price: 250, subtotal_cost: 250, unit_price_client: 300, subtotal_client: 300, status: "incluida" },
+  { id: "p15", concept: "Seguridad y medios auxiliares", description: "Andamios, EPIs y medidas de seguridad.", quantity: 1, unit: "PA", category: "otros", unit_price: 400, subtotal_cost: 400, unit_price_client: 480, subtotal_client: 480, status: "incluida" }
+];
+
 export interface BudgetState {
   draftId: string | null;
   lastSavedAt: string | null;
@@ -192,46 +210,55 @@ export function BudgetGenerateProvider({
 
         const { data, error } = await supabase
           .from("price_items")
-          .select("id, name, unit, unit_price, supplier_name")
+          .select("*")
           .eq("user_id", user.id)
           .eq("sector", activeSector)
           .eq("category", "material")
           .eq("is_active", true)
-          .limit(30); // Limitar para el subconjunto sugerido inicial
+          .limit(100);
 
         if (error || !data || data.length === 0) return; // Fallback to mock
 
         if (!mounted) return;
 
         // Normalization logic for providers
-        function normalizeSupplierName(name: string | null | undefined): string {
-          if (!name || name.trim() === "") return "Proveedor Genérico";
-          const upper = name.trim().toUpperCase();
+        function normalizeSupplierName(item: any): string {
+          const rawName = item.supplier_name || item.source || item.provider || item.provider_name || item.supplier || (item.metadata?.source);
+          if (!rawName || typeof rawName !== 'string' || rawName.trim() === "") return "Proveedor Genérico";
+          
+          const upper = rawName.trim().toUpperCase();
           if (activeSector === "construccion") {
-            if (upper.includes("LEROY")) return "Leroy Merlin";
+            if (upper.includes("LEROY") || upper.includes("MERLIN")) return "Leroy Merlin";
             if (upper.includes("OBRAMAT") || upper.includes("BRICOMART")) return "Obramat";
             if (upper.includes("SALTOKI")) return "Saltoki";
+            if (upper.includes("CYPE")) return "CYPE / Banco de precios";
+            if (upper.includes("MERCADO") || upper.includes("REFERENCIA")) return "Referencia mercado";
           }
-          return name.trim();
+          return rawName.trim();
         }
 
+        // Initialize with existing mock options so they don't disappear if real data only has "generic" items
         const providersMap = new Map<string, ProviderOption>();
+        state.providerOptions.forEach(p => {
+          providersMap.set(p.id, { ...p, materialsCount: 0 });
+        });
+
         const realMaterials: Material[] = [];
 
         data.forEach(item => {
-          const normName = normalizeSupplierName(item.supplier_name);
-          const provId = normName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+          const normName = normalizeSupplierName(item);
+          const provId = normName === "Proveedor Genérico" ? "generic" : normName === "Referencia mercado" ? "market" : normName.toLowerCase().replace(/[^a-z0-9]/g, '-');
           
           if (!providersMap.has(provId)) {
             providersMap.set(provId, {
               id: provId,
               name: normName,
-              description: normName === "Proveedor Genérico" ? "Materiales sin asignar" : "Catálogo propio",
+              description: normName === "Proveedor Genérico" ? "Materiales sin asignar" : "Catálogo propio / Importado",
               estimatedPrice: 0, 
               deliveryTime: "Consultar",
               stockLevel: "A consultar",
               rating: 4.5,
-              isRecommended: normName === "Leroy Merlin" || normName === "Obramat",
+              isRecommended: false,
               materialsCount: 0,
               isRealData: true
             });
@@ -628,6 +655,23 @@ export function BudgetGenerateProvider({
 
   const nextStep = () => {
     if (!validateStep(state.currentStep)) return;
+    
+    // Inject construction fallback items if moving to step 1 and items are default
+    if (state.currentStep === 0 && (state.sector === "construccion" || !state.sector)) {
+      const isReforma = state.serviceType?.toLowerCase().includes("reforma") || !state.serviceType;
+      const isDefaultPartidas = state.partidas.length === 0 || (state.partidas.length === 2 && state.partidas[0].id === "example-1");
+      if (isReforma && isDefaultPartidas) {
+        setState(prev => ({ 
+          ...prev, 
+          currentStep: prev.currentStep + 1, 
+          validationError: null,
+          partidas: CONSTRUCTION_FALLBACK_PARTIDAS 
+        }));
+        saveDraft(false);
+        return;
+      }
+    }
+
     setState(prev => ({ ...prev, currentStep: prev.currentStep + 1, validationError: null }));
     saveDraft(false); // Force save on step change
   };

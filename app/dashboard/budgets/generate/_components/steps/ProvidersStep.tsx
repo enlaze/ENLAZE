@@ -1,12 +1,13 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useBudgetGenerate } from "../BudgetGenerateProvider";
 import { Card } from "@/components/ui/card";
 
 export function ProvidersStep() {
   const { state, setSelectedProvider, updateMaterial, setUseSuggestedMaterials } = useBudgetGenerate();
   const { providerOptions, selectedProviderId, materials, useSuggestedMaterials } = state;
+  const [showCompare, setShowCompare] = useState(false);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -18,10 +19,58 @@ export function ProvidersStep() {
               Escoge un proveedor principal para recalcular automáticamente los costes y márgenes de los materiales.
             </p>
           </div>
-          <button className="hidden sm:flex px-4 py-2 bg-white dark:bg-zinc-800 border border-navy-200 dark:border-zinc-700 rounded-lg text-sm font-medium hover:bg-navy-50 dark:hover:bg-zinc-700 transition">
-            Comparar proveedores
+          <button 
+            onClick={() => setShowCompare(!showCompare)}
+            className={`hidden sm:flex px-4 py-2 border rounded-lg text-sm font-medium transition ${showCompare ? 'bg-navy-900 text-white border-navy-900 dark:bg-white dark:text-navy-900' : 'bg-white dark:bg-zinc-800 border-navy-200 dark:border-zinc-700 hover:bg-navy-50 dark:hover:bg-zinc-700'}`}
+          >
+            {showCompare ? 'Cerrar comparador' : 'Comparar proveedores'}
           </button>
         </div>
+
+        {showCompare && (
+          <div className="mb-8 bg-navy-50 dark:bg-zinc-800/50 rounded-xl p-5 border border-navy-200 dark:border-zinc-700 animate-in fade-in slide-in-from-top-4">
+            <h3 className="font-bold text-navy-900 dark:text-white mb-4 flex items-center gap-2">
+              <svg className="w-5 h-5 text-brand-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+              Comparativa de Proveedores
+            </h3>
+            {providerOptions.length <= 1 ? (
+              <p className="text-sm text-navy-600 dark:text-zinc-400">
+                No hay suficientes proveedores reales para comparar. Se usará el proveedor actual.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {providerOptions.map(p => (
+                  <div key={p.id} className={`bg-white dark:bg-zinc-900 p-4 rounded-lg border ${selectedProviderId === p.id ? 'border-brand-green' : 'border-navy-100 dark:border-zinc-800'}`}>
+                    <div className="flex justify-between items-start mb-2">
+                      <h4 className="font-bold text-navy-900 dark:text-white">{p.name}</h4>
+                      {p.isRealData && <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Real</span>}
+                    </div>
+                    <ul className="text-sm text-navy-600 dark:text-zinc-400 mb-4 space-y-1">
+                      <li><strong>Materiales:</strong> {p.materialsCount || 0} disponibles</li>
+                      <li><strong>Plazo:</strong> {p.deliveryTime}</li>
+                      <li><strong>Origen:</strong> {p.description}</li>
+                    </ul>
+                    <div className="flex justify-between items-center mt-auto">
+                      <div className="font-bold text-navy-900 dark:text-white">
+                        {p.estimatedPrice > 0 ? `${p.estimatedPrice.toFixed(2)} €` : 'Calculando...'}
+                      </div>
+                      {selectedProviderId !== p.id ? (
+                        <button 
+                          onClick={() => { setSelectedProvider(p.id); setShowCompare(false); }}
+                          className="text-xs bg-navy-100 hover:bg-brand-green hover:text-navy-900 dark:bg-zinc-800 text-navy-700 dark:text-white font-medium px-3 py-1.5 rounded transition"
+                        >
+                          Usar este
+                        </button>
+                      ) : (
+                        <span className="text-xs font-bold text-brand-green bg-brand-green/10 px-3 py-1.5 rounded">Seleccionado</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           {providerOptions.map(provider => {
