@@ -4,7 +4,7 @@ import React from "react";
 import { useBudgetGenerate } from "./BudgetGenerateProvider";
 
 export function LiveSummaryPanel() {
-  const { state, nextStep, addPartida } = useBudgetGenerate();
+  const { state, nextStep, saveDraft } = useBudgetGenerate();
   const { totals, marginPercent, sector, providerOptions, selectedProviderId, materials, isRealDataMode } = state;
   const isConstruction = sector === "construccion";
 
@@ -309,7 +309,11 @@ export function LiveSummaryPanel() {
         >
           {state.isAnalyzing ? "✨ Analizando peticion..." : "Siguiente paso"}
         </button>
-        <button className="w-full py-2 bg-transparent text-navy-600 dark:text-zinc-400 font-medium hover:text-navy-900 dark:hover:text-white transition text-sm">
+        <button 
+          onClick={() => saveDraft(true)}
+          disabled={!state.draftId && state.currentStep === 0}
+          className="w-full py-2 bg-transparent text-navy-600 dark:text-zinc-400 font-medium hover:text-navy-900 dark:hover:text-white transition text-sm disabled:opacity-50"
+        >
           Guardar borrador
         </button>
       </div>

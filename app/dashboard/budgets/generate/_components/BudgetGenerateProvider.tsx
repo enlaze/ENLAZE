@@ -214,7 +214,7 @@ interface BudgetContextProps {
   setSelectedProvider: (id: string) => void;
   updateMaterial: (id: string, updates: Partial<Material>) => void;
   setUseSuggestedMaterials: (val: boolean) => void;
-  saveDraft: (manual?: boolean) => Promise<void>;
+  saveDraft: (manual?: boolean) => Promise<string | null>;
   loadDraft: (statePayload: BudgetState) => void;
   finalizeBudget: () => Promise<string | null>;
   analyzeWithAI: (force?: boolean) => Promise<boolean>;
@@ -551,11 +551,11 @@ export function BudgetGenerateProvider({
   };
 
   /* ─── Persistencia y Borradores ─── */
-  const saveDraft = async (manual = false) => {
+  const saveDraft = async (manual = false): Promise<string | null> => {
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) return null;
 
       const snapshot = { ...state };
       let draftId = state.draftId;
@@ -608,18 +608,20 @@ export function BudgetGenerateProvider({
       if (manual) {
         toast.success("Borrador guardado correctamente");
       }
+      return draftId;
     } catch (err) {
       console.error("Error saving draft:", err);
       if (manual) toast.error("Error al guardar el borrador");
+      return null;
     }
   };
 
   const finalizeBudget = async (): Promise<string | null> => {
     try {
-      await saveDraft(false); // Asegurarse de que tenemos el ID y el último estado
+      const currentDraftId = await saveDraft(false); // Asegurarse de que tenemos el ID y el último estado
 
       const supabase = createClient();
-      const budgetId = state.draftId;
+      const budgetId = currentDraftId || state.draftId;
       if (!budgetId) throw new Error("No hay borrador para finalizar");
 
       // 1. Obtener la siguiente versión (si ya existía y lo abrieron, o si es la 1)
