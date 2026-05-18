@@ -80,6 +80,7 @@ export function ScopeStep() {
   const incluyeCocina: boolean = scopeData.incluye_cocina ?? true;
   const incluyeVentanas: boolean = scopeData.incluye_ventanas ?? false;
   const incluyeClimatizacion: boolean = scopeData.incluye_climatizacion ?? false;
+  const ubicacion: string = scopeData.ubicacion || "";
 
   useEffect(() => {
     async function loadData() {
@@ -309,6 +310,21 @@ export function ScopeStep() {
           <p className="text-sm text-navy-500 dark:text-zinc-400 mb-5">
             Selecciona las estancias, actuaciones y calidad. Esto alimenta al analisis IA para generar partidas mas precisas.
           </p>
+
+          {/* Ubicacion y superficie */}
+          <div className="mb-6">
+            <label className={labelCls}>Ubicacion de la obra (ciudad / provincia)</label>
+            <input
+              type="text"
+              value={ubicacion}
+              onChange={(e) => updateSectorData("ubicacion", e.target.value)}
+              placeholder="Ej: Madrid, Valencia, Barcelona..."
+              className={inputCls}
+            />
+            <p className="text-[11px] text-navy-400 dark:text-zinc-500 mt-1">
+              Los precios se ajustan segun la zona geografica y normativas locales (CTE, BOE, ordenanzas municipales).
+            </p>
+          </div>
 
           {/* Superficie y extras */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">

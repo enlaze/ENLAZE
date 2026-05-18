@@ -604,9 +604,17 @@ export function BudgetGenerateProvider({
       let draftId = state.draftId;
 
       if (!draftId) {
+        // Generate budget_number: PRE-{year}-{random5}
+        const year = new Date().getFullYear();
+        const randArray = new Uint32Array(1);
+        crypto.getRandomValues(randArray);
+        const rand = 10000 + (randArray[0] % 90000);
+        const budgetNumber = `PRE-${year}-${rand}`;
+
         // Insert new draft
         const { data, error } = await supabase.from("budgets").insert({
           user_id: user.id,
+          budget_number: budgetNumber,
           status: "borrador",
           title: state.title || "Borrador de Presupuesto (Wizard)",
           client_id: state.clientId || null,

@@ -84,6 +84,10 @@ export async function POST(request: Request) {
 
     const regulations = sectorData?.filter(d => d.data_type === "regulation") || [];
     const refPrices = sectorData?.filter(d => d.data_type === "price") || [];
+    const news = sectorData?.filter(d => d.data_type === "news") || [];
+
+    // Extract location from scope for zone-specific pricing
+    const ubicacion = scope?.ubicacion || "";
 
     // Build context
     let priceContext = "NO HAY PRECIOS PRIVADOS EN BBDD.\n";
@@ -93,12 +97,35 @@ export async function POST(request: Request) {
 
     let regContext = "";
     if (regulations.length > 0) {
-      regContext = "NORMATIVAS ACTUALES EN BBDD:\n" + regulations.map(r => `- ${r.title}: ${r.description}`).join("\n");
+      regContext = "NORMATIVAS Y BOE ACTUALES (sincronizado por agente n8n):\n" + regulations.map(r => `- ${r.title}: ${r.description} (Fuente: ${r.source || "n8n"})`).join("\n");
     }
 
     let marketPriceContext = "";
     if (refPrices.length > 0) {
-      marketPriceContext = "PRECIOS MERCADO (AGENT N8N):\n" + refPrices.map(r => `- ${r.title}: ${r.value} EUR/${r.unit} (${r.source})`).join("\n");
+      marketPriceContext = "PRECIOS DE MERCADO REALES (sincronizados por agente n8n desde proveedores):\n" + refPrices.map(r => {
+        const supplier = r.metadata?.supplier_name || r.source || "mercado";
+        return `- ${r.title}: ${r.value} EUR/${r.unit} | Proveedor: ${supplier} | Fuente: ${r.source}`;
+      }).join("\n");
+      marketPriceContext += `\n\nIMPORTANTE: Usa estos precios de mercado reales como REFERENCIA PRINCIPAL. Son datos actualizados de proveedores reales en Espana.`;
+    }
+
+    let newsContext = "";
+    if (news.length > 0) {
+      newsContext = "NOTICIAS Y ACTUALIZACIONES DEL SECTOR (agente n8n):\n" + news.slice(0, 5).map(n => `- ${n.title}: ${n.description}`).join("\n");
+    }
+
+    // Location-based pricing context
+    let locationContext = "";
+    if (ubicacion) {
+      locationContext = `\nUBICACION DE LA OBRA: ${ubicacion}
+INSTRUCCIONES POR ZONA GEOGRAFICA:
+- Ajusta los precios segun la ciudad/provincia indicada. Los costes varian significativamente entre zonas:
+  * Madrid, Barcelona, Baleares, Pais Vasco: +15-25% sobre media nacional
+  * Valencia, Malaga, Sevilla: precio medio nacional
+  * Interior peninsular, zonas rurales: -10-15% sobre media nacional
+- Considera las normativas urbanisticas locales y ordenanzas municipales de "${ubicacion}"
+- Incluye en regulatory_notes cualquier normativa especifica de la zona (CTE, DB-HE, ordenanzas locales)
+- Los costes de mano de obra y transporte dependen de la ubicacion`;
     }
 
     // --- CONSTRUCTION-SPECIFIC PRICING INSTRUCTIONS ---
@@ -173,13 +200,18 @@ Genera SIEMPRE al menos 2 proveedores con sus materiales asignados.`;
 
 Tu tarea es actuar como un Agente Inteligente de ${sectorConfig.name} y analizar detalladamente la peticion de presupuesto del usuario.
 
-CONTEXTO DEL SISTEMA Y AGENTE N8N:
-${regContext}
-${marketPriceContext}
+DATOS DEL AGENTE N8N DE CONSTRUCCION (datos reales sincronizados):
+${regContext || "Sin normativas sincronizadas por n8n todavia."}
+${marketPriceContext || "Sin precios de mercado sincronizados por n8n todavia."}
+${newsContext || ""}
+${locationContext}
 
 ${priceContext}
 
-Si el usuario no tiene materiales en su catalogo que coincidan con la peticion, usa referencias de mercado de Espana o las de "PRECIOS MERCADO".
+PRIORIDAD DE FUENTES DE PRECIOS:
+1. Precios de mercado reales del agente n8n (PRECIOS DE MERCADO REALES) — MAXIMA prioridad
+2. Catalogo privado del usuario — segunda prioridad
+3. Referencias de mercado espanol general (2024-2026) — si no hay datos n8n
 ${pricingInstructions}
 
 DEVUELVE UNICAMENTE UN JSON CON LA SIGUIENTE ESTRUCTURA EXACTA:
@@ -191,7 +223,7 @@ DEVUELVE UNICAMENTE UN JSON CON LA SIGUIENTE ESTRUCTURA EXACTA:
     "sector": "${activeSector}",
     "service_type": "${service_type || 'general'}",
     "area_m2": 90,
-    "location": ""
+    "location": "${ubicacion || ""}"
   },
   "suggested_items": [
     {
@@ -271,7 +303,7 @@ REGLAS:
       messages: [
         {
           role: "user",
-          content: `Analiza esta peticion de presupuesto y genera la estructura JSON completa con TODAS las partidas detalladas, materiales, proveedores, fases y timeline:\n\nDescripcion:\n"${description}"\n\nTipo: ${service_type || "general"}${scope ? `\n\nALCANCE DETALLADO del selector del usuario:\n- Superficie: ${scope.superficie_m2 || "no indicada"} m2\n- Estancias: ${(scope.estancias || []).join(", ") || "no seleccionadas"}\n- Actuaciones: ${(scope.actuaciones || []).join(", ") || "no seleccionadas"}\n- Calidad: ${scope.calidad || "media"}\n- N. banos: ${scope.num_banos || 1}\n- Incluye cocina: ${scope.incluye_cocina ? "si" : "no"}\n- Incluye cambio ventanas: ${scope.incluye_ventanas ? "si" : "no"}\n- Incluye climatizacion: ${scope.incluye_climatizacion ? "si" : "no"}` : ""}\n\nRecuerda: para construccion necesito MINIMO 20 partidas y 15 materiales con precios realistas de mercado espanol.`
+          content: `Analiza esta peticion de presupuesto y genera la estructura JSON completa con TODAS las partidas detalladas, materiales, proveedores, fases y timeline:\n\nDescripcion:\n"${description}"\n\nTipo: ${service_type || "general"}${scope ? `\n\nALCANCE DETALLADO del selector del usuario:\n- Superficie: ${scope.superficie_m2 || "no indicada"} m2\n- Ubicacion: ${scope.ubicacion || "no indicada (usar precios medios de Espana)"}\n- Estancias: ${(scope.estancias || []).join(", ") || "no seleccionadas"}\n- Actuaciones: ${(scope.actuaciones || []).join(", ") || "no seleccionadas"}\n- Calidad: ${scope.calidad || "media"}\n- N. banos: ${scope.num_banos || 1}\n- Incluye cocina: ${scope.incluye_cocina ? "si" : "no"}\n- Incluye cambio ventanas: ${scope.incluye_ventanas ? "si" : "no"}\n- Incluye climatizacion: ${scope.incluye_climatizacion ? "si" : "no"}` : ""}\n\nRecuerda: para construccion necesito MINIMO 20 partidas y 15 materiales con precios realistas del mercado espanol, ajustados a la ubicacion si se indica.`
         }
       ]
     });
