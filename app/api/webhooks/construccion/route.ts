@@ -10,10 +10,14 @@ const supabase = createClient(
 // n8n puede enviar actualizaciones de precios, normativas, etc.
 export async function POST(request: Request) {
   try {
-    const authHeader = request.headers.get("authorization");
-    const webhookSecret = process.env.WEBHOOK_SECRET || "enlaze-n8n-2024";
+    const authHeader = request.headers.get("authorization") || "";
+    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+    const validTokens = [
+      process.env.WEBHOOK_SECRET,
+      process.env.AGENT_API_KEY,
+    ].filter(Boolean);
 
-    if (authHeader !== "Bearer " + webhookSecret) {
+    if (!token || !validTokens.includes(token)) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
