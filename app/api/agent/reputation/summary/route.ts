@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyAgentRequest, isErrorResponse } from "../../_lib/auth";
+import { verifyAgentOrBrowserRequest, isErrorResponse } from "../../_lib/auth";
 
 /**
  * GET /api/agent/reputation/summary?user_id=xxx
@@ -16,7 +16,7 @@ import { verifyAgentRequest, isErrorResponse } from "../../_lib/auth";
  */
 export async function GET(req: NextRequest) {
   try {
-    const auth = verifyAgentRequest(req);
+    const auth = await verifyAgentOrBrowserRequest(req);
     if (isErrorResponse(auth)) return auth;
     const { supabase, userId } = auth;
 

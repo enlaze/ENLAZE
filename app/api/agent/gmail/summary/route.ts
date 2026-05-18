@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAgentOrBrowserRequest, isErrorResponse } from "../../_lib/auth";
-import { getValidAccessToken } from "@/lib/services/google-api";
+import { getAccessTokenInfo } from "@/lib/services/google-api";
 async function syncModuleState(
   supabase: any,
   userId: string,
@@ -91,15 +91,36 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // ── Gmail IS connected ──
-    const accessToken = await getValidAccessToken(supabase, userId, "gmail");
-    if (!accessToken) {
-      return NextResponse.json({
-        ok: false,
+    // ── Gmail IS connected (per agent_connections row) ──
+    // Probe the actual token. If the access token can't be decrypted (typical
+    // when local OAUTH_ENCRYPTION_KEY differs from the one used to encrypt the
+    // stored credential) we return 200 with connected:false + a precise status
+    // so the inspector and the n8n agent can both surface a coherent message
+    // instead of dying with a 500.
+    const tokenInfo = await getAccessTokenInfo(supabase, userId, "gmail");
+    if (tokenInfo.status !== "active" || !tokenInfo.token) {
+      await syncModuleState(supabase, userId, "gmail", {
         connected: false,
-        error: "Google token missing or expired.",
-      }, { status: 401 });
+        status: tokenInfo.status,
+        error_message: tokenInfo.error_message,
+      });
+      return NextResponse.json({
+        ok: true,
+        connected: false,
+        status: tokenInfo.status,
+        error_message: tokenInfo.error_message,
+        unread_count: 0,
+        priority_threads: [],
+        awaiting_reply: [],
+        supplier_messages: [],
+        customer_messages: [],
+        invoice_messages: [],
+        suggested_replies: [],
+        action_items: [],
+        summary: `Gmail no operativo (${tokenInfo.status}). ${tokenInfo.error_message ?? ""}`.trim(),
+      });
     }
+    const accessToken = tokenInfo.token;
 
     // Fetch inbox messages
     const gmailRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages?q=is:unread in:inbox&maxResults=20", {

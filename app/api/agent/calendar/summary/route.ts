@@ -1,6 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAgentOrBrowserRequest, isErrorResponse } from "../../_lib/auth";
-import { getValidAccessToken } from "@/lib/services/google-api";
+import { getAccessTokenInfo } from "@/lib/services/google-api";
+
+function disconnectedCalendarPayload(today: string, status: string, error: string | null) {
+  return {
+    ok: true,
+    connected: false,
+    status,
+    error_message: error,
+    today_events: [],
+    next_events: [],
+    free_slots: [],
+    reminders: [],
+    daily_agenda: {
+      date: today,
+      total_events: 0,
+      busy_hours: 0,
+      free_hours: 8,
+      next_important: null,
+    },
+    action_items: [],
+    summary: `Google Calendar no operativo (${status}). ${error ?? ""}`.trim(),
+  };
+}
 
 /**
  * GET /api/agent/calendar/summary?user_id=xxx
@@ -50,15 +72,14 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // ── Calendar IS connected ──
-    const accessToken = await getValidAccessToken(supabase, userId, "google_calendar");
-    if (!accessToken) {
-      return NextResponse.json({
-        ok: false,
-        connected: false,
-        error: "Google token missing or expired.",
-      }, { status: 401 });
+    // ── Calendar IS connected (per agent_connections row): probe real token ──
+    const tokenInfo = await getAccessTokenInfo(supabase, userId, "google_calendar");
+    if (tokenInfo.status !== "active" || !tokenInfo.token) {
+      return NextResponse.json(
+        disconnectedCalendarPayload(today, tokenInfo.status, tokenInfo.error_message),
+      );
     }
+    const accessToken = tokenInfo.token;
 
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAgentOrBrowserRequest, isErrorResponse } from "../../_lib/auth";
-import { getValidAccessToken } from "@/lib/services/google-api";
+import { getAccessTokenInfo } from "@/lib/services/google-api";
 
 export async function GET(req: NextRequest) {
   try {
@@ -28,14 +28,21 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const accessToken = await getValidAccessToken(supabase, userId, "google_sheets");
-    if (!accessToken) {
+    const tokenInfo = await getAccessTokenInfo(supabase, userId, "google_sheets");
+    if (tokenInfo.status !== "active" || !tokenInfo.token) {
       return NextResponse.json({
-        ok: false,
+        ok: true,
         connected: false,
-        error: "Google token missing or expired.",
-      }, { status: 401 });
+        status: tokenInfo.status,
+        error_message: tokenInfo.error_message,
+        spreadsheet_id: null,
+        spreadsheet_name: null,
+        detected_columns: [],
+        sample_data: [],
+        summary: `Google Sheets no operativo (${tokenInfo.status}). ${tokenInfo.error_message ?? ""}`.trim(),
+      });
     }
+    const accessToken = tokenInfo.token;
 
     // Phase 1: If user configured a specific sheet ID in config, use it. Otherwise, search recent sheets.
     let config = connection.config || {};

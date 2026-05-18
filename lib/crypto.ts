@@ -34,24 +34,59 @@ export function encryptToken(text: string): string {
 
 /**
  * Decrypts a previously encrypted token.
+ *
+ * Throws on any failure (bad format, wrong key, tampered ciphertext). Callers
+ * that just need a probe should use {@link safeDecryptToken} instead — it
+ * narrows failures into a structured result so route handlers can degrade
+ * gracefully (e.g. when `OAUTH_ENCRYPTION_KEY` differs between environments).
  */
 export function decryptToken(encryptedText: string): string {
   if (!encryptedText) return encryptedText;
-  
+
   const parts = encryptedText.split(":");
   if (parts.length !== 3) {
     throw new Error("Invalid encrypted token format");
   }
-  
+
   const iv = Buffer.from(parts[0], "hex");
   const encrypted = parts[1];
   const authTag = Buffer.from(parts[2], "hex");
-  
+
   const decipher = crypto.createDecipheriv(ALGORITHM, getEncryptionKey(), iv);
   decipher.setAuthTag(authTag);
-  
+
   let decrypted = decipher.update(encrypted, "hex", "utf8");
   decrypted += decipher.final("utf8");
-  
+
   return decrypted;
+}
+
+export type DecryptResult =
+  | { ok: true; plaintext: string }
+  | { ok: false; reason: "missing" | "bad_format" | "bad_key_or_tampered" | "no_key"; error: string };
+
+/**
+ * Non-throwing variant of {@link decryptToken}. Used by agent endpoints to
+ * distinguish "no token stored" from "token stored but undecryptable with the
+ * current OAUTH_ENCRYPTION_KEY" — the latter happens when local connections
+ * were made with a different key than production.
+ */
+export function safeDecryptToken(encryptedText: string | null | undefined): DecryptResult {
+  if (!encryptedText) {
+    return { ok: false, reason: "missing", error: "No encrypted token provided" };
+  }
+  const parts = encryptedText.split(":");
+  if (parts.length !== 3) {
+    return { ok: false, reason: "bad_format", error: "Invalid encrypted token format" };
+  }
+  try {
+    const plaintext = decryptToken(encryptedText);
+    return { ok: true, plaintext };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes("OAUTH_ENCRYPTION_KEY")) {
+      return { ok: false, reason: "no_key", error: message };
+    }
+    return { ok: false, reason: "bad_key_or_tampered", error: message };
+  }
 }
