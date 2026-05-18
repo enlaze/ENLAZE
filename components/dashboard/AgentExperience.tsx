@@ -129,10 +129,25 @@ type TabKey =
   | "leads"
   | "tareas";
 
+/**
+ * Live connection state pulled from `agent_connections`. We carry this in
+ * context so the briefing hero can override stale claims like "tienes 4
+ * módulos sin conectar" when the user has actually connected them since the
+ * last agent run. The briefing is generated once per day; this lets the UI
+ * tell the truth without waiting for the next run.
+ */
+interface LiveConnections {
+  gmail: boolean;
+  calendar: boolean;
+  sheets: boolean;
+  reputation: boolean;
+}
+
 interface AgentDataValue {
   loading: boolean;
   hasSession: boolean;
   summary: DailySummary | null;
+  connections: LiveConnections;
   news: AgentNews[];
   signals: AgentSignal[];
   reviews: AgentReview[];
@@ -144,6 +159,8 @@ interface AgentDataValue {
   completeTask: (id: string) => Promise<void>;
   updateLeadStatus: (id: string, status: string) => Promise<void>;
 }
+
+const NO_CONNECTIONS: LiveConnections = { gmail: false, calendar: false, sheets: false, reputation: false };
 
 /* ─── Helpers ───────────────────────────────────────────────────────── */
 
@@ -190,6 +207,7 @@ export function AgentDataProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [hasSession, setHasSession] = useState(false);
   const [summary, setSummary] = useState<DailySummary | null>(null);
+  const [connections, setConnections] = useState<LiveConnections>(NO_CONNECTIONS);
   const [news, setNews] = useState<AgentNews[]>([]);
   const [signals, setSignals] = useState<AgentSignal[]>([]);
   const [reviews, setReviews] = useState<AgentReview[]>([]);
@@ -215,6 +233,7 @@ export function AgentDataProvider({ children }: { children: React.ReactNode }) {
       // posture on the agent_* tables (see commit notes).
       const [
         summaryRes,
+        connectionsRes,
         newsRes,
         signalsRes,
         reviewsRes,
@@ -228,6 +247,10 @@ export function AgentDataProvider({ children }: { children: React.ReactNode }) {
           .eq("user_id", user.id)
           .order("execution_date", { ascending: false })
           .limit(1),
+        supabase
+          .from("agent_connections")
+          .select("module, connected")
+          .eq("user_id", user.id),
         supabase
           .from("agent_news")
           .select("*")
@@ -270,6 +293,20 @@ export function AgentDataProvider({ children }: { children: React.ReactNode }) {
       if (cancelled) return;
 
       setSummary((summaryRes.data?.[0] as DailySummary) || null);
+
+      const connMap: Record<string, boolean> = {};
+      for (const c of (connectionsRes.data || []) as { module: string; connected: boolean | null }[]) {
+        connMap[c.module] = c.connected === true;
+      }
+      setConnections({
+        gmail: connMap["gmail"] === true,
+        calendar: connMap["google_calendar"] === true,
+        sheets: connMap["google_sheets"] === true,
+        // "google_business" is the OAuth module key; some flows treat the
+        // mere presence of google_place_id as reputation being "set up".
+        reputation: connMap["google_business"] === true,
+      });
+
       setNews((newsRes.data || []) as AgentNews[]);
       setSignals((signalsRes.data || []) as AgentSignal[]);
       setReviews((reviewsRes.data || []) as AgentReview[]);
@@ -337,6 +374,7 @@ export function AgentDataProvider({ children }: { children: React.ReactNode }) {
       loading,
       hasSession,
       summary,
+      connections,
       news,
       signals,
       reviews,
@@ -352,6 +390,7 @@ export function AgentDataProvider({ children }: { children: React.ReactNode }) {
       loading,
       hasSession,
       summary,
+      connections,
       news,
       signals,
       reviews,
@@ -374,8 +413,121 @@ export function AgentDataProvider({ children }: { children: React.ReactNode }) {
 
 /* ─── Hero briefing ─────────────────────────────────────────────────── */
 
+/**
+ * Words/phrases the briefing should never show to a 50-year-old autónomo.
+ * The agent's narrative is generated once a day and we can't re-run it on the
+ * fly, so we strip these client-side until the next run uses the new prompt.
+ *
+ * Phrase replacements run first (longer first to avoid leaving stray "score"
+ * after "health score" was meant to go), then sentence-level removal kicks in
+ * for paragraphs that still carry residue.
+ */
+const PHRASE_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/\bbusiness[- ]?health[- ]?score\b/gi, "estado"],
+  [/\bhealth[- ]?score\b/gi, "estado"],
+  [/\bscore\b/gi, ""],
+  [/\bKPI(s)?\b/gi, "indicadores"],
+  [/\bpipeline\b/gi, "flujo"],
+  [/\bchurn\b/gi, "bajas"],
+  [/\bleads?\b/gi, "clientes potenciales"],
+  [/\bdashboard\b/gi, "panel"],
+  [/\bbenchmark\b/gi, "referencia"],
+  [/\bbriefing\b/gi, "resumen"],
+];
+
+function sanitizeProse(text: string): string {
+  let out = text;
+  for (const [rx, sub] of PHRASE_REPLACEMENTS) out = out.replace(rx, sub);
+  // tidy double spaces / orphan punctuation from blanked-out words
+  out = out.replace(/\s+([,.;:!?])/g, "$1").replace(/\s{2,}/g, " ").trim();
+  // Drop dangling number+slash leftovers like "de 62, que está en zona" → keep,
+  // but remove obviously broken bits like " de 62 /100" produced by stripping.
+  out = out.replace(/de\s+\d+\s*\/\s*100/gi, "");
+  return out;
+}
+
+/**
+ * Per-module name variants Claude tends to use.
+ * `correos`/`emails`/`bandeja` are intentionally tied to Gmail because the
+ * agent often refers to Gmail by its content, not by the brand.
+ */
+const MODULE_TERMS: Record<keyof LiveConnections, RegExp> = {
+  gmail: /\b(gmail|correos?|emails?|bandeja\s+de\s+entrada)\b/i,
+  calendar: /\b(calendar(?:io)?|agenda|google\s+calendar)\b/i,
+  sheets: /\b(sheets|hojas?\s+de\s+c[aá]lculo|google\s+sheets|hoja\s+de\s+ventas)\b/i,
+  reputation: /\b(reputaci[oó]n|rese[ñn]as|google\s+business|google\s+my\s+business|ficha\s+de\s+google)\b/i,
+};
+
+/**
+ * Patterns that, *together with a module name*, mean the sentence is talking
+ * about the module not being set up — even when the literal substring
+ * "no conectado" never appears. We discovered the hard way that Claude writes
+ * "No tienes Gmail conectado" (no = first word, conectado = last word), so a
+ * naive `/no conectad/` misses it. These patterns target the *grammar of
+ * absence* instead of exact strings.
+ */
+const ABSENCE_PATTERNS: RegExp[] = [
+  // "No <stuff> conectad…" — covers "No tienes Gmail conectado", "no está conectado", etc.
+  /\bno\b[^.!?]{0,60}\bconectad/i,
+  // "Sin <stuff> conectad…" — covers "Sin el módulo de reputación conectado", "Sin Sheets conectado".
+  /\bsin\b[^.!?]{0,60}\bconectad/i,
+  // "<module> sin conectar"
+  /\bsin\s+conectar\b/i,
+  // Imperative "conecta tu X" / "conéctalo" / "vincula tu X" / "activa tu X".
+  /\bconecta(?:r|los?|las?)?\b/i,
+  /\bcon[eé]ctal(?:o|a|os|as)\b/i,
+  /\bvincular?\b/i,
+  /\bactivar?\b/i,
+  // "Falta(n) conectar/vincular/activar"
+  /\bfalta(?:n)?\s+(?:por\s+)?(?:conectar|vincular|activar)\b/i,
+  // "X pendiente(s) de conectar"
+  /\bpendientes?\s+de\s+(?:conectar|vincular|activar)\b/i,
+  // "X deshabilitad…" / "desconectad…" / "inhabilitad…"
+  /\bdes(?:conectad|habilitad)[oa]s?\b/i,
+  /\binhabilitad[oa]s?\b/i,
+];
+
+/**
+ * Generic "X módulos sin conectar" / "módulos pendientes" / "tienes 4 módulos
+ * desconectados". These claims are always wrong as soon as ANY module is live,
+ * regardless of which specific module Claude was thinking about.
+ */
+const GENERIC_MODULES_DISCONNECTED_RX = /m[oó]dulos?\s+(?:sin\s+(?:conectar|activar|vincular)|pendientes?(?:\s+de\s+(?:conectar|activar|vincular))?|no\s+conectados?|desconectad[oa]s?)|\d+\s+m[oó]dulos?\s+(?:sin|pendientes?|de(?:s)?conectad)/i;
+
+function shouldHideForConnections(text: string, conn: LiveConnections): boolean {
+  if (!text) return false;
+  const someLive = conn.gmail || conn.calendar || conn.sheets || conn.reputation;
+  // Generic "tienes 4 módulos sin conectar" / "módulos pendientes" — wrong by
+  // definition as soon as ANY module is connected.
+  if (someLive && GENERIC_MODULES_DISCONNECTED_RX.test(text)) return true;
+  // Per-module: drop only if the sentence names a module the user has AND any
+  // absence pattern hits. Tested against the literal phrasings Claude produced
+  // ("No tienes Gmail conectado", "Sin el módulo de reputación conectado",
+  // "Conecta tu Gmail o Reputación", "Vincula tus Sheets", …).
+  const keys = Object.keys(MODULE_TERMS) as (keyof LiveConnections)[];
+  for (const key of keys) {
+    if (!conn[key]) continue;
+    if (!MODULE_TERMS[key].test(text)) continue;
+    if (ABSENCE_PATTERNS.some((p) => p.test(text))) return true;
+  }
+  return false;
+}
+
+function filterStaleConnectionParagraphs(narrative: string, conn: LiveConnections): string {
+  return narrative
+    .split(/\n+/)
+    .map((paragraph) =>
+      paragraph
+        .split(/(?<=[.!?])\s+/)
+        .filter((s) => !shouldHideForConnections(s, conn))
+        .join(" "),
+    )
+    .filter((p) => p.trim().length > 0)
+    .join("\n\n");
+}
+
 export function AgentBriefingHero() {
-  const { loading, summary } = useAgentData();
+  const { loading, summary, connections } = useAgentData();
 
   if (loading) return <BriefingSkeleton />;
 
@@ -390,51 +542,84 @@ export function AgentBriefingHero() {
       ? "bg-yellow-500"
       : "bg-brand-green";
 
+  const allConnectedLive =
+    connections.gmail && connections.calendar && connections.sheets && connections.reputation;
+
+  // Strip leftover anglicisms / score talk from stale Claude output, plus
+  // sentences that lie about the user's connection state.
+  const rawNarrative = aiOk ? ai!.narrative ?? "" : "";
+  const displayNarrative = filterStaleConnectionParagraphs(
+    sanitizeProse(rawNarrative),
+    connections,
+  );
+
+  const displayHeadline = sanitizeProse(
+    (aiOk && ai!.headline ? ai!.headline : summary.headline) || "",
+  );
+
+  // Drop actions / watch_outs / opportunities that talk about connecting a
+  // module the user already has live. The check runs per-item even when only
+  // ONE module is live — we don't need every module connected to know the
+  // statement "Gmail no conectado" is false when gmail.connected === true.
+  const filteredActions = (aiOk ? ai!.top_actions || [] : []).filter((a) => {
+    const blob = `${a.action || ""} ${a.why || ""}`;
+    return !shouldHideForConnections(blob, connections);
+  });
+
+  const filteredWatchOuts = (aiOk ? ai!.watch_outs || [] : [])
+    .filter((w) => !shouldHideForConnections(w, connections))
+    .map(sanitizeProse);
+  const filteredOpportunities = (aiOk ? ai!.opportunities || [] : [])
+    .filter((o) => !shouldHideForConnections(o, connections))
+    .map(sanitizeProse);
+
   return (
     <section className="relative overflow-hidden rounded-2xl border border-brand-green/20 bg-gradient-to-br from-white to-brand-green/5 shadow-sm dark:border-brand-green/20 dark:from-zinc-900 dark:to-brand-green/5">
       <div className="p-6">
-        <div className="flex items-start justify-between mb-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-500 dark:text-zinc-500 mb-1">
-              Resumen del día · {fmtDate(summary.execution_date)}
-              {aiOk && (
-                <span className="ml-2 text-brand-green normal-case tracking-normal">
-                  · generado por IA
-                </span>
-              )}
-            </p>
-            <h2 className="text-[18px] font-semibold text-navy-900 dark:text-white">
-              {aiOk && ai!.headline ? ai!.headline : summary.headline}
-            </h2>
-          </div>
-          <div className="flex items-center gap-1 bg-navy-50 dark:bg-zinc-800/60 rounded-full px-3 py-1 shrink-0">
-            <span className="text-xs text-navy-500 dark:text-zinc-400">Score</span>
-            <span className="text-sm font-bold text-navy-900 dark:text-white">
-              {summary.score}
-            </span>
-            <span className="text-xs text-navy-400 dark:text-zinc-500">/100</span>
-          </div>
+        <div className="mb-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-500 dark:text-zinc-500 mb-1">
+            Resumen de hoy · {fmtDate(summary.execution_date)}
+            {aiOk && (
+              <span className="ml-2 text-brand-green normal-case tracking-normal">
+                · escrito por tu asistente
+              </span>
+            )}
+          </p>
+          <h2 className="text-[18px] font-semibold text-navy-900 dark:text-white">
+            {displayHeadline}
+          </h2>
         </div>
 
-        {aiOk && ai!.narrative && (
+        {allConnectedLive && (
+          <div className="mb-4 rounded-lg border border-brand-green/30 bg-brand-green/10 px-3 py-2 text-[12.5px] text-brand-green dark:border-brand-green/30 dark:bg-brand-green/15 dark:text-brand-green-light">
+            ✓ Tienes Gmail, Calendar, Sheets y reputación conectados. Si el
+            resumen menciona conectar integraciones es de ayer — se actualizará
+            mañana.
+          </div>
+        )}
+
+        {displayNarrative && (
           <p className="text-sm text-navy-700 dark:text-zinc-300 whitespace-pre-line mb-4">
-            {ai!.narrative}
+            {displayNarrative}
           </p>
         )}
 
-        {aiOk && ai!.top_actions && ai!.top_actions.length > 0 ? (
+        {filteredActions.length > 0 ? (
           <div className="space-y-2">
-            {ai!.top_actions.map((a, i) => (
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-400 dark:text-zinc-500 mb-1">
+              Qué hacer hoy
+            </p>
+            {filteredActions.map((a, i) => (
               <div key={i} className="flex items-start gap-2">
                 <span
                   className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${impactDot(a.impact)}`}
                 />
                 <div className="flex-1">
                   <div className="text-sm font-medium text-navy-900 dark:text-white">
-                    {a.action}
+                    {sanitizeProse(a.action)}
                   </div>
                   <div className="text-xs text-navy-500 dark:text-zinc-500">
-                    {a.why}
+                    {sanitizeProse(a.why)}
                     {a.when && <span className="ml-1">· {a.when}</span>}
                   </div>
                 </div>
@@ -448,7 +633,7 @@ export function AgentBriefingHero() {
                 <div key={i} className="flex items-start gap-2">
                   <span className="mt-0.5 h-2 w-2 rounded-full bg-brand-green shrink-0" />
                   <span className="text-sm text-navy-700 dark:text-zinc-300">
-                    {action}
+                    {sanitizeProse(action)}
                   </span>
                 </div>
               ))}
@@ -456,60 +641,44 @@ export function AgentBriefingHero() {
           )
         )}
 
-        {aiOk &&
-          (((ai!.opportunities?.length ?? 0) > 0) ||
-            ((ai!.watch_outs?.length ?? 0) > 0)) && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 pt-3 border-t border-brand-green/10 dark:border-zinc-700/50">
-              {(ai!.opportunities?.length ?? 0) > 0 && (
-                <div>
-                  <div className="text-[11px] uppercase tracking-wider text-navy-500 dark:text-zinc-500 mb-1">
-                    Oportunidades
-                  </div>
-                  <ul className="space-y-1">
-                    {ai!.opportunities!.map((o, i) => (
-                      <li
-                        key={i}
-                        className="text-xs text-navy-700 dark:text-zinc-300"
-                      >
-                        • {o}
-                      </li>
-                    ))}
-                  </ul>
+        {(filteredOpportunities.length > 0 || filteredWatchOuts.length > 0) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 pt-3 border-t border-brand-green/10 dark:border-zinc-700/50">
+            {filteredOpportunities.length > 0 && (
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-navy-500 dark:text-zinc-500 mb-1">
+                  Aprovecha hoy
                 </div>
-              )}
-              {(ai!.watch_outs?.length ?? 0) > 0 && (
-                <div>
-                  <div className="text-[11px] uppercase tracking-wider text-navy-500 dark:text-zinc-500 mb-1">
-                    A vigilar
-                  </div>
-                  <ul className="space-y-1">
-                    {ai!.watch_outs!.map((w, i) => (
-                      <li
-                        key={i}
-                        className="text-xs text-navy-700 dark:text-zinc-300"
-                      >
-                        • {w}
-                      </li>
-                    ))}
-                  </ul>
+                <ul className="space-y-1">
+                  {filteredOpportunities.map((o, i) => (
+                    <li
+                      key={i}
+                      className="text-xs text-navy-700 dark:text-zinc-300"
+                    >
+                      • {o}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {filteredWatchOuts.length > 0 && (
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-navy-500 dark:text-zinc-500 mb-1">
+                  Ojo con
                 </div>
-              )}
-            </div>
-          )}
-
-        <div className="flex flex-wrap gap-4 mt-4 pt-3 border-t border-brand-green/10 dark:border-zinc-700/50">
-          <span className="text-xs text-navy-500 dark:text-zinc-500">
-            {summary.opportunities_count} oportunidades
-          </span>
-          <span className="text-xs text-navy-500 dark:text-zinc-500">
-            {summary.risks_count} riesgos
-          </span>
-          {aiOk && ai!.mood && (
-            <span className="text-xs text-navy-400 dark:text-zinc-500 ml-auto">
-              tono: {ai!.mood}
-            </span>
-          )}
-        </div>
+                <ul className="space-y-1">
+                  {filteredWatchOuts.map((w, i) => (
+                    <li
+                      key={i}
+                      className="text-xs text-navy-700 dark:text-zinc-300"
+                    >
+                      • {w}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );
