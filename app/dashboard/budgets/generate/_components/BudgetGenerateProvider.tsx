@@ -46,23 +46,59 @@ export interface Material {
   sourceType?: string;
 }
 
-const CONSTRUCTION_FALLBACK_PARTIDAS: Partida[] = [
-  { id: "p1", concept: "Demoliciones y retirada de escombros", description: "Demolición de elementos existentes y gestión de residuos.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 1500, subtotal_cost: 1500, unit_price_client: 1800, subtotal_client: 1800, status: "incluida" },
-  { id: "p2", concept: "Albañilería y tabiquería", description: "Ayudas de albañilería, apertura de regatas y formación de tabiquería.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 2200, subtotal_cost: 2200, unit_price_client: 2640, subtotal_client: 2640, status: "incluida" },
-  { id: "p3", concept: "Fontanería", description: "Instalación completa de fontanería y saneamiento.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 1800, subtotal_cost: 1800, unit_price_client: 2160, subtotal_client: 2160, status: "incluida" },
-  { id: "p4", concept: "Electricidad", description: "Instalación eléctrica completa, mecanismos y cuadro.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 2500, subtotal_cost: 2500, unit_price_client: 3000, subtotal_client: 3000, status: "incluida" },
-  { id: "p5", concept: "Revestimientos y alicatados", description: "Alicatado de paramentos verticales.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 1900, subtotal_cost: 1900, unit_price_client: 2280, subtotal_client: 2280, status: "incluida" },
-  { id: "p6", concept: "Solados y pavimentos", description: "Suministro y colocación de pavimento.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 2100, subtotal_cost: 2100, unit_price_client: 2520, subtotal_client: 2520, status: "incluida" },
-  { id: "p7", concept: "Pintura", description: "Preparación de paredes y pintura plástica.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 1600, subtotal_cost: 1600, unit_price_client: 1920, subtotal_client: 1920, status: "incluida" },
-  { id: "p8", concept: "Carpintería interior", description: "Suministro y colocación de puertas.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 1800, subtotal_cost: 1800, unit_price_client: 2160, subtotal_client: 2160, status: "incluida" },
-  { id: "p9", concept: "Carpintería exterior", description: "Suministro y colocación de ventanas.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 3200, subtotal_cost: 3200, unit_price_client: 3840, subtotal_client: 3840, status: "incluida" },
-  { id: "p10", concept: "Sanitarios y grifería", description: "Suministro y colocación de sanitarios.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 1200, subtotal_cost: 1200, unit_price_client: 1440, subtotal_client: 1440, status: "incluida" },
-  { id: "p11", concept: "Cocina y equipamiento", description: "Montaje de muebles de cocina y electrodomésticos.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 2800, subtotal_cost: 2800, unit_price_client: 3360, subtotal_client: 3360, status: "incluida" },
-  { id: "p12", concept: "Iluminación", description: "Suministro e instalación de luminarias.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 800, subtotal_cost: 800, unit_price_client: 960, subtotal_client: 960, status: "incluida" },
-  { id: "p13", concept: "Limpieza final", description: "Limpieza fin de obra.", quantity: 1, unit: "PA", category: "mano_obra", unit_price: 350, subtotal_cost: 350, unit_price_client: 420, subtotal_client: 420, status: "incluida" },
-  { id: "p14", concept: "Gestión de residuos", description: "Tasas y gestión de residuos en vertedero.", quantity: 1, unit: "PA", category: "otros", unit_price: 250, subtotal_cost: 250, unit_price_client: 300, subtotal_client: 300, status: "incluida" },
-  { id: "p15", concept: "Seguridad y medios auxiliares", description: "Andamios, EPIs y medidas de seguridad.", quantity: 1, unit: "PA", category: "otros", unit_price: 400, subtotal_cost: 400, unit_price_client: 480, subtotal_client: 480, status: "incluida" }
-];
+const getDetailedConstructionFallback = (areaM2: number, marginMultiplier: number): Partida[] => {
+  const p = (concept: string, description: string, quantity: number, unit: string, unit_price: number, category: string, id: string): Partida => ({
+    id, concept, description, quantity, unit, category, unit_price,
+    subtotal_cost: quantity * unit_price,
+    unit_price_client: unit_price * marginMultiplier,
+    subtotal_client: quantity * unit_price * marginMultiplier,
+    status: "incluida"
+  });
+
+  const a = Math.max(areaM2 || 90, 30); // Use minimum 30m2 for reasonable calculations
+
+  return [
+    p("Protección de zonas comunes y ascensor", "Forrado de ascensor, pasillos y elementos comunes con cartón ondulado y plástico.", 1, "PA", 150, "otros", "fb-1"),
+    p("Demolición de tabiquería", "Derribo manual de tabiquería interior no portante.", Math.round(a * 0.4), "m2", 12, "mano_obra", "fb-2"),
+    p("Demolición de pavimentos", "Levantado de pavimentos existentes y rodapiés.", a, "m2", 9, "mano_obra", "fb-3"),
+    p("Demolición de alicatados (Baños y Cocina)", "Picado de azulejos en zonas húmedas.", Math.round(a * 0.4), "m2", 11, "mano_obra", "fb-4"),
+    p("Desmontaje de sanitarios y muebles", "Retirada de sanitarios, grifería y muebles de cocina.", 1, "PA", 250, "mano_obra", "fb-5"),
+    p("Desmontaje de carpintería interior", "Retirada de puertas y premarcos.", Math.max(Math.round(a / 12), 2), "ud", 25, "mano_obra", "fb-6"),
+    p("Gestión de residuos y contenedores", "Alquiler de contenedores, tasas de vertedero y transporte.", Math.max(Math.round(a / 20), 1), "ud", 250, "otros", "fb-7"),
+
+    p("Formación de tabiquería (Pladur/Ladrillo)", "Suministro e instalación de nueva tabiquería interior.", Math.round(a * 0.5), "m2", 38, "mano_obra", "fb-8"),
+    p("Falsos techos continuos", "Formación de falso techo de placa de yeso laminado.", a, "m2", 28, "mano_obra", "fb-9"),
+    p("Ayudas de albañilería", "Apertura y tapado de regatas para instalaciones.", 1, "PA", 800, "mano_obra", "fb-10"),
+
+    p("Instalación de fontanería (Baño 1)", "Red de agua fría, caliente y desagües para 1 baño completo.", 1, "PA", 950, "mano_obra", "fb-11"),
+    p("Instalación de fontanería (Cocina)", "Red de fontanería y desagües para cocina.", 1, "PA", 650, "mano_obra", "fb-12"),
+    p("Instalación de climatización", "Preinstalación y conductos para aire acondicionado.", 1, "PA", 1200, "mano_obra", "fb-13"),
+
+    p("Cuadro eléctrico y derivaciones", "Suministro e instalación de cuadro general de mando y protección.", 1, "ud", 450, "mano_obra", "fb-14"),
+    p("Puntos de luz y enchufes", "Cableado y cajas para puntos de luz y tomas de corriente.", Math.round(a * 0.8), "ud", 35, "mano_obra", "fb-15"),
+    p("Suministro y colocación de mecanismos", "Mecanismos eléctricos estándar.", Math.round(a * 0.8), "ud", 20, "mano_obra", "fb-16"),
+
+    p("Alicatado de baños y cocina", "Colocación de revestimiento cerámico en paredes.", Math.round(a * 0.4), "m2", 35, "mano_obra", "fb-17"),
+    p("Solado general de vivienda", "Colocación de pavimento (laminado o cerámico).", a, "m2", 25, "mano_obra", "fb-18"),
+    p("Rodapié", "Suministro y colocación de rodapié a juego.", Math.round(a * 0.8), "ml", 8, "mano_obra", "fb-19"),
+
+    p("Preparación de paredes (Alisado)", "Raspado de gotelé y lucido de paredes con masilla.", Math.round(a * 2.5), "m2", 14, "mano_obra", "fb-20"),
+    p("Pintura plástica lisa", "Aplicación de dos manos de pintura plástica lavable.", Math.round(a * 3.5), "m2", 6, "mano_obra", "fb-21"),
+
+    p("Carpintería interior (Puertas de paso)", "Suministro y colocación de puertas de paso lacadas.", Math.max(Math.round(a / 12), 2), "ud", 350, "mano_obra", "fb-22"),
+    p("Puerta de entrada", "Suministro y colocación de puerta de seguridad.", 1, "ud", 850, "mano_obra", "fb-23"),
+    p("Carpintería exterior (Ventanas)", "Suministro y colocación de ventanas PVC/Aluminio RPT.", Math.max(Math.round(a / 15), 2), "ud", 450, "mano_obra", "fb-24"),
+
+    p("Suministro y montaje de sanitarios", "Inodoros, lavabos y platos de ducha.", 1, "PA", 850, "mano_obra", "fb-25"),
+    p("Suministro y montaje de grifería", "Grifería de lavabos, ducha y cocina.", 1, "PA", 450, "mano_obra", "fb-26"),
+
+    p("Mobiliario de cocina", "Muebles altos y bajos de cocina (estimación base).", 1, "PA", 3500, "mano_obra", "fb-27"),
+    p("Encimera de cocina", "Suministro e instalación de encimera tipo cuarzo/porcelánico.", 1, "PA", 1200, "mano_obra", "fb-28"),
+
+    p("Limpieza final de obra", "Limpieza profesional exhaustiva.", 1, "PA", 350, "mano_obra", "fb-29"),
+    p("Seguridad y Salud", "Medios auxiliares y EPIs.", 1, "PA", 300, "otros", "fb-30"),
+  ];
+};
 
 const CONSTRUCTION_FALLBACK_MATERIALS: Material[] = [
   { id: "fm1", name: "Mortero de cemento M-7.5 (saco 25kg)", quantity: 20, unit: "sacos", unit_price: 3.50, subtotal: 70, included: true, provider_id: "leroy-merlin", isRealData: false },
@@ -901,8 +937,13 @@ export function BudgetGenerateProvider({
 
       // --- Fallback partidas for construction if AI returned too few ---
       let finalPartidas = newPartidas;
-      if (finalPartidas.length < 5 && state.sector === "construccion") {
-        finalPartidas = CONSTRUCTION_FALLBACK_PARTIDAS;
+      if (state.sector === "construccion") {
+        const isIntegral = (state.serviceType || state.description || "").toLowerCase().includes("integral");
+        const hasTooFewItems = newPartidas.length < (isIntegral ? 25 : 5);
+        const hasTooManyPA = newPartidas.filter(p => p.unit.toUpperCase() === "PA").length > (newPartidas.length * 0.4);
+        if (hasTooFewItems || hasTooManyPA || newPartidas.length === 0) {
+           finalPartidas = getDetailedConstructionFallback(data.detected_area_m2 || 90, marginMultiplier);
+        }
       }
 
       // --- Timeline ---
@@ -992,7 +1033,7 @@ export function BudgetGenerateProvider({
               ...prev,
               currentStep: prev.currentStep + 1,
               validationError: null,
-              partidas: CONSTRUCTION_FALLBACK_PARTIDAS
+              partidas: getDetailedConstructionFallback(state.aiInsights?.detected_area_m2 || 90, 1 + (state.marginPercent / 100))
             }));
             saveDraft(false);
             return;
@@ -1021,7 +1062,7 @@ export function BudgetGenerateProvider({
                 toast.info("Aviso", {
                   description: "Usando plantilla local V1 porque el análisis IA no ha respondido."
                 });
-                setState(prev => ({ ...prev, partidas: CONSTRUCTION_FALLBACK_PARTIDAS }));
+                setState(prev => ({ ...prev, partidas: getDetailedConstructionFallback(state.aiInsights?.detected_area_m2 || 90, 1 + (state.marginPercent / 100)) }));
               }
            }
          }
