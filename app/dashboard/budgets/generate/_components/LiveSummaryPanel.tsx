@@ -88,24 +88,7 @@ export function LiveSummaryPanel() {
     };
   }
 
-  const handleAjusteMinimo = () => {
-    if (!priceRange) return;
-    const difference = priceRange.min - totals.clientPrice;
-    if (difference <= 0) return;
 
-    const marginMultiplier = 1 + (state.marginPercent / 100);
-    const costDifference = difference / marginMultiplier;
-
-    addPartida({
-      concept: "Ajuste a mínimo recomendado de mercado",
-      description: "Ajuste manual para alcanzar el rango mínimo esperado por el mercado según m2.",
-      quantity: 1,
-      unit: "PA",
-      category: "otros",
-      unit_price: costDifference,
-      status: "incluida"
-    });
-  };
 
   return (
     <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-navy-100 dark:border-zinc-800 shadow-sm p-6 sticky top-24">
@@ -198,7 +181,6 @@ export function LiveSummaryPanel() {
               <div className="flex justify-between items-center mt-0.5">
                 <span className="text-[10px] text-navy-400 dark:text-zinc-500">Rango total</span>
                 <span className="text-[10px] text-navy-400 dark:text-zinc-500">
-                  {priceRange.min.toLocaleString("es-ES")} - {priceRange.max.toLocaleString("es-ES")} EUR
                 </span>
               </div>
             )}
@@ -207,15 +189,9 @@ export function LiveSummaryPanel() {
                 <p className="text-[10px] text-red-600 dark:text-red-400 font-medium mb-1 flex items-start gap-1">
                   <span className="text-xs">⚠️</span>
                   <span>
-                    El presupuesto actual ({totals.clientPrice.toLocaleString("es-ES", {maximumFractionDigits: 0})} €) está {(priceRange.min - totals.clientPrice).toLocaleString("es-ES", {maximumFractionDigits: 0})} € por debajo del mínimo recomendado. Añade partidas faltantes o ajusta el precio.
+                    Presupuesto infravalorado. Revisa capítulos faltantes o genera una versión realista. El actual ({totals.clientPrice.toLocaleString("es-ES", {maximumFractionDigits: 0})} €) está {(priceRange.min - totals.clientPrice).toLocaleString("es-ES", {maximumFractionDigits: 0})} € por debajo del mínimo de mercado.
                   </span>
                 </p>
-                <button
-                  onClick={handleAjusteMinimo}
-                  className="w-full mt-2 py-1.5 px-2 bg-white dark:bg-zinc-800 text-red-600 dark:text-red-400 text-[10px] font-bold rounded shadow-sm border border-red-200 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                >
-                  Ajustar al mínimo recomendado
-                </button>
               </div>
             )}
           </div>
