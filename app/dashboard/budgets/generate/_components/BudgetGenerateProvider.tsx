@@ -199,6 +199,13 @@ export interface BudgetState {
   } | null;
   /** When true, materials came from AI and should NOT be overwritten by the provider useEffect */
   materialsFromAI: boolean;
+  /** When true, the scope/description changed since last AI analysis */
+  analysisDirty: boolean;
+  /** Saving states */
+  isSavingDraft: boolean;
+  isFinalizing: boolean;
+  saveError: string | null;
+  finalizeError: string | null;
 }
 
 interface BudgetContextProps {
@@ -292,6 +299,11 @@ export function BudgetGenerateProvider({
     lastAnalysisHash: null,
     aiInsights: null,
     materialsFromAI: false,
+    analysisDirty: false,
+    isSavingDraft: false,
+    isFinalizing: false,
+    saveError: null,
+    finalizeError: null,
   });
 
   // HYDRATE WITH REAL DATA (Fase 4.1)
@@ -474,14 +486,22 @@ export function BudgetGenerateProvider({
     }));
   }, [state.partidas, state.materials, state.marginPercent]);
 
+  const SCOPE_FIELDS = new Set(["description", "serviceType", "startDate"]);
+
   const updateState = (updates: Partial<BudgetState>) => {
-    setState(prev => ({ ...prev, ...updates }));
+    const scopeChanged = Object.keys(updates).some(k => SCOPE_FIELDS.has(k));
+    setState(prev => ({
+      ...prev,
+      ...updates,
+      ...(scopeChanged && prev.lastAnalysisHash ? { analysisDirty: true } : {}),
+    }));
   };
 
   const updateSectorData = (key: string, value: any) => {
     setState(prev => ({
       ...prev,
-      sectorData: { ...prev.sectorData, [key]: value }
+      sectorData: { ...prev.sectorData, [key]: value },
+      ...(prev.lastAnalysisHash ? { analysisDirty: true } : {}),
     }));
   };
 
@@ -552,12 +572,35 @@ export function BudgetGenerateProvider({
 
   /* ─── Persistencia y Borradores ─── */
   const saveDraft = async (manual = false): Promise<string | null> => {
+    // Don't autosave if there's no meaningful data yet
+    if (!manual && !state.title && !state.description && state.partidas.length <= 2) {
+      return null;
+    }
+
+    if (manual) {
+      setState(prev => ({ ...prev, isSavingDraft: true, saveError: null }));
+    }
+
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
+      if (!user) {
+        if (manual) {
+          setState(prev => ({ ...prev, isSavingDraft: false, saveError: "No hay usuario autenticado" }));
+          toast.error("No hay usuario autenticado");
+        }
+        return null;
+      }
 
-      const snapshot = { ...state };
+      // Build snapshot — exclude circular/transient fields
+      const snapshot = {
+        ...state,
+        isSavingDraft: false,
+        isFinalizing: false,
+        saveError: null,
+        finalizeError: null,
+      };
+
       let draftId = state.draftId;
 
       if (!draftId) {
@@ -581,6 +624,8 @@ export function BudgetGenerateProvider({
         setState(prev => ({
           ...prev,
           draftId,
+          isSavingDraft: false,
+          saveError: null,
           lastSavedAt: new Date().toLocaleTimeString("es-ES", { hour: '2-digit', minute: '2-digit' })
         }));
       } else {
@@ -601,6 +646,8 @@ export function BudgetGenerateProvider({
 
         setState(prev => ({
           ...prev,
+          isSavingDraft: false,
+          saveError: null,
           lastSavedAt: new Date().toLocaleTimeString("es-ES", { hour: '2-digit', minute: '2-digit' })
         }));
       }
@@ -609,20 +656,23 @@ export function BudgetGenerateProvider({
         toast.success("Borrador guardado correctamente");
       }
       return draftId;
-    } catch (err) {
+    } catch (err: any) {
+      const errorMsg = err?.message || "Error desconocido al guardar";
       console.error("Error saving draft:", err);
-      if (manual) toast.error("Error al guardar el borrador");
+      setState(prev => ({ ...prev, isSavingDraft: false, saveError: errorMsg }));
+      if (manual) toast.error("Error al guardar: " + errorMsg);
       return null;
     }
   };
 
   const finalizeBudget = async (): Promise<string | null> => {
+    setState(prev => ({ ...prev, isFinalizing: true, finalizeError: null }));
     try {
-      const currentDraftId = await saveDraft(false); // Asegurarse de que tenemos el ID y el último estado
+      const currentDraftId = await saveDraft(false); // Asegurarse de que tenemos el ID y el ultimo estado
 
       const supabase = createClient();
       const budgetId = currentDraftId || state.draftId;
-      if (!budgetId) throw new Error("No hay borrador para finalizar");
+      if (!budgetId) throw new Error("No hay borrador para finalizar. Guarda un borrador primero.");
 
       // 1. Obtener la siguiente versión (si ya existía y lo abrieron, o si es la 1)
       const nextVer = await getNextVersion(supabase, "budget", budgetId);
@@ -692,12 +742,15 @@ export function BudgetGenerateProvider({
         metadata: { from: "borrador", to: "pendiente" },
       });
 
+      setState(prev => ({ ...prev, isFinalizing: false, finalizeError: null }));
       toast.success("Presupuesto finalizado correctamente");
       return budgetId;
 
-    } catch (err) {
+    } catch (err: any) {
+      const errorMsg = err?.message || "Error desconocido al finalizar";
       console.error("Error finalizing budget:", err);
-      toast.error("Error al finalizar el presupuesto");
+      setState(prev => ({ ...prev, isFinalizing: false, finalizeError: errorMsg }));
+      toast.error("Error al finalizar: " + errorMsg);
       return null;
     }
   };
@@ -753,7 +806,18 @@ export function BudgetGenerateProvider({
   const analyzeWithAI = async (forceRegenerate = false): Promise<boolean> => {
     if (!state.description || state.description.trim().length < 5) return true;
 
-    const currentHash = `${state.sector}-${state.serviceType}-${state.description}`.trim();
+    // Include scope data in hash so changes to estancias/calidad/superficie trigger re-analysis
+    const scopeStr = JSON.stringify({
+      s: state.sectorData.estancias,
+      a: state.sectorData.actuaciones,
+      c: state.sectorData.calidad,
+      m2: state.sectorData.superficie_m2,
+      nb: state.sectorData.num_banos,
+      ck: state.sectorData.incluye_cocina,
+      cv: state.sectorData.incluye_ventanas,
+      cc: state.sectorData.incluye_climatizacion,
+    });
+    const currentHash = `${state.sector}-${state.serviceType}-${state.description}-${scopeStr}`.trim();
     if (!forceRegenerate && state.lastAnalysisHash === currentHash && !state.analysisError) {
       return true;
     }
@@ -763,6 +827,7 @@ export function BudgetGenerateProvider({
       ...prev,
       isAnalyzing: true,
       analysisError: null,
+      analysisDirty: false,
       ...(forceRegenerate ? { materialsFromAI: false } : {}),
     }));
 
@@ -774,8 +839,16 @@ export function BudgetGenerateProvider({
           sector: state.sector,
           description: state.description,
           service_type: state.serviceType,
-          current_partidas: state.partidas.map(p => ({ concept: p.concept, subtotal: p.subtotal_cost })),
-          current_materials: state.materials.map(m => ({ name: m.name, subtotal: m.subtotal }))
+          scope: {
+            estancias: state.sectorData.estancias || [],
+            actuaciones: state.sectorData.actuaciones || [],
+            calidad: state.sectorData.calidad || "media",
+            superficie_m2: state.sectorData.superficie_m2 || null,
+            num_banos: state.sectorData.num_banos || 1,
+            incluye_cocina: state.sectorData.incluye_cocina ?? true,
+            incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
+            incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,
+          },
         })
       });
 

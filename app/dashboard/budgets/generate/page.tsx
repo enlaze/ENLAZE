@@ -82,8 +82,7 @@ function DraftRecoveryManager() {
 function WizardContent() {
   const { state, saveDraft, finalizeBudget } = useBudgetGenerate();
   const [finalizedId, setFinalizedId] = useState<string | null>(null);
-  const [isFinalizing, setIsFinalizing] = useState(false);
-  
+
   const isConstruction = state.sector === "construccion";
 
   // Pasos dinámicos por sector
@@ -98,9 +97,7 @@ function WizardContent() {
   ];
 
   const handleFinalize = async () => {
-    setIsFinalizing(true);
     const id = await finalizeBudget();
-    setIsFinalizing(false);
     if (id) {
       setFinalizedId(id);
     }
@@ -204,22 +201,27 @@ function WizardContent() {
       <div className="flex justify-between items-center mb-6">
         <GenerateStepper steps={steps} />
         
-        <div className={`hidden sm:flex gap-3 items-center ${isFinalizing ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div className={`hidden sm:flex gap-3 items-center ${state.isFinalizing ? 'opacity-50 pointer-events-none' : ''}`}>
           {state.lastSavedAt && (
             <span className="text-xs text-navy-400 dark:text-zinc-500 font-medium">
               Guardado a las {state.lastSavedAt}
             </span>
           )}
-          <Button variant="secondary" onClick={() => saveDraft(true)} disabled={!state.draftId && state.currentStep === 0}>
-            Guardar borrador
+          {state.saveError && (
+            <span className="text-xs text-red-500 font-medium max-w-[200px] truncate" title={state.saveError}>
+              Error: {state.saveError}
+            </span>
+          )}
+          <Button variant="secondary" onClick={() => saveDraft(true)} disabled={state.isSavingDraft}>
+            {state.isSavingDraft ? "Guardando..." : "Guardar borrador"}
           </Button>
-          <Button 
+          <Button
             className="bg-brand-green hover:bg-brand-green/90 text-navy-900 font-bold border-0 shadow-md"
             onClick={handleFinalize}
-            disabled={isFinalizing || state.partidas.length === 0 || !state.title || !state.clientId || !state.projectId}
-            title={(!state.title || !state.clientId || !state.projectId) ? "Completa el título, cliente y obra en el Paso 1" : ""}
+            disabled={state.isFinalizing || state.partidas.length === 0 || !state.title || !state.clientId || !state.projectId}
+            title={(!state.title || !state.clientId || !state.projectId) ? "Completa el titulo, cliente y obra en el Paso 1" : ""}
           >
-            {isFinalizing ? "Finalizando..." : "Finalizar presupuesto"}
+            {state.isFinalizing ? "Finalizando..." : "Finalizar presupuesto"}
           </Button>
         </div>
       </div>

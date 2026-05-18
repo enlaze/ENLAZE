@@ -44,7 +44,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { sector, description, service_type } = body;
+    const { sector, description, service_type, scope } = body;
 
     if (!description || description.trim().length < 5) {
       return NextResponse.json({ error: "Descripcion insuficiente" }, { status: 400 });
@@ -271,7 +271,7 @@ REGLAS:
       messages: [
         {
           role: "user",
-          content: `Analiza esta peticion de presupuesto y genera la estructura JSON completa con TODAS las partidas detalladas, materiales, proveedores, fases y timeline:\n\nDescripcion:\n"${description}"\n\nTipo: ${service_type || "general"}\n\nRecuerda: para construccion necesito MINIMO 20 partidas y 15 materiales con precios realistas de mercado espanol.`
+          content: `Analiza esta peticion de presupuesto y genera la estructura JSON completa con TODAS las partidas detalladas, materiales, proveedores, fases y timeline:\n\nDescripcion:\n"${description}"\n\nTipo: ${service_type || "general"}${scope ? `\n\nALCANCE DETALLADO del selector del usuario:\n- Superficie: ${scope.superficie_m2 || "no indicada"} m2\n- Estancias: ${(scope.estancias || []).join(", ") || "no seleccionadas"}\n- Actuaciones: ${(scope.actuaciones || []).join(", ") || "no seleccionadas"}\n- Calidad: ${scope.calidad || "media"}\n- N. banos: ${scope.num_banos || 1}\n- Incluye cocina: ${scope.incluye_cocina ? "si" : "no"}\n- Incluye cambio ventanas: ${scope.incluye_ventanas ? "si" : "no"}\n- Incluye climatizacion: ${scope.incluye_climatizacion ? "si" : "no"}` : ""}\n\nRecuerda: para construccion necesito MINIMO 20 partidas y 15 materiales con precios realistas de mercado espanol.`
         }
       ]
     });

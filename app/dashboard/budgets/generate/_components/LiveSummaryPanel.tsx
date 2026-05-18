@@ -301,21 +301,33 @@ export function LiveSummaryPanel() {
         </ul>
       </div>
 
+      {/* Analysis dirty warning */}
+      {state.analysisDirty && (
+        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-800 rounded-xl p-3 mb-4">
+          <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
+            La propuesta ha cambiado desde el ultimo analisis. Pulsa "Generar con IA" en el paso de Partidas para recalcular.
+          </p>
+        </div>
+      )}
+
       <div className="mt-6 flex flex-col gap-2">
         <button
           className="w-full py-3 bg-brand-green text-navy-900 font-bold rounded-xl hover:opacity-90 transition disabled:opacity-50"
           onClick={nextStep}
           disabled={state.isAnalyzing}
         >
-          {state.isAnalyzing ? "✨ Analizando peticion..." : "Siguiente paso"}
+          {state.isAnalyzing ? "Analizando peticion..." : "Siguiente paso"}
         </button>
-        <button 
+        <button
           onClick={() => saveDraft(true)}
-          disabled={!state.draftId && state.currentStep === 0}
+          disabled={state.isSavingDraft}
           className="w-full py-2 bg-transparent text-navy-600 dark:text-zinc-400 font-medium hover:text-navy-900 dark:hover:text-white transition text-sm disabled:opacity-50"
         >
-          Guardar borrador
+          {state.isSavingDraft ? "Guardando..." : "Guardar borrador"}
         </button>
+        {state.saveError && (
+          <p className="text-xs text-red-500 text-center">{state.saveError}</p>
+        )}
       </div>
     </div>
   );
