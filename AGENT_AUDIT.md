@@ -213,6 +213,169 @@ Para reproducir el escenario "Bug A" en local: levantar la app con una
 inspector y comprobar que aparece la alerta de coherencia + el módulo en rojo
 con `status=decrypt_failed` (sin 500, sin throw).
 
+## Profundización Bloque 1 — 2026-05-19
+
+Los módulos pasaban de OAuth a "etiqueta CONECTADO" sin alimentar de verdad el
+prompt. Ahora cada endpoint `/api/agent/{gmail,calendar,sheets}/summary`
+devuelve un payload heurístico enriquecido y Claude tiene reglas explícitas
+para citarlo por nombre, hora y cifra.
+
+### Endpoints — qué devuelven ahora
+
+**`/api/agent/gmail/summary`** — `total_unread`, `threads_awaiting_reply[]`
+(con `from_name`, `from_email`, `subject`, `snippet` ≤200 chars,
+`hours_waiting`, `is_recurring_contact`, `category`, `priority_signal`),
+`top_senders_30d[]`, `threads_count_by_category` (customer/supplier/lead/
+internal/spam/unknown), `invoices_detected[]`, `meeting_requests[]`,
+`emails_processed`, `fetched_range_days`.
+
+**`/api/agent/calendar/summary`** — `today` y `tomorrow` con `events[]`,
+`total_busy_hours`, `free_blocks[]` (≥1h) e `is_packed` (>6h ocupado);
+`this_week` con `total_events`, `busiest_day`, `quietest_day`;
+`upcoming_important[]`; `recurring_patterns[]`. Cubre todos los calendarios
+visibles (selected & no hidden), no sólo `primary`.
+
+**`/api/agent/sheets/summary`** — `active_sheet.column_schema_detected[]`
+con `role` (date/product/quantity/price/revenue/unknown), `sales_summary`
+(today/yesterday/this_week con `vs_last_week_pct`/this_month con
+`vs_last_month_pct`), `top_products_7d[]` con trend y `vs_previous_pct`,
+`alerts[]`, `rows_analyzed`, `detection_confidence`. Si el schema no se
+detecta con seguridad, `detection_confidence='low'` y las cifras quedan en
+`null` — **nunca se inventa**.
+
+### Heurísticas implementadas
+
+Gmail (`lib/agent/intelligence/gmail.ts`):
+- Ventana: últimos 7 días o 50 mensajes, hasta 30 con detalle (`format=metadata`).
+- Categoría: dominio del remitente (`makro.es`, `amazon.es`, etc.) → `supplier`;
+  regex sobre subject+snippet para `cliente|pedido` → `customer`; `factura|invoice|albarán|pago` → `supplier`;
+  `no-reply|notification` → `internal`; `promo|newsletter|unsubscribe` → `spam`.
+- `is_recurring_contact`: ≥2 emails con esa dirección en los 90 días vistos.
+- `priority_signal`: `urgente|asap|hoy` → `urgent`; cliente recurrente sin respuesta >24h → `high`;
+  proveedor sin respuesta >48h → `high`; spam → `low`; default `normal`.
+- `invoices_detected`: regex `factura|invoice|albarán|pago` + adjunto, extrae
+  importe con `/€|EUR/` y fecha con regex `dd/mm/yyyy` cuando se puede.
+- `meeting_requests`: regex `reunión|meeting|cita|videollamada|llamada` y
+  saca fechas con la misma heurística.
+- Threads ordenados por prioridad y horas de espera; spam excluido salvo
+  marcado como urgent.
+
+Calendar (`lib/agent/intelligence/calendar.ts`):
+- Recoge `calendarList` → filtra `selected && !hidden` (con fallback a
+  `primary` si no hay nada visible).
+- Trae 14 días con `singleEvents=true&orderBy=startTime&maxResults=250`.
+- Workday 09:00–18:00. Eventos solapados se mergean antes de calcular
+  ocupación. Free blocks >=1h.
+- `is_packed`: >6h ocupado.
+- `upcoming_important`: regex sobre el título (`firma|contrato|renovación|
+  cierre|vencimiento|plazo|deadline`, trámites oficiales, eventos con
+  ≥3 asistentes).
+- `recurring_patterns`: agrupa eventos con `recurringEventId` por
+  weekday+hora+título; ≥2 ocurrencias.
+
+Sheets (`lib/agent/intelligence/sheets.ts`):
+- Si `agent_connections.config.active_sheet_id` (o `target_spreadsheet_id`)
+  → usa esa hoja; si no, fallback al spreadsheet más recientemente modificado.
+- Trae hasta 500 filas de la primera tab.
+- Detección de columnas (50 filas de muestra): >70% parseable como fecha
+  → `date`; >70% numérico + nombre que matchea `ingreso|total|importe|venta|
+  facturación|€` → `revenue`; con nombre `precio|pvp|coste` → `price`; con
+  nombre `unidades|cantidad|qty|stock` o promedio <50 e integer → `quantity`;
+  >70% string distinto pero acotado → `product`. Cuando solo se detecta numérico
+  sin pista de nombre, se usa la magnitud (>=5 → `revenue`, si no `quantity`).
+- `detection_confidence`: `high` con date+product+numeric; `medium` con
+  date+numeric sin product; `low` en otro caso → sales_summary/top_products
+  quedan en `null`.
+- Parseo de números en formato ES: `1.234,56` → `1234.56`; quita `€/EUR`.
+- Parseo de fechas: ISO `yyyy-mm-dd` o `dd/mm/yyyy|dd-mm|dd.mm` (años de 2
+  dígitos → +2000).
+- Trend: `vs_previous_pct` >= +10% → `up`, <= -10% → `down`, resto `flat`.
+- Alertas: producto cae ≥25% vs semana anterior → `product_declining`;
+  facturación de hoy ≥1.5x o ≤0.5x el promedio de los últimos 14 días con
+  ≥7 días de datos → `anomaly_high`/`anomaly_low`.
+
+### Casos donde la detección puede fallar (documentado)
+
+- Sheets con cabecera en fila 2 o múltiples tabs con datos distribuidos —
+  sólo se procesa la primera tab; mitigado pidiendo `active_sheet_id` en
+  config.
+- Sheets sin columna de fecha legible (e.g. fechas como texto libre
+  "lunes" o números seriales de Excel sin formatear) → confidence=`low` y
+  no se computa sales_summary.
+- Importes que vienen en celdas como números puros sin símbolo de € y con
+  cabecera ambigua: la heurística los marca como `quantity` o `revenue`
+  según magnitud, lo cual puede confundirlos. Manejable iterando hacia
+  Haiku para clasificar (siguiente bloque).
+- Gmail: emails marcados como leídos manualmente pero pendientes de
+  respuesta entran igual en `threads_awaiting_reply` (eso es deseado;
+  el criterio es "último mensaje no es mío"). Falso positivo posible si
+  el usuario envía emails desde otra dirección que no coincide con
+  `tokenInfo.email`.
+- Calendar: solo cuenta como "important" lo que matchea las regex; eventos
+  importantes con títulos genéricos ("Reunión") no se promueven a
+  `upcoming_important`.
+
+### Cambios en el workflow de n8n
+
+`Run User Modules`:
+- Mantiene el spread `inbox = { connected: true, ...gmailResp.data }`, pero
+  como el endpoint ahora pone su propio `connected`, el spread gana — la
+  estructura enriquecida fluye al payload tal cual.
+- Añade aliases explícitos `payload.gmail_intel = inbox`,
+  `payload.calendar_intel = calendar`, `payload.sales_intel = sheets` justo
+  antes del `outputs.push`.
+
+`Build Claude Prompt`:
+- Construye `ctx.gmail_intel`, `ctx.calendar_intel`, `ctx.sales_intel`
+  curados (sub-set de los payloads originales para no inflar tokens).
+- El system prompt incluye la sección **USO DE DATOS DE INTEGRACIONES
+  (OBLIGATORIO si están presentes)** con instrucciones específicas:
+  citar `from_name` + `hours_waiting`, proponer franjas concretas de
+  `free_blocks`, citar `revenue` con `vs_last_week_pct`, convertir alerts
+  en watch_outs, no inventar nada que no esté en los intel objects.
+
+### Inspector
+
+`/dashboard/dev/agent-inspector` ahora muestra 3 secciones nuevas
+expandibles tras "Estado de módulos":
+- **Gmail intel**: stats + awaiting_reply detallado + facturas + meetings +
+  top senders + conteo por categoría.
+- **Calendar intel**: stats + hoy + mañana (eventos y huecos libres con
+  hora) + upcoming_important + recurring_patterns.
+- **Sheets / Sales intel**: stats + esquema detectado por columna +
+  sales_summary 4-ventanas + top_products_7d + alertas.
+
+### Verificación local
+
+```bash
+npx tsc --noEmit -p tsconfig.json   # ✅ limpio
+npm run build                       # ✅ limpio
+```
+
+### Archivos tocados (bloque 1 profundización)
+
+```
+NEW   lib/agent/intelligence/gmail.ts
+NEW   lib/agent/intelligence/calendar.ts
+NEW   lib/agent/intelligence/sheets.ts
+EDIT  app/api/agent/gmail/summary/route.ts       — usa fetchGmailIntel; 200 siempre
+EDIT  app/api/agent/calendar/summary/route.ts    — usa fetchCalendarIntel
+EDIT  app/api/agent/sheets/summary/route.ts      — usa fetchSheetsIntel
+EDIT  app/dashboard/dev/agent-inspector/page.tsx — 3 bloques intel expandibles
+EDIT  n8n-workflow-comercio-local-v6.3.json
+        - Run User Modules: gmail_intel/calendar_intel/sales_intel aliases.
+        - Build Claude Prompt: curated ctx + USO DE DATOS DE INTEGRACIONES rules.
+EDIT  AGENT_AUDIT.md                              — esta sección
+```
+
+### Iteraciones futuras (no incluidas en este bloque)
+
+- Clasificación de email con Claude Haiku cuando la categoría heurística
+  devuelve `unknown` consistentemente.
+- Detección de schema de Sheets con LLM cuando confidence=`low`.
+- Pasar a Claude los últimos 3 briefings + estado de "hecho/no hecho".
+- Botones de acción ejecutable conectados a `/api/agent/gmail/action/*`.
+
 ## Pendientes razonables (no aplicados — esperan confirmación)
 
 1. **Re-encrypt sweep**: si quieres alinear local con prod, un script

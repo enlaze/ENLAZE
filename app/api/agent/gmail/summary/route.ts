@@ -1,18 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
+import { SupabaseClient } from "@supabase/supabase-js";
 import { verifyAgentOrBrowserRequest, isErrorResponse } from "../../_lib/auth";
 import { getAccessTokenInfo } from "@/lib/services/google-api";
+import {
+  emptyGmailIntel,
+  fetchGmailIntel,
+  GmailIntel,
+  GmailStatus,
+} from "@/lib/agent/intelligence/gmail";
+
 async function syncModuleState(
-  supabase: any,
+  supabase: SupabaseClient,
   userId: string,
   moduleName: string,
-  data: {
-    connected: boolean;
-    status: string;
-    error_message?: string | null;
-  }
+  data: { connected: boolean; status: string; error_message?: string | null },
 ) {
   const now = new Date().toISOString();
-
   const { data: existing } = await supabase
     .from("agent_connections")
     .select("id")
@@ -49,16 +52,47 @@ async function syncModuleState(
 }
 
 /**
+ * Map a token-info status to a GmailIntel status. Keeps the route from
+ * inventing labels and keeps the intelligence module the single source of
+ * truth for the status enum the workflow consumes.
+ */
+function tokenStatusToGmail(status: string): GmailStatus {
+  switch (status) {
+    case "decrypt_failed":
+      return "decrypt_failed";
+    case "no_refresh_token":
+    case "refresh_failed":
+      return "expired_token";
+    case "not_connected":
+    case "no_credentials":
+      return "not_connected";
+    default:
+      return "api_error";
+  }
+}
+
+function summaryLine(intel: GmailIntel): string {
+  if (!intel.connected) return `Gmail no operativo (${intel.status}). ${intel.error_message ?? ""}`.trim();
+  const parts: string[] = [];
+  parts.push(`${intel.total_unread} sin leer`);
+  if (intel.threads_awaiting_reply.length > 0) {
+    parts.push(`${intel.threads_awaiting_reply.length} pendientes de respuesta`);
+  }
+  const urgent = intel.threads_awaiting_reply.filter((t) => t.priority_signal === "urgent").length;
+  const high = intel.threads_awaiting_reply.filter((t) => t.priority_signal === "high").length;
+  if (urgent) parts.push(`${urgent} urgente(s)`);
+  if (high) parts.push(`${high} prioridad alta`);
+  if (intel.invoices_detected.length > 0) parts.push(`${intel.invoices_detected.length} facturas`);
+  if (intel.meeting_requests.length > 0) parts.push(`${intel.meeting_requests.length} solicitudes de reunión`);
+  return parts.join(" · ");
+}
+
+/**
  * GET /api/agent/gmail/summary?user_id=xxx
  *
- * Returns Gmail inbox summary with automation-ready data:
- * - Unread count and priority threads
- * - Emails awaiting reply (detected by heuristic)
- * - Supplier/customer/invoice categorization
- * - Suggested replies for important threads
- * - Actionable items extracted from emails
- *
- * Graceful degradation: if not connected → connected:false + empty structures.
+ * Returns the enriched Gmail intel payload consumed by the n8n agent and the
+ * dev inspector. Heuristic-only (no LLM in this iteration). Degrades to a
+ * 200 with a precise `status` when Gmail is unavailable; never 500s.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -66,147 +100,64 @@ export async function GET(req: NextRequest) {
     if (isErrorResponse(auth)) return auth;
     const { supabase, userId } = auth;
 
-    // Check if Gmail module is connected
     const { data: connection } = await supabase
       .from("agent_connections")
-      .select("connected, status, config, last_sync_at, credentials_ref")
+      .select("connected, status")
       .eq("user_id", userId)
       .eq("module", "gmail")
       .maybeSingle();
 
     if (!connection || !connection.connected) {
+      const intel = emptyGmailIntel("not_connected", "Gmail not connected");
       return NextResponse.json({
         ok: true,
-        connected: false,
-        unread_count: 0,
-        priority_threads: [],
-        awaiting_reply: [],
-        supplier_messages: [],
-        customer_messages: [],
-        invoice_messages: [],
-        suggested_replies: [],
-        action_items: [],
+        ...intel,
         summary:
           "Gmail no conectado — conecta tu cuenta en Ajustes > Integraciones para recibir resumen de bandeja, detección de emails pendientes y sugerencias de respuesta.",
+        last_sync_at: null,
       });
     }
 
-    // ── Gmail IS connected (per agent_connections row) ──
-    // Probe the actual token. If the access token can't be decrypted (typical
-    // when local OAUTH_ENCRYPTION_KEY differs from the one used to encrypt the
-    // stored credential) we return 200 with connected:false + a precise status
-    // so the inspector and the n8n agent can both surface a coherent message
-    // instead of dying with a 500.
     const tokenInfo = await getAccessTokenInfo(supabase, userId, "gmail");
     if (tokenInfo.status !== "active" || !tokenInfo.token) {
+      const gmailStatus = tokenStatusToGmail(tokenInfo.status);
       await syncModuleState(supabase, userId, "gmail", {
         connected: false,
         status: tokenInfo.status,
         error_message: tokenInfo.error_message,
       });
+      const intel = emptyGmailIntel(gmailStatus, tokenInfo.error_message);
       return NextResponse.json({
         ok: true,
-        connected: false,
-        status: tokenInfo.status,
-        error_message: tokenInfo.error_message,
-        unread_count: 0,
-        priority_threads: [],
-        awaiting_reply: [],
-        supplier_messages: [],
-        customer_messages: [],
-        invoice_messages: [],
-        suggested_replies: [],
-        action_items: [],
+        ...intel,
         summary: `Gmail no operativo (${tokenInfo.status}). ${tokenInfo.error_message ?? ""}`.trim(),
+        last_sync_at: new Date().toISOString(),
       });
     }
-    const accessToken = tokenInfo.token;
 
-    // Fetch inbox messages
-    const gmailRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages?q=is:unread in:inbox&maxResults=20", {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-
-    if (!gmailRes.ok) {
-      throw new Error(`Gmail API error: ${gmailRes.statusText}`);
-    }
-
-    const { messages = [], resultSizeEstimate } = await gmailRes.json();
-    const unread_count = resultSizeEstimate || messages.length;
-
-    const priority_threads = [];
-    const supplier_messages = [];
-    const customer_messages = [];
-    const invoice_messages = [];
-    const otros = [];
-
-    // Fetch details for up to 5 messages to avoid rate limits/slow responses
-    const messagesToFetch = messages.slice(0, 5);
-    
-    for (const msg of messagesToFetch) {
-      const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`, {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
-      if (msgRes.ok) {
-        const msgData = await msgRes.json();
-        const headers = msgData.payload?.headers || [];
-        const subject = headers.find((h: any) => h.name === "Subject")?.value || "Sin Asunto";
-        const from = headers.find((h: any) => h.name === "From")?.value || "Desconocido";
-        const snippet = msgData.snippet || "";
-
-        const emailItem = { id: msg.id, subject, from, snippet };
-        const textToAnalyze = `${subject} ${snippet} ${from}`.toLowerCase();
-
-        if (textToAnalyze.includes("urgente") || textToAnalyze.includes("urgent")) {
-          priority_threads.push(emailItem);
-        } else if (textToAnalyze.includes("factura") || textToAnalyze.includes("invoice") || textToAnalyze.includes("pago")) {
-          invoice_messages.push(emailItem);
-        } else if (textToAnalyze.includes("pedido") || textToAnalyze.includes("order")) {
-          customer_messages.push(emailItem);
-        } else if (textToAnalyze.includes("proveedor") || textToAnalyze.includes("supplier") || textToAnalyze.includes("albarán")) {
-          supplier_messages.push(emailItem);
-        } else {
-          otros.push(emailItem);
-        }
-      }
-    }
-
-    let summaryText = `Tienes ${unread_count} correos sin leer. `;
-    if (priority_threads.length > 0) summaryText += `¡Hay ${priority_threads.length} correos urgentes! `;
-    if (invoice_messages.length > 0) summaryText += `Tienes ${invoice_messages.length} facturas pendientes de revisar. `;
-    if (customer_messages.length > 0) summaryText += `Han llegado ${customer_messages.length} mensajes sobre pedidos.`;
+    const intel = await fetchGmailIntel(tokenInfo.token, tokenInfo.email ?? null);
 
     await syncModuleState(supabase, userId, "gmail", {
-      connected: true,
-      status: "active",
-      error_message: null,
+      connected: intel.connected,
+      status: intel.status === "ok" ? "active" : intel.status,
+      error_message: intel.error_message,
     });
 
     return NextResponse.json({
       ok: true,
-      connected: true,
-      unread_count,
-      priority_threads,
-      awaiting_reply: [], // Heuristics for awaiting_reply can be added later
-      supplier_messages,
-      customer_messages,
-      invoice_messages,
-      otros,
-      suggested_replies: [],
-      action_items: [],
-      summary: summaryText.trim() || "Tienes tu bandeja al día, sin correos importantes detectados.",
+      ...intel,
+      summary: summaryLine(intel),
       last_sync_at: new Date().toISOString(),
     });
-
-} catch (err: unknown) {
-  const message = err instanceof Error ? err.message : String(err);
-  console.error("[Agent/gmail/summary] Error:", message);
-  return NextResponse.json(
-    { error: "Internal server error", detail: message },
-    { status: 500 }
-  );
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[agent/gmail/summary] Unexpected error:", message);
+    // Per brief: NEVER 500. Degrade with a status field.
+    return NextResponse.json({
+      ok: true,
+      ...emptyGmailIntel("api_error", message),
+      summary: `Gmail no operativo (error inesperado). ${message}`,
+      last_sync_at: new Date().toISOString(),
+    });
+  }
 }
-}
-
-
-

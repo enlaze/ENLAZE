@@ -1,143 +1,130 @@
 import { NextRequest, NextResponse } from "next/server";
+import { SupabaseClient } from "@supabase/supabase-js";
 import { verifyAgentOrBrowserRequest, isErrorResponse } from "../../_lib/auth";
 import { getAccessTokenInfo } from "@/lib/services/google-api";
+import {
+  emptySheetsIntel,
+  fetchSheetsIntel,
+  SheetsIntel,
+  SheetsStatus,
+} from "@/lib/agent/intelligence/sheets";
 
+function tokenStatusToSheets(status: string): SheetsStatus {
+  switch (status) {
+    case "decrypt_failed":
+      return "decrypt_failed";
+    case "no_refresh_token":
+    case "refresh_failed":
+      return "expired_token";
+    case "not_connected":
+    case "no_credentials":
+      return "not_connected";
+    default:
+      return "api_error";
+  }
+}
+
+async function markActive(supabase: SupabaseClient, userId: string) {
+  const now = new Date().toISOString();
+  await supabase
+    .from("agent_connections")
+    .update({ connected: true, status: "active", last_sync_at: now, error_message: null, updated_at: now })
+    .eq("user_id", userId)
+    .eq("module", "google_sheets");
+}
+
+function summaryLine(intel: SheetsIntel): string {
+  if (!intel.connected) return `Google Sheets no operativo (${intel.status}). ${intel.error_message ?? ""}`.trim();
+  const parts: string[] = [];
+  const name = intel.active_sheet?.name || "hoja activa";
+  parts.push(`Hoja "${name}"`);
+  parts.push(`${intel.rows_analyzed} filas`);
+  parts.push(`detección: ${intel.detection_confidence}`);
+  if (intel.sales_summary?.today) {
+    parts.push(`hoy ${intel.sales_summary.today.revenue.toFixed(0)}€`);
+  } else if (intel.sales_summary?.yesterday) {
+    parts.push(`ayer ${intel.sales_summary.yesterday.revenue.toFixed(0)}€`);
+  }
+  if (intel.alerts.length > 0) parts.push(`${intel.alerts.length} alerta(s)`);
+  return parts.join(" · ");
+}
+
+interface SheetsConnectionConfig {
+  active_sheet_id?: string;
+  active_sheet_name?: string;
+  target_spreadsheet_id?: string;
+  target_spreadsheet_name?: string;
+}
+
+/**
+ * GET /api/agent/sheets/summary?user_id=xxx
+ *
+ * Enriched Sheets intel: schema-detected columns, sales summary, top products,
+ * alerts. If schema detection isn't confident, sales_summary/top_products
+ * are null and detection_confidence='low' — we never invent numbers.
+ */
 export async function GET(req: NextRequest) {
   try {
     const auth = await verifyAgentOrBrowserRequest(req);
     if (isErrorResponse(auth)) return auth;
     const { supabase, userId } = auth;
 
-    // Check if Sheets module is connected
     const { data: connection } = await supabase
       .from("agent_connections")
-      .select("connected, status, config, last_sync_at")
+      .select("connected, status, config")
       .eq("user_id", userId)
       .eq("module", "google_sheets")
       .maybeSingle();
 
     if (!connection || !connection.connected) {
+      const intel = emptySheetsIntel("not_connected", "Google Sheets not connected");
       return NextResponse.json({
         ok: true,
-        connected: false,
-        spreadsheet_id: null,
-        spreadsheet_name: null,
-        detected_columns: [],
-        sample_data: [],
-        summary: "Google Sheets no conectado — conecta tu cuenta en Ajustes > Integraciones para leer datos financieros o de inventario.",
+        ...intel,
+        summary:
+          "Google Sheets no conectado — conecta tu cuenta en Ajustes > Integraciones para leer datos financieros o de inventario.",
+        last_sync_at: null,
       });
     }
 
     const tokenInfo = await getAccessTokenInfo(supabase, userId, "google_sheets");
     if (tokenInfo.status !== "active" || !tokenInfo.token) {
+      const intel = emptySheetsIntel(tokenStatusToSheets(tokenInfo.status), tokenInfo.error_message);
       return NextResponse.json({
         ok: true,
-        connected: false,
-        status: tokenInfo.status,
-        error_message: tokenInfo.error_message,
-        spreadsheet_id: null,
-        spreadsheet_name: null,
-        detected_columns: [],
-        sample_data: [],
+        ...intel,
         summary: `Google Sheets no operativo (${tokenInfo.status}). ${tokenInfo.error_message ?? ""}`.trim(),
+        last_sync_at: new Date().toISOString(),
       });
     }
-    const accessToken = tokenInfo.token;
 
-    // Phase 1: If user configured a specific sheet ID in config, use it. Otherwise, search recent sheets.
-    let config = connection.config || {};
-    if (typeof config === 'string') {
-      try { config = JSON.parse(config); } catch (e) { config = {}; }
-    }
-    
-    let targetSpreadsheetId = config.target_spreadsheet_id;
-    let spreadsheetName = config.target_spreadsheet_name || "Hoja configurada";
-    let isFallback = false;
-
-    if (!targetSpreadsheetId) {
-      isFallback = true;
-      // Fallback: search for the latest modified spreadsheet
-      const driveRes = await fetch("https://www.googleapis.com/drive/v3/files?q=mimeType='application/vnd.google-apps.spreadsheet'&orderBy=modifiedTime desc&pageSize=1", {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
-
-      if (!driveRes.ok) {
-        throw new Error(`Drive API error: ${driveRes.statusText}`);
+    let config: SheetsConnectionConfig | null = null;
+    const raw = connection.config;
+    if (raw) {
+      try {
+        config = typeof raw === "string" ? (JSON.parse(raw) as SheetsConnectionConfig) : (raw as SheetsConnectionConfig);
+      } catch {
+        config = null;
       }
-
-      const driveData = await driveRes.json();
-      if (!driveData.files || driveData.files.length === 0) {
-        return NextResponse.json({
-          ok: true,
-          connected: true,
-          spreadsheet_id: null,
-          spreadsheet_name: null,
-          detected_columns: [],
-          sample_data: [],
-          summary: "No se encontraron hojas de cálculo en tu cuenta de Google Drive.",
-          last_sync_at: new Date().toISOString()
-        });
-      }
-
-      targetSpreadsheetId = driveData.files[0].id;
-      spreadsheetName = driveData.files[0].name;
     }
 
-    // Phase 2: Fetch sample data from the spreadsheet (A1:E5 to detect columns)
-    const sheetsRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${targetSpreadsheetId}/values/A1:E5`, {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-
-    if (!sheetsRes.ok) {
-      throw new Error(`Sheets API error: ${sheetsRes.statusText}`);
-    }
-
-    const sheetsData = await sheetsRes.json();
-    const rows = sheetsData.values || [];
-
-    let detected_columns: string[] = [];
-    let sample_data: any[] = [];
-    let summaryText = `Conectado a la hoja '${spreadsheetName}'. `;
-
-    if (rows.length > 0) {
-      detected_columns = rows[0]; // Assume first row is header
-      sample_data = rows.slice(1);
-      summaryText += `Detectadas ${detected_columns.length} columnas principales: ${detected_columns.join(", ")}. Se han extraído ${sample_data.length} filas de muestra.`;
-    } else {
-      summaryText += "La hoja de cálculo parece estar vacía o no tiene datos en el rango A1:E5.";
-    }
-
-    // Update connection state to mark as successful sync
-    const now = new Date().toISOString();
-    await supabase
-      .from("agent_connections")
-      .update({
-        connected: true,
-        status: "active",
-        last_sync_at: now,
-        error_message: null,
-        updated_at: now,
-      })
-      .eq("user_id", userId)
-      .eq("module", "google_sheets");
+    const intel = await fetchSheetsIntel({ accessToken: tokenInfo.token, config });
+    if (intel.connected) await markActive(supabase, userId);
 
     return NextResponse.json({
       ok: true,
-      connected: true,
-      spreadsheet_id: targetSpreadsheetId,
-      spreadsheet_name: spreadsheetName,
-      detected_columns,
-      sample_data,
-      summary: summaryText,
-      last_sync_at: now,
-      is_fallback: isFallback,
+      ...intel,
+      summary: summaryLine(intel),
+      last_sync_at: new Date().toISOString(),
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error("[Agent/sheets/summary] Error:", message);
-    return NextResponse.json(
-      { error: "Internal server error", detail: message },
-      { status: 500 }
-    );
+    console.error("[agent/sheets/summary] Unexpected error:", message);
+    return NextResponse.json({
+      ok: true,
+      ...emptySheetsIntel("api_error", message),
+      summary: `Google Sheets no operativo (error inesperado). ${message}`,
+      last_sync_at: new Date().toISOString(),
+    });
   }
 }
