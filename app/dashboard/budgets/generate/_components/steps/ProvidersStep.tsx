@@ -238,6 +238,84 @@ export function ProvidersStep() {
           )}
         </div>
       </Card>
+
+      {/* PDF Export section - visible in last step */}
+      <Card>
+        <h2 className="text-lg font-bold text-navy-900 dark:text-white mb-1">Exportar presupuesto</h2>
+        <p className="text-sm text-navy-500 dark:text-zinc-400 mb-4">
+          Descarga el presupuesto en PDF antes o despues de finalizar. El PDF cliente es limpio y profesional; el interno incluye costes, margenes y notas.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => {
+              const { generateBudgetPDFHTML, printPDF } = require("@/lib/pdf-generator");
+              const marginMultiplier = 1 + (state.marginPercent / 100);
+              const budgetMock = {
+                budget_number: state.draftId ? `PRE-${new Date().getFullYear()}` : `BORRADOR-${new Date().getFullYear()}`,
+                title: state.title || "Presupuesto Generado",
+                service_type: state.serviceType || state.sector,
+                status: "pendiente",
+                created_at: new Date().toISOString(),
+                subtotal: state.totals.directCost,
+                iva_percent: state.ivaPercent,
+                iva_amount: state.totals.directCost * (state.ivaPercent / 100),
+                total: state.totals.clientPrice * (1 + state.ivaPercent / 100),
+              };
+              const items = [
+                ...state.partidas.filter(p => p.status !== "opcional").map(p => ({
+                  concept: p.concept, description: p.description, category: p.category,
+                  quantity: p.quantity, unit: p.unit,
+                  unit_price: p.unit_price_client, subtotal: p.subtotal_client,
+                })),
+                ...state.materials.filter(m => m.included).map(m => ({
+                  concept: m.name, description: "Material", category: "material",
+                  quantity: m.quantity, unit: m.unit,
+                  unit_price: m.unit_price * marginMultiplier, subtotal: m.subtotal * marginMultiplier,
+                })),
+              ];
+              printPDF(generateBudgetPDFHTML(budgetMock, items, "client"));
+            }}
+            className="flex-1 min-w-[180px] py-3 px-4 bg-navy-900 hover:bg-navy-800 text-white font-bold rounded-xl transition text-sm dark:bg-zinc-800 dark:hover:bg-zinc-700"
+          >
+            Descargar PDF cliente
+          </button>
+          <button
+            onClick={() => {
+              const { generateBudgetPDFHTML, printPDF } = require("@/lib/pdf-generator");
+              const marginMultiplier = 1 + (state.marginPercent / 100);
+              const budgetMock = {
+                budget_number: state.draftId ? `PRE-${new Date().getFullYear()}` : `BORRADOR-${new Date().getFullYear()}`,
+                title: state.title || "Presupuesto Generado",
+                service_type: state.serviceType || state.sector,
+                status: "pendiente",
+                created_at: new Date().toISOString(),
+                subtotal: state.totals.directCost,
+                iva_percent: state.ivaPercent,
+                iva_amount: state.totals.directCost * (state.ivaPercent / 100),
+                total: state.totals.clientPrice * (1 + state.ivaPercent / 100),
+              };
+              const items = [
+                ...state.partidas.filter(p => p.status !== "opcional").map(p => ({
+                  concept: p.concept, description: p.description, category: p.category,
+                  quantity: p.quantity, unit: p.unit,
+                  unit_price: p.unit_price_client, subtotal: p.subtotal_client,
+                  subtotal_cost: p.subtotal_cost,
+                })),
+                ...state.materials.filter(m => m.included).map(m => ({
+                  concept: m.name, description: "Material", category: "material",
+                  quantity: m.quantity, unit: m.unit,
+                  unit_price: m.unit_price * marginMultiplier, subtotal: m.subtotal * marginMultiplier,
+                  subtotal_cost: m.subtotal,
+                })),
+              ];
+              printPDF(generateBudgetPDFHTML(budgetMock, items, "internal"));
+            }}
+            className="flex-1 min-w-[180px] py-3 px-4 bg-white hover:bg-navy-50 text-navy-900 font-bold rounded-xl border-2 border-brand-green/50 transition text-sm dark:bg-zinc-900 dark:hover:bg-zinc-800 dark:text-white"
+          >
+            Descargar PDF interno
+          </button>
+        </div>
+      </Card>
     </div>
   );
 }

@@ -40,22 +40,34 @@ export function LiveSummaryPanel() {
     priceRange = { min: detectedArea * minExpected, max: detectedArea * maxExpected };
   }
 
-  // Timeline calculation
+  // Timeline calculation — realistic, based on scope data
   let estimatedTimeline = state.aiInsights?.estimated_timeline;
   if (!estimatedTimeline && isConstruction) {
     const serviceType = (state.serviceType || state.description || "").toLowerCase();
-    let minWeeks = 4;
-    let maxWeeks = 6;
+    const scope = state.sectorData || {};
+    const areaM2 = scope.superficie_m2 || detectedArea || 80;
+    const nBanos = scope.num_banos || 1;
+    const nActuaciones = (scope.actuaciones || []).length;
+
+    // Base duration from area: ~1 week per 15m2 for integral, min 3 weeks
+    let baseDays = 15; // minimum 3 weeks
     if (serviceType.includes("integral") || serviceType.includes("completa")) {
-      if (totals.clientPrice > 80000) { minWeeks = 10; maxWeeks = 14; }
-      else if (totals.clientPrice > 40000) { minWeeks = 6; maxWeeks = 10; }
-      else { minWeeks = 4; maxWeeks = 6; }
+      baseDays = Math.max(20, Math.ceil(areaM2 / 15) * 5); // 5 working days per 15m2
     } else if (serviceType.includes("baño") || serviceType.includes("cocina")) {
-      minWeeks = 2; maxWeeks = 4;
-    } else {
-      minWeeks = 1; maxWeeks = 2;
+      baseDays = 15; // 3 weeks base for bathroom/kitchen
+    } else if (serviceType.includes("parcial") || serviceType.includes("pintura")) {
+      baseDays = Math.max(5, Math.ceil(areaM2 / 30) * 5);
     }
-    estimatedTimeline = { total_duration_weeks: maxWeeks, total_duration_days: maxWeeks * 5 };
+
+    // Add time for complexity factors
+    if (nBanos > 1) baseDays += (nBanos - 1) * 5; // +1 week per extra bathroom
+    if (scope.incluye_cocina) baseDays += 7; // +7 working days for kitchen
+    if (scope.incluye_ventanas) baseDays += 5; // +1 week for windows
+    if (scope.incluye_climatizacion) baseDays += 5; // +1 week for AC
+    if (nActuaciones > 8) baseDays += Math.ceil((nActuaciones - 8) * 2); // +2 days per extra actuacion beyond 8
+
+    const totalWeeks = Math.ceil(baseDays / 5);
+    estimatedTimeline = { total_duration_weeks: totalWeeks, total_duration_days: baseDays };
   }
 
   let endDateValue = state.endDate ? new Date(state.endDate) : null;

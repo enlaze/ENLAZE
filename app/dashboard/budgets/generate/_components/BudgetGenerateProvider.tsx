@@ -848,6 +848,7 @@ export function BudgetGenerateProvider({
           description: state.description,
           service_type: state.serviceType,
           scope: {
+            ubicacion: state.sectorData.ubicacion || "",
             estancias: state.sectorData.estancias || [],
             actuaciones: state.sectorData.actuaciones || [],
             calidad: state.sectorData.calidad || "media",
@@ -869,7 +870,7 @@ export function BudgetGenerateProvider({
       const marginMultiplier = 1 + (state.marginPercent / 100);
 
       // Map suggested_items to Partidas
-      const newPartidas: Partida[] = (data.suggested_items || []).map((item: any, idx: number) => {
+      let newPartidas: Partida[] = (data.suggested_items || []).map((item: any, idx: number) => {
         const cost = item.unit_cost || item.unit_price || 0;
         const qty = item.quantity || 1;
         return {
@@ -948,7 +949,7 @@ export function BudgetGenerateProvider({
       }
 
       // --- Pricing sanity check for construction ---
-      const detectedArea = data.detected_scope?.area_m2 || null;
+      const detectedArea = data.detected_scope?.area_m2 || state.sectorData.superficie_m2 || null;
       const totalPartidasCost = newPartidas.reduce((s, p) => s + p.subtotal_cost, 0);
       const totalMaterialsCost = newMaterials.reduce((s, m) => s + m.subtotal, 0);
       const totalCostNoIva = (totalPartidasCost + totalMaterialsCost) * marginMultiplier;
@@ -957,29 +958,136 @@ export function BudgetGenerateProvider({
       let pricingConfidence = data.pricing_confidence || data.confidence_score || 75;
       let priceRange = data.estimated_price_range || null;
 
+      // Determine expected price range based on service type and quality
+      const serviceType = (state.serviceType || state.description || "").toLowerCase();
+      const calidad = (state.sectorData.calidad || "media").toLowerCase();
+      const qualityMultiplier = calidad === "alta" ? 1.35 : calidad === "basica" ? 0.75 : 1.0;
+
+      let minExpected = 400;
+      let maxExpected = 900;
+
+      if (serviceType.includes("integral") || serviceType.includes("completa")) {
+        minExpected = 500; maxExpected = 1200;
+      } else if (serviceType.includes("baño") || serviceType.includes("cocina")) {
+        minExpected = 600; maxExpected = 1500;
+      } else if (serviceType.includes("parcial") || serviceType.includes("pintura")) {
+        minExpected = 100; maxExpected = 400;
+      }
+
+      // Apply quality multiplier to expectations
+      minExpected = Math.round(minExpected * qualityMultiplier);
+      maxExpected = Math.round(maxExpected * qualityMultiplier);
+
       if (state.sector === "construccion" && detectedArea && detectedArea > 0) {
         const pricePerM2 = totalCostNoIva / detectedArea;
-        const serviceType = (state.serviceType || state.description || "").toLowerCase();
-
-        let minExpected = 400; // €/m² default
-        let maxExpected = 900;
-
-        if (serviceType.includes("integral") || serviceType.includes("completa")) {
-          minExpected = 500; maxExpected = 1200;
-        } else if (serviceType.includes("baño") || serviceType.includes("cocina")) {
-          minExpected = 600; maxExpected = 1500;
-        } else if (serviceType.includes("parcial") || serviceType.includes("pintura")) {
-          minExpected = 100; maxExpected = 400;
-        }
 
         if (pricePerM2 < minExpected) {
-          priceWarnings.push(
-            `Presupuesto posiblemente infravalorado: ${pricePerM2.toFixed(0)} €/m² vs rango habitual ${minExpected}-${maxExpected} €/m². Revisa instalaciones, baños, cocina, carpinterías, calidades, licencias y gestión de residuos.`
-          );
-          pricingConfidence = Math.min(pricingConfidence, 50);
+          // --- SMART AUTO-ADJUST: add missing chapters first ---
+          const existingChapters = new Set(newPartidas.map(p => {
+            const desc = (p.concept + " " + p.description).toLowerCase();
+            if (desc.includes("demolici")) return "demoliciones";
+            if (desc.includes("albañil") || desc.includes("tabiq")) return "albanileria";
+            if (desc.includes("fontane") || desc.includes("agua")) return "fontaneria";
+            if (desc.includes("electric") || desc.includes("cuadro")) return "electricidad";
+            if (desc.includes("imper")) return "impermeabilizacion";
+            if (desc.includes("alicat") || desc.includes("revestim")) return "revestimientos";
+            if (desc.includes("pavim") || desc.includes("solad") || desc.includes("suelo")) return "pavimentos";
+            if (desc.includes("pintura")) return "pintura";
+            if (desc.includes("carpint") && desc.includes("inter")) return "carpinteria_interior";
+            if (desc.includes("carpint") && desc.includes("exter") || desc.includes("ventana")) return "carpinteria_exterior";
+            if (desc.includes("sanitar") || desc.includes("bañ") || desc.includes("inodoro")) return "sanitarios";
+            if (desc.includes("cocina") && (desc.includes("mueble") || desc.includes("encimera"))) return "cocina";
+            if (desc.includes("climatiz") || desc.includes("aire")) return "climatizacion";
+            if (desc.includes("limp")) return "limpieza";
+            if (desc.includes("residuo") || desc.includes("escom") || desc.includes("conten")) return "residuos";
+            if (desc.includes("protecc") || desc.includes("segurid")) return "seguridad";
+            return "otros";
+          }));
+
+          const scope = state.sectorData;
+          const area = detectedArea;
+          const missingPartidas: Partida[] = [];
+          let nextId = newPartidas.length;
+
+          const addMissing = (concept: string, desc: string, qty: number, unit: string, price: number, cat: string, chapter: string) => {
+            missingPartidas.push({
+              id: `auto-${nextId++}`,
+              concept, description: desc, quantity: qty, unit, category: cat,
+              unit_price: price,
+              subtotal_cost: qty * price,
+              unit_price_client: price * marginMultiplier,
+              subtotal_client: qty * price * marginMultiplier,
+              status: "incluida",
+            });
+          };
+
+          // Add missing chapters based on scope
+          if (!existingChapters.has("demoliciones")) {
+            addMissing("Demoliciones y retirada", "Demolicion de revestimientos, tabiques y pavimentos existentes", area * 0.8, "m2", 18, "mano_obra", "Demoliciones");
+          }
+          if (!existingChapters.has("residuos")) {
+            addMissing("Gestion de residuos y contenedores", "Carga, transporte y tasa de vertedero autorizado", Math.ceil(area / 25), "ud", 280, "otros", "Gestion de residuos");
+          }
+          if (!existingChapters.has("seguridad")) {
+            addMissing("Seguridad y medios auxiliares", "Protecciones colectivas, EPI y señalizacion durante obra", 1, "PA", area * 8, "otros", "Seguridad");
+          }
+          if (!existingChapters.has("impermeabilizacion") && (scope.incluye_cocina || (scope.num_banos || 1) > 0)) {
+            addMissing("Impermeabilizacion zonas humedas", "Lamina impermeabilizante en banos y cocina", Math.min(area * 0.15, 25), "m2", 22, "material", "Impermeabilizacion");
+          }
+          if (!existingChapters.has("sanitarios") && (scope.num_banos || 1) > 0) {
+            const nBanos = scope.num_banos || 1;
+            addMissing("Sanitarios y griferia completa", `Suministro e instalacion de inodoro, lavabo, plato ducha y griferia por bano (${nBanos} banos)`, nBanos, "ud", 1800, "material", "Sanitarios");
+          }
+          if (!existingChapters.has("cocina") && scope.incluye_cocina) {
+            addMissing("Cocina completa", "Muebles bajos y altos, encimera, fregadero y griferia", 1, "PA", area > 100 ? 6500 : 4500, "material", "Cocina");
+          }
+          if (!existingChapters.has("carpinteria_exterior") && scope.incluye_ventanas) {
+            addMissing("Carpinteria exterior - ventanas", "Suministro y colocacion de ventanas de aluminio RPT con doble acristalamiento", Math.ceil(area / 15), "ud", 650, "material", "Carpinteria exterior");
+          }
+          if (!existingChapters.has("climatizacion") && scope.incluye_climatizacion) {
+            addMissing("Climatizacion", "Instalacion de sistema de aire acondicionado split o conductos", Math.ceil(area / 25), "ud", 1200, "maquinaria", "Climatizacion");
+          }
+          if (!existingChapters.has("limpieza")) {
+            addMissing("Limpieza final de obra", "Limpieza integral de todas las estancias tras finalizacion de obra", area, "m2", 4.5, "mano_obra", "Limpieza final");
+          }
+
+          // Merge missing partidas with existing
+          if (missingPartidas.length > 0) {
+            newPartidas = [...newPartidas, ...missingPartidas];
+          }
+
+          // Recalculate after adding chapters
+          const newTotalCost = newPartidas.reduce((s, p) => s + p.subtotal_cost, 0);
+          const newTotalWithMats = (newTotalCost + totalMaterialsCost) * marginMultiplier;
+          const newPricePerM2 = detectedArea > 0 ? newTotalWithMats / detectedArea : 0;
+
+          // If STILL below minimum after adding chapters, scale up proportionally
+          if (newPricePerM2 < minExpected && detectedArea > 0) {
+            const targetTotal = detectedArea * minExpected;
+            const currentTotal = newTotalWithMats;
+            const scaleFactor = targetTotal / currentTotal;
+
+            newPartidas = newPartidas.map(p => ({
+              ...p,
+              unit_price: Math.round(p.unit_price * scaleFactor * 100) / 100,
+              subtotal_cost: Math.round(p.quantity * p.unit_price * scaleFactor * 100) / 100,
+              unit_price_client: Math.round(p.unit_price * scaleFactor * marginMultiplier * 100) / 100,
+              subtotal_client: Math.round(p.quantity * p.unit_price * scaleFactor * marginMultiplier * 100) / 100,
+            }));
+
+            priceWarnings.push(
+              `Se ha ajustado el presupuesto al minimo realista de mercado (${minExpected} EUR/m2) porque estaba infravalorado (${Math.round(newPricePerM2)} EUR/m2). Se anadieron ${missingPartidas.length} capitulos que faltaban y se ajustaron precios unitarios.`
+            );
+          } else if (missingPartidas.length > 0) {
+            priceWarnings.push(
+              `Se anadieron automaticamente ${missingPartidas.length} capitulos que faltaban segun el alcance detallado (${missingPartidas.map(p => p.concept).join(", ")}).`
+            );
+          }
+
+          pricingConfidence = Math.min(pricingConfidence, missingPartidas.length > 3 ? 55 : 70);
         } else if (pricePerM2 > maxExpected) {
           priceWarnings.push(
-            `Presupuesto posiblemente sobrevalorado: ${pricePerM2.toFixed(0)} €/m² vs rango habitual ${minExpected}-${maxExpected} €/m².`
+            `Presupuesto posiblemente sobrevalorado: ${pricePerM2.toFixed(0)} EUR/m2 vs rango habitual ${minExpected}-${maxExpected} EUR/m2.`
           );
           pricingConfidence = Math.min(pricingConfidence, 65);
         }
@@ -997,7 +1105,6 @@ export function BudgetGenerateProvider({
       let finalProviders = newProviders;
       if (finalMaterials.length === 0 && state.sector === "construccion") {
         finalMaterials = CONSTRUCTION_FALLBACK_MATERIALS;
-        // Build providers from fallback materials
         const fbProvMap = new Map<string, { name: string; count: number; total: number }>();
         finalMaterials.forEach(m => {
           const pid = m.provider_id || "referencia-mercado";
@@ -1011,7 +1118,6 @@ export function BudgetGenerateProvider({
           materialsCount: fbProvMap.get(fp.id)?.count || 0,
           estimatedPrice: fbProvMap.get(fp.id)?.total || 0,
         })).filter(fp => (fp.materialsCount || 0) > 0);
-        // Mark first as recommended
         if (finalProviders.length > 0) {
           finalProviders.sort((a, b) => (b.materialsCount || 0) - (a.materialsCount || 0));
           finalProviders[0].isRecommended = true;
@@ -1021,11 +1127,11 @@ export function BudgetGenerateProvider({
       // --- Fallback partidas for construction if AI returned too few ---
       let finalPartidas = newPartidas;
       if (state.sector === "construccion") {
-        const isIntegral = (state.serviceType || state.description || "").toLowerCase().includes("integral");
-        const hasTooFewItems = newPartidas.length < (isIntegral ? 25 : 5);
+        const isIntegral = serviceType.includes("integral");
+        const hasTooFewItems = newPartidas.length < (isIntegral ? 15 : 5);
         const hasTooManyPA = newPartidas.filter(p => p.unit.toUpperCase() === "PA").length > (newPartidas.length * 0.4);
         if (hasTooFewItems || hasTooManyPA || newPartidas.length === 0) {
-           finalPartidas = getDetailedConstructionFallback(data.detected_area_m2 || 90, marginMultiplier);
+          finalPartidas = getDetailedConstructionFallback(detectedArea || 90, marginMultiplier);
         }
       }
 
