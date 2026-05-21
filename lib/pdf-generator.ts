@@ -47,8 +47,9 @@ const fallbackServiceLabels: Record<string, string> = {
 };
 
 const fallbackCategoryLabels: Record<string, string> = {
-  material: "Material",
+  material: "Suministro y col.",
   mano_obra: "Mano de obra",
+  maquinaria: "Maquinaria",
   otros: "Otros",
 };
 
@@ -103,11 +104,16 @@ export function generateBudgetPDFHTML(
 
   const materialItems = items.filter((i) => i.category === "material");
   const laborItems = items.filter((i) => i.category === "mano_obra");
-  const otherItems = items.filter((i) => i.category === "otros");
+  const otherItems = items.filter((i) => i.category !== "material" && i.category !== "mano_obra");
 
   const materialTotal = materialItems.reduce((s, i) => s + i.subtotal, 0);
   const laborTotal = laborItems.reduce((s, i) => s + i.subtotal, 0);
   const otherTotal = otherItems.reduce((s, i) => s + i.subtotal, 0);
+
+  // Recalculate totals from items to ensure consistency
+  const calculatedSubtotal = materialTotal + laborTotal + otherTotal;
+  const calculatedIva = calculatedSubtotal * (budget.iva_percent / 100);
+  const calculatedTotal = calculatedSubtotal + calculatedIva;
 
   let internalBreakdown = "";
   if (mode === "internal") {
@@ -238,9 +244,9 @@ export function generateBudgetPDFHTML(
 
     <div class="totals">
       <div class="totals-box">
-        <div class="total-row"><span>Subtotal</span><span>${budget.subtotal.toFixed(2)} €</span></div>
-        <div class="total-row"><span>IVA (${budget.iva_percent}%)</span><span>${budget.iva_amount.toFixed(2)} €</span></div>
-        <div class="total-row total-final"><span>TOTAL</span><span>${budget.total.toFixed(2)} €</span></div>
+        <div class="total-row"><span>Subtotal</span><span>${calculatedSubtotal.toFixed(2)} €</span></div>
+        <div class="total-row"><span>IVA (${budget.iva_percent}%)</span><span>${calculatedIva.toFixed(2)} €</span></div>
+        <div class="total-row total-final"><span>TOTAL</span><span>${calculatedTotal.toFixed(2)} €</span></div>
       </div>
     </div>
 

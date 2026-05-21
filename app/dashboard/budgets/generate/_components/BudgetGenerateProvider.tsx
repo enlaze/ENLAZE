@@ -4,6 +4,19 @@ import { createClient } from "@/lib/supabase-browser";
 import { useToast } from "@/components/ui/toast";
 import { saveDocumentVersion, getNextVersion } from "@/lib/document-versions";
 import { logActivity } from "@/lib/activity-log";
+import {
+  type BudgetScope,
+  type EnginePartida,
+  type EngineMaterial,
+  type RealisticTimeline,
+  buildScopeQuantities,
+  normalizeBudgetItemsToScope,
+  calculateItemCostBreakdown,
+  buildScopeMaterials,
+  adjustToMarket,
+  getMarketRange,
+  estimateRealisticTimeline,
+} from "@/lib/budget-engine";
 
 export interface Partida {
   id: string;
@@ -12,6 +25,7 @@ export interface Partida {
   quantity: number;
   unit: string;
   category: string;
+  chapter?: string;
   unit_price: number;
   subtotal_cost: number;
   unit_price_client: number;
@@ -46,6 +60,7 @@ export interface Material {
   sourceType?: string;
 }
 
+/** @deprecated Use normalizeBudgetItemsToScope from budget-engine instead */
 const getDetailedConstructionFallback = (areaM2: number, marginMultiplier: number): Partida[] => {
   const p = (concept: string, description: string, quantity: number, unit: string, unit_price: number, category: string, id: string): Partida => ({
     id, concept, description, quantity, unit, category, unit_price,
@@ -55,7 +70,7 @@ const getDetailedConstructionFallback = (areaM2: number, marginMultiplier: numbe
     status: "incluida"
   });
 
-  const a = Math.max(areaM2 || 90, 30); // Use minimum 30m2 for reasonable calculations
+  const a = Math.max(areaM2 || 80, 30); // @deprecated — use budget-engine instead
 
   return [
     p("Protección de zonas comunes y ascensor", "Forrado de ascensor, pasillos y elementos comunes con cartón ondulado y plástico.", 1, "PA", 150, "otros", "fb-1"),
@@ -201,6 +216,12 @@ export interface BudgetState {
   materialsFromAI: boolean;
   /** When true, the scope/description changed since last AI analysis */
   analysisDirty: boolean;
+  /** Budget is below market floor — blocks finalize and client PDF */
+  isUndervalued: boolean;
+  /** Market adjustment message (green/amber) */
+  marketAdjustMessage: string;
+  /** Realistic timeline from engine */
+  realisticTimeline: RealisticTimeline | null;
   /** Saving states */
   isSavingDraft: boolean;
   isFinalizing: boolean;
@@ -300,6 +321,9 @@ export function BudgetGenerateProvider({
     aiInsights: null,
     materialsFromAI: false,
     analysisDirty: false,
+    isUndervalued: false,
+    marketAdjustMessage: "",
+    realisticTimeline: null,
     isSavingDraft: false,
     isFinalizing: false,
     saveError: null,
@@ -620,10 +644,10 @@ export function BudgetGenerateProvider({
           client_id: state.clientId || null,
           project_id: state.projectId || null,
           service_type: state.serviceType || state.sector || "general",
-          subtotal: state.totals.directCost,
+          subtotal: state.totals.clientPrice,
           iva_percent: state.ivaPercent,
-          iva_amount: state.totals.directCost * (state.ivaPercent / 100),
-          total: state.totals.directCost * (1 + state.ivaPercent / 100),
+          iva_amount: state.totals.clientPrice * (state.ivaPercent / 100),
+          total: state.totals.clientPrice * (1 + state.ivaPercent / 100),
           wizard_state: snapshot
         }).select("id").single();
 
@@ -643,9 +667,9 @@ export function BudgetGenerateProvider({
           client_id: state.clientId || null,
           project_id: state.projectId || null,
           service_type: state.serviceType || state.sector || "general",
-          subtotal: state.totals.directCost,
-          iva_amount: state.totals.directCost * (state.ivaPercent / 100),
-          total: state.totals.directCost * (1 + state.ivaPercent / 100),
+          subtotal: state.totals.clientPrice,
+          iva_amount: state.totals.clientPrice * (state.ivaPercent / 100),
+          total: state.totals.clientPrice * (1 + state.ivaPercent / 100),
           wizard_state: snapshot,
           updated_at: new Date().toISOString()
         }).eq("id", draftId);
@@ -674,6 +698,11 @@ export function BudgetGenerateProvider({
   };
 
   const finalizeBudget = async (): Promise<string | null> => {
+    // Block finalization if budget is undervalued
+    if (state.isUndervalued) {
+      toast.error("No se puede finalizar: el presupuesto esta por debajo del minimo realista de mercado. Ajusta las partidas o genera de nuevo con IA.");
+      return null;
+    }
     setState(prev => ({ ...prev, isFinalizing: true, finalizeError: null }));
     try {
       const currentDraftId = await saveDraft(false); // Asegurarse de que tenemos el ID y el ultimo estado
@@ -948,199 +977,180 @@ export function BudgetGenerateProvider({
         else if (newProviders.length > 0) newProviders[0].isRecommended = true;
       }
 
-      // --- Pricing sanity check for construction ---
-      const detectedArea = data.detected_scope?.area_m2 || state.sectorData.superficie_m2 || null;
-      const totalPartidasCost = newPartidas.reduce((s, p) => s + p.subtotal_cost, 0);
-      const totalMaterialsCost = newMaterials.reduce((s, m) => s + m.subtotal, 0);
-      const totalCostNoIva = (totalPartidasCost + totalMaterialsCost) * marginMultiplier;
-
+      // ─── ENGINE-BASED NORMALIZATION (idempotent) ───
+      const detectedArea = state.sectorData.superficie_m2 || data.detected_scope?.area_m2 || null;
+      const serviceType = (state.serviceType || state.description || "").toLowerCase();
       let priceWarnings: string[] = data.price_warnings || [];
       let pricingConfidence = data.pricing_confidence || data.confidence_score || 75;
       let priceRange = data.estimated_price_range || null;
+      let isUndervalued = false;
+      let marketAdjustMessage = "";
 
-      // Determine expected price range based on service type and quality
-      const serviceType = (state.serviceType || state.description || "").toLowerCase();
-      const calidad = (state.sectorData.calidad || "media").toLowerCase();
-      const qualityMultiplier = calidad === "alta" ? 1.35 : calidad === "basica" ? 0.75 : 1.0;
+      // Build scope from user data (user scope always takes priority)
+      const engineScope: BudgetScope = {
+        superficie_m2: detectedArea || 80,
+        num_banos: state.sectorData.num_banos || 1,
+        incluye_cocina: state.sectorData.incluye_cocina ?? true,
+        incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
+        incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,
+        estancias: state.sectorData.estancias || [],
+        actuaciones: state.sectorData.actuaciones || [],
+        calidad: (state.sectorData.calidad as "basica" | "media" | "alta") || "media",
+        ubicacion: state.sectorData.ubicacion || "",
+      };
 
-      let minExpected = 400;
-      let maxExpected = 900;
-
-      if (serviceType.includes("integral") || serviceType.includes("completa")) {
-        minExpected = 500; maxExpected = 1200;
-      } else if (serviceType.includes("baño") || serviceType.includes("cocina")) {
-        minExpected = 600; maxExpected = 1500;
-      } else if (serviceType.includes("parcial") || serviceType.includes("pintura")) {
-        minExpected = 100; maxExpected = 400;
-      }
-
-      // Apply quality multiplier to expectations
-      minExpected = Math.round(minExpected * qualityMultiplier);
-      maxExpected = Math.round(maxExpected * qualityMultiplier);
+      let finalPartidas: Partida[] = newPartidas;
+      let finalMaterials: Material[] = newMaterials;
 
       if (state.sector === "construccion" && detectedArea && detectedArea > 0) {
-        const pricePerM2 = totalCostNoIva / detectedArea;
+        // A) Convert AI partidas to EnginePartida, normalize quantities + add missing chapters
+        const engineItems: EnginePartida[] = newPartidas.map(p => ({
+          ...p,
+          chapter: (p as any).chapter || "",
+          status: (p.status || "incluida") as "incluida" | "estimada" | "opcional",
+        }));
 
-        if (pricePerM2 < minExpected) {
-          // --- SMART AUTO-ADJUST: add missing chapters first ---
-          const existingChapters = new Set(newPartidas.map(p => {
-            const desc = (p.concept + " " + p.description).toLowerCase();
-            if (desc.includes("demolici")) return "demoliciones";
-            if (desc.includes("albañil") || desc.includes("tabiq")) return "albanileria";
-            if (desc.includes("fontane") || desc.includes("agua")) return "fontaneria";
-            if (desc.includes("electric") || desc.includes("cuadro")) return "electricidad";
-            if (desc.includes("imper")) return "impermeabilizacion";
-            if (desc.includes("alicat") || desc.includes("revestim")) return "revestimientos";
-            if (desc.includes("pavim") || desc.includes("solad") || desc.includes("suelo")) return "pavimentos";
-            if (desc.includes("pintura")) return "pintura";
-            if (desc.includes("carpint") && desc.includes("inter")) return "carpinteria_interior";
-            if (desc.includes("carpint") && desc.includes("exter") || desc.includes("ventana")) return "carpinteria_exterior";
-            if (desc.includes("sanitar") || desc.includes("bañ") || desc.includes("inodoro")) return "sanitarios";
-            if (desc.includes("cocina") && (desc.includes("mueble") || desc.includes("encimera"))) return "cocina";
-            if (desc.includes("climatiz") || desc.includes("aire")) return "climatizacion";
-            if (desc.includes("limp")) return "limpieza";
-            if (desc.includes("residuo") || desc.includes("escom") || desc.includes("conten")) return "residuos";
-            if (desc.includes("protecc") || desc.includes("segurid")) return "seguridad";
-            return "otros";
-          }));
+        const normalized = normalizeBudgetItemsToScope(engineScope, engineItems, marginMultiplier);
 
-          const scope = state.sectorData;
-          const area = detectedArea;
-          const missingPartidas: Partida[] = [];
-          let nextId = newPartidas.length;
+        // B) Apply cost breakdown and fix categories
+        const withCosts = normalized.map(item =>
+          calculateItemCostBreakdown(item, engineScope, state.marginPercent)
+        );
 
-          const addMissing = (concept: string, desc: string, qty: number, unit: string, price: number, cat: string, chapter: string) => {
-            missingPartidas.push({
-              id: `auto-${nextId++}`,
-              concept, description: desc, quantity: qty, unit, category: cat,
-              unit_price: price,
-              subtotal_cost: qty * price,
-              unit_price_client: price * marginMultiplier,
-              subtotal_client: qty * price * marginMultiplier,
-              status: "incluida",
-            });
-          };
+        // C) Build scope-driven materials (replaces AI materials or fallback)
+        const engineMats = buildScopeMaterials(engineScope);
 
-          // Add missing chapters based on scope
-          if (!existingChapters.has("demoliciones")) {
-            addMissing("Demoliciones y retirada", "Demolicion de revestimientos, tabiques y pavimentos existentes", area * 0.8, "m2", 18, "mano_obra", "Demoliciones");
-          }
-          if (!existingChapters.has("residuos")) {
-            addMissing("Gestion de residuos y contenedores", "Carga, transporte y tasa de vertedero autorizado", Math.ceil(area / 25), "ud", 280, "otros", "Gestion de residuos");
-          }
-          if (!existingChapters.has("seguridad")) {
-            addMissing("Seguridad y medios auxiliares", "Protecciones colectivas, EPI y señalizacion durante obra", 1, "PA", area * 8, "otros", "Seguridad");
-          }
-          if (!existingChapters.has("impermeabilizacion") && (scope.incluye_cocina || (scope.num_banos || 1) > 0)) {
-            addMissing("Impermeabilizacion zonas humedas", "Lamina impermeabilizante en banos y cocina", Math.min(area * 0.15, 25), "m2", 22, "material", "Impermeabilizacion");
-          }
-          if (!existingChapters.has("sanitarios") && (scope.num_banos || 1) > 0) {
-            const nBanos = scope.num_banos || 1;
-            addMissing("Sanitarios y griferia completa", `Suministro e instalacion de inodoro, lavabo, plato ducha y griferia por bano (${nBanos} banos)`, nBanos, "ud", 1800, "material", "Sanitarios");
-          }
-          if (!existingChapters.has("cocina") && scope.incluye_cocina) {
-            addMissing("Cocina completa", "Muebles bajos y altos, encimera, fregadero y griferia", 1, "PA", area > 100 ? 6500 : 4500, "material", "Cocina");
-          }
-          if (!existingChapters.has("carpinteria_exterior") && scope.incluye_ventanas) {
-            addMissing("Carpinteria exterior - ventanas", "Suministro y colocacion de ventanas de aluminio RPT con doble acristalamiento", Math.ceil(area / 15), "ud", 650, "material", "Carpinteria exterior");
-          }
-          if (!existingChapters.has("climatizacion") && scope.incluye_climatizacion) {
-            addMissing("Climatizacion", "Instalacion de sistema de aire acondicionado split o conductos", Math.ceil(area / 25), "ud", 1200, "maquinaria", "Climatizacion");
-          }
-          if (!existingChapters.has("limpieza")) {
-            addMissing("Limpieza final de obra", "Limpieza integral de todas las estancias tras finalizacion de obra", area, "m2", 4.5, "mano_obra", "Limpieza final");
-          }
+        // D) Market adjustment (idempotent)
+        const adjustResult = adjustToMarket(
+          engineScope, withCosts, engineMats, serviceType, marginMultiplier
+        );
 
-          // Merge missing partidas with existing
-          if (missingPartidas.length > 0) {
-            newPartidas = [...newPartidas, ...missingPartidas];
-          }
+        isUndervalued = adjustResult.isUndervalued;
+        marketAdjustMessage = adjustResult.message;
 
-          // Recalculate after adding chapters
-          const newTotalCost = newPartidas.reduce((s, p) => s + p.subtotal_cost, 0);
-          const newTotalWithMats = (newTotalCost + totalMaterialsCost) * marginMultiplier;
-          const newPricePerM2 = detectedArea > 0 ? newTotalWithMats / detectedArea : 0;
-
-          // If STILL below minimum after adding chapters, scale up proportionally
-          if (newPricePerM2 < minExpected && detectedArea > 0) {
-            const targetTotal = detectedArea * minExpected;
-            const currentTotal = newTotalWithMats;
-            const scaleFactor = targetTotal / currentTotal;
-
-            newPartidas = newPartidas.map(p => ({
-              ...p,
-              unit_price: Math.round(p.unit_price * scaleFactor * 100) / 100,
-              subtotal_cost: Math.round(p.quantity * p.unit_price * scaleFactor * 100) / 100,
-              unit_price_client: Math.round(p.unit_price * scaleFactor * marginMultiplier * 100) / 100,
-              subtotal_client: Math.round(p.quantity * p.unit_price * scaleFactor * marginMultiplier * 100) / 100,
-            }));
-
-            priceWarnings.push(
-              `Se ha ajustado el presupuesto al minimo realista de mercado (${minExpected} EUR/m2) porque estaba infravalorado (${Math.round(newPricePerM2)} EUR/m2). Se anadieron ${missingPartidas.length} capitulos que faltaban y se ajustaron precios unitarios.`
-            );
-          } else if (missingPartidas.length > 0) {
-            priceWarnings.push(
-              `Se anadieron automaticamente ${missingPartidas.length} capitulos que faltaban segun el alcance detallado (${missingPartidas.map(p => p.concept).join(", ")}).`
-            );
-          }
-
-          pricingConfidence = Math.min(pricingConfidence, missingPartidas.length > 3 ? 55 : 70);
-        } else if (pricePerM2 > maxExpected) {
-          priceWarnings.push(
-            `Presupuesto posiblemente sobrevalorado: ${pricePerM2.toFixed(0)} EUR/m2 vs rango habitual ${minExpected}-${maxExpected} EUR/m2.`
-          );
+        if (adjustResult.adjusted) {
+          priceWarnings.push(adjustResult.message);
           pricingConfidence = Math.min(pricingConfidence, 65);
         }
 
-        if (!priceRange) {
-          priceRange = {
-            min: Math.round(detectedArea * minExpected),
-            max: Math.round(detectedArea * maxExpected),
-          };
-        }
-      }
+        // Convert back to Partida format
+        finalPartidas = adjustResult.items.map(ep => ({
+          id: ep.id,
+          concept: ep.concept,
+          description: ep.description,
+          quantity: ep.quantity,
+          unit: ep.unit,
+          category: ep.category,
+          chapter: ep.chapter,
+          unit_price: ep.unit_price,
+          subtotal_cost: ep.subtotal_cost,
+          unit_price_client: ep.unit_price_client,
+          subtotal_client: ep.subtotal_client,
+          status: ep.status,
+        }));
 
-      // --- Fallback materials for construction if AI returned empty ---
-      let finalMaterials = newMaterials;
-      let finalProviders = newProviders;
-      if (finalMaterials.length === 0 && state.sector === "construccion") {
-        finalMaterials = CONSTRUCTION_FALLBACK_MATERIALS;
-        const fbProvMap = new Map<string, { name: string; count: number; total: number }>();
-        finalMaterials.forEach(m => {
-          const pid = m.provider_id || "referencia-mercado";
-          const existing = fbProvMap.get(pid) || { name: pid, count: 0, total: 0 };
-          existing.count += 1;
-          existing.total += m.subtotal;
-          fbProvMap.set(pid, existing);
-        });
-        finalProviders = FALLBACK_PROVIDERS.map(fp => ({
-          ...fp,
-          materialsCount: fbProvMap.get(fp.id)?.count || 0,
-          estimatedPrice: fbProvMap.get(fp.id)?.total || 0,
-        })).filter(fp => (fp.materialsCount || 0) > 0);
-        if (finalProviders.length > 0) {
-          finalProviders.sort((a, b) => (b.materialsCount || 0) - (a.materialsCount || 0));
-          finalProviders[0].isRecommended = true;
-        }
+        // Convert engine materials to Material format
+        finalMaterials = adjustResult.materials.map(em => ({
+          id: em.id,
+          name: em.name,
+          quantity: em.quantity,
+          unit: em.unit,
+          unit_price: em.unit_price,
+          subtotal: em.subtotal,
+          included: em.included,
+          provider_id: em.provider_id,
+          isRealData: em.isRealData,
+          sourceType: em.sourceType,
+        }));
+
+        // Market range
+        const range = getMarketRange(engineScope, serviceType);
+        priceRange = priceRange || { min: range.min, max: range.max };
       }
 
       // --- Fallback partidas for construction if AI returned too few ---
-      let finalPartidas = newPartidas;
-      if (state.sector === "construccion") {
-        const isIntegral = serviceType.includes("integral");
-        const hasTooFewItems = newPartidas.length < (isIntegral ? 15 : 5);
-        const hasTooManyPA = newPartidas.filter(p => p.unit.toUpperCase() === "PA").length > (newPartidas.length * 0.4);
-        if (hasTooFewItems || hasTooManyPA || newPartidas.length === 0) {
-          finalPartidas = getDetailedConstructionFallback(detectedArea || 90, marginMultiplier);
-        }
+      if (state.sector === "construccion" && finalPartidas.length < 5) {
+        // Use engine to build from scratch based on scope
+        const fallbackScope: BudgetScope = {
+          superficie_m2: detectedArea || 80,
+          num_banos: state.sectorData.num_banos || 1,
+          incluye_cocina: state.sectorData.incluye_cocina ?? true,
+          incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
+          incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,
+          estancias: state.sectorData.estancias || [],
+          actuaciones: state.sectorData.actuaciones || [],
+          calidad: (state.sectorData.calidad as "basica" | "media" | "alta") || "media",
+          ubicacion: state.sectorData.ubicacion || "",
+        };
+        const built = normalizeBudgetItemsToScope(fallbackScope, [], marginMultiplier);
+        finalPartidas = built.map(ep => ({
+          id: ep.id, concept: ep.concept, description: ep.description,
+          quantity: ep.quantity, unit: ep.unit, category: ep.category,
+          chapter: ep.chapter,
+          unit_price: ep.unit_price, subtotal_cost: ep.subtotal_cost,
+          unit_price_client: ep.unit_price_client, subtotal_client: ep.subtotal_client,
+          status: ep.status,
+        }));
+        finalMaterials = buildScopeMaterials(fallbackScope).map(em => ({
+          id: em.id, name: em.name, quantity: em.quantity, unit: em.unit,
+          unit_price: em.unit_price, subtotal: em.subtotal, included: em.included,
+          provider_id: em.provider_id, isRealData: em.isRealData, sourceType: em.sourceType,
+        }));
       }
 
-      // --- Timeline ---
-      const calendarPhases = data.calendar_phases || [];
+      // --- Fallback materials if still empty ---
+      if (finalMaterials.length === 0 && state.sector === "construccion") {
+        const matScope: BudgetScope = {
+          superficie_m2: detectedArea || 80,
+          num_banos: state.sectorData.num_banos || 1,
+          incluye_cocina: state.sectorData.incluye_cocina ?? true,
+          incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
+          incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,
+          estancias: [], actuaciones: [],
+          calidad: (state.sectorData.calidad as "basica" | "media" | "alta") || "media",
+          ubicacion: "",
+        };
+        finalMaterials = buildScopeMaterials(matScope).map(em => ({
+          id: em.id, name: em.name, quantity: em.quantity, unit: em.unit,
+          unit_price: em.unit_price, subtotal: em.subtotal, included: em.included,
+          provider_id: em.provider_id, isRealData: em.isRealData, sourceType: em.sourceType,
+        }));
+      }
+
+      // --- Timeline via engine ---
+      const engineTimelineScope: BudgetScope = {
+        superficie_m2: detectedArea || 80,
+        num_banos: state.sectorData.num_banos || 1,
+        incluye_cocina: state.sectorData.incluye_cocina ?? true,
+        incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
+        incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,
+        estancias: state.sectorData.estancias || [],
+        actuaciones: state.sectorData.actuaciones || [],
+        calidad: (state.sectorData.calidad as "basica" | "media" | "alta") || "media",
+        ubicacion: state.sectorData.ubicacion || "",
+      };
+      const engineTimeline = state.sector === "construccion"
+        ? estimateRealisticTimeline(engineTimelineScope, finalPartidas.map(p => ({
+            ...p, chapter: p.chapter || "", status: (p.status || "incluida") as "incluida" | "estimada" | "opcional",
+          })))
+        : null;
+
+      const calendarPhases = engineTimeline
+        ? engineTimeline.phase_breakdown.map(ph => ({
+            title: ph.title,
+            duration_days: Math.round((ph.duration_days_min + ph.duration_days_max) / 2),
+            description: ph.description,
+          }))
+        : data.calendar_phases || [];
       const totalDays = calendarPhases.reduce((s: number, p: any) => s + (p.duration_days || 0), 0);
-      const estimatedTimeline = data.estimated_timeline || (totalDays > 0 ? {
+      const estimatedTimeline = engineTimeline ? {
         total_duration_days: totalDays,
-        total_duration_weeks: Math.ceil(totalDays / 5), // working weeks
+        total_duration_weeks: engineTimeline.execution_weeks_min,
+        confidence: 0.8,
+        notes: `Ejecucion ${engineTimeline.execution_weeks_min}-${engineTimeline.execution_weeks_max} semanas. Plazo total ${engineTimeline.total_weeks_min}-${engineTimeline.total_weeks_max} semanas.`,
+      } : data.estimated_timeline || (totalDays > 0 ? {
+        total_duration_days: totalDays,
+        total_duration_weeks: Math.ceil(totalDays / 5),
         confidence: 0.7,
         notes: "Estimacion orientativa segun alcance declarado.",
       } : undefined);
@@ -1163,6 +1173,40 @@ export function BudgetGenerateProvider({
         }
       }
 
+      // Build providers from final materials
+      const finalProvMap = new Map<string, { name: string; count: number; total: number; isReal: boolean; sourceType: string }>();
+      finalMaterials.forEach(m => {
+        const pid = m.provider_id || "referencia-mercado";
+        const existing = finalProvMap.get(pid) || { name: pid, count: 0, total: 0, isReal: m.isRealData || false, sourceType: m.sourceType || "market_reference" };
+        existing.count += 1;
+        existing.total += m.subtotal;
+        finalProvMap.set(pid, existing);
+      });
+      let finalProviders: ProviderOption[] = [];
+      if (finalProvMap.size > 0) {
+        const provNameMap: Record<string, string> = {
+          "leroy-merlin": "Leroy Merlin",
+          "obramat": "Obramat",
+          "saltoki": "Saltoki",
+          "referencia-mercado": "Referencia mercado",
+        };
+        finalProviders = Array.from(finalProvMap.entries()).map(([id, info]) => ({
+          id,
+          name: provNameMap[id] || info.name,
+          description: info.isReal ? "Proveedor sugerido por IA" : "Referencia de mercado",
+          estimatedPrice: Math.round(info.total * 100) / 100,
+          deliveryTime: "Consultar",
+          stockLevel: "A consultar" as const,
+          rating: 4.5,
+          isRecommended: false,
+          materialsCount: info.count,
+          isRealData: info.isReal,
+          sourceType: info.sourceType,
+        }));
+        finalProviders.sort((a, b) => (b.materialsCount || 0) - (a.materialsCount || 0));
+        if (finalProviders.length > 0) finalProviders[0].isRecommended = true;
+      }
+
       setState(prev => ({
         ...prev,
         isAnalyzing: false,
@@ -1173,6 +1217,9 @@ export function BudgetGenerateProvider({
         providerOptions: finalProviders.length > 0 ? finalProviders : prev.providerOptions,
         selectedProviderId: finalProviders.length > 0 ? finalProviders[0].id : prev.selectedProviderId,
         endDate: calculatedEndDate || prev.endDate,
+        isUndervalued,
+        marketAdjustMessage,
+        realisticTimeline: engineTimeline,
         aiInsights: {
           summary: data.summary,
           confidence_score: data.confidence_score,
@@ -1211,18 +1258,44 @@ export function BudgetGenerateProvider({
       if (isDefaultPartidas) {
         const success = await analyzeWithAI();
 
-        // If AI failed or returned nothing, and we're in construction, inject fallback
+        // If AI failed or returned nothing, and we're in construction, inject engine fallback
         if (!success && (state.sector === "construccion" || !state.sector)) {
           const isReforma = state.serviceType?.toLowerCase().includes("reforma") || !state.serviceType;
           if (isReforma) {
             toast.info("Aviso", {
-              description: "Usando plantilla local V1 porque el análisis IA no ha respondido."
+              description: "Usando motor de presupuestos local porque el analisis IA no ha respondido."
             });
+            const fbScope: BudgetScope = {
+              superficie_m2: state.sectorData.superficie_m2 || 80,
+              num_banos: state.sectorData.num_banos || 1,
+              incluye_cocina: state.sectorData.incluye_cocina ?? true,
+              incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
+              incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,
+              estancias: state.sectorData.estancias || [],
+              actuaciones: state.sectorData.actuaciones || [],
+              calidad: (state.sectorData.calidad as "basica" | "media" | "alta") || "media",
+              ubicacion: state.sectorData.ubicacion || "",
+            };
+            const mm = 1 + (state.marginPercent / 100);
+            const builtItems = normalizeBudgetItemsToScope(fbScope, [], mm);
+            const builtMats = buildScopeMaterials(fbScope);
             setState(prev => ({
               ...prev,
               currentStep: prev.currentStep + 1,
               validationError: null,
-              partidas: getDetailedConstructionFallback(state.aiInsights?.detected_area_m2 || 90, 1 + (state.marginPercent / 100))
+              partidas: builtItems.map(ep => ({
+                id: ep.id, concept: ep.concept, description: ep.description,
+                quantity: ep.quantity, unit: ep.unit, category: ep.category, chapter: ep.chapter,
+                unit_price: ep.unit_price, subtotal_cost: ep.subtotal_cost,
+                unit_price_client: ep.unit_price_client, subtotal_client: ep.subtotal_client,
+                status: ep.status,
+              })),
+              materials: builtMats.map(em => ({
+                id: em.id, name: em.name, quantity: em.quantity, unit: em.unit,
+                unit_price: em.unit_price, subtotal: em.subtotal, included: em.included,
+                provider_id: em.provider_id, isRealData: em.isRealData, sourceType: em.sourceType,
+              })),
+              materialsFromAI: true,
             }));
             saveDraft(false);
             return;
@@ -1249,9 +1322,31 @@ export function BudgetGenerateProvider({
               const isReforma = state.serviceType?.toLowerCase().includes("reforma") || !state.serviceType;
               if (isReforma) {
                 toast.info("Aviso", {
-                  description: "Usando plantilla local V1 porque el análisis IA no ha respondido."
+                  description: "Usando motor de presupuestos local porque el analisis IA no ha respondido."
                 });
-                setState(prev => ({ ...prev, partidas: getDetailedConstructionFallback(state.aiInsights?.detected_area_m2 || 90, 1 + (state.marginPercent / 100)) }));
+                const gScope: BudgetScope = {
+                  superficie_m2: state.sectorData.superficie_m2 || 80,
+                  num_banos: state.sectorData.num_banos || 1,
+                  incluye_cocina: state.sectorData.incluye_cocina ?? true,
+                  incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
+                  incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,
+                  estancias: state.sectorData.estancias || [],
+                  actuaciones: state.sectorData.actuaciones || [],
+                  calidad: (state.sectorData.calidad as "basica" | "media" | "alta") || "media",
+                  ubicacion: state.sectorData.ubicacion || "",
+                };
+                const gMM = 1 + (state.marginPercent / 100);
+                const gItems = normalizeBudgetItemsToScope(gScope, [], gMM);
+                setState(prev => ({
+                  ...prev,
+                  partidas: gItems.map(ep => ({
+                    id: ep.id, concept: ep.concept, description: ep.description,
+                    quantity: ep.quantity, unit: ep.unit, category: ep.category, chapter: ep.chapter,
+                    unit_price: ep.unit_price, subtotal_cost: ep.subtotal_cost,
+                    unit_price_client: ep.unit_price_client, subtotal_client: ep.subtotal_client,
+                    status: ep.status,
+                  })),
+                }));
               }
            }
          }

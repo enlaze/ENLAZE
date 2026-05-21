@@ -222,7 +222,7 @@ DEVUELVE UNICAMENTE UN JSON CON LA SIGUIENTE ESTRUCTURA EXACTA:
   "detected_scope": {
     "sector": "${activeSector}",
     "service_type": "${service_type || 'general'}",
-    "area_m2": 90,
+    "area_m2": ${scope?.superficie_m2 || "null"},
     "location": "${ubicacion || ""}"
   },
   "suggested_items": [

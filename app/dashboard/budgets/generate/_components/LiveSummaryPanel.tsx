@@ -17,8 +17,8 @@ export function LiveSummaryPanel() {
   // Real data check (don't show as real if it's default/fallback)
   const isMaterialBasketReal = isRealDataMode && activeProvider?.isRealData && activeProvider?.name !== "Banco ENLAZE base" && activeProvider?.name !== "Referencia mercado";
 
-  // EUR/m2 calculation
-  let detectedArea = state.aiInsights?.detected_area_m2;
+  // EUR/m2 calculation — user scope always takes priority
+  let detectedArea = state.sectorData?.superficie_m2 || state.aiInsights?.detected_area_m2;
   if (!detectedArea && isConstruction) {
     const match = (state.description || "").match(/(\d+)\s*(m2|metros|m²)/i);
     if (match) detectedArea = parseInt(match[1], 10);
@@ -40,34 +40,14 @@ export function LiveSummaryPanel() {
     priceRange = { min: detectedArea * minExpected, max: detectedArea * maxExpected };
   }
 
-  // Timeline calculation — realistic, based on scope data
+  // Timeline — use realistic timeline from engine if available
+  const realisticTimeline = state.realisticTimeline;
   let estimatedTimeline = state.aiInsights?.estimated_timeline;
-  if (!estimatedTimeline && isConstruction) {
-    const serviceType = (state.serviceType || state.description || "").toLowerCase();
-    const scope = state.sectorData || {};
-    const areaM2 = scope.superficie_m2 || detectedArea || 80;
-    const nBanos = scope.num_banos || 1;
-    const nActuaciones = (scope.actuaciones || []).length;
-
-    // Base duration from area: ~1 week per 15m2 for integral, min 3 weeks
-    let baseDays = 15; // minimum 3 weeks
-    if (serviceType.includes("integral") || serviceType.includes("completa")) {
-      baseDays = Math.max(20, Math.ceil(areaM2 / 15) * 5); // 5 working days per 15m2
-    } else if (serviceType.includes("baño") || serviceType.includes("cocina")) {
-      baseDays = 15; // 3 weeks base for bathroom/kitchen
-    } else if (serviceType.includes("parcial") || serviceType.includes("pintura")) {
-      baseDays = Math.max(5, Math.ceil(areaM2 / 30) * 5);
-    }
-
-    // Add time for complexity factors
-    if (nBanos > 1) baseDays += (nBanos - 1) * 5; // +1 week per extra bathroom
-    if (scope.incluye_cocina) baseDays += 7; // +7 working days for kitchen
-    if (scope.incluye_ventanas) baseDays += 5; // +1 week for windows
-    if (scope.incluye_climatizacion) baseDays += 5; // +1 week for AC
-    if (nActuaciones > 8) baseDays += Math.ceil((nActuaciones - 8) * 2); // +2 days per extra actuacion beyond 8
-
-    const totalWeeks = Math.ceil(baseDays / 5);
-    estimatedTimeline = { total_duration_weeks: totalWeeks, total_duration_days: baseDays };
+  if (!estimatedTimeline && realisticTimeline) {
+    estimatedTimeline = {
+      total_duration_weeks: realisticTimeline.execution_weeks_min,
+      total_duration_days: realisticTimeline.execution_weeks_min * 5,
+    };
   }
 
   let endDateValue = state.endDate ? new Date(state.endDate) : null;
@@ -196,12 +176,30 @@ export function LiveSummaryPanel() {
                 </span>
               </div>
             )}
-            {priceRange && pricePerM2 < (priceRange.min / (detectedArea || 1)) && (
+            {state.isUndervalued && priceRange && (
               <div className="mt-3 p-2 bg-red-50/50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 rounded-lg">
                 <p className="text-[10px] text-red-600 dark:text-red-400 font-medium mb-1 flex items-start gap-1">
                   <span className="text-xs">⚠️</span>
                   <span>
-                    Presupuesto infravalorado. Revisa capítulos faltantes o genera una versión realista. El actual ({totals.clientPrice.toLocaleString("es-ES", {maximumFractionDigits: 0})} €) está {(priceRange.min - totals.clientPrice).toLocaleString("es-ES", {maximumFractionDigits: 0})} € por debajo del mínimo de mercado.
+                    Presupuesto pendiente de ajuste: esta por debajo del minimo realista de mercado. No se puede finalizar ni descargar PDF cliente.
+                  </span>
+                </p>
+              </div>
+            )}
+            {!state.isUndervalued && state.marketAdjustMessage && (
+              <div className="mt-3 p-2 bg-green-50/50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30 rounded-lg">
+                <p className="text-[10px] text-green-700 dark:text-green-400 font-medium flex items-start gap-1">
+                  <span className="text-xs">✓</span>
+                  <span>Presupuesto ajustado al minimo realista de mercado.</span>
+                </p>
+              </div>
+            )}
+            {!state.isUndervalued && !state.marketAdjustMessage && priceRange && pricePerM2 !== null && pricePerM2 < (priceRange.min / (detectedArea || 1)) && (
+              <div className="mt-3 p-2 bg-amber-50/50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 rounded-lg">
+                <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium flex items-start gap-1">
+                  <span className="text-xs">⚠️</span>
+                  <span>
+                    Presupuesto por debajo del rango de mercado ({totals.clientPrice.toLocaleString("es-ES", {maximumFractionDigits: 0})} EUR vs minimo {priceRange.min.toLocaleString("es-ES", {maximumFractionDigits: 0})} EUR).
                   </span>
                 </p>
               </div>
@@ -210,7 +208,7 @@ export function LiveSummaryPanel() {
         )}
 
         {/* Timeline and dates */}
-        {(startDateFormatted || endDateFormatted || estimatedTimeline) && (
+        {(startDateFormatted || endDateFormatted || estimatedTimeline || realisticTimeline) && (
           <div className="bg-navy-50 dark:bg-zinc-800/50 p-3 rounded-xl mt-1">
             <div className="text-xs font-bold text-navy-600 dark:text-zinc-400 uppercase tracking-wider mb-2">Calendario</div>
             {startDateFormatted && (
@@ -225,19 +223,45 @@ export function LiveSummaryPanel() {
                 <span className="font-medium text-navy-900 dark:text-white">{endDateFormatted}</span>
               </div>
             )}
-            {estimatedTimeline && (
+            {realisticTimeline ? (
+              <>
+                <div className="flex justify-between items-center text-sm mt-1">
+                  <span className="text-navy-500 dark:text-zinc-400">Ejecucion estimada</span>
+                  <span className="font-medium text-navy-900 dark:text-white">
+                    {realisticTimeline.execution_weeks_min}-{realisticTimeline.execution_weeks_max} semanas
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-sm mt-1">
+                  <span className="text-navy-500 dark:text-zinc-400">Plazo total recomendado</span>
+                  <span className="font-medium text-navy-900 dark:text-white">
+                    {realisticTimeline.total_weeks_min}-{realisticTimeline.total_weeks_max} semanas
+                  </span>
+                </div>
+                {realisticTimeline.phase_breakdown.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    <div className="text-[10px] text-navy-500 dark:text-zinc-400 font-bold uppercase">Ruta critica ({realisticTimeline.phase_breakdown.length} fases)</div>
+                    {realisticTimeline.phase_breakdown.slice(0, 6).map((phase, idx) => (
+                      <div key={idx} className="flex justify-between items-center text-[10px]">
+                        <span className="text-navy-400 dark:text-zinc-500 truncate max-w-[60%]">{phase.title}</span>
+                        <span className="text-navy-500 dark:text-zinc-400 font-medium">
+                          {phase.duration_days_min}-{phase.duration_days_max}d
+                        </span>
+                      </div>
+                    ))}
+                    {realisticTimeline.phase_breakdown.length > 6 && (
+                      <div className="text-[10px] text-navy-400 dark:text-zinc-500">+{realisticTimeline.phase_breakdown.length - 6} fases mas</div>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : estimatedTimeline ? (
               <div className="flex justify-between items-center text-sm mt-1">
                 <span className="text-navy-500 dark:text-zinc-400">Duracion</span>
                 <span className="font-medium text-navy-900 dark:text-white">
                   {estimatedTimeline.total_duration_weeks} semanas ({estimatedTimeline.total_duration_days} dias)
                 </span>
               </div>
-            )}
-            {state.aiInsights?.calendar_phases && state.aiInsights.calendar_phases.length > 0 && (
-              <div className="text-[10px] text-navy-400 dark:text-zinc-500 mt-1">
-                {state.aiInsights.calendar_phases.length} fases planificadas
-              </div>
-            )}
+            ) : null}
           </div>
         )}
       </div>

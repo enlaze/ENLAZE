@@ -245,22 +245,19 @@ export function ProvidersStep() {
         <p className="text-sm text-navy-500 dark:text-zinc-400 mb-4">
           Descarga el presupuesto en PDF antes o despues de finalizar. El PDF cliente es limpio y profesional; el interno incluye costes, margenes y notas.
         </p>
+        {state.isUndervalued && (
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 rounded-lg">
+            <p className="text-xs text-red-600 dark:text-red-400 font-medium">
+              El presupuesto esta por debajo del minimo realista de mercado. No se puede descargar el PDF cliente. Genera de nuevo con IA o ajusta las partidas.
+            </p>
+          </div>
+        )}
         <div className="flex flex-wrap gap-3">
           <button
             onClick={() => {
+              if (state.isUndervalued) return;
               const { generateBudgetPDFHTML, printPDF } = require("@/lib/pdf-generator");
               const marginMultiplier = 1 + (state.marginPercent / 100);
-              const budgetMock = {
-                budget_number: state.draftId ? `PRE-${new Date().getFullYear()}` : `BORRADOR-${new Date().getFullYear()}`,
-                title: state.title || "Presupuesto Generado",
-                service_type: state.serviceType || state.sector,
-                status: "pendiente",
-                created_at: new Date().toISOString(),
-                subtotal: state.totals.directCost,
-                iva_percent: state.ivaPercent,
-                iva_amount: state.totals.directCost * (state.ivaPercent / 100),
-                total: state.totals.clientPrice * (1 + state.ivaPercent / 100),
-              };
               const items = [
                 ...state.partidas.filter(p => p.status !== "opcional").map(p => ({
                   concept: p.concept, description: p.description, category: p.category,
@@ -273,9 +270,26 @@ export function ProvidersStep() {
                   unit_price: m.unit_price * marginMultiplier, subtotal: m.subtotal * marginMultiplier,
                 })),
               ];
+              const subtotal = items.reduce((s, i) => s + i.subtotal, 0);
+              const budgetMock = {
+                budget_number: state.draftId ? `PRE-${new Date().getFullYear()}` : `BORRADOR-${new Date().getFullYear()}`,
+                title: state.title || "Presupuesto Generado",
+                service_type: state.serviceType || state.sector,
+                status: "pendiente",
+                created_at: new Date().toISOString(),
+                subtotal,
+                iva_percent: state.ivaPercent,
+                iva_amount: subtotal * (state.ivaPercent / 100),
+                total: subtotal * (1 + state.ivaPercent / 100),
+              };
               printPDF(generateBudgetPDFHTML(budgetMock, items, "client"));
             }}
-            className="flex-1 min-w-[180px] py-3 px-4 bg-navy-900 hover:bg-navy-800 text-white font-bold rounded-xl transition text-sm dark:bg-zinc-800 dark:hover:bg-zinc-700"
+            disabled={state.isUndervalued}
+            className={`flex-1 min-w-[180px] py-3 px-4 font-bold rounded-xl transition text-sm ${
+              state.isUndervalued
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed dark:bg-zinc-700 dark:text-zinc-500"
+                : "bg-navy-900 hover:bg-navy-800 text-white dark:bg-zinc-800 dark:hover:bg-zinc-700"
+            }`}
           >
             Descargar PDF cliente
           </button>
@@ -283,17 +297,6 @@ export function ProvidersStep() {
             onClick={() => {
               const { generateBudgetPDFHTML, printPDF } = require("@/lib/pdf-generator");
               const marginMultiplier = 1 + (state.marginPercent / 100);
-              const budgetMock = {
-                budget_number: state.draftId ? `PRE-${new Date().getFullYear()}` : `BORRADOR-${new Date().getFullYear()}`,
-                title: state.title || "Presupuesto Generado",
-                service_type: state.serviceType || state.sector,
-                status: "pendiente",
-                created_at: new Date().toISOString(),
-                subtotal: state.totals.directCost,
-                iva_percent: state.ivaPercent,
-                iva_amount: state.totals.directCost * (state.ivaPercent / 100),
-                total: state.totals.clientPrice * (1 + state.ivaPercent / 100),
-              };
               const items = [
                 ...state.partidas.filter(p => p.status !== "opcional").map(p => ({
                   concept: p.concept, description: p.description, category: p.category,
@@ -308,6 +311,18 @@ export function ProvidersStep() {
                   subtotal_cost: m.subtotal,
                 })),
               ];
+              const subtotal = items.reduce((s, i) => s + i.subtotal, 0);
+              const budgetMock = {
+                budget_number: state.draftId ? `PRE-${new Date().getFullYear()}` : `BORRADOR-${new Date().getFullYear()}`,
+                title: state.title || "Presupuesto Generado",
+                service_type: state.serviceType || state.sector,
+                status: "pendiente",
+                created_at: new Date().toISOString(),
+                subtotal,
+                iva_percent: state.ivaPercent,
+                iva_amount: subtotal * (state.ivaPercent / 100),
+                total: subtotal * (1 + state.ivaPercent / 100),
+              };
               printPDF(generateBudgetPDFHTML(budgetMock, items, "internal"));
             }}
             className="flex-1 min-w-[180px] py-3 px-4 bg-white hover:bg-navy-50 text-navy-900 font-bold rounded-xl border-2 border-brand-green/50 transition text-sm dark:bg-zinc-900 dark:hover:bg-zinc-800 dark:text-white"
