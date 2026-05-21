@@ -1,8 +1,53 @@
 "use client";
 
 import React, { useState } from "react";
-import { useBudgetGenerate } from "../BudgetGenerateProvider";
+import { useBudgetGenerate, type BudgetState } from "../BudgetGenerateProvider";
 import { Card } from "@/components/ui/card";
+import type { PDFBudget } from "@/lib/pdf-generator";
+
+/** Build the budget metadata object for PDF generation */
+function buildBudgetMeta(state: BudgetState): PDFBudget {
+  const subtotal = state.clientView?.subtotal
+    ?? state.partidas.filter(p => p.status !== "opcional").reduce((s, p) => s + p.subtotal_client, 0);
+  return {
+    budget_number: state.draftId ? `PRE-${new Date().getFullYear()}` : `BORRADOR-${new Date().getFullYear()}`,
+    title: state.title || "Presupuesto Generado",
+    service_type: state.serviceType || state.sector,
+    status: "pendiente",
+    created_at: new Date().toISOString(),
+    subtotal,
+    iva_percent: state.ivaPercent,
+    iva_amount: subtotal * (state.ivaPercent / 100),
+    total: subtotal * (1 + state.ivaPercent / 100),
+  };
+}
+
+/** Build legacy flat items array for the old PDF generator (fallback) */
+function buildLegacyPDFItems(state: BudgetState, mode: "client" | "internal") {
+  const marginMultiplier = 1 + (state.marginPercent / 100);
+  return [
+    ...state.partidas.filter(p => p.status !== "opcional").map(p => ({
+      concept: p.concept,
+      description: p.description,
+      category: p.category,
+      quantity: p.quantity,
+      unit: p.unit,
+      unit_price: p.unit_price_client,
+      subtotal: p.subtotal_client,
+      ...(mode === "internal" ? { subtotal_cost: p.subtotal_cost } : {}),
+    })),
+    ...state.materials.filter(m => m.included).map(m => ({
+      concept: m.name,
+      description: "Material",
+      category: "material",
+      quantity: m.quantity,
+      unit: m.unit,
+      unit_price: m.unit_price * marginMultiplier,
+      subtotal: m.subtotal * marginMultiplier,
+      ...(mode === "internal" ? { subtotal_cost: m.subtotal } : {}),
+    })),
+  ];
+}
 
 export function ProvidersStep() {
   const { state, setSelectedProvider, updateMaterial, setUseSuggestedMaterials } = useBudgetGenerate();
@@ -256,33 +301,21 @@ export function ProvidersStep() {
           <button
             onClick={() => {
               if (state.isUndervalued) return;
-              const { generateBudgetPDFHTML, printPDF } = require("@/lib/pdf-generator");
-              const marginMultiplier = 1 + (state.marginPercent / 100);
-              const items = [
-                ...state.partidas.filter(p => p.status !== "opcional").map(p => ({
-                  concept: p.concept, description: p.description, category: p.category,
-                  quantity: p.quantity, unit: p.unit,
-                  unit_price: p.unit_price_client, subtotal: p.subtotal_client,
-                })),
-                ...state.materials.filter(m => m.included).map(m => ({
-                  concept: m.name, description: "Material", category: "material",
-                  quantity: m.quantity, unit: m.unit,
-                  unit_price: m.unit_price * marginMultiplier, subtotal: m.subtotal * marginMultiplier,
-                })),
-              ];
-              const subtotal = items.reduce((s, i) => s + i.subtotal, 0);
-              const budgetMock = {
-                budget_number: state.draftId ? `PRE-${new Date().getFullYear()}` : `BORRADOR-${new Date().getFullYear()}`,
-                title: state.title || "Presupuesto Generado",
-                service_type: state.serviceType || state.sector,
-                status: "pendiente",
-                created_at: new Date().toISOString(),
-                subtotal,
-                iva_percent: state.ivaPercent,
-                iva_amount: subtotal * (state.ivaPercent / 100),
-                total: subtotal * (1 + state.ivaPercent / 100),
-              };
-              printPDF(generateBudgetPDFHTML(budgetMock, items, "client"));
+              const pdfLib = require("@/lib/pdf-generator");
+              const budgetMeta = buildBudgetMeta(state);
+
+              if (state.clientView) {
+                // New chapter-based PDF (no escandallo)
+                pdfLib.printPDF(pdfLib.generateClientPDFHTML(budgetMeta, state.clientView));
+              } else {
+                // Legacy flat-table fallback
+                const items = buildLegacyPDFItems(state, "client");
+                const subtotal = items.reduce((s: number, i: any) => s + i.subtotal, 0);
+                budgetMeta.subtotal = subtotal;
+                budgetMeta.iva_amount = subtotal * (state.ivaPercent / 100);
+                budgetMeta.total = subtotal * (1 + state.ivaPercent / 100);
+                pdfLib.printPDF(pdfLib.generateBudgetPDFHTML(budgetMeta, items, "client"));
+              }
             }}
             disabled={state.isUndervalued}
             className={`flex-1 min-w-[180px] py-3 px-4 font-bold rounded-xl transition text-sm ${
@@ -295,35 +328,21 @@ export function ProvidersStep() {
           </button>
           <button
             onClick={() => {
-              const { generateBudgetPDFHTML, printPDF } = require("@/lib/pdf-generator");
-              const marginMultiplier = 1 + (state.marginPercent / 100);
-              const items = [
-                ...state.partidas.filter(p => p.status !== "opcional").map(p => ({
-                  concept: p.concept, description: p.description, category: p.category,
-                  quantity: p.quantity, unit: p.unit,
-                  unit_price: p.unit_price_client, subtotal: p.subtotal_client,
-                  subtotal_cost: p.subtotal_cost,
-                })),
-                ...state.materials.filter(m => m.included).map(m => ({
-                  concept: m.name, description: "Material", category: "material",
-                  quantity: m.quantity, unit: m.unit,
-                  unit_price: m.unit_price * marginMultiplier, subtotal: m.subtotal * marginMultiplier,
-                  subtotal_cost: m.subtotal,
-                })),
-              ];
-              const subtotal = items.reduce((s, i) => s + i.subtotal, 0);
-              const budgetMock = {
-                budget_number: state.draftId ? `PRE-${new Date().getFullYear()}` : `BORRADOR-${new Date().getFullYear()}`,
-                title: state.title || "Presupuesto Generado",
-                service_type: state.serviceType || state.sector,
-                status: "pendiente",
-                created_at: new Date().toISOString(),
-                subtotal,
-                iva_percent: state.ivaPercent,
-                iva_amount: subtotal * (state.ivaPercent / 100),
-                total: subtotal * (1 + state.ivaPercent / 100),
-              };
-              printPDF(generateBudgetPDFHTML(budgetMock, items, "internal"));
+              const pdfLib = require("@/lib/pdf-generator");
+              const budgetMeta = buildBudgetMeta(state);
+
+              if (state.internalView) {
+                // New escandallo PDF with full breakdown
+                pdfLib.printPDF(pdfLib.generateInternalPDFHTML(budgetMeta, state.internalView));
+              } else {
+                // Legacy flat-table fallback
+                const items = buildLegacyPDFItems(state, "internal");
+                const subtotal = items.reduce((s: number, i: any) => s + i.subtotal, 0);
+                budgetMeta.subtotal = subtotal;
+                budgetMeta.iva_amount = subtotal * (state.ivaPercent / 100);
+                budgetMeta.total = subtotal * (1 + state.ivaPercent / 100);
+                pdfLib.printPDF(pdfLib.generateBudgetPDFHTML(budgetMeta, items, "internal"));
+              }
             }}
             className="flex-1 min-w-[180px] py-3 px-4 bg-white hover:bg-navy-50 text-navy-900 font-bold rounded-xl border-2 border-brand-green/50 transition text-sm dark:bg-zinc-900 dark:hover:bg-zinc-800 dark:text-white"
           >

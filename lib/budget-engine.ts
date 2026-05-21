@@ -378,9 +378,15 @@ export function normalizeBudgetItemsToScope(
   }
 
   if (scope.incluye_climatizacion) {
-    add("climatizacion", "Climatizacion",
-      "Instalacion de sistema de aire acondicionado (splits o conductos).",
-      Math.max(Math.ceil(q.floorArea / 25), 2), "ud", 1200, "mano_obra");
+    const clima = inferClimaSystem(scope);
+    const climaQty = clima.system === "conductos" ? 1 : clima.unitsNeeded;
+    const climaUnit = clima.system === "conductos" ? "PA" : "ud";
+    const climaPrice = clima.system === "conductos" ? Math.max(q.floorArea * 35, 4500) :
+                       clima.system === "multisplit" ? 1400 :
+                       clima.system === "splits_individuales" ? 1200 : 600;
+    add("climatizacion", `Climatizacion — ${clima.label}`,
+      clima.description,
+      climaQty, climaUnit, climaPrice, "mano_obra");
   }
 
   add("residuos", "Gestion de residuos y contenedores",
@@ -834,5 +840,698 @@ export function estimateRealisticTimeline(
     phase_breakdown: phases,
     critical_path: criticalPath,
     assumptions,
+  };
+}
+
+// ─── G. Climatización System Inference ─────────────────────────────────────
+
+export type ClimaSystem =
+  | "conductos"
+  | "multisplit"
+  | "splits_individuales"
+  | "preinstalacion";
+
+export interface ClimaSystemSpec {
+  system: ClimaSystem;
+  label: string;
+  description: string;
+  unitsNeeded: number;
+  assumptions: string[];
+  frigorias_estimated: number;
+}
+
+/**
+ * Infer the most appropriate HVAC system based on scope.
+ * Never returns ambiguous "splits o conductos".
+ */
+export function inferClimaSystem(scope: BudgetScope): ClimaSystemSpec {
+  const area = scope.superficie_m2;
+  const rooms = scope.estancias?.length || Math.ceil(area / 15);
+  // ~100 frigorias/m2 baseline, adjust by location
+  const loc = (scope.ubicacion || "").toLowerCase();
+  let frigMultiplier = 1.0;
+  if (/alicante|murcia|sevilla|cordoba|huelva|almeria|badajoz|malaga/.test(loc)) {
+    frigMultiplier = 1.15; // hotter zones
+  } else if (/bilbao|asturias|cantabria|galicia|leon/.test(loc)) {
+    frigMultiplier = 0.85; // milder zones
+  }
+  const frigorias = Math.round(area * 100 * frigMultiplier);
+
+  // Decision logic
+  if (area >= 120 && scope.calidad !== "basica") {
+    // Large homes: conductos if quality allows
+    return {
+      system: "conductos",
+      label: "Sistema por conductos",
+      description: `Instalacion de sistema centralizado por conductos con maquina en falso techo. ${Math.ceil(area / 20)} rejillas de impulsion y ${Math.ceil(area / 40)} de retorno.`,
+      unitsNeeded: 1, // 1 central unit
+      assumptions: [
+        `Superficie: ${area} m2, requiere sistema centralizado`,
+        `Potencia estimada: ${frigorias} frigorias (${Math.round(frigorias / 860)} kW)`,
+        "Requiere falso techo con espacio para conductos (min 25cm)",
+        `${Math.ceil(area / 20)} bocas de impulsion, ${Math.ceil(area / 40)} de retorno`,
+        "Incluye termostato centralizado con zonificacion basica",
+      ],
+      frigorias_estimated: frigorias,
+    };
+  }
+
+  if (rooms >= 4 && area >= 80) {
+    // Multi-room: multisplit
+    const innerUnits = Math.min(rooms, 5);
+    return {
+      system: "multisplit",
+      label: "Sistema multisplit",
+      description: `Instalacion de sistema multisplit: 1 unidad exterior + ${innerUnits} unidades interiores (split pared). Tuberia frigorifica preinstalada.`,
+      unitsNeeded: innerUnits,
+      assumptions: [
+        `Superficie: ${area} m2, ${rooms} estancias climatizables`,
+        `Potencia estimada: ${frigorias} frigorias (${Math.round(frigorias / 860)} kW)`,
+        `1 unidad exterior + ${innerUnits} unidades interiores`,
+        "Tuberia frigorifica de cobre preaislada por falso techo/rozas",
+        "Desagues por gravedad a bajante mas cercano",
+      ],
+      frigorias_estimated: frigorias,
+    };
+  }
+
+  if (area >= 40) {
+    // Small/medium: splits individuales
+    const splits = Math.max(Math.ceil(area / 25), 2);
+    return {
+      system: "splits_individuales",
+      label: "Splits individuales",
+      description: `Instalacion de ${splits} equipos split de pared independientes con unidades exteriores individuales.`,
+      unitsNeeded: splits,
+      assumptions: [
+        `Superficie: ${area} m2`,
+        `Potencia estimada: ${frigorias} frigorias (${Math.round(frigorias / 860)} kW)`,
+        `${splits} equipos split independientes (1x1)`,
+        "Cada equipo con su unidad exterior",
+        "Instalacion electrica independiente por equipo",
+      ],
+      frigorias_estimated: frigorias,
+    };
+  }
+
+  // Very small or basic: preinstalacion only
+  return {
+    system: "preinstalacion",
+    label: "Preinstalacion de climatizacion",
+    description: "Preinstalacion de tuberia frigorifica, desague y alimentacion electrica para futura instalacion de equipo split.",
+    unitsNeeded: Math.max(Math.ceil(area / 30), 1),
+    assumptions: [
+      `Superficie: ${area} m2`,
+      "Solo preinstalacion (tuberia, desague, linea electrica)",
+      "No incluye equipos de climatizacion",
+      "Preparado para instalacion posterior de split individual",
+    ],
+    frigorias_estimated: frigorias,
+  };
+}
+
+// ─── H. Technical Breakdown per Chapter ─────────────────────────────────────
+
+export interface TechnicalDetail {
+  task: string;
+  description: string;
+  unit: string;
+  estimated_qty: number;
+}
+
+export interface ChapterTechnicalBreakdown {
+  chapter: string;
+  chapterLabel: string;
+  assumptions: string[];
+  includedTasks: TechnicalDetail[];
+}
+
+const CHAPTER_LABELS: Record<string, string> = {
+  protecciones: "Protecciones y forrados",
+  demoliciones: "Demoliciones y retiradas",
+  albanileria: "Albanileria y tabiqueria",
+  falsos_techos: "Falsos techos",
+  fontaneria: "Fontaneria y saneamiento",
+  electricidad: "Electricidad",
+  impermeabilizacion: "Impermeabilizacion",
+  revestimientos: "Revestimientos ceramicos",
+  pavimentos: "Pavimentos",
+  rodapie: "Rodapie",
+  pintura: "Pintura y acabados de pared",
+  carpinteria_interior: "Carpinteria interior",
+  carpinteria_exterior: "Carpinteria exterior",
+  sanitarios: "Sanitarios y griferia",
+  cocina: "Cocina",
+  climatizacion: "Climatizacion",
+  residuos: "Gestion de residuos",
+  seguridad: "Seguridad y salud",
+  limpieza: "Limpieza final de obra",
+  otros: "Otros",
+};
+
+/**
+ * Build technical breakdown for a specific chapter.
+ * Returns detailed assumptions and included sub-tasks.
+ */
+export function buildChapterTechnicalBreakdown(
+  chapter: string,
+  scope: BudgetScope,
+  q: ScopeQuantities
+): ChapterTechnicalBreakdown {
+  const label = CHAPTER_LABELS[chapter] || chapter;
+
+  switch (chapter) {
+    case "demoliciones":
+      return {
+        chapter, chapterLabel: label,
+        assumptions: [
+          `Superficie a demoler: ${q.demolitionArea} m2 (85% de ${q.floorArea} m2)`,
+          "Incluye pavimento existente, revestimientos de pared y falso techo",
+          "Demolicion selectiva conservando estructura portante",
+          `Estimacion de ${q.wasteContainersEstimated} contenedores de escombro`,
+        ],
+        includedTasks: [
+          { task: "Levantado de pavimento existente", description: "Picado y retirada de pavimento ceramico/terrazo incluido mortero de agarre", unit: "m2", estimated_qty: q.demolitionArea },
+          { task: "Picado de alicatados", description: "Retirada de alicatado en zonas humedas hasta soporte", unit: "m2", estimated_qty: q.wetWallArea },
+          { task: "Demolicion de tabiqueria", description: "Demolicion de tabiques divisorios no estructurales", unit: "m2", estimated_qty: Math.round(q.partitionArea * 0.6) },
+          { task: "Desmontaje de falso techo", description: "Retirada de falso techo existente de escayola/pladur", unit: "m2", estimated_qty: q.ceilingArea },
+          { task: "Retirada de sanitarios existentes", description: `Desmontaje y retirada de aparatos sanitarios (${q.bathroomsCount} bano/s)`, unit: "ud", estimated_qty: q.bathroomsCount * 3 },
+          { task: "Carga y retirada de escombros", description: "Carga mecanica a contenedor y transporte a vertedero", unit: "ud", estimated_qty: q.wasteContainersEstimated },
+        ],
+      };
+
+    case "electricidad":
+      return {
+        chapter, chapterLabel: label,
+        assumptions: [
+          `Puntos electricos estimados: ${q.electricalPointsEstimated} (0.7 puntos/m2)`,
+          "Instalacion completa con cuadro general de proteccion segun REBT",
+          "Cableado empotrado en rozas o por falso techo",
+          "Incluye toma de tierra y protecciones diferenciales",
+        ],
+        includedTasks: [
+          { task: "Cuadro general de proteccion", description: "Suministro e instalacion de cuadro con magnetotermicos, diferenciales y protecciones segun REBT", unit: "ud", estimated_qty: 1 },
+          { task: "Cableado general", description: "Tendido de lineas H07V-K de distintas secciones empotradas en tubo corrugado", unit: "ml", estimated_qty: Math.round(q.electricalPointsEstimated * 8) },
+          { task: "Puntos de luz", description: "Punto de luz sencillo con mecanismo incluido", unit: "ud", estimated_qty: Math.round(q.electricalPointsEstimated * 0.4) },
+          { task: "Bases de enchufe", description: "Base de enchufe schuko 16A empotrada con mecanismo", unit: "ud", estimated_qty: Math.round(q.electricalPointsEstimated * 0.5) },
+          { task: "Puntos especiales", description: "Tomas para cocina (horno, vitro, lavavajillas), banos (secador, espejo), lavadero", unit: "ud", estimated_qty: Math.round(q.electricalPointsEstimated * 0.1) },
+          { task: "Toma de tierra", description: "Revision y adecuacion de toma de tierra existente", unit: "ud", estimated_qty: 1 },
+        ],
+      };
+
+    case "climatizacion": {
+      const clima = inferClimaSystem(scope);
+      return {
+        chapter, chapterLabel: label,
+        assumptions: clima.assumptions,
+        includedTasks: clima.system === "conductos" ? [
+          { task: "Unidad exterior", description: "Suministro e instalacion de maquina exterior tipo bomba de calor inverter", unit: "ud", estimated_qty: 1 },
+          { task: "Unidad interior de conductos", description: "Maquina interior para falso techo con plenum de impulsion", unit: "ud", estimated_qty: 1 },
+          { task: "Red de conductos", description: "Conducto de fibra/chapa aislada desde maquina a rejillas de impulsion", unit: "ml", estimated_qty: Math.round(q.floorArea * 0.4) },
+          { task: "Rejillas de impulsion", description: "Rejillas de impulsion de aluminio regulables en falso techo", unit: "ud", estimated_qty: Math.ceil(q.floorArea / 20) },
+          { task: "Rejillas de retorno", description: "Rejillas de retorno en zonas comunes", unit: "ud", estimated_qty: Math.ceil(q.floorArea / 40) },
+          { task: "Termostato de control", description: "Termostato digital con zonificacion basica", unit: "ud", estimated_qty: 1 },
+        ] : clima.system === "multisplit" ? [
+          { task: "Unidad exterior multisplit", description: `Maquina exterior multisplit inverter para ${clima.unitsNeeded} unidades interiores`, unit: "ud", estimated_qty: 1 },
+          { task: "Unidades interiores split pared", description: "Split de pared con control remoto individual", unit: "ud", estimated_qty: clima.unitsNeeded },
+          { task: "Tuberia frigorifica", description: "Tuberia de cobre preaislada desde exterior a cada interior", unit: "ml", estimated_qty: Math.round(clima.unitsNeeded * 8) },
+          { task: "Desagues", description: "Linea de desague por gravedad de cada unidad a bajante", unit: "ud", estimated_qty: clima.unitsNeeded },
+          { task: "Linea electrica", description: "Alimentacion electrica desde cuadro a unidad exterior", unit: "ml", estimated_qty: 15 },
+        ] : clima.system === "splits_individuales" ? [
+          { task: "Equipos split 1x1", description: "Suministro e instalacion de equipo split individual (interior + exterior)", unit: "ud", estimated_qty: clima.unitsNeeded },
+          { task: "Tuberia frigorifica", description: "Conexion frigorifica interior-exterior por equipo", unit: "ml", estimated_qty: Math.round(clima.unitsNeeded * 5) },
+          { task: "Desagues individuales", description: "Linea de desague por equipo a bajante o fachada", unit: "ud", estimated_qty: clima.unitsNeeded },
+          { task: "Alimentacion electrica", description: "Linea electrica independiente por equipo desde cuadro", unit: "ud", estimated_qty: clima.unitsNeeded },
+        ] : [
+          // preinstalacion
+          { task: "Preinstalacion frigorifica", description: "Tuberia de cobre preaislada empotrada desde interior a exterior", unit: "ud", estimated_qty: clima.unitsNeeded },
+          { task: "Preinstalacion desague", description: "Tuberia de desague desde ubicacion interior a bajante", unit: "ud", estimated_qty: clima.unitsNeeded },
+          { task: "Preinstalacion electrica", description: "Linea electrica desde cuadro hasta ubicacion de equipo", unit: "ud", estimated_qty: clima.unitsNeeded },
+        ],
+      };
+    }
+
+    case "fontaneria":
+      return {
+        chapter, chapterLabel: label,
+        assumptions: [
+          `${q.bathroomsCount} bano(s) completo(s)${q.kitchenIncluded ? " + cocina" : ""}`,
+          "Tuberia multicapa para agua fria y caliente",
+          "PVC para evacuacion",
+          "Llaves de corte individuales por aparato",
+        ],
+        includedTasks: [
+          { task: "Acometida y llave general", description: "Revision de acometida existente y sustitucion de llave general de corte", unit: "ud", estimated_qty: 1 },
+          { task: "Red de agua fria", description: "Distribucion en tuberia multicapa desde llave general a todos los puntos de consumo", unit: "ud", estimated_qty: q.bathroomsCount + (q.kitchenIncluded ? 1 : 0) },
+          { task: "Red de agua caliente", description: "Circuito de agua caliente desde calentador/caldera a puntos de consumo", unit: "ud", estimated_qty: q.bathroomsCount + (q.kitchenIncluded ? 1 : 0) },
+          { task: "Red de evacuacion", description: `Desagues en PVC 40-110mm con sifones y bajantes (${q.bathroomsCount} banos)`, unit: "ud", estimated_qty: q.bathroomsCount + (q.kitchenIncluded ? 1 : 0) },
+          { task: "Llaves de corte", description: "Llaves de escuadra cromadas en cada punto de consumo", unit: "ud", estimated_qty: (q.bathroomsCount * 4) + (q.kitchenIncluded ? 2 : 0) },
+          ...(q.kitchenIncluded ? [{ task: "Tomas de cocina", description: "Tomas de fregadero, lavavajillas y lavadora (si aplica)", unit: "ud", estimated_qty: 3 }] : []),
+        ],
+      };
+
+    case "sanitarios":
+      return {
+        chapter, chapterLabel: label,
+        assumptions: [
+          `${q.bathroomsCount} bano(s) completo(s)`,
+          `Calidad ${scope.calidad}: gama ${scope.calidad === "alta" ? "alta (Roca Inspira, Grohe, Hansgrohe)" : scope.calidad === "basica" ? "economica (Roca Victoria, griferia basica)" : "media (Roca, griferia monomando estandar)"}`,
+          "Incluye aparatos, griferia, accesorios y conexion a instalaciones",
+        ],
+        includedTasks: [
+          { task: "Inodoro", description: scope.calidad === "alta" ? "Inodoro suspendido rimless con cisterna empotrada Geberit" : "Inodoro compacto con salida dual", unit: "ud", estimated_qty: q.bathroomsCount },
+          { task: "Lavabo", description: scope.calidad === "alta" ? "Lavabo sobre encimera de diseno con mueble suspendido" : "Lavabo sobre encimera con mueble y monomando", unit: "ud", estimated_qty: q.bathroomsCount },
+          { task: "Plato de ducha", description: "Plato de ducha extraplano de resina con textura antideslizante", unit: "ud", estimated_qty: q.bathroomsCount },
+          { task: "Mampara de ducha", description: scope.calidad === "alta" ? "Mampara fija de cristal templado 8mm con herrajes ocultos" : "Mampara frontal de cristal templado 6mm", unit: "ud", estimated_qty: q.bathroomsCount },
+          { task: "Griferia", description: scope.calidad === "alta" ? "Griferia premium empotrada (lavabo + ducha tipo lluvia)" : "Griferia monomando para lavabo y ducha", unit: "ud", estimated_qty: q.bathroomsCount * 2 },
+          { task: "Accesorios de bano", description: "Juego de accesorios (portarrollos, toallero, espejo)", unit: "ud", estimated_qty: q.bathroomsCount },
+        ],
+      };
+
+    case "cocina":
+      return {
+        chapter, chapterLabel: label,
+        assumptions: [
+          `Cocina estimada: ${Math.min(Math.max(q.floorArea * 0.08, 6), 14)} m2 aprox.`,
+          `Calidad ${scope.calidad}`,
+          scope.calidad === "alta" ? "Muebles lacados, encimera Silestone/Dekton, electrodomesticos gama alta" :
+          scope.calidad === "basica" ? "Muebles melamina, encimera laminada, electrodomesticos basicos" :
+          "Muebles lacados/estratificados, encimera cuarzo, electrodomesticos gama media",
+        ],
+        includedTasks: [
+          { task: "Muebles bajos", description: "Modulos bajos con cajones, herrajes de cierre amortiguado", unit: "ml", estimated_qty: Math.round(Math.min(Math.max(q.floorArea * 0.08, 6), 14) * 0.7) },
+          { task: "Muebles altos", description: "Modulos altos con puertas abatibles", unit: "ml", estimated_qty: Math.round(Math.min(Math.max(q.floorArea * 0.08, 6), 14) * 0.5) },
+          { task: "Encimera", description: scope.calidad === "alta" ? "Encimera Silestone/Dekton con faldones" : "Encimera postformada o de cuarzo compacto", unit: "ml", estimated_qty: Math.round(Math.min(Math.max(q.floorArea * 0.08, 6), 14) * 0.7) },
+          { task: "Fregadero y griferia", description: "Fregadero de acero inoxidable/bajo encimera y griferia extraible", unit: "ud", estimated_qty: 1 },
+          { task: "Zocalo y remates", description: "Zocalo inferior, cornisa superior y remates de acabado", unit: "ml", estimated_qty: Math.round(Math.min(Math.max(q.floorArea * 0.08, 6), 14) * 0.7) },
+        ],
+      };
+
+    case "pavimentos":
+      return {
+        chapter, chapterLabel: label,
+        assumptions: [
+          `Superficie a pavimentar: ${q.pavementArea} m2`,
+          `Calidad ${scope.calidad}: ${scope.calidad === "alta" ? "porcelanico rectificado gran formato" : scope.calidad === "basica" ? "ceramico/laminado estandar" : "porcelanico 60x60 estandar"}`,
+          "Incluye material + colocacion + borada",
+        ],
+        includedTasks: [
+          { task: "Nivelacion del soporte", description: "Regularizacion del soporte con mortero autonivelante donde sea necesario", unit: "m2", estimated_qty: Math.round(q.pavementArea * 0.3) },
+          { task: "Pavimento general", description: `Suministro y colocacion de pavimento ${scope.calidad === "alta" ? "porcelanico rectificado" : "ceramico/laminado"} en toda la vivienda`, unit: "m2", estimated_qty: q.pavementArea },
+          { task: "Borada / Rejuntado", description: "Rejuntado con mortero de juntas del color elegido", unit: "m2", estimated_qty: q.pavementArea },
+        ],
+      };
+
+    case "pintura":
+      return {
+        chapter, chapterLabel: label,
+        assumptions: [
+          `Paredes: ${q.wallPaintArea} m2, Techos: ${q.ceilingArea} m2`,
+          "Dos manos de pintura plastica lisa lavable",
+          "Preparacion de superficie: plastecido, lijado e imprimacion",
+        ],
+        includedTasks: [
+          { task: "Preparacion de paredes", description: "Plastecido de imperfecciones, lijado y aplicacion de imprimacion fijadora", unit: "m2", estimated_qty: q.wallPaintArea },
+          { task: "Pintura de paredes", description: "Aplicacion de dos manos de pintura plastica lisa lavable en paredes", unit: "m2", estimated_qty: q.wallPaintArea },
+          { task: "Pintura de techos", description: "Aplicacion de dos manos de pintura plastica blanca mate en techos", unit: "m2", estimated_qty: q.ceilingArea },
+        ],
+      };
+
+    case "carpinteria_interior":
+      return {
+        chapter, chapterLabel: label,
+        assumptions: [
+          `Puertas estimadas: ${q.doorsEstimated} uds`,
+          `Calidad ${scope.calidad}: ${scope.calidad === "alta" ? "macizas lacadas premium o de roble" : scope.calidad === "basica" ? "huecas lisas en melamina" : "ciega lacada blanca con herrajes calidad media"}`,
+        ],
+        includedTasks: [
+          { task: "Puertas de paso", description: `Suministro y colocacion de puerta de paso ${scope.calidad === "alta" ? "maciza lacada" : "ciega lacada"} con premarco, tapajuntas y herrajes`, unit: "ud", estimated_qty: q.doorsEstimated },
+          { task: "Armarios empotrados (si procede)", description: "Frentes de armario abatibles o correderas lacados, con interiores de melamina", unit: "ud", estimated_qty: 0 },
+        ],
+      };
+
+    case "carpinteria_exterior":
+      return {
+        chapter, chapterLabel: label,
+        assumptions: [
+          `Ventanas estimadas: ${q.windowsCountEstimated} uds`,
+          `Calidad ${scope.calidad}: ${scope.calidad === "alta" ? "aluminio RPT premium o PVC alta gama, doble/triple acristalamiento bajo emisivo" : scope.calidad === "basica" ? "aluminio sin RPT, doble acristalamiento estandar" : "aluminio RPT, doble acristalamiento 4/16/4"}`,
+          "Puede requerir licencia municipal de obras",
+        ],
+        includedTasks: [
+          { task: "Ventanas", description: `Suministro y colocacion de ventana de aluminio ${scope.calidad === "alta" ? "RPT premium" : "RPT"} con doble acristalamiento`, unit: "ud", estimated_qty: q.windowsCountEstimated },
+          { task: "Persianas/estores (si aplica)", description: "Sustitucion de persiana enrollable monoblock si se cambia el hueco completo", unit: "ud", estimated_qty: q.windowsCountEstimated },
+        ],
+      };
+
+    default:
+      return {
+        chapter, chapterLabel: label,
+        assumptions: [],
+        includedTasks: [],
+      };
+  }
+}
+
+// ─── I. Client View (for PDF Cliente) ───────────────────────────────────────
+
+export interface ClientViewChapter {
+  chapter: string;
+  chapterLabel: string;
+  title: string;
+  clientDescription: string;
+  includedTasks: string[];
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  subtotal: number;
+  technicalAssumptions: string[];
+}
+
+export interface BudgetClientView {
+  chapters: ClientViewChapter[];
+  subtotal: number;
+  ivaPct: number;
+  ivaAmount: number;
+  total: number;
+  qualityLabel: string;
+  climaSpec?: ClimaSystemSpec;
+}
+
+/**
+ * Build the client-facing view: grouped by chapters, no internal escandallo.
+ * Each chapter shows: title, description, included tasks (as text), price.
+ * Materials are NOT separate line items — they're PART of the chapter cost.
+ */
+export function buildClientView(
+  scope: BudgetScope,
+  items: EnginePartida[],
+  ivaPct: number
+): BudgetClientView {
+  const q = buildScopeQuantities(scope);
+  const climaSpec = scope.incluye_climatizacion ? inferClimaSystem(scope) : undefined;
+
+  // Group items by chapter
+  const chapterGroups = new Map<string, EnginePartida[]>();
+  for (const item of items) {
+    const ch = item.chapter || "otros";
+    if (!chapterGroups.has(ch)) chapterGroups.set(ch, []);
+    chapterGroups.get(ch)!.push(item);
+  }
+
+  // Define display order
+  const chapterOrder = [
+    "protecciones", "demoliciones", "albanileria", "falsos_techos",
+    "fontaneria", "electricidad", "impermeabilizacion",
+    "revestimientos", "pavimentos", "rodapie", "pintura",
+    "carpinteria_interior", "carpinteria_exterior",
+    "sanitarios", "cocina", "climatizacion",
+    "residuos", "seguridad", "limpieza", "otros",
+  ];
+
+  const chapters: ClientViewChapter[] = [];
+
+  for (const ch of chapterOrder) {
+    const group = chapterGroups.get(ch);
+    if (!group || group.length === 0) continue;
+
+    const technical = buildChapterTechnicalBreakdown(ch, scope, q);
+
+    // Aggregate all items in this chapter
+    const chapterSubtotal = group.reduce((s, i) => s + i.subtotal_client, 0);
+    const mainItem = group[0];
+
+    // Build client-facing description
+    let clientDesc = technical.includedTasks.length > 0
+      ? technical.assumptions[0] || mainItem.description
+      : mainItem.description;
+
+    // Override climatizacion description with specific system
+    if (ch === "climatizacion" && climaSpec) {
+      clientDesc = climaSpec.description;
+    }
+
+    const includedTaskTexts = technical.includedTasks.length > 0
+      ? technical.includedTasks.map(t => t.task)
+      : group.map(i => i.concept);
+
+    // For chapters with multiple items, sum them up as one chapter entry
+    const primaryQty = mainItem.quantity;
+    const primaryUnit = mainItem.unit;
+
+    chapters.push({
+      chapter: ch,
+      chapterLabel: CHAPTER_LABELS[ch] || ch,
+      title: group.length === 1 ? mainItem.concept : (CHAPTER_LABELS[ch] || ch),
+      clientDescription: clientDesc,
+      includedTasks: includedTaskTexts,
+      quantity: primaryQty,
+      unit: primaryUnit,
+      unitPrice: chapterSubtotal / Math.max(primaryQty, 1),
+      subtotal: Math.round(chapterSubtotal * 100) / 100,
+      technicalAssumptions: technical.assumptions,
+    });
+  }
+
+  const subtotal = chapters.reduce((s, c) => s + c.subtotal, 0);
+  const ivaAmount = Math.round(subtotal * (ivaPct / 100) * 100) / 100;
+  const total = Math.round((subtotal + ivaAmount) * 100) / 100;
+
+  const qualityLabels: Record<string, string> = {
+    basica: "Gama basica / economica",
+    media: "Gama media / estandar",
+    alta: "Gama alta / premium",
+  };
+
+  return {
+    chapters,
+    subtotal: Math.round(subtotal * 100) / 100,
+    ivaPct,
+    ivaAmount,
+    total,
+    qualityLabel: qualityLabels[scope.calidad] || "Gama media",
+    climaSpec,
+  };
+}
+
+// ─── J. Internal View (for PDF Interno) ─────────────────────────────────────
+
+export interface InternalMaterialLine {
+  name: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  subtotal: number;
+  qualityTier: string;
+  sourceType: string;
+  supplier: string;
+  confidenceScore: number;
+}
+
+export interface InternalViewChapter {
+  chapter: string;
+  chapterLabel: string;
+  // Cost breakdown
+  laborCost: number;
+  materialCost: number;
+  equipmentCost: number;
+  wasteCost: number;
+  directCost: number;
+  // Client pricing
+  clientPrice: number;
+  margin: number;
+  marginPct: number;
+  // Details
+  materials: InternalMaterialLine[];
+  sourceTypes: string[];
+  avgConfidence: number;
+  qualityTier: string;
+}
+
+export interface BudgetInternalView {
+  chapters: InternalViewChapter[];
+  totals: {
+    directCost: number;
+    materialsCost: number;
+    laborCost: number;
+    equipmentCost: number;
+    wasteCost: number;
+    clientSubtotal: number;
+    totalMargin: number;
+    totalMarginPct: number;
+    ivaPct: number;
+    ivaAmount: number;
+    clientTotal: number;
+  };
+  avgConfidence: number;
+  qualityTier: string;
+  climaSpec?: ClimaSystemSpec;
+}
+
+/**
+ * Build the internal view: full escandallo with costs, margins, materials, sources.
+ * Materials are linked to their chapter and shown with price source and confidence.
+ */
+export function buildInternalView(
+  scope: BudgetScope,
+  items: EnginePartida[],
+  materials: EngineMaterial[],
+  ivaPct: number,
+  _resolvedPrices?: Array<{
+    materialName: string;
+    normalizedName: string;
+    selectedPrice: number;
+    qualityTier: string;
+    sourceType: string;
+    selectedSupplier: string;
+    confidenceScore: number;
+  }>
+): BudgetInternalView {
+  const climaSpec = scope.incluye_climatizacion ? inferClimaSystem(scope) : undefined;
+
+  // Group items and materials by chapter
+  const chapterGroups = new Map<string, EnginePartida[]>();
+  const materialsByChapter = new Map<string, EngineMaterial[]>();
+
+  for (const item of items) {
+    const ch = item.chapter || "otros";
+    if (!chapterGroups.has(ch)) chapterGroups.set(ch, []);
+    chapterGroups.get(ch)!.push(item);
+  }
+  for (const mat of materials) {
+    const ch = mat.linked_chapter || "otros";
+    if (!materialsByChapter.has(ch)) materialsByChapter.set(ch, []);
+    materialsByChapter.get(ch)!.push(mat);
+  }
+
+  const chapterOrder = [
+    "protecciones", "demoliciones", "albanileria", "falsos_techos",
+    "fontaneria", "electricidad", "impermeabilizacion",
+    "revestimientos", "pavimentos", "rodapie", "pintura",
+    "carpinteria_interior", "carpinteria_exterior",
+    "sanitarios", "cocina", "climatizacion",
+    "residuos", "seguridad", "limpieza", "otros",
+  ];
+
+  const internalChapters: InternalViewChapter[] = [];
+
+  for (const ch of chapterOrder) {
+    const group = chapterGroups.get(ch);
+    if (!group || group.length === 0) continue;
+
+    const chMaterials = materialsByChapter.get(ch) || [];
+
+    // Sum costs from items' breakdowns
+    let laborCost = 0, materialCost = 0, equipmentCost = 0, wasteCost = 0;
+    const sourceTypes = new Set<string>();
+    let confidenceSum = 0;
+    let confidenceCount = 0;
+
+    for (const item of group) {
+      if (item.cost_breakdown) {
+        laborCost += item.cost_breakdown.labor_cost;
+        materialCost += item.cost_breakdown.material_cost;
+        equipmentCost += item.cost_breakdown.equipment_cost;
+        wasteCost += item.cost_breakdown.waste_cost;
+        sourceTypes.add(item.cost_breakdown.source);
+        confidenceSum += item.cost_breakdown.confidence_score;
+        confidenceCount++;
+      } else {
+        // Fallback: all cost is from subtotal_cost
+        laborCost += item.subtotal_cost * 0.5;
+        materialCost += item.subtotal_cost * 0.4;
+        equipmentCost += item.subtotal_cost * 0.05;
+        wasteCost += item.subtotal_cost * 0.05;
+        sourceTypes.add("engine_estimate");
+        confidenceSum += 50;
+        confidenceCount++;
+      }
+    }
+
+    const directCost = laborCost + materialCost + equipmentCost + wasteCost;
+    const clientPrice = group.reduce((s, i) => s + i.subtotal_client, 0);
+    const margin = clientPrice - directCost;
+    const marginPct = directCost > 0 ? (margin / directCost) * 100 : 0;
+
+    // Build material lines with resolved price info if available
+    const materialLines: InternalMaterialLine[] = chMaterials.map(mat => {
+      // Try to find resolved price for this material
+      const matNameLower = mat.name.toLowerCase();
+      const resolved = _resolvedPrices?.find(rp => {
+        const rpNameLower = rp.materialName.toLowerCase();
+        return rpNameLower.includes(matNameLower.slice(0, 15)) ||
+               matNameLower.includes(rpNameLower.slice(0, 15));
+      });
+
+      return {
+        name: mat.name,
+        quantity: mat.quantity,
+        unit: mat.unit,
+        unitPrice: resolved?.selectedPrice || mat.unit_price,
+        subtotal: resolved ? resolved.selectedPrice * mat.quantity : mat.subtotal,
+        qualityTier: resolved?.qualityTier || scope.calidad,
+        sourceType: resolved?.sourceType || mat.sourceType,
+        supplier: resolved?.selectedSupplier || mat.provider_id,
+        confidenceScore: resolved?.confidenceScore || (mat.isRealData ? 0.80 : 0.40),
+      };
+    });
+
+    const avgConf = confidenceCount > 0 ? Math.round(confidenceSum / confidenceCount) : 50;
+
+    internalChapters.push({
+      chapter: ch,
+      chapterLabel: CHAPTER_LABELS[ch] || ch,
+      laborCost: Math.round(laborCost * 100) / 100,
+      materialCost: Math.round(materialCost * 100) / 100,
+      equipmentCost: Math.round(equipmentCost * 100) / 100,
+      wasteCost: Math.round(wasteCost * 100) / 100,
+      directCost: Math.round(directCost * 100) / 100,
+      clientPrice: Math.round(clientPrice * 100) / 100,
+      margin: Math.round(margin * 100) / 100,
+      marginPct: Math.round(marginPct * 10) / 10,
+      materials: materialLines,
+      sourceTypes: Array.from(sourceTypes),
+      avgConfidence: avgConf,
+      qualityTier: scope.calidad,
+    });
+  }
+
+  // Totals
+  const totalDirectCost = internalChapters.reduce((s, c) => s + c.directCost, 0);
+  const totalMaterials = internalChapters.reduce((s, c) => s + c.materialCost, 0);
+  const totalLabor = internalChapters.reduce((s, c) => s + c.laborCost, 0);
+  const totalEquipment = internalChapters.reduce((s, c) => s + c.equipmentCost, 0);
+  const totalWaste = internalChapters.reduce((s, c) => s + c.wasteCost, 0);
+  const totalClient = internalChapters.reduce((s, c) => s + c.clientPrice, 0);
+  const totalMargin = totalClient - totalDirectCost;
+  const totalMarginPct = totalDirectCost > 0 ? (totalMargin / totalDirectCost) * 100 : 0;
+
+  const ivaAmount = Math.round(totalClient * (ivaPct / 100) * 100) / 100;
+
+  const allConfidences = internalChapters
+    .filter(c => c.avgConfidence > 0)
+    .map(c => c.avgConfidence);
+  const avgConf = allConfidences.length > 0
+    ? Math.round(allConfidences.reduce((s, c) => s + c, 0) / allConfidences.length)
+    : 50;
+
+  return {
+    chapters: internalChapters,
+    totals: {
+      directCost: Math.round(totalDirectCost * 100) / 100,
+      materialsCost: Math.round(totalMaterials * 100) / 100,
+      laborCost: Math.round(totalLabor * 100) / 100,
+      equipmentCost: Math.round(totalEquipment * 100) / 100,
+      wasteCost: Math.round(totalWaste * 100) / 100,
+      clientSubtotal: Math.round(totalClient * 100) / 100,
+      totalMargin: Math.round(totalMargin * 100) / 100,
+      totalMarginPct: Math.round(totalMarginPct * 10) / 10,
+      ivaPct,
+      ivaAmount,
+      clientTotal: Math.round((totalClient + ivaAmount) * 100) / 100,
+    },
+    avgConfidence: avgConf,
+    qualityTier: scope.calidad,
+    climaSpec,
   };
 }

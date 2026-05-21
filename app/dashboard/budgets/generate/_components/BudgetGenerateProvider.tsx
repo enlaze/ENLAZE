@@ -9,6 +9,8 @@ import {
   type EnginePartida,
   type EngineMaterial,
   type RealisticTimeline,
+  type BudgetClientView,
+  type BudgetInternalView,
   buildScopeQuantities,
   normalizeBudgetItemsToScope,
   calculateItemCostBreakdown,
@@ -16,6 +18,8 @@ import {
   adjustToMarket,
   getMarketRange,
   estimateRealisticTimeline,
+  buildClientView,
+  buildInternalView,
 } from "@/lib/budget-engine";
 
 export interface Partida {
@@ -222,6 +226,10 @@ export interface BudgetState {
   marketAdjustMessage: string;
   /** Realistic timeline from engine */
   realisticTimeline: RealisticTimeline | null;
+  /** Client view for PDF (chapters, no escandallo) */
+  clientView: BudgetClientView | null;
+  /** Internal view for PDF (full escandallo) */
+  internalView: BudgetInternalView | null;
   /** Saving states */
   isSavingDraft: boolean;
   isFinalizing: boolean;
@@ -324,6 +332,8 @@ export function BudgetGenerateProvider({
     isUndervalued: false,
     marketAdjustMessage: "",
     realisticTimeline: null,
+    clientView: null,
+    internalView: null,
     isSavingDraft: false,
     isFinalizing: false,
     saveError: null,
@@ -1207,6 +1217,54 @@ export function BudgetGenerateProvider({
         if (finalProviders.length > 0) finalProviders[0].isRecommended = true;
       }
 
+      // ─── Build dual views for PDFs ───
+      let computedClientView: BudgetClientView | null = null;
+      let computedInternalView: BudgetInternalView | null = null;
+
+      if (state.sector === "construccion" && finalPartidas.length > 0) {
+        const viewScope: BudgetScope = {
+          superficie_m2: detectedArea || 80,
+          num_banos: state.sectorData.num_banos || 1,
+          incluye_cocina: state.sectorData.incluye_cocina ?? true,
+          incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
+          incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,
+          estancias: state.sectorData.estancias || [],
+          actuaciones: state.sectorData.actuaciones || [],
+          calidad: (state.sectorData.calidad as "basica" | "media" | "alta") || "media",
+          ubicacion: state.sectorData.ubicacion || "",
+        };
+
+        // Convert partidas to EnginePartida for view builders
+        const viewItems: EnginePartida[] = finalPartidas.map(p => ({
+          ...p,
+          chapter: p.chapter || "",
+          status: (p.status || "incluida") as "incluida" | "estimada" | "opcional",
+        }));
+        const viewMaterials: EngineMaterial[] = finalMaterials.map(m => ({
+          id: m.id,
+          name: m.name,
+          quantity: m.quantity,
+          unit: m.unit,
+          unit_price: m.unit_price,
+          subtotal: m.subtotal,
+          included: m.included,
+          provider_id: m.provider_id || "referencia-mercado",
+          linked_chapter: "", // Will be matched by engine
+          isRealData: m.isRealData || false,
+          sourceType: m.sourceType || "market_reference",
+        }));
+
+        // Rebuild linked_chapter from MATERIAL_SPECS matching
+        const engineMats = buildScopeMaterials(viewScope);
+        const linkedMaterials = viewMaterials.map((m, idx) => ({
+          ...m,
+          linked_chapter: engineMats[idx]?.linked_chapter || "",
+        }));
+
+        computedClientView = buildClientView(viewScope, viewItems, state.ivaPercent);
+        computedInternalView = buildInternalView(viewScope, viewItems, linkedMaterials, state.ivaPercent);
+      }
+
       setState(prev => ({
         ...prev,
         isAnalyzing: false,
@@ -1220,6 +1278,8 @@ export function BudgetGenerateProvider({
         isUndervalued,
         marketAdjustMessage,
         realisticTimeline: engineTimeline,
+        clientView: computedClientView,
+        internalView: computedInternalView,
         aiInsights: {
           summary: data.summary,
           confidence_score: data.confidence_score,
