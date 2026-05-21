@@ -21,6 +21,12 @@ import {
   buildClientView,
   buildInternalView,
 } from "@/lib/budget-engine";
+import {
+  resolveMarketPrices,
+  type PriceRequest,
+  type QualityTier,
+  type ResolvedPrice,
+} from "@/lib/price-resolver";
 
 export interface Partida {
   id: string;
@@ -1263,6 +1269,56 @@ export function BudgetGenerateProvider({
 
         computedClientView = buildClientView(viewScope, viewItems, state.ivaPercent);
         computedInternalView = buildInternalView(viewScope, viewItems, linkedMaterials, state.ivaPercent);
+
+        // ─── Trigger server-side market price resolution (async, non-blocking) ───
+        // Runs in background; updates materials with real prices if found.
+        // Does NOT block the UI — initial render uses engine estimates.
+        const qualityTier: QualityTier = (viewScope.calidad as QualityTier) || "media";
+        const location = viewScope.ubicacion || "";
+        const priceRequests: PriceRequest[] = linkedMaterials
+          .filter(m => m.included)
+          .map(m => ({
+            materialName: m.name,
+            category: m.linked_chapter || "material",
+            unit: m.unit,
+            quantity: m.quantity,
+            qualityTier,
+            location,
+          }));
+
+        if (priceRequests.length > 0) {
+          // Fire-and-forget: resolve market prices in background
+          resolveMarketPrices({ materials: priceRequests, location })
+            .then(result => {
+              if (!result.ok || result.resolved.length === 0) return;
+              // Update materials with resolved prices (only if better source)
+              setState(prev => {
+                const updatedMaterials = prev.materials.map(m => {
+                  const rp = result.resolved.find(r =>
+                    m.name.toLowerCase().includes(r.normalizedName) ||
+                    r.normalizedName.includes(
+                      m.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                    )
+                  );
+                  if (rp && rp.selectedPrice > 0 && rp.sourceType !== "estimated") {
+                    return {
+                      ...m,
+                      unit_price: rp.selectedPrice,
+                      subtotal: rp.selectedPrice * m.quantity,
+                      sourceType: rp.sourceType,
+                      isRealData: true,
+                    };
+                  }
+                  return m;
+                });
+                return { ...prev, materials: updatedMaterials };
+              });
+            })
+            .catch(err => {
+              console.warn("[BudgetProvider] Background price resolution failed:", err);
+              // Non-fatal — keep engine estimates
+            });
+        }
       }
 
       setState(prev => ({

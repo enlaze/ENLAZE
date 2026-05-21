@@ -514,32 +514,9 @@ export function isCacheValid(entry: PriceCacheEntry): boolean {
 // ─── Supabase integration helpers (to be called from API routes) ────────────
 
 /**
- * Schema for a `resolved_prices` table in Supabase (to be created via migration):
- *
- * CREATE TABLE IF NOT EXISTS resolved_prices (
- *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
- *   user_id uuid REFERENCES auth.users(id),
- *   material_name text NOT NULL,
- *   normalized_name text NOT NULL,
- *   unit text NOT NULL,
- *   quality_tier text NOT NULL CHECK (quality_tier IN ('basica', 'media', 'alta')),
- *   location text DEFAULT '',
- *   selected_price numeric NOT NULL,
- *   price_min numeric,
- *   price_median numeric,
- *   price_max numeric,
- *   selected_supplier text,
- *   source_url text DEFAULT '',
- *   source_type text NOT NULL,
- *   confidence_score numeric DEFAULT 0.4,
- *   alternatives jsonb DEFAULT '[]',
- *   captured_at timestamptz DEFAULT now(),
- *   expires_at timestamptz DEFAULT (now() + interval '48 hours'),
- *   created_at timestamptz DEFAULT now()
- * );
- *
- * This function builds the row to insert. The actual Supabase call
- * should be done in the API route, not here.
+ * Build a row for upserting into the `resolved_prices` Supabase table.
+ * Table created via migration: 20260521_resolved_prices.sql
+ * The actual Supabase call should be done in the API route, not here.
  */
 export function buildCacheRow(resolved: ResolvedPrice, userId: string, location: string) {
   const now = new Date();
@@ -562,4 +539,86 @@ export function buildCacheRow(resolved: ResolvedPrice, userId: string, location:
     captured_at: resolved.capturedAt,
     expires_at: new Date(now.getTime() + CACHE_TTL_HOURS * 60 * 60 * 1000).toISOString(),
   };
+}
+
+// ─── Client-side API caller ─────────────────────────────────────────────────
+
+export interface ResolveMarketPricesInput {
+  materials: PriceRequest[];
+  location: string;
+  forceRefresh?: boolean;
+}
+
+export interface ResolveMarketPricesResult {
+  ok: boolean;
+  resolved: ResolvedPrice[];
+  summary: {
+    total: number;
+    fromUserCatalog: number;
+    fromEnlaze: number;
+    fromN8n: number;
+    fromWebSearch: number;
+    fromCache: number;
+    estimated: number;
+    webSearchesPerformed: number;
+    webSearchesSuccessful: number;
+  };
+  cachedUntil: string;
+  error?: string;
+}
+
+/**
+ * Call the server-side /api/prices/resolve endpoint.
+ *
+ * USE THIS from client components (BudgetGenerateProvider, ProvidersStep).
+ * It triggers the full priority chain including web search + cache.
+ *
+ * WHEN TO CALL:
+ *   - During budget generation (after AI analysis produces materials list)
+ *   - When user clicks "Actualizar precios de mercado"
+ *   - Never on render, never on mount, never in useEffect without user action
+ */
+export async function resolveMarketPrices(
+  input: ResolveMarketPricesInput
+): Promise<ResolveMarketPricesResult> {
+  try {
+    const response = await fetch("/api/prices/resolve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        materials: input.materials,
+        location: input.location,
+        forceRefresh: input.forceRefresh || false,
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ error: "Error de red" }));
+      return {
+        ok: false,
+        resolved: [],
+        summary: {
+          total: 0, fromUserCatalog: 0, fromEnlaze: 0, fromN8n: 0,
+          fromWebSearch: 0, fromCache: 0, estimated: 0,
+          webSearchesPerformed: 0, webSearchesSuccessful: 0,
+        },
+        cachedUntil: "",
+        error: err.error || `HTTP ${response.status}`,
+      };
+    }
+
+    return await response.json();
+  } catch (err: any) {
+    return {
+      ok: false,
+      resolved: [],
+      summary: {
+        total: 0, fromUserCatalog: 0, fromEnlaze: 0, fromN8n: 0,
+        fromWebSearch: 0, fromCache: 0, estimated: 0,
+        webSearchesPerformed: 0, webSearchesSuccessful: 0,
+      },
+      cachedUntil: "",
+      error: err.message || "Error de conexion",
+    };
+  }
 }

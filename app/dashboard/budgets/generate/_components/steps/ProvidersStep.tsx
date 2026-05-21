@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import { useBudgetGenerate, type BudgetState } from "../BudgetGenerateProvider";
 import { Card } from "@/components/ui/card";
 import type { PDFBudget } from "@/lib/pdf-generator";
+import { resolveMarketPrices, type PriceRequest, type QualityTier } from "@/lib/price-resolver";
 
 /** Build the budget metadata object for PDF generation */
 function buildBudgetMeta(state: BudgetState): PDFBudget {
@@ -53,6 +54,82 @@ export function ProvidersStep() {
   const { state, setSelectedProvider, updateMaterial, setUseSuggestedMaterials } = useBudgetGenerate();
   const { providerOptions, selectedProviderId, materials, useSuggestedMaterials } = state;
   const [showCompare, setShowCompare] = useState(false);
+  const [isRefreshingPrices, setIsRefreshingPrices] = useState(false);
+  const [priceRefreshResult, setPriceRefreshResult] = useState<{
+    ok: boolean;
+    message: string;
+    summary?: { fromWebSearch: number; fromCache: number; estimated: number; total: number };
+  } | null>(null);
+
+  const handleRefreshMarketPrices = useCallback(async () => {
+    if (isRefreshingPrices) return;
+    setIsRefreshingPrices(true);
+    setPriceRefreshResult(null);
+
+    try {
+      // Build PriceRequest list from current materials
+      const qualityTier: QualityTier = (state as any).qualityTier || "media";
+      const location: string = (state as any).location || (state as any).city || "";
+
+      const priceRequests: PriceRequest[] = materials
+        .filter(m => m.included)
+        .map(m => ({
+          materialName: m.name,
+          category: (m as any).category || "material",
+          unit: m.unit,
+          quantity: m.quantity,
+          qualityTier,
+          location,
+        }));
+
+      if (priceRequests.length === 0) {
+        setPriceRefreshResult({ ok: false, message: "No hay materiales seleccionados para actualizar." });
+        return;
+      }
+
+      const result = await resolveMarketPrices({
+        materials: priceRequests,
+        location,
+        forceRefresh: true,
+      });
+
+      if (result.ok && result.resolved.length > 0) {
+        // Update material prices with resolved prices
+        for (const rp of result.resolved) {
+          const mat = materials.find(m =>
+            m.name.toLowerCase().includes(rp.normalizedName) ||
+            rp.normalizedName.includes(m.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""))
+          );
+          if (mat && rp.selectedPrice > 0) {
+            updateMaterial(mat.id, {
+              unit_price: rp.selectedPrice,
+              subtotal: rp.selectedPrice * mat.quantity,
+              sourceType: rp.sourceType,
+              isRealData: rp.sourceType !== "estimated",
+            });
+          }
+        }
+
+        setPriceRefreshResult({
+          ok: true,
+          message: `Precios actualizados: ${result.summary.fromWebSearch} web, ${result.summary.fromCache} cache, ${result.summary.estimated} estimados`,
+          summary: result.summary,
+        });
+      } else {
+        setPriceRefreshResult({
+          ok: false,
+          message: result.error || "No se pudieron actualizar los precios. Se mantienen los estimados.",
+        });
+      }
+    } catch (err: any) {
+      setPriceRefreshResult({
+        ok: false,
+        message: err.message || "Error al conectar con el servidor de precios.",
+      });
+    } finally {
+      setIsRefreshingPrices(false);
+    }
+  }, [isRefreshingPrices, materials, state, updateMaterial]);
 
   const getBadgeProps = (sourceType?: string, isRealData?: boolean) => {
     if (sourceType === "n8n_sync") return { label: "REAL", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800" };
@@ -283,6 +360,78 @@ export function ProvidersStep() {
           )}
         </div>
       </Card>
+
+      {/* Market price refresh */}
+      {materials.length > 0 && (
+        <Card>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-navy-900 dark:text-white">Precios de mercado</h2>
+              <p className="text-sm text-navy-500 dark:text-zinc-400">
+                Busca precios reales en proveedores y compara con los estimados actuales.
+              </p>
+            </div>
+            <button
+              onClick={handleRefreshMarketPrices}
+              disabled={isRefreshingPrices}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition ${
+                isRefreshingPrices
+                  ? "bg-gray-200 text-gray-500 cursor-wait dark:bg-zinc-700 dark:text-zinc-500"
+                  : "bg-brand-green text-navy-900 hover:bg-brand-green/90 shadow-sm"
+              }`}
+            >
+              {isRefreshingPrices ? (
+                <>
+                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Buscando precios...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Actualizar precios de mercado
+                </>
+              )}
+            </button>
+          </div>
+
+          {priceRefreshResult && (
+            <div className={`mt-4 p-3 rounded-lg border text-sm ${
+              priceRefreshResult.ok
+                ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-900/30 text-green-700 dark:text-green-400"
+                : "bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30 text-amber-700 dark:text-amber-400"
+            }`}>
+              <p className="font-medium">{priceRefreshResult.message}</p>
+              {priceRefreshResult.summary && (
+                <div className="mt-2 flex flex-wrap gap-3 text-xs">
+                  <span className="px-2 py-0.5 rounded bg-white dark:bg-zinc-800 border border-current/10">
+                    Total: {priceRefreshResult.summary.total}
+                  </span>
+                  {priceRefreshResult.summary.fromWebSearch > 0 && (
+                    <span className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400">
+                      Web: {priceRefreshResult.summary.fromWebSearch}
+                    </span>
+                  )}
+                  {priceRefreshResult.summary.fromCache > 0 && (
+                    <span className="px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400">
+                      Cache: {priceRefreshResult.summary.fromCache}
+                    </span>
+                  )}
+                  {priceRefreshResult.summary.estimated > 0 && (
+                    <span className="px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">
+                      Estimados: {priceRefreshResult.summary.estimated}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* PDF Export section - visible in last step */}
       <Card>
