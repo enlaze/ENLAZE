@@ -391,3 +391,243 @@ EDIT  AGENT_AUDIT.md                              — esta sección
 4. **Mover `buildSpanishRetailCalendar` a `Fetch Shared Sources`** para evitar
    la duplicación entre `Run User Modules` y `Build Claude Prompt`. Es viable
    pero implica reordenar dependencias del workflow; lo dejo señalado.
+
+---
+
+# Bloque 3 — Especialización por sector — 2026-05-23
+
+Aplicación de `BRIEF_CLAUDE_CODE_AGENT_SECTOR.md` + ADDENDUM. Objetivo:
+que el agente diario deje de ser genérico y razone como un experto del
+subsector real del negocio (peluquería ≠ hostelería ≠ taller).
+
+## TL;DR
+
+| Pieza | Estado |
+| --- | --- |
+| `lib/agent/sector-intel.ts` con perfiles por sector | ✅ Creado |
+| `lib/sectors.ts` lista compartida onboarding ↔ Ajustes | ✅ Creado |
+| `business_sector` deja de colapsar a `comercio_local` | ✅ Hecho |
+| `/api/agent/config` expone `agent_persona_prompt`, `agent_name`, `sector_intel` | ✅ Hecho |
+| `/api/agent/news` (Google News RSS + Haiku opcional) | ✅ Creado, `200` siempre |
+| Ajustes → Sector edita y muestra el subsector granular | ✅ Hecho |
+| `sector-context` deriva de `profiles.business_sector` | ✅ Hecho |
+| `npx tsc --noEmit` y `npm run build` | ✅ limpios |
+
+## Decisiones de diseño aplicadas
+
+### Única fuente de verdad = `profiles.business_sector`
+
+Antes había dos: `profiles.business_sector` (granular, lo guardaba el
+onboarding) y `fiscal_settings.sector_key` (coarse, lo editaba Ajustes →
+Sector). Como Ajustes solo tocaba el segundo, el subsector quedaba
+escondido y el agente nunca llegaba a usarlo.
+
+Ahora:
+- Ajustes → Sector escribe en `profiles.business_sector` (granular) y
+  además sincroniza `fiscal_settings.sector_key` con su mapeo coarse
+  (`construccion` / `comercio` / `servicios`) para no romper el motor de
+  presupuestos.
+- `lib/sector-context.tsx::loadConfig` lee primero `profiles.business_sector`;
+  sólo cae a `fiscal_settings.sector_key` si el primero está vacío.
+- `sector_config` (tabla coarse) sigue usándose para terminología y
+  módulos visibles — se busca por la versión coarse mapeada.
+
+### Taxonomía y mapeos
+
+`lib/sectors.ts::SECTOR_OPTIONS` es la lista canónica. Sus `id` coinciden
+1:1 con las claves de `sectorConfigs` en `lib/agent-prompts.ts`:
+
+```
+construccion · legal · hosteleria · salud · comercio · automocion ·
+estetica · educacion · tecnologia · eventos · otro
+```
+
+`normalizeSectorId(value)` y `normalizeBusinessSectorKey(value)`
+(en `lib/sectors.ts` y `lib/agent-prompts.ts` respectivamente) absorben
+alias históricos: `comercio_local` / `retail` → `comercio`, `peluqueria`
+/ `belleza` → `estetica`, `restaurante` / `bar` / `cafeteria` →
+`hosteleria`. Lo demás cae a `otro`.
+
+Para el motor de presupuestos / banco de precios:
+`lib/sector-config.ts::normalizeSector` mapea `construccion` →
+`construccion` y todo lo demás a `comercio_local`. Esto es un detalle
+del wizard de presupuestos, no del agente — el agente diario sigue
+viendo la clave granular vía `business_sector`.
+
+### Perfiles de inteligencia (`lib/agent/sector-intel.ts`)
+
+`SECTOR_INTEL` indexa por `sector_key` y contiene, para cada subsector,
+material editorial concreto para España:
+
+- `news_queries`: queries Google News RSS específicas. `{ciudad}` se
+  interpola server-side con `profiles.city` antes de salir hacia n8n /
+  el endpoint de noticias.
+- `news_max_items`: 4–5.
+- `kpis_focus`: las cifras que el agente debe destacar para ese
+  sector (food cost % en hostelería, rebooking % en peluquería, ITV en
+  automoción…).
+- `seasonal_focus`: ventanas estacionales propias (terrazas de verano,
+  cenas de empresa, temporada de bodas, revisión pre-vacaciones…) con
+  meses 1–12 y nota accionable.
+- `campaign_archetypes`: arquetipos de campaña reales del sector
+  (happy hour en franja valle, bono prepago, paquete novia, revisión
+  pre-vacaciones, escaparate temático…). NADA de "haz una promo".
+- `regulatory_notes`: recordatorios operativos (APPCC, alérgenos,
+  gestión de residuos químicos en estética, RGPD fotos antes/después,
+  garantía legal de reparación en automoción…).
+- `supplier_types`: tipos de proveedor habituales (ayuda a futuras
+  categorizaciones de Gmail y sugerencias de compras).
+
+Cubierto con calidad: `hosteleria`, `estetica`, `comercio`, `salud`,
+`automocion` + un `default` para `otro` / sin sector. Los otros
+sectores existentes en `sectorConfigs` (legal, construccion,
+educacion, tecnologia, eventos) caen al `default` por ahora; añadir
+perfiles propios es una línea por sector cuando convenga.
+
+### Endpoint `/api/agent/config`
+
+Sigue devolviendo lo que ya devolvía. Añade:
+
+- `sector` ahora es el resultado de `normalizeBusinessSectorKey` (clave
+  válida de `sectorConfigs`), no `business_sector || "comercio_local"`.
+- `sector_raw`: lo que hay literalmente en BBDD (para debug).
+- `agent_name` y `agent_persona_prompt`: la persona detallada (ej. "Eres
+  un consultor experto en hostelería con 20 años…") en lugar de prosa
+  genérica.
+- `sector_intel`: `SectorIntelProfile` con `news_queries` ya
+  interpoladas con `profiles.city`. n8n no replica lógica de sector.
+
+### Endpoint nuevo `/api/agent/news`
+
+`GET /api/agent/news?user_id=<uuid>[&write=1]`. Protegido por
+`Bearer AGENT_API_KEY`. Flujo:
+
+1. Lee `profiles.business_sector` + `city`, resuelve el perfil con
+   `getSectorIntel`, interpola queries con `resolveNewsQueries`.
+2. Para cada query, fetch a `https://news.google.com/rss/search?q=…&hl=es&gl=ES&ceid=ES:es`
+   (sin API key). Parseo de RSS con regex (sin dependencias nuevas).
+   Per-query timeout 2200 ms; deadline global 7500 ms para asegurar
+   <8 s.
+3. Dedup por URL canonicalizada + título (`slice(0,80).toLowerCase()`),
+   orden por `pubDate` desc, recorte a `news_max_items`.
+4. Si hay `ANTHROPIC_API_KEY`, llamada única a
+   `claude-haiku-4-5-20251001` con system prompt en castellano:
+   "explica en ≤25 palabras por qué importa cada titular a un negocio
+   del sector X en {ciudad}". JSON `{items:[{idx,relevance}]}`. Si
+   falla, se sigue sin `why_relevant` (no bloquea).
+5. Si `write=1`, escribe en `agent_news` con idempotencia: se filtran
+   las URLs ya insertadas para el mismo usuario en el día UTC. Campos
+   mapeados al esquema que ya espera `/api/agent/ingest`:
+   `user_id, title, summary (=why_relevant), source, url,
+   published_date, category (=sector_key), relevance=5, tags=[sector]`.
+
+Ante cualquier error devuelve `200 { ok:true, news: [] }` con `error`
+en el body. Nunca 500. Logs sólo metadata: `[agent/news] user=… sector=…
+queries=… items=… written=… took=…ms`.
+
+### Reglas para el `Build Claude Prompt` de n8n (a aplicar en el workflow)
+
+El brief pide reescribir el system prompt para que use la persona y
+respete el sector. Como editar el JSON enorme de n8n vivo es un cambio
+operativo, dejamos el contrato listo desde el código:
+
+- `/api/agent/config` ya devuelve `agent_persona_prompt`, `agent_name`
+  y `sector_intel` (con `kpis_focus`, `seasonal_focus`,
+  `campaign_archetypes`, `regulatory_notes`, `supplier_types`,
+  `news_queries`).
+- `/api/agent/news?user_id=&write=1` se puede llamar desde un nodo
+  nuevo `Fetch Sector News` después del `Run User Modules`. Como ya
+  escribe en `agent_news`, el `ingest` no necesita re-mandar noticias.
+  El payload que llega a `Build Claude Prompt` debería incorporar
+  `news` (las recién obtenidas) y `sector_intel` (de
+  `/api/agent/config`).
+- Reglas a inyectar en el system prompt del `Build Claude Prompt`
+  (texto íntegro a pegar):
+
+```
+ESPECIALIZACIÓN POR SECTOR (OBLIGATORIO):
+- Eres el agente del sector {agent_name}. Razona y prioriza como un
+  experto de ESE sector.
+- Usa sector_intel.kpis_focus para decidir qué cifras destacar.
+- Si hay news relevantes, cita 1-2 por título y explica en una frase
+  por qué importan al negocio (usa why_relevant si está).
+- Aplica seasonal_focus del sector (no sólo el calendario retail
+  genérico).
+- Cuando toque, recuerda un punto de regulatory_notes (p.ej. APPCC en
+  hostelería) sin sonar a abogado.
+- Propón campañas inspiradas en campaign_archetypes del sector,
+  adaptadas a los datos reales del negocio. NADA de campañas genéricas
+  tipo "haz una promo".
+- NUNCA inventes noticias, cifras ni normativas que no estén en el ctx.
+```
+
+> Estos dos cambios (`Fetch Sector News` + reescritura del system
+> prompt) son los únicos que quedan en el workflow JSON y son
+> 100 % editables desde la UI de n8n sin tocar código TS.
+
+### Onboarding ↔ Ajustes
+
+- `app/onboarding/page.tsx` importa `SECTOR_OPTIONS` y guarda la `id`
+  exacta en `profiles.business_sector`.
+- `app/dashboard/settings/sector/page.tsx` también importa
+  `SECTOR_OPTIONS` (no la tabla `sector_config`), preselecciona desde
+  `profiles.business_sector` y guarda en `profiles.business_sector`.
+  Sincroniza `fiscal_settings.sector_key` con su coarse para no
+  romper el wizard de presupuestos.
+- `sector-context` lee primero `profiles.business_sector` y cae a
+  `fiscal_settings.sector_key` sólo si está vacío. La búsqueda en
+  `sector_config` se hace con la versión coarse mapeada
+  (`construccion` / `comercio` / `servicios`).
+
+## Casos donde puede fallar (documentado)
+
+- **`business_sector = "otro"` o un free-text no canónico**: el agente
+  cae al perfil `default`. Útil pero genérico. Recomendar al usuario
+  en Ajustes elegir el subsector más cercano.
+- **Sin `city` en el perfil**: `resolveNewsQueries` interpola "España"
+  y las queries quedan más genéricas. El briefing pierde regional.
+- **Google News RSS caído / corta conexión**: el endpoint devuelve
+  `news: []` con `error` en el body. El briefing diario funciona,
+  pero sin noticias frescas para ese día.
+- **Haiku falla / no hay `ANTHROPIC_API_KEY`**: las noticias llegan
+  sin `why_relevant`. Aceptable: el briefing puede explicar por sí
+  solo.
+- **Perfiles existentes con `business_sector = "comercio_local"` o
+  vacío**: en el dashboard parecerán "Comercio" o caerán al `default`.
+  No se ejecuta migración automática para no sobrescribir un
+  `business_sector` ya elegido por el usuario; el usuario lo arregla
+  desde Ajustes → Sector en un click.
+- **Sectores `legal`/`construccion`/`educacion`/`tecnologia`/`eventos`
+  no tienen perfil propio todavía**: `getSectorIntel` los lleva al
+  `default`. La persona detallada de `sectorConfigs` sí está activa.
+
+## Verificación local
+
+```bash
+npx tsc --noEmit -p tsconfig.json   # ✅ limpio
+npm run build                       # ✅ limpio
+```
+
+## Archivos tocados (bloque 3)
+
+```
+NEW   lib/agent/sector-intel.ts        — registro SECTOR_INTEL + helpers
+NEW   lib/sectors.ts                   — SECTOR_OPTIONS compartido + normalize
+NEW   app/api/agent/news/route.ts      — Google News RSS + Haiku opcional
+EDIT  lib/agent-prompts.ts             — getSectorConfig con alias; nueva normalizeBusinessSectorKey
+EDIT  lib/sector-config.ts             — normalizeSector: sólo construccion permanece; el resto cae a comercio_local
+EDIT  lib/sector-context.tsx           — sectorKey deriva de profiles.business_sector; lookup coarse en sector_config
+EDIT  app/api/agent/config/route.ts    — devuelve agent_persona_prompt + agent_name + sector_intel
+EDIT  app/onboarding/page.tsx          — consume SECTOR_OPTIONS
+EDIT  app/dashboard/settings/sector/page.tsx — edita business_sector, mismas opciones que onboarding
+EDIT  AGENT_AUDIT.md                   — esta sección
+```
+
+## Pendientes (n8n, fuera de TS)
+
+1. Añadir un nodo `Fetch Sector News` en `n8n-workflow-comercio-local-v6.3.json`
+   que llame `/api/agent/news?user_id=...&write=1` y guarde el array en el
+   payload (o confíe en que el endpoint ya escribió en `agent_news`).
+2. Reemplazar el system prompt inline de `Build Claude Prompt` por uno que
+   parta de `agent_persona_prompt`, inyecte `sector_intel` y `news` y
+   añada el bloque "ESPECIALIZACIÓN POR SECTOR" que dejamos arriba.

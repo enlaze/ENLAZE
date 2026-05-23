@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getSectorConfig, normalizeBusinessSectorKey } from "@/lib/agent-prompts";
+import { getSectorIntel, resolveNewsQueries } from "@/lib/agent/sector-intel";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey =
@@ -112,6 +114,22 @@ export async function GET(req: NextRequest) {
 
     const modulesEnabled = profile.agent_modules_enabled || {};
 
+    // Resolve sector intel (persona + intelligence profile)
+    const sectorKey = normalizeBusinessSectorKey(profile.business_sector);
+    const personaConfig = getSectorConfig(sectorKey);
+    const intelProfile = getSectorIntel(sectorKey);
+    const newsQueries = resolveNewsQueries(intelProfile, profile.city);
+    const resolvedIntel = {
+      sector_key: intelProfile.sector_key,
+      news_queries: newsQueries,
+      news_max_items: intelProfile.news_max_items,
+      kpis_focus: intelProfile.kpis_focus,
+      seasonal_focus: intelProfile.seasonal_focus,
+      campaign_archetypes: intelProfile.campaign_archetypes,
+      regulatory_notes: intelProfile.regulatory_notes,
+      supplier_types: intelProfile.supplier_types,
+    };
+
     // Update agent_status to running
     await supabase
       .from("profiles")
@@ -125,7 +143,8 @@ export async function GET(req: NextRequest) {
       business_name: profile.business_name || profile.company_name || "Mi Negocio",
       business_type: profile.business_type || "comercio",
       business_type_normalized: bizType,
-      sector: profile.business_sector || "comercio_local",
+      sector: sectorKey,
+      sector_raw: profile.business_sector || null,
       city: profile.city || "",
       google_place_id: profile.google_place_id || null,
       coordinates: profile.coordinates || null,
@@ -139,6 +158,10 @@ export async function GET(req: NextRequest) {
       google_calendar_connected: connMap["google_calendar"] || false,
       google_business_connected: connMap["google_business"] || Boolean(profile.google_place_id),
       agent_modules_enabled: modulesEnabled,
+      // Sector persona + intelligence (única fuente de verdad para n8n)
+      agent_name: personaConfig.agent_name,
+      agent_persona_prompt: personaConfig.prompt,
+      sector_intel: resolvedIntel,
       // Base URL for reference (auth is injected by n8n Set node, NOT here)
       ENLAZE_BASE_URL: resolveBaseUrl(),
     });

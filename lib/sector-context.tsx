@@ -2,6 +2,23 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { createClient } from "@/lib/supabase-browser";
+import { normalizeSectorId } from "@/lib/sectors";
+
+/**
+ * Maps a granular subsector id (profiles.business_sector) to the coarse key
+ * used by the `sector_config` table (construccion / servicios / comercio / instalaciones).
+ * profiles.business_sector is the source of truth; this is only for terminology/UI lookup.
+ */
+function granularToCoarseConfigKey(granular: string): string {
+  switch (granular) {
+    case "construccion":
+      return "construccion";
+    case "comercio":
+      return "comercio";
+    default:
+      return "servicios";
+  }
+}
 
 /* ── Types ────────────────────────────────────────────────────────── */
 
@@ -128,27 +145,39 @@ export function SectorProvider({ children }: { children: ReactNode }) {
   const loadConfig = async () => {
     setLoading(true);
 
-    // 1. Get user's selected sector from fiscal_settings
+    // 1. Única fuente de verdad: profiles.business_sector (granular).
+    //    Fallback a fiscal_settings.sector_key sólo si el granular está vacío.
     const { data: { user } } = await supabase.auth.getUser();
-    let key = "construccion";
+    let granular = "construccion";
 
     if (user) {
-      const { data: fiscal } = await supabase
-        .from("fiscal_settings")
-        .select("sector_key")
-        .eq("user_id", user.id)
-        .single();
-      if (fiscal?.sector_key) key = fiscal.sector_key;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("business_sector")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (profile?.business_sector) {
+        granular = normalizeSectorId(profile.business_sector);
+      } else {
+        const { data: fiscal } = await supabase
+          .from("fiscal_settings")
+          .select("sector_key")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (fiscal?.sector_key) granular = fiscal.sector_key;
+      }
     }
 
-    setSectorKey(key);
+    setSectorKey(granular);
 
-    // 2. Load the sector config
+    // 2. sector_config sólo conoce las 4 claves coarse — mapeamos sólo para
+    //    cargar terminología/módulos. El sectorKey expuesto sigue siendo el granular.
+    const coarse = granularToCoarseConfigKey(granular);
     const { data } = await supabase
       .from("sector_config")
       .select("*")
-      .eq("sector_key", key)
-      .single();
+      .eq("sector_key", coarse)
+      .maybeSingle();
 
     if (data) {
       setConfig(data as SectorConfig);

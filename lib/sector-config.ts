@@ -10,10 +10,13 @@ export type SectorConfig = {
 };
 
 export function normalizeSector(value?: string | null): BusinessSector {
-  if (value === "comercio_local" || value === "comercio" || value === "retail") {
-    return "comercio_local";
-  }
-  return "construccion";
+  const v = (value || "").toLowerCase().trim();
+  // Construction sector is the only one with the construccion price bank
+  if (v === "construccion") return "construccion";
+  // Anything else falls under comercio_local for price-bank / module-layout purposes.
+  // The granular subsector (hosteleria, estetica, salud, etc.) still drives the
+  // agent persona via lib/agent-prompts.ts; this only governs the budget engine.
+  return "comercio_local";
 }
 
 export function getSectorConfig(value?: string | null): SectorConfig {

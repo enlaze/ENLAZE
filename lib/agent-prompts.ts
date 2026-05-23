@@ -396,13 +396,40 @@ Cada partida debe ser específica y cuantificable.`,
   },
 };
 
+/**
+ * Devuelve la persona detallada del agente para una clave de subsector.
+ * IMPORTANTE: si la clave es una de `sectorConfigs` (`hosteleria`, `estetica`,
+ * `salud`, etc.), se devuelve TAL CUAL — no se colapsa a "comercio". Solo
+ * `comercio_local`/`retail` (alias históricos) y valores libres caen a
+ * `comercio`/`otro` respectivamente.
+ */
 export function getSectorConfig(sector: string): SectorConfig {
-  if (sectorConfigs[sector]) return sectorConfigs[sector];
-  // Handle aliases: "comercio_local" and "retail" → use "comercio" config
-  if (sector === "comercio_local" || sector === "retail") {
+  const key = (sector || "").toLowerCase().trim();
+  if (sectorConfigs[key]) return sectorConfigs[key];
+  if (key === "comercio_local" || key === "retail") {
     return sectorConfigs["comercio"];
   }
+  if (key === "peluqueria" || key === "belleza") {
+    return sectorConfigs["estetica"];
+  }
+  if (key === "restaurante" || key === "bar" || key === "cafeteria") {
+    return sectorConfigs["hosteleria"];
+  }
   return sectorConfigs["otro"];
+}
+
+/**
+ * Normaliza un valor crudo de `profiles.business_sector` a una clave válida
+ * de `sectorConfigs`. Útil para el agente diario, que necesita preservar el
+ * subsector granular hasta el prompt.
+ */
+export function normalizeBusinessSectorKey(value: string | null | undefined): string {
+  const key = (value || "").toLowerCase().trim();
+  if (sectorConfigs[key]) return key;
+  if (key === "comercio_local" || key === "retail") return "comercio";
+  if (key === "peluqueria" || key === "belleza") return "estetica";
+  if (key === "restaurante" || key === "bar" || key === "cafeteria") return "hosteleria";
+  return "otro";
 }
 
 /**

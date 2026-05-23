@@ -8,20 +8,9 @@ import {
   recordMarketingConsent,
 } from "@/lib/activity-log";
 import { useToast } from "@/components/ui/toast";
+import { SECTOR_OPTIONS } from "@/lib/sectors";
 
-const sectors = [
-  { id: "construccion", icon: "🏗️", name: "Construcción y Reformas", desc: "Reformas, obra nueva, rehabilitación, instalaciones" },
-  { id: "legal", icon: "⚖️", name: "Legal y Abogacía", desc: "Asesoría jurídica, gestión documental, procedimientos" },
-  { id: "hosteleria", icon: "🍽️", name: "Hostelería", desc: "Bares, restaurantes, cafeterías, catering" },
-  { id: "salud", icon: "🏥", name: "Salud y Bienestar", desc: "Clínicas, fisioterapia, estética, psicología" },
-  { id: "comercio", icon: "🛍️", name: "Comercio y Retail", desc: "Tiendas, comercio local, e-commerce" },
-  { id: "automocion", icon: "🔧", name: "Automoción", desc: "Talleres mecánicos, chapa y pintura, recambios" },
-  { id: "estetica", icon: "💇", name: "Peluquería y Estética", desc: "Peluquerías, centros de estética, spa" },
-  { id: "educacion", icon: "📚", name: "Educación y Formación", desc: "Academias, formación, tutorías, coaching" },
-  { id: "tecnologia", icon: "💻", name: "Tecnología y Digital", desc: "Desarrollo, IT, consultoría tech, diseño" },
-  { id: "eventos", icon: "📸", name: "Eventos y Fotografía", desc: "Fotografía, vídeo, organización de eventos" },
-  { id: "otro", icon: "🏢", name: "Otro sector", desc: "Mi sector no está en la lista" },
-];
+const sectors = SECTOR_OPTIONS;
 
 const TERMS_VERSION = "v1.0";
 const PRIVACY_VERSION = "v1.0";
