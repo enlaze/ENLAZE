@@ -458,12 +458,15 @@ export function BudgetGenerateProvider({
         const activeId = newProviderOptions[0].id;
         const visibleMaterials = realMaterials.filter(m => m.provider_id === activeId);
 
+        // allFetchedMaterials es el snapshot base inmutable.
+        // Siempre se clona para evitar que mutaciones en `materials`
+        // contaminen el array de referencia.
         setState(prev => ({
           ...prev,
           providerOptions: newProviderOptions,
           selectedProviderId: activeId,
-          allFetchedMaterials: realMaterials,
-          materials: visibleMaterials,
+          allFetchedMaterials: realMaterials.map(m => ({ ...m })),
+          materials: visibleMaterials.map(m => ({ ...m })),
           isRealDataMode: true
         }));
 
@@ -476,21 +479,10 @@ export function BudgetGenerateProvider({
     return () => { mounted = false; };
   }, [state.sector]);
 
-  // Update visible materials when provider changes
-  useEffect(() => {
-    if (!state.selectedProviderId) return;
-    // NEVER overwrite AI-generated materials with provider filtering
-    if (state.materialsFromAI) return;
-
-    if (state.isRealDataMode && state.allFetchedMaterials.length > 0) {
-      const newVisible = state.allFetchedMaterials.filter(m => m.provider_id === state.selectedProviderId);
-      // Only update if provider actually changed
-      if (state.materials.length === 0 || state.materials[0]?.provider_id !== state.selectedProviderId) {
-        setState(prev => ({ ...prev, materials: newVisible }));
-      }
-    }
-    // No more mock logic — materials come from AI or fallback
-  }, [state.selectedProviderId, state.isRealDataMode, state.allFetchedMaterials]);
+  // El filtrado por proveedor ya no se hace en useEffect, sino dentro de
+  // setSelectedProvider para evitar race conditions y recalcular siempre
+  // desde snapshot base (allFetchedMaterials). Esto garantiza reversibilidad
+  // A → B → A sin perder ni duplicar materiales.
 
   // Calculate totals whenever partidas, materials or margin change
   useEffect(() => {
@@ -590,8 +582,40 @@ export function BudgetGenerateProvider({
     setState(prev => ({ ...prev, partidas: prev.partidas.filter(p => p.id !== id) }));
   };
 
+  /**
+   * Selecciona un proveedor y recalcula los materiales visibles desde el
+   * snapshot base (allFetchedMaterials). Garantiza reversibilidad A → B → A:
+   * cambiar de proveedor y volver siempre restaura los materiales originales.
+   *
+   * - Si allFetchedMaterials está vacío, solo guarda selectedProviderId.
+   * - Si materialsFromAI=true, solo guarda selectedProviderId (los materiales
+   *   de IA no se filtran por proveedor).
+   * - Si es real-data, filtra desde allFetchedMaterials por provider_id === id
+   *   con deep clone para no mutar el snapshot base.
+   */
   const setSelectedProvider = (id: string) => {
-    setState(prev => ({ ...prev, selectedProviderId: id }));
+    setState(prev => {
+      // Caso 1: sin materiales reales cargados
+      if (prev.allFetchedMaterials.length === 0) {
+        return { ...prev, selectedProviderId: id };
+      }
+
+      // Caso 2: materiales provienen de IA — no filtrar por proveedor
+      if (prev.materialsFromAI) {
+        return { ...prev, selectedProviderId: id };
+      }
+
+      // Caso 3: real-data — filtrar desde snapshot base (deep clone)
+      const filtered = prev.allFetchedMaterials
+        .filter(m => m.provider_id === id)
+        .map(m => ({ ...m }));
+
+      return {
+        ...prev,
+        selectedProviderId: id,
+        materials: filtered,
+      };
+    });
   };
 
   const updateMaterial = (id: string, updates: Partial<Material>) => {
