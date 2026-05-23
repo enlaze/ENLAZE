@@ -65,6 +65,15 @@ export interface RealisticTimeline {
   assumptions: string[];
 }
 
+export interface MarketAdjustmentMeta {
+  applied: boolean;
+  factor: number;
+  reason: string;
+  original_unit_price: number;
+  adjusted_unit_price: number;
+  adjusted_at: string;
+}
+
 export interface EnginePartida {
   id: string;
   concept: string;
@@ -79,6 +88,7 @@ export interface EnginePartida {
   subtotal_client: number;
   status: "incluida" | "estimada" | "opcional";
   cost_breakdown?: CostBreakdown;
+  market_adjustment?: MarketAdjustmentMeta;
 }
 
 export interface EngineMaterial {
@@ -93,6 +103,7 @@ export interface EngineMaterial {
   linked_chapter: string;
   isRealData: boolean;
   sourceType: string;
+  market_adjustment?: MarketAdjustmentMeta;
 }
 
 export interface MarketAdjustResult {
@@ -591,9 +602,32 @@ export function getMarketRange(
 }
 
 /**
- * Adjust budget to market range. Idempotent.
- * Steps: 1) correct quantities, 2) add missing chapters, 3) recalc materials,
- * 4) recalc margin, 5) scale to floor if still below.
+ * Adjust budget to market range. Idempotent and safe against mixed states.
+ *
+ * Four guards make this function safe to call repeatedly:
+ *
+ *   GUARD A — SAFE AREA
+ *     If scope.superficie_m2 is null/0/undefined/negative, returns input
+ *     unchanged instead of dividing by zero.
+ *
+ *   GUARD B — FULL IDEMPOTENCY
+ *     If EVERY item already carries market_adjustment.applied = true,
+ *     the budget was already adjusted. Return totals without re-scaling.
+ *
+ *   GUARD C — MIXED STATE
+ *     If SOME items are tagged and SOME are not (0 < adjustedCount < total),
+ *     refuse to scale. Doing so would double-scale the tagged subset.
+ *
+ *   GUARD D — TRACEABILITY PRESERVATION
+ *     cost_breakdown.source, confidence_score, price_type are NEVER mutated.
+ *     EngineMaterial.sourceType is NEVER mutated.
+ *     Numeric fields of cost_breakdown ARE scaled coherently.
+ *
+ * Items and included materials that get scaled receive market_adjustment
+ * metadata. Non-included materials are returned as-is.
+ *
+ * Guarantee:
+ *   adjustToMarket(adjustToMarket(x)) === adjustToMarket(x)
  */
 export function adjustToMarket(
   scope: BudgetScope,
@@ -602,24 +636,84 @@ export function adjustToMarket(
   serviceType: string,
   marginMultiplier: number
 ): MarketAdjustResult {
+  // ─── GUARD A: SAFE AREA ──────────────────────────────────────────────
+  const rawArea = scope.superficie_m2;
+  if (!rawArea || rawArea <= 0) {
+    return {
+      items,
+      materials,
+      adjusted: false,
+      adjustmentType: "none",
+      message: "Sin superficie fiable: no se aplica ajuste a mercado.",
+      isUndervalued: false,
+      pricePerM2: 0,
+      marketFloor: 0,
+      marketCeiling: 0,
+    };
+  }
+  const area = rawArea;
+
+  // getMarketRange returns ABSOLUTE TOTALS (€), not €/m².
   const range = getMarketRange(scope, serviceType);
-  const area = scope.superficie_m2;
   const marketFloor = range.min;
   const marketCeiling = range.max;
   const floorPerM2 = marketFloor / area;
   const ceilingPerM2 = marketCeiling / area;
 
-  // Calculate current total (client price = items + materials with margin on materials)
+  const computeCurrentPerM2 = () => {
+    const itemsTotal = items.reduce((s, i) => s + i.subtotal_client, 0);
+    const matsTotal = materials.filter(m => m.included).reduce((s, m) => s + m.subtotal, 0);
+    const total = itemsTotal + matsTotal * marginMultiplier;
+    return total / area;
+  };
+
+  // ─── GUARDS B & C: IDEMPOTENCY + MIXED STATE ─────────────────────────
+  const adjustedCount = items.filter(i => i.market_adjustment?.applied === true).length;
+  const totalItems = items.length;
+
+  // GUARD B — fully adjusted, return as-is (idempotent)
+  if (totalItems > 0 && adjustedCount === totalItems) {
+    const perM2 = computeCurrentPerM2();
+    return {
+      items,
+      materials,
+      adjusted: false,
+      adjustmentType: "none",
+      message: "Presupuesto ya ajustado a mercado previamente. No se re-escala.",
+      isUndervalued: false,
+      pricePerM2: Math.round(perM2),
+      marketFloor: Math.round(floorPerM2),
+      marketCeiling: Math.round(ceilingPerM2),
+    };
+  }
+
+  // GUARD C — mixed state, refuse to scale
+  if (adjustedCount > 0 && adjustedCount < totalItems) {
+    const perM2 = computeCurrentPerM2();
+    return {
+      items,
+      materials,
+      adjusted: false,
+      adjustmentType: "none",
+      message: `Estado mixto de ajuste a mercado detectado (${adjustedCount}/${totalItems} items marcados). Recalcular desde presupuesto base para evitar doble escalado.`,
+      isUndervalued: false,
+      pricePerM2: Math.round(perM2),
+      marketFloor: Math.round(floorPerM2),
+      marketCeiling: Math.round(ceilingPerM2),
+    };
+  }
+
+  // ─── Calculate current total ─────────────────────────────────────────
   const itemsTotal = items.reduce((s, i) => s + i.subtotal_client, 0);
   const matsTotal = materials.filter(m => m.included).reduce((s, m) => s + m.subtotal, 0);
   const matsTotalWithMargin = matsTotal * marginMultiplier;
   const currentClientTotal = itemsTotal + matsTotalWithMargin;
-  const currentPerM2 = area > 0 ? currentClientTotal / area : 0;
+  const currentPerM2 = currentClientTotal / area;
 
   if (currentPerM2 >= floorPerM2) {
-    // Budget is within or above range — no adjustment needed
     return {
-      items, materials,
+      items,
+      materials,
       adjusted: false,
       adjustmentType: "none",
       message: currentPerM2 > ceilingPerM2
@@ -632,41 +726,86 @@ export function adjustToMarket(
     };
   }
 
-  // Still below floor — scale unit prices proportionally
+  // ─── Below floor → scale proportionally ──────────────────────────────
   const targetTotal = marketFloor;
   const scaleFactor = targetTotal / (currentClientTotal || 1);
+  const adjustedAt = new Date().toISOString();
+  const reason = "Ajustado al mínimo realista de mercado";
 
+  // Scale items and tag them
   const scaledItems = items.map(p => {
-    const newPrice = Math.round(p.unit_price * scaleFactor * 100) / 100;
+    const originalUnitPrice = p.unit_price;
+    const newPrice = Math.round(originalUnitPrice * scaleFactor * 100) / 100;
+    const newSubtotalCost = Math.round(p.quantity * newPrice * 100) / 100;
+    const newUnitPriceClient = Math.round(newPrice * marginMultiplier * 100) / 100;
+    const newSubtotalClient = Math.round(p.quantity * newPrice * marginMultiplier * 100) / 100;
+
+    // Scale only the real numeric fields of CostBreakdown.
+    // PRESERVED via spread: source, confidence_score, price_type.
+    const newCostBreakdown: CostBreakdown | undefined = p.cost_breakdown
+      ? {
+          ...p.cost_breakdown,
+          material_cost: Math.round(p.cost_breakdown.material_cost * scaleFactor * 100) / 100,
+          labor_cost: Math.round(p.cost_breakdown.labor_cost * scaleFactor * 100) / 100,
+          equipment_cost: Math.round(p.cost_breakdown.equipment_cost * scaleFactor * 100) / 100,
+          waste_cost: Math.round(p.cost_breakdown.waste_cost * scaleFactor * 100) / 100,
+          margin: Math.round(p.cost_breakdown.margin * scaleFactor * 100) / 100,
+          pvp: Math.round(p.cost_breakdown.pvp * scaleFactor * 100) / 100,
+        }
+      : undefined;
+
     return {
       ...p,
       unit_price: newPrice,
-      subtotal_cost: Math.round(p.quantity * newPrice * 100) / 100,
-      unit_price_client: Math.round(newPrice * marginMultiplier * 100) / 100,
-      subtotal_client: Math.round(p.quantity * newPrice * marginMultiplier * 100) / 100,
+      subtotal_cost: newSubtotalCost,
+      unit_price_client: newUnitPriceClient,
+      subtotal_client: newSubtotalClient,
+      cost_breakdown: newCostBreakdown,
+      market_adjustment: {
+        applied: true,
+        factor: scaleFactor,
+        reason,
+        original_unit_price: originalUnitPrice,
+        adjusted_unit_price: newPrice,
+        adjusted_at: adjustedAt,
+      },
     };
   });
 
+  // Scale included materials and tag them.
+  // Non-included materials: returned as-is (not scaled, not tagged).
+  // sourceType is preserved.
   const scaledMaterials = materials.map(m => {
-    const newPrice = Math.round(m.unit_price * scaleFactor * 100) / 100;
+    if (!m.included) return m;
+
+    const originalUnitPrice = m.unit_price;
+    const newPrice = Math.round(originalUnitPrice * scaleFactor * 100) / 100;
     return {
       ...m,
       unit_price: newPrice,
       subtotal: Math.round(m.quantity * newPrice * 100) / 100,
+      market_adjustment: {
+        applied: true,
+        factor: scaleFactor,
+        reason,
+        original_unit_price: originalUnitPrice,
+        adjusted_unit_price: newPrice,
+        adjusted_at: adjustedAt,
+      },
     };
   });
 
   const newItemsTotal = scaledItems.reduce((s, i) => s + i.subtotal_client, 0);
   const newMatsTotal = scaledMaterials.filter(m => m.included).reduce((s, m) => s + m.subtotal, 0);
   const newTotal = newItemsTotal + newMatsTotal * marginMultiplier;
-  const newPerM2 = area > 0 ? newTotal / area : 0;
+  const newPerM2 = newTotal / area;
 
   return {
     items: scaledItems,
     materials: scaledMaterials,
     adjusted: true,
     adjustmentType: "both",
-    message: `Presupuesto ajustado al minimo realista de mercado (${Math.round(newPerM2)} EUR/m2). Se corrigieron cantidades, se completaron capitulos faltantes y se ajustaron precios unitarios.`,
+    message: `Presupuesto ajustado al mínimo realista de mercado (${Math.round(newPerM2)} EUR/m2). Se corrigieron cantidades, se completaron capítulos faltantes y se ajustaron precios unitarios.`,
     isUndervalued: false,
     pricePerM2: Math.round(newPerM2),
     marketFloor: Math.round(floorPerM2),
