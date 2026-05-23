@@ -207,3 +207,36 @@ Confirma que Gmail está realmente conectado y trayendo datos, o no tendrás con
 2. La pestaña Bandeja del dashboard con correos reales clasificados.
 3. Un briefing de prueba que abra citando los correos críticos por nombre.
 4. La sección añadida a `AGENT_AUDIT.md`.
+
+---
+
+## ADDENDUM — Aprovechar el contexto de sector (ya implementado en el bloque 3)
+
+Desde que se escribió este brief se implementó la especialización por sector. Ahora
+`/api/agent/config` ya devuelve `agent_persona_prompt`, `agent_name` y `sector_intel`
+(ver `lib/agent/sector-intel.ts` y `AGENT_AUDIT.md`, "Bloque 3"). La clasificación de
+correos debe apoyarse en eso para acertar más con clientes/proveedores:
+
+1. **Heurística enriquecida con `supplier_types`:** `sector_intel.supplier_types` lista
+   los tipos de proveedor típicos del subsector (p.ej. en hostelería: "distribuidor de
+   alimentación/horeca", "bodega"; en estética: "distribuidor de producto profesional").
+   Úsalo como señal extra al categorizar `supplier`: si el remitente o el dominio casa
+   con esos tipos/marcas, sube la confianza de `category='supplier'`. Pásale a
+   `fetchGmailIntel` (o al clasificador) los `supplier_types` del usuario, igual que ya
+   se le pasan los emails de `clients` conocidos.
+
+2. **Haiku con persona de sector:** en la llamada batch a Haiku para los correos
+   ambiguos, incluye en el contexto de negocio el `agent_name`/sector y 1 frase del
+   `agent_persona_prompt`. Así Haiku clasifica "importante vs ruido" sabiendo que es,
+   p.ej., una peluquería (una confirmación de cita de cliente es crítica) y no un
+   bufete (donde lo crítico es un plazo procesal). No mandes el prompt entero — solo el
+   nombre del sector y una línea de contexto, para no inflar tokens.
+
+3. **Reutiliza la fuente de verdad:** el sector sale de `profiles.business_sector` vía
+   `/api/agent/config`. No reintroduzcas lógica de sector en el route de Gmail; consume
+   lo que ya devuelve config.
+
+**Criterio de aceptación añadido:**
+- [ ] La categorización de `supplier` usa `sector_intel.supplier_types` del usuario.
+- [ ] El batch de Haiku recibe el sector/persona del negocio como contexto.
+- [ ] No se duplica lógica de sector; se consume `/api/agent/config`.

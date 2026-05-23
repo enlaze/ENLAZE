@@ -529,6 +529,7 @@ function GmailIntelBlock({ data }: { data: any }) {
   const awaiting = (data.threads_awaiting_reply || []) as Array<{
     from_name: string; from_email: string; subject: string; hours_waiting: number;
     is_recurring_contact: boolean; category: string; priority_signal: string; snippet: string;
+    importance?: string; importance_reason?: string; classified_by?: string;
   }>;
   const invoices = (data.invoices_detected || []) as Array<{ supplier: string; amount: number | null; due_date: string | null; snippet: string }>;
   const meetings = (data.meeting_requests || []) as Array<{ from: string; proposed_dates: string[]; snippet: string }>;
@@ -541,6 +542,14 @@ function GmailIntelBlock({ data }: { data: any }) {
         <Stat label="Procesados" value={String(data.emails_processed ?? 0)} />
         <Stat label="Pendientes" value={String(awaiting.length)} />
         <Stat label="Ventana" value={`${data.fetched_range_days ?? "?"}d`} />
+      </div>
+
+      <div className="flex flex-wrap gap-3 text-[11px] text-navy-500 dark:text-zinc-400">
+        <span className="font-bold uppercase tracking-wider text-navy-400">Importancia</span>
+        <span>{(data.importance_counts || {}).critical ?? 0} crítico</span>
+        <span>{(data.importance_counts || {}).important ?? 0} importante</span>
+        <span>{(data.importance_counts || {}).normal ?? 0} normal</span>
+        <span>{(data.importance_counts || {}).noise ?? 0} ruido</span>
       </div>
 
       <details open>
@@ -556,8 +565,9 @@ function GmailIntelBlock({ data }: { data: any }) {
                 <p className="font-semibold">{t.from_name} <span className="text-navy-400 dark:text-zinc-500">&lt;{t.from_email}&gt;</span></p>
                 <p className="text-[12px] text-navy-600 dark:text-zinc-300 truncate">{t.subject}</p>
                 <p className="text-[11.5px] text-navy-400 dark:text-zinc-500 mt-0.5">
-                  {t.hours_waiting}h · {t.category} · prio={t.priority_signal}{t.is_recurring_contact ? " · recurrente" : ""}
+                  {t.hours_waiting}h · {t.category} · prio={t.priority_signal} · imp={t.importance ?? "?"}{t.classified_by === "haiku" ? " (IA)" : ""}{t.is_recurring_contact ? " · recurrente" : ""}
                 </p>
+                {t.importance_reason && <p className="text-[10.5px] text-navy-400 mt-0.5">{t.importance_reason}</p>}
                 <p className="text-[11px] italic text-navy-500 dark:text-zinc-400 mt-1 line-clamp-2">{t.snippet}</p>
               </li>
             ))}

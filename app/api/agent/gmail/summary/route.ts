@@ -8,6 +8,8 @@ import {
   GmailIntel,
   GmailStatus,
 } from "@/lib/agent/intelligence/gmail";
+import { normalizeBusinessSectorKey, getSectorConfig } from "@/lib/agent-prompts";
+import { getSectorIntel } from "@/lib/agent/sector-intel";
 
 async function syncModuleState(
   supabase: SupabaseClient,
@@ -135,7 +137,37 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const intel = await fetchGmailIntel(tokenInfo.token, tokenInfo.email ?? null);
+    // Known clients + sector context sharpen classification (see email-importance).
+    const { data: clientRows } = await supabase
+      .from("clients")
+      .select("email")
+      .eq("user_id", userId);
+    const knownClientEmails = (clientRows || [])
+      .map((c) => (c as { email: string | null }).email)
+      .filter((e): e is string => !!e);
+
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("business_sector, business_name")
+      .eq("id", userId)
+      .maybeSingle();
+    const sectorRow = prof as { business_sector?: string | null; business_name?: string | null } | null;
+    const sectorKey = normalizeBusinessSectorKey(sectorRow?.business_sector);
+    const persona = getSectorConfig(sectorKey);
+    const intelProfile = getSectorIntel(sectorKey);
+    const personaHint = (persona.prompt || "").split(/[.\n]/)[0].slice(0, 200);
+
+    const intel = await fetchGmailIntel(tokenInfo.token, tokenInfo.email ?? null, {
+      knownClientEmails,
+      supplierHints: intelProfile.supplier_types,
+      sectorContext: {
+        agent_name: persona.agent_name,
+        sector_key: sectorKey,
+        persona_hint: personaHint,
+        business_name: sectorRow?.business_name || undefined,
+      },
+      enableHaiku: true,
+    });
 
     await syncModuleState(supabase, userId, "gmail", {
       connected: intel.connected,

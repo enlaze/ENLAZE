@@ -631,3 +631,102 @@ EDIT  AGENT_AUDIT.md                   — esta sección
 2. Reemplazar el system prompt inline de `Build Claude Prompt` por uno que
    parta de `agent_persona_prompt`, inyecte `sector_intel` y `news` y
    añada el bloque "ESPECIALIZACIÓN POR SECTOR" que dejamos arriba.
+
+## Bloque 4 — Clasificación de correos por importancia + bandeja en el dashboard (2026-05-23)
+
+Implementa el brief `BRIEF_CLAUDE_CODE_EMAIL_CLASSIFICATION.md`. El agente ahora
+clasifica los correos entrantes por importancia y los muestra en una bandeja real
+dentro del dashboard (antes la página Emails solo mostraba correos salientes).
+
+### Motor de importancia
+
+Nuevo eje `importance: 'critical' | 'important' | 'normal' | 'noise'` por hilo, con
+`importance_reason` (frase corta en español) y `classified_by: 'heuristic' | 'haiku'`.
+
+- **Heurística** (`lib/agent/intelligence/gmail.ts::importanceForHeuristic`): resuelve
+  los casos claros — urgente → critical; cliente conocido/recurrente sin responder
+  ≥24h → critical; factura/pago → important; proveedor sin responder ≥48h o solicitud
+  de reunión → important; cliente → important; spam/no-reply/notificaciones → noise;
+  resto con categoría clara → normal.
+- **Categorización mejorada**: `categorize()` ahora cruza el remitente con los emails
+  de `clients` del usuario (→ customer con alta confianza) y con tokens derivados de
+  `sector_intel.supplier_types` (→ supplier). Resuelve el punto débil de clientes en
+  dominios freemail.
+- **Fallback Haiku** (`lib/agent/intelligence/email-importance.ts`): los correos que
+  quedan `category='unknown'` se mandan en UNA sola llamada batch a
+  `claude-haiku-4-5-20251001` con el contexto de sector (agent_name + 1 línea de
+  persona). Devuelve importancia + categoría + motivo. Timeout 4,5s, cap 15 correos,
+  parseo JSON tolerante. Si falla (sin API key, timeout, JSON inválido) → se queda la
+  heurística. Nunca bloquea ni lanza.
+
+`GmailIntel` se amplía con `classified_threads` (todos los hilos analizados, ordenados
+por importancia y luego horas) e `importance_counts`. `threads_awaiting_reply` se
+mantiene (subconjunto sin ruido) para compatibilidad con n8n.
+
+### Privacidad y robustez
+
+- A Haiku solo van remitente + asunto + snippet (≤200 chars). Nunca cuerpos completos.
+- No se loguea contenido de correos, solo contadores con prefijo `[agent/intel/gmail]`.
+- El endpoint `/api/agent/gmail/summary` sigue devolviendo 200 siempre, nunca 500.
+
+### Cableado del route
+
+`app/api/agent/gmail/summary/route.ts` ahora, antes de llamar a `fetchGmailIntel`,
+carga los emails de `clients` del usuario y resuelve el sector
+(`normalizeBusinessSectorKey` → `getSectorConfig` + `getSectorIntel`), y los pasa como
+opciones (`knownClientEmails`, `supplierHints`, `sectorContext`, `enableHaiku: true`).
+Reutiliza la fuente de verdad de sector; no duplica lógica.
+
+### Bandeja en el dashboard
+
+`app/dashboard/emails/page.tsx` reorganizada en dos pestañas:
+- **Bandeja**: hace `fetch('/api/agent/gmail/summary')` (sesión de browser) y muestra
+  los correos agrupados por importancia (críticos/importantes/normales arriba, ruido
+  colapsado), con badges de color, categoría, horas de espera y el motivo de
+  importancia. Estados: cargando / no-conectado (CTA a Integraciones) / error / vacío.
+- **Enviar**: el formulario + historial de salientes existente, intacto.
+- Corregido el copy del `InfoFlipCard` para reflejar la bandeja real.
+
+### Inspector
+
+`/dashboard/dev/agent-inspector` muestra ahora `importance_counts` y, por cada correo,
+`importance` + motivo + si lo clasificó la heurística o Haiku (IA).
+
+### Verificación
+
+```bash
+npx tsc --noEmit -p tsconfig.json   # ✅ limpio
+npx eslint <ficheros tocados>       # ✅ 0 errores (1 warning exhaustive-deps preexistente)
+npm run build                       # pendiente de ejecutar en máquina del usuario
+```
+
+> Nota: el build no se pudo ejecutar en el entorno aislado (Next requiere descargar el
+> binario SWC y no había acceso a registry.npmjs.org). tsc + eslint pasan limpios.
+
+### Pendiente opcional (n8n, no bloqueante)
+
+`classified_threads` e `importance_counts` ya viajan dentro de `gmail_intel` hacia n8n
+automáticamente (el endpoint los incluye en el payload). Falta, si se quiere, actualizar
+el system prompt de `Build Claude Prompt` para que el briefing abra con los correos
+`critical`/`important` por nombre y omita el `noise`. Es un cambio de prompt aislado.
+
+### Archivos tocados (bloque 4)
+
+```
+NEW   lib/agent/intelligence/email-importance.ts   — clasificador Haiku batch
+EDIT  lib/agent/intelligence/gmail.ts              — importance + classified_threads + opts
+EDIT  app/api/agent/gmail/summary/route.ts          — clients + sector → fetchGmailIntel
+EDIT  app/dashboard/emails/page.tsx                 — pestañas Bandeja / Enviar
+EDIT  app/dashboard/dev/agent-inspector/page.tsx    — importance_counts + por correo
+EDIT  AGENT_AUDIT.md                                — esta sección
+```
+
+### Casos donde puede fallar (documentado)
+
+- **Buzón sin correos de negocio** (p.ej. cuenta de la uni con notificaciones de
+  CAMPUS): casi todo se clasifica como `internal/noise`, que es lo correcto. Para ver
+  `critical/important` hacen falta correos reales de clientes/proveedores.
+- **Sin `ANTHROPIC_API_KEY` o Haiku caído**: los correos `unknown` se quedan en
+  `normal` con motivo "Sin clasificar". El resto (heurística) funciona igual.
+- **El usuario envía desde otra dirección** distinta a `tokenInfo.email`: sus propios
+  correos podrían contar como pendientes (mismo criterio que ya existía).
