@@ -27,6 +27,10 @@ import {
   type QualityTier,
   type ResolvedPrice,
 } from "@/lib/price-resolver";
+import {
+  applyProviderToAIMaterials,
+  type ProviderAdjustmentMeta,
+} from "@/lib/provider-materials";
 
 export interface Partida {
   id: string;
@@ -68,6 +72,12 @@ export interface Material {
   provider_id?: string;
   isRealData?: boolean;
   sourceType?: string;
+  /** True when the selected provider does not carry this material */
+  missing_in_selected_provider?: boolean;
+  /** Human-readable reason when material falls back to base price */
+  provider_fallback_reason?: string;
+  /** Metadata about provider price adjustment */
+  provider_adjustment?: ProviderAdjustmentMeta;
 }
 
 /** @deprecated Use normalizeBudgetItemsToScope from budget-engine instead */
@@ -182,6 +192,8 @@ export interface BudgetState {
   providerOptions: ProviderOption[];
   materials: Material[]; // Active visible materials
   allFetchedMaterials: Material[]; // Internal cache for real data
+  /** Immutable snapshot of AI/engine materials before provider enrichment */
+  baseAIMaterials: Material[];
   useSuggestedMaterials: boolean;
   isRealDataMode: boolean;
   // Totals
@@ -321,6 +333,7 @@ export function BudgetGenerateProvider({
     providerOptions: [],
     materials: [],
     allFetchedMaterials: [],
+    baseAIMaterials: [],
     useSuggestedMaterials: true,
     isRealDataMode: false,
     totals: {
@@ -583,25 +596,40 @@ export function BudgetGenerateProvider({
   };
 
   /**
-   * Selecciona un proveedor y recalcula los materiales visibles desde el
-   * snapshot base (allFetchedMaterials). Garantiza reversibilidad A → B → A:
-   * cambiar de proveedor y volver siempre restaura los materiales originales.
+   * Selecciona un proveedor y recalcula los materiales visibles.
    *
-   * - Si allFetchedMaterials está vacío, solo guarda selectedProviderId.
-   * - Si materialsFromAI=true, solo guarda selectedProviderId (los materiales
-   *   de IA no se filtran por proveedor).
-   * - Si es real-data, filtra desde allFetchedMaterials por provider_id === id
-   *   con deep clone para no mutar el snapshot base.
+   * Modo IA/motor (materialsFromAI=true):
+   *   Enriquece/reprecia desde baseAIMaterials usando applyProviderToAIMaterials.
+   *   Mantiene TODOS los materiales, marca los que faltan en el proveedor.
+   *   Garantiza reversibilidad A → B → A.
+   *
+   * Modo real-data (materialsFromAI=false):
+   *   Filtra desde allFetchedMaterials por provider_id === id.
    */
   const setSelectedProvider = (id: string) => {
     setState(prev => {
-      // Caso 1: sin materiales reales cargados
-      if (prev.allFetchedMaterials.length === 0) {
-        return { ...prev, selectedProviderId: id };
+      // Caso 1: modo IA/motor — enriquecer, no filtrar
+      if (prev.materialsFromAI && prev.baseAIMaterials.length > 0) {
+        // Buscar el nombre del proveedor para metadata
+        const provOption = prev.providerOptions.find(p => p.id === id);
+        const provName = provOption?.name || id;
+
+        const enriched = applyProviderToAIMaterials(
+          prev.baseAIMaterials as any,
+          prev.allFetchedMaterials as any,
+          id,
+          provName
+        );
+
+        return {
+          ...prev,
+          selectedProviderId: id,
+          materials: enriched as Material[],
+        };
       }
 
-      // Caso 2: materiales provienen de IA — no filtrar por proveedor
-      if (prev.materialsFromAI) {
+      // Caso 2: sin materiales reales cargados
+      if (prev.allFetchedMaterials.length === 0) {
         return { ...prev, selectedProviderId: id };
       }
 
@@ -1352,6 +1380,8 @@ export function BudgetGenerateProvider({
         materialsFromAI: finalMaterials.length > 0,
         partidas: finalPartidas.length > 0 ? finalPartidas : prev.partidas,
         materials: finalMaterials.length > 0 ? finalMaterials : prev.materials,
+        // Snapshot base inmutable de materiales IA/motor para enriquecimiento por proveedor
+        baseAIMaterials: finalMaterials.length > 0 ? finalMaterials.map(m => ({ ...m })) : prev.baseAIMaterials,
         providerOptions: finalProviders.length > 0 ? finalProviders : prev.providerOptions,
         selectedProviderId: finalProviders.length > 0 ? finalProviders[0].id : prev.selectedProviderId,
         endDate: calculatedEndDate || prev.endDate,
@@ -1419,6 +1449,11 @@ export function BudgetGenerateProvider({
             const mm = 1 + (state.marginPercent / 100);
             const builtItems = normalizeBudgetItemsToScope(fbScope, [], mm);
             const builtMats = buildScopeMaterials(fbScope);
+            const fallbackMaterialsList = builtMats.map(em => ({
+              id: em.id, name: em.name, quantity: em.quantity, unit: em.unit,
+              unit_price: em.unit_price, subtotal: em.subtotal, included: em.included,
+              provider_id: em.provider_id, isRealData: em.isRealData, sourceType: em.sourceType,
+            }));
             setState(prev => ({
               ...prev,
               currentStep: prev.currentStep + 1,
@@ -1430,11 +1465,9 @@ export function BudgetGenerateProvider({
                 unit_price_client: ep.unit_price_client, subtotal_client: ep.subtotal_client,
                 status: ep.status,
               })),
-              materials: builtMats.map(em => ({
-                id: em.id, name: em.name, quantity: em.quantity, unit: em.unit,
-                unit_price: em.unit_price, subtotal: em.subtotal, included: em.included,
-                provider_id: em.provider_id, isRealData: em.isRealData, sourceType: em.sourceType,
-              })),
+              materials: fallbackMaterialsList,
+              // Snapshot base inmutable para enriquecimiento por proveedor
+              baseAIMaterials: fallbackMaterialsList.map(m => ({ ...m })),
               materialsFromAI: true,
             }));
             saveDraft(false);
