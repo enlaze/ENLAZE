@@ -131,7 +131,16 @@ export function ProvidersStep() {
     }
   }, [isRefreshingPrices, materials, state, updateMaterial]);
 
-  const getBadgeProps = (sourceType?: string, isRealData?: boolean) => {
+  /** Badge props for source/provider status. Provider match/missing flags take priority when present. */
+  const getBadgeProps = (sourceType?: string, isRealData?: boolean, material?: any) => {
+    // Provider enrichment flags take priority (commit 1.1.b.2)
+    if (material?.missing_in_selected_provider === true) {
+      return { label: "SIN PRECIO", className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800" };
+    }
+    if (material?.provider_adjustment?.applied === true) {
+      return { label: "PROVEEDOR", className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800" };
+    }
+    // Original logic
     if (sourceType === "n8n_sync") return { label: "REAL", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800" };
     if (sourceType === "default") return { label: "BASE", className: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700" };
     if (sourceType === "market_reference") return { label: "REFERENCIA", className: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800" };
@@ -139,6 +148,11 @@ export function ProvidersStep() {
     if (isRealData) return { label: "REAL", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800" };
     return { label: "SIN FUENTE", className: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400 border-gray-200 dark:border-gray-700" };
   };
+
+  // Provider coverage stats for UI banner
+  const providerMatchCount = materials.filter(m => (m as any).provider_adjustment?.applied === true).length;
+  const providerMissingCount = materials.filter(m => (m as any).missing_in_selected_provider === true).length;
+  const hasProviderEnrichment = providerMatchCount > 0 || providerMissingCount > 0;
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -302,6 +316,22 @@ export function ProvidersStep() {
             </div>
           ) : (
             <div className="overflow-x-auto">
+              {/* Provider coverage banner */}
+              {hasProviderEnrichment && (
+                <div className="mb-3 p-3 rounded-lg border bg-navy-50 dark:bg-zinc-800/50 border-navy-200 dark:border-zinc-700 flex flex-wrap items-center gap-3 text-xs">
+                  <span className="font-bold text-navy-700 dark:text-zinc-300">Cobertura del proveedor:</span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 font-semibold">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                    {providerMatchCount} de {materials.length} con precio del proveedor
+                  </span>
+                  {providerMissingCount > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 font-semibold">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                      {providerMissingCount} con precio estimado/base
+                    </span>
+                  )}
+                </div>
+              )}
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-navy-50 dark:bg-zinc-800/50 border-y border-navy-100 dark:border-zinc-800 text-xs font-semibold text-navy-500 dark:text-zinc-400 uppercase tracking-wider">
@@ -327,8 +357,11 @@ export function ProvidersStep() {
                       <td className="p-3">
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-medium text-navy-900 dark:text-white">{m.name}</p>
-                          <span className={`${getBadgeProps(m.sourceType, m.isRealData).className} border text-[9px] px-1 rounded-sm uppercase tracking-wider font-semibold`} title="Fuente de datos">
-                            {getBadgeProps(m.sourceType, m.isRealData).label}
+                          <span
+                            className={`${getBadgeProps(m.sourceType, m.isRealData, m).className} border text-[9px] px-1 rounded-sm uppercase tracking-wider font-semibold`}
+                            title={(m as any).provider_fallback_reason || "Fuente de datos"}
+                          >
+                            {getBadgeProps(m.sourceType, m.isRealData, m).label}
                           </span>
                         </div>
                       </td>

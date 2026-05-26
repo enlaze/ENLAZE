@@ -86,22 +86,43 @@ export function LiveSummaryPanel() {
     <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-navy-100 dark:border-zinc-800 shadow-sm p-6 sticky top-24">
       <h3 className="text-lg font-bold text-navy-900 dark:text-white mb-4">Resumen en vivo</h3>
 
-      {isConstruction && activeProvider && (
-        <div className="flex items-center gap-3 bg-navy-50 dark:bg-zinc-800/50 p-3 rounded-xl mb-4 border border-navy-100 dark:border-zinc-700">
-          <div className="w-8 h-8 rounded-full bg-white dark:bg-zinc-700 flex items-center justify-center shadow-sm text-lg">
-            🏢
-          </div>
-          <div className="flex-1">
-            <div className="flex justify-between items-center">
-              <div className="text-[10px] text-navy-500 dark:text-zinc-400 uppercase tracking-wider font-bold">Proveedor activo</div>
-              {isMaterialBasketReal && (
-                <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 px-1.5 rounded">Catalogo Real</span>
-              )}
+      {isConstruction && activeProvider && (() => {
+        const matchedCount = materials?.filter(m => (m as any).provider_adjustment?.applied === true).length || 0;
+        const missingCount = materials?.filter(m => (m as any).missing_in_selected_provider === true).length || 0;
+        const hasEnrichment = matchedCount > 0 || missingCount > 0;
+        return (
+          <div className="bg-navy-50 dark:bg-zinc-800/50 p-3 rounded-xl mb-4 border border-navy-100 dark:border-zinc-700">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-white dark:bg-zinc-700 flex items-center justify-center shadow-sm text-lg">
+                🏢
+              </div>
+              <div className="flex-1">
+                <div className="flex justify-between items-center">
+                  <div className="text-[10px] text-navy-500 dark:text-zinc-400 uppercase tracking-wider font-bold">Proveedor activo</div>
+                  {isMaterialBasketReal && (
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 px-1.5 rounded">Catalogo Real</span>
+                  )}
+                </div>
+                <div className="text-sm font-bold text-navy-900 dark:text-white">{activeProvider.name}</div>
+              </div>
             </div>
-            <div className="text-sm font-bold text-navy-900 dark:text-white">{activeProvider.name}</div>
+            {hasEnrichment && (
+              <div className="mt-2 pt-2 border-t border-navy-200/50 dark:border-zinc-700/50 flex flex-wrap gap-2">
+                <span className="text-[10px] font-semibold text-green-600 dark:text-green-400 flex items-center gap-0.5">
+                  <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                  {matchedCount} de {includedMaterialsCount} con precio
+                </span>
+                {missingCount > 0 && (
+                  <span className="text-[10px] font-semibold text-amber-500 dark:text-amber-400 flex items-center gap-0.5">
+                    <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                    {missingCount} sin precio exacto
+                  </span>
+                )}
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <div className="space-y-4 mb-6">
         <div className="flex justify-between items-center text-sm">
