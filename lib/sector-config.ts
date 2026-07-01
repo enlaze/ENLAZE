@@ -29,10 +29,12 @@ export function getSectorConfig(value?: string | null): SectorConfig {
       aiPreset: "retail",
       priceLabel: "Catálogo / Tarifas",
       budgetLabel: "Propuestas",
+      // NOTE: "budgets" is intentionally omitted here. Budgets are a
+      // construction-native concept; for comercio_local the module is gated off
+      // (reversible product decision — may be re-added during validation).
       visibleModules: [
         "dashboard",
         "clients",
-        "budgets",
         "prices",
         "suppliers",
         "emails",

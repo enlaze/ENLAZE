@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { normalizeSectorId } from "@/lib/sectors";
+import { normalizeSector } from "@/lib/sector-config";
 
 /**
  * Maps a granular subsector id (profiles.business_sector) to the coarse key
@@ -209,7 +210,16 @@ export function SectorProvider({ children }: { children: ReactNode }) {
 
   const visibleModules = (): SidebarModule[] => {
     if (!config?.sidebar_modules) return [];
-    return config.sidebar_modules.filter((m) => m.visible);
+    const modules = config.sidebar_modules.filter((m) => m.visible);
+    // Budgets are construction-only for now (reversible product gate). Hide the
+    // budgets entry for comercio_local even if the DB config still lists it, so
+    // the runtime nav stays coherent regardless of the sector_config row.
+    if (normalizeSector(sectorKey) !== "construccion") {
+      return modules.filter(
+        (m) => m.href !== "/dashboard/budgets" && m.key !== "budgets",
+      );
+    }
+    return modules;
   };
 
   const serviceTypes = (): ServiceType[] => {

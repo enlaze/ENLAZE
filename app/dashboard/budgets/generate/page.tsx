@@ -180,18 +180,11 @@ function WizardContent() {
         case 2: return <ProvidersStep />;
         default: return <ScopeStep />;
       }
-    } else {
-      // Placeholder para Retail
-      return (
-        <div className="flex flex-col items-center justify-center p-12 bg-white dark:bg-zinc-900 border border-navy-100 dark:border-zinc-800 rounded-2xl">
-          <span className="text-4xl mb-4">🏪</span>
-          <h2 className="text-xl font-bold text-navy-900 dark:text-white mb-2">Flujo Retail en construcción</h2>
-          <p className="text-navy-500 dark:text-zinc-400 text-center">
-            Este sector utilizará una estructura de pasos distinta (Equipamiento, Suscripción, Mantenimiento).
-          </p>
-        </div>
-      );
     }
+    // Non-construction sectors never reach this component: the budgets segment
+    // guard (app/dashboard/budgets/layout.tsx) redirects them to /dashboard.
+    // The old "Flujo Retail en construcción" placeholder is gone by design.
+    return null;
   };
 
   return (
@@ -235,6 +228,9 @@ function WizardContent() {
 
 export default function GenerateBudgetPage() {
   const { sectorKey } = useSector();
+  // Comercio_local is redirected to /dashboard by the budgets segment guard
+  // (app/dashboard/budgets/layout.tsx), so the wizard and the old "en
+  // construcción" placeholder are never reached outside construction.
 
   return (
     <div className="mx-auto w-full">
