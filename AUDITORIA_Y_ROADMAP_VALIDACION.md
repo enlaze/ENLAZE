@@ -1,0 +1,77 @@
+# Enlaze — Auditoría de producto y roadmap hasta validación
+
+_Fecha: 2026-07-01 · Objetivo de esta etapa: web prácticamente acabada + primeros usuarios probándola (fase de validación)._
+
+---
+
+## 1. Veredicto: dónde estás de verdad
+
+El producto está **feature-complete**, no a medias. Datos objetivos de la auditoría:
+
+- **19 módulos** del dashboard, y **todos leen datos reales de Supabase** (no son maquetas): clientes, presupuestos, catálogo, proveedores, pedidos, albaranes, calendario, facturas recibidas/emitidas, pagos, márgenes, emails, WhatsApp/mensajes, cumplimiento, registro de actividad, ajustes.
+- **Un solo `TODO`** en todo el código. Deuda técnica muy baja.
+- Superficie pública real: landing (1.137 líneas), pricing con planes 19/49/199 € y descuento anual, registro, verificación de email, **onboarding real** (multi-paso con consentimiento legal), login.
+- Tu **roadmap de polish de abril** ya tiene gran parte del **P0 hecho**: fuente Inter, modal de confirmación, toasts, skeletons, medidor de contraseña, overlay de atajos, toggle anual en pricing, JSON-LD. Empty states usados en 12 módulos.
+
+**Estimación honesta: ~80-85% del camino a "web acabada", no un 40%.**
+_Caveat: esto lo juzgo leyendo código estático, no usando la app en caliente ni revisando cada pantalla renderizada. Es una estimación cualitativa; la QA de la Etapa C la confirmará o la corregirá._
+
+---
+
+## 2. El hueco que más importa (prioridad 1)
+
+El **generador de presupuestos solo funciona para el sector Construcción**. Para Comercio Local / Retail —el sector de tu cliente de prueba, Panadería San Juan— la pantalla muestra literalmente *"Flujo Retail en construcción"*.
+
+Es decir: **tu primer sector objetivo no puede generar presupuestos**, que es una función central del producto. Esto es lo primero a cerrar antes de poner usuarios de comercio local a probar.
+
+El detalle está en tu propio `MULTI_SECTOR_WIZARD_TECH_DEBT.md` (4 puntos: configuraciones visuales por sector, quitar el fallback "construccion", unificar la fuente de verdad del sector, y categorías por sector).
+
+---
+
+## 3. Lo que NO es bloqueante (mejora, pero puede esperar)
+
+El resto de tu roadmap de abril (P1/P2): sorting+filtros+paginación en tablas, export CSV/PDF, acciones bulk, breadcrumbs, empty-states ilustrados, social proof en landing, status page, changelog, cookies banner. Todo esto sube la percepción de "premium" pero **no bloquea** que un usuario valide el producto. Se cogen los de más impacto en la Etapa B y el resto se aparca.
+
+---
+
+## 4. Las etapas hasta validación
+
+Método fijo: **yo defino cada etapa, Claude Code ejecuta, tú validas visualmente.** Cada cambio lleva su nota de *qué cambia por dentro / qué cambia visualmente*.
+
+### Etapa A — Cerrar el wizard de presupuestos Retail  _(funcional, prioridad 1)_
+Que un comercio local pueda generar un presupuesto de principio a fin. Resolver los 4 puntos del doc de deuda técnica.
+- **Interno:** pasos/categorías por sector, fuente de verdad única del sector, guardado en `budget_items` sin romper el esquema.
+- **Visual:** desaparece "en construcción"; aparece un flujo de presupuesto real adaptado a retail (equipamiento, inventario, etc.).
+- **Reparto:** Cowork define el flujo y el mapeo de categorías → Code implementa.
+
+### Etapa B — Pulido visual y de consistencia  _(percepción)_
+El rediseño del briefing (ya en marcha) + una pasada de consistencia + los P1 de más impacto de tu roadmap.
+- **Interno:** componentes de UI reutilizados, tablas con orden/filtro donde aporte.
+- **Visual:** el producto se siente terminado y coherente entre módulos.
+- **Reparto:** Cowork prioriza y da dirección de diseño → Code implementa.
+
+### Etapa C — Recorrido del primer usuario (QA end-to-end)  _(fiabilidad)_
+Probar el funnel completo con datos reales: landing → registro → verificación email → onboarding → dashboard → generar primer presupuesto → briefing del agente. Arreglar lo que se rompa. Incluir recuperación de contraseña si falta.
+- **Interno:** se cierran bugs de flujo, estados vacíos con 1 cliente/0 datos.
+- **Visual:** cada pantalla se ve bien también "vacía", no solo llena.
+- **Reparto:** Cowork hace el guion de QA → Code arregla lo que aparezca.
+
+### Etapa D — Instrumentación para aprender  _(medir)_
+Analytics (PostHog) + error tracking (Sentry). Hoy no tienes ninguno; solo un `lib/error-handler.ts` local. Sin esto, no verás qué hacen los primeros usuarios ni qué se rompe.
+- **Interno:** eventos de producto + captura de errores en producción.
+- **Visual:** nada para el usuario; es para ti.
+- **Reparto:** Cowork elige herramientas y define eventos → Code integra.
+
+### Etapa E — Go-live / Validación  _(infra, aparcada hasta aquí)_
+El paquete de infraestructura que decidimos aparcar: deploy de Next.js a Vercel + hosting de n8n + estrategia única de clave de cifrado OAuth. Todo junto porque está acoplado. Luego, invitar a los primeros usuarios reales.
+- **Interno:** la app y el agente dejan de depender de tu portátil.
+- **Visual:** nada nuevo; el briefing empieza a aparecer solo cada día.
+- **Reparto:** Cowork prepara el plan de despliegue → Code ejecuta → tú haces los clics en Vercel.
+
+---
+
+## 5. Resumen del orden
+
+A (wizard retail) → B (pulido visual) → C (QA del primer usuario) → D (instrumentación) → E (go-live + validación).
+
+Las etapas A-D son 100% locales (sin infra). La E es el "salir a producción" que solo tiene sentido cuando A-D estén sólidas y tengas a alguien real esperando para probar.
