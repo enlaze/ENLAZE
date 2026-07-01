@@ -14,6 +14,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
 import EmptyState from "@/components/ui/empty-state";
+import DailyBriefingCard, {
+  type BriefingAction,
+  type BriefingPriority,
+} from "@/components/dashboard/DailyBriefingCard";
 
 /* ─── Types ─────────────────────────────────────────────────────────── */
 
@@ -526,6 +530,13 @@ function filterStaleConnectionParagraphs(narrative: string, conn: LiveConnection
     .join("\n\n");
 }
 
+/** Real briefing impact levels → the card's badge priority. */
+const IMPACT_TO_PRIORITY: Record<string, BriefingPriority | undefined> = {
+  alto: "alta",
+  medio: "media",
+  bajo: "baja",
+};
+
 export function AgentBriefingHero() {
   const { loading, summary, connections } = useAgentData();
 
@@ -535,12 +546,6 @@ export function AgentBriefingHero() {
 
   const ai = summary.raw_payload?.daily_summary?.ai_briefing;
   const aiOk = !!ai && !ai.error;
-  const impactDot = (impact?: string) =>
-    impact === "alto"
-      ? "bg-red-500"
-      : impact === "medio"
-      ? "bg-yellow-500"
-      : "bg-brand-green";
 
   const allConnectedLive =
     connections.gmail && connections.calendar && connections.sheets && connections.reputation;
@@ -573,113 +578,41 @@ export function AgentBriefingHero() {
     .filter((o) => !shouldHideForConnections(o, connections))
     .map(sanitizeProse);
 
+  // Map the app's data shape onto the redesigned card's action shape.
+  //   action -> título, why -> subtexto, when -> pill, impact -> badge
+  // On the mechanical fallback (aiOk === false) we feed priority_actions as
+  // bare titles — no reason/moment/priority — so the card degrades gracefully.
+  const cardActions: BriefingAction[] = aiOk
+    ? filteredActions.map((a) => ({
+        title: sanitizeProse(a.action),
+        reason: a.why ? sanitizeProse(a.why) : undefined,
+        moment: a.when || undefined,
+        priority: IMPACT_TO_PRIORITY[a.impact ?? ""],
+      }))
+    : summary.priority_actions.map((action) => ({
+        title: sanitizeProse(action),
+      }));
+
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-brand-green/20 bg-gradient-to-br from-white to-brand-green/5 shadow-sm dark:border-brand-green/20 dark:from-zinc-900 dark:to-brand-green/5">
-      <div className="p-6">
-        <div className="mb-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-500 dark:text-zinc-500 mb-1">
-            Resumen de hoy · {fmtDate(summary.execution_date)}
-            {aiOk && (
-              <span className="ml-2 text-brand-green normal-case tracking-normal">
-                · escrito por tu asistente
-              </span>
-            )}
-          </p>
-          <h2 className="text-[18px] font-semibold text-navy-900 dark:text-white">
-            {displayHeadline}
-          </h2>
+    <section>
+      {allConnectedLive && (
+        <div className="mb-3 rounded-lg border border-brand-green/30 bg-brand-green/10 px-3 py-2 text-[12.5px] text-brand-green dark:border-brand-green/30 dark:bg-brand-green/15 dark:text-brand-green-light">
+          ✓ Tienes Gmail, Calendar, Sheets y reputación conectados. Si el
+          resumen menciona conectar integraciones es de ayer — se actualizará
+          mañana.
         </div>
+      )}
 
-        {allConnectedLive && (
-          <div className="mb-4 rounded-lg border border-brand-green/30 bg-brand-green/10 px-3 py-2 text-[12.5px] text-brand-green dark:border-brand-green/30 dark:bg-brand-green/15 dark:text-brand-green-light">
-            ✓ Tienes Gmail, Calendar, Sheets y reputación conectados. Si el
-            resumen menciona conectar integraciones es de ayer — se actualizará
-            mañana.
-          </div>
-        )}
-
-        {displayNarrative && (
-          <p className="text-sm text-navy-700 dark:text-zinc-300 whitespace-pre-line mb-4">
-            {displayNarrative}
-          </p>
-        )}
-
-        {filteredActions.length > 0 ? (
-          <div className="space-y-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-400 dark:text-zinc-500 mb-1">
-              Qué hacer hoy
-            </p>
-            {filteredActions.map((a, i) => (
-              <div key={i} className="flex items-start gap-2">
-                <span
-                  className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${impactDot(a.impact)}`}
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-navy-900 dark:text-white">
-                    {sanitizeProse(a.action)}
-                  </div>
-                  <div className="text-xs text-navy-500 dark:text-zinc-500">
-                    {sanitizeProse(a.why)}
-                    {a.when && <span className="ml-1">· {a.when}</span>}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          summary.priority_actions.length > 0 && (
-            <div className="space-y-1.5">
-              {summary.priority_actions.map((action, i) => (
-                <div key={i} className="flex items-start gap-2">
-                  <span className="mt-0.5 h-2 w-2 rounded-full bg-brand-green shrink-0" />
-                  <span className="text-sm text-navy-700 dark:text-zinc-300">
-                    {sanitizeProse(action)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )
-        )}
-
-        {(filteredOpportunities.length > 0 || filteredWatchOuts.length > 0) && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 pt-3 border-t border-brand-green/10 dark:border-zinc-700/50">
-            {filteredOpportunities.length > 0 && (
-              <div>
-                <div className="text-[11px] uppercase tracking-wider text-navy-500 dark:text-zinc-500 mb-1">
-                  Aprovecha hoy
-                </div>
-                <ul className="space-y-1">
-                  {filteredOpportunities.map((o, i) => (
-                    <li
-                      key={i}
-                      className="text-xs text-navy-700 dark:text-zinc-300"
-                    >
-                      • {o}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {filteredWatchOuts.length > 0 && (
-              <div>
-                <div className="text-[11px] uppercase tracking-wider text-navy-500 dark:text-zinc-500 mb-1">
-                  Ojo con
-                </div>
-                <ul className="space-y-1">
-                  {filteredWatchOuts.map((w, i) => (
-                    <li
-                      key={i}
-                      className="text-xs text-navy-700 dark:text-zinc-300"
-                    >
-                      • {w}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      <DailyBriefingCard
+        summaryId={summary.id}
+        date={fmtDate(summary.execution_date)}
+        headline={displayHeadline}
+        narrative={displayNarrative}
+        actions={cardActions}
+        opportunities={filteredOpportunities}
+        watch_outs={filteredWatchOuts}
+        aiWritten={aiOk}
+      />
     </section>
   );
 }
