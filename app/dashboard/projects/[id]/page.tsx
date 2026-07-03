@@ -10,7 +10,7 @@ import { saveDocumentVersion, getNextVersion } from "@/lib/document-versions";
 import { logActivity } from "@/lib/activity-log";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
-import BackButton from "@/components/ui/back-button";
+import Breadcrumbs from "@/components/ui/breadcrumbs";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Loading from "@/components/ui/loading";
@@ -796,7 +796,15 @@ export default function ProjectDetailPage() {
 
   return (
     <div className="max-w-6xl mx-auto">
-      <BackButton fallbackHref="/dashboard/projects" label="Volver a obras" />
+      <Breadcrumbs
+        className="mb-6"
+        showHomeIcon
+        items={[
+          { label: "Inicio", href: "/dashboard" },
+          { label: "Proyectos", href: "/dashboard/projects" },
+          { label: project.name },
+        ]}
+      />
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
         <div>

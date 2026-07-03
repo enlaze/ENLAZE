@@ -7,7 +7,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase-browser";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
-import BackButton from "@/components/ui/back-button";
+import Breadcrumbs from "@/components/ui/breadcrumbs";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FormField, Input, Select } from "@/components/ui/form-fields";
@@ -256,7 +256,15 @@ export default function DeliveryNoteDetailPage() {
   return (
     <div className="max-w-5xl mx-auto">
       {/* Header */}
-      <BackButton fallbackHref="/dashboard/delivery-notes" label="Volver a albaranes" />
+      <Breadcrumbs
+        className="mb-6"
+        showHomeIcon
+        items={[
+          { label: "Inicio", href: "/dashboard" },
+          { label: "Albaranes", href: "/dashboard/delivery-notes" },
+          { label: note.note_number || "(sin nº)" },
+        ]}
+      />
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-navy-900 dark:text-white">Albarán {note.note_number || "(sin nº)"}</h1>

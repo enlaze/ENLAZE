@@ -111,19 +111,20 @@ export default function ReceivedInvoiceDetailPage() {
   return (
     <div className="max-w-4xl mx-auto">
       <PageHeader
+        breadcrumbs={[
+          { label: "Inicio", href: "/dashboard" },
+          { label: "Proveedores", href: "/dashboard/suppliers" },
+          { label: "Facturas", href: "/dashboard/suppliers/invoices" },
+          { label: invoice.invoice_number },
+        ]}
         title={`Factura ${invoice.invoice_number}`}
         description={`${invoice.supplier_name}${invoice.supplier_nif ? ` · ${invoice.supplier_nif}` : ""}`}
         actions={
-          <div className="flex gap-2">
-            <Link href="/dashboard/suppliers/invoices">
-              <Button variant="secondary">← Facturas</Button>
+          invoice.supplier_id ? (
+            <Link href={`/dashboard/suppliers/${invoice.supplier_id}`}>
+              <Button variant="secondary">Ver proveedor</Button>
             </Link>
-            {invoice.supplier_id && (
-              <Link href={`/dashboard/suppliers/${invoice.supplier_id}`}>
-                <Button variant="secondary">Ver proveedor</Button>
-              </Link>
-            )}
-          </div>
+          ) : undefined
         }
       />
 
@@ -170,7 +171,7 @@ export default function ReceivedInvoiceDetailPage() {
             )}
             <div className="border-t border-navy-100 dark:border-zinc-800 pt-2 flex justify-between">
               <span className="font-semibold text-navy-900 dark:text-white">Total</span>
-              <span className="font-bold text-navy-900 text-lg">{fmtMoney(invoice.total)}</span>
+              <span className="font-bold text-navy-900 dark:text-white text-lg">{fmtMoney(invoice.total)}</span>
             </div>
           </div>
         </Card>
@@ -275,7 +276,7 @@ export default function ReceivedInvoiceDetailPage() {
                     <span className="text-xs text-navy-500 dark:text-zinc-400 ml-2">{paymentMethodLabels[p.payment_method] || p.payment_method}</span>
                     {p.reference && <span className="text-xs text-navy-400 dark:text-zinc-500 ml-2">Ref: {p.reference}</span>}
                   </div>
-                  <span className="text-xs text-navy-500">{fmtDate(p.payment_date)}</span>
+                  <span className="text-xs text-navy-500 dark:text-zinc-400">{fmtDate(p.payment_date)}</span>
                 </div>
               ))}
             </div>
@@ -289,8 +290,8 @@ export default function ReceivedInvoiceDetailPage() {
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between">
-      <span className="text-sm text-navy-500">{label}</span>
-      <span className="text-sm text-navy-900 text-right max-w-[60%]">{children}</span>
+      <span className="text-sm text-navy-500 dark:text-zinc-400">{label}</span>
+      <span className="text-sm text-navy-900 dark:text-white text-right max-w-[60%]">{children}</span>
     </div>
   );
 }

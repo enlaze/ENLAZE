@@ -10,7 +10,6 @@ import { Card, StatCard } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
 import Loading from "@/components/ui/loading";
-import BackButton from "@/components/ui/back-button";
 import {
   type Supplier,
   type ReceivedInvoice,
@@ -63,8 +62,12 @@ export default function SupplierDetailPage() {
 
   return (
     <div className="max-w-5xl mx-auto">
-      <BackButton fallbackHref="/dashboard/suppliers" label="Volver a proveedores" />
       <PageHeader
+        breadcrumbs={[
+          { label: "Inicio", href: "/dashboard" },
+          { label: "Proveedores", href: "/dashboard/suppliers" },
+          { label: supplier.name },
+        ]}
         title={supplier.name}
         description={[supplier.nif, supplier.city].filter(Boolean).join(" · ") || "Proveedor"}
         actions={
@@ -139,7 +142,7 @@ export default function SupplierDetailPage() {
       {supplier.notes && (
         <Card className="mb-6">
           <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-2">Notas</h3>
-          <p className="text-sm text-navy-700 whitespace-pre-wrap">{supplier.notes}</p>
+          <p className="text-sm text-navy-700 dark:text-zinc-300 whitespace-pre-wrap">{supplier.notes}</p>
         </Card>
       )}
 
@@ -206,8 +209,8 @@ export default function SupplierDetailPage() {
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between">
-      <span className="text-sm text-navy-500">{label}</span>
-      <span className="text-sm text-navy-900 text-right max-w-[60%]">{children}</span>
+      <span className="text-sm text-navy-500 dark:text-zinc-400">{label}</span>
+      <span className="text-sm text-navy-900 dark:text-white text-right max-w-[60%]">{children}</span>
     </div>
   );
 }

@@ -466,7 +466,7 @@ export default function DashboardHome() {
             <IcoAlert size={16} className="text-amber-500" />
             <h2 className="text-[14px] font-semibold text-navy-900 dark:text-white">Requiere atención</h2>
           </div>
-          <ul className="divide-y divide-navy-50">
+          <ul className="divide-y divide-navy-50 dark:divide-zinc-800">
             <AlertRow label="Facturas por cobrar" count={kpi.invoicesUnpaid} href="/dashboard/issued-invoices" severity="danger" />
             <AlertRow label="Importe pendiente" count={0} href="/dashboard/issued-invoices" severity="warning" customValue={`€${kpi.totalOutstanding.toLocaleString("es-ES")}`} />
             <AlertRow label="Tasa conversión" count={0} href="/dashboard/budgets" severity={kpi.conversionRate >= 50 ? "info" : "warning"} customValue={`${kpi.conversionRate}%`} />
@@ -489,14 +489,14 @@ export default function DashboardHome() {
               Ver todo →
             </Link>
           </div>
-          <ul className="divide-y divide-navy-50">
+          <ul className="divide-y divide-navy-50 dark:divide-zinc-800">
             {complianceChecks.map(c => (
               <li key={c.area} className="flex items-center gap-3 px-6 py-3.5">
                 <span className={`h-3 w-3 rounded-full ${
                   c.status === "green" ? "bg-emerald-400" : c.status === "yellow" ? "bg-amber-400" : "bg-red-400"
                 }`} />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-medium text-navy-800">{c.label}</p>
+                  <p className="text-[13px] font-medium text-navy-800 dark:text-zinc-200">{c.label}</p>
                   <p className="text-[11px] text-navy-400 dark:text-zinc-500 truncate">{c.detail}</p>
                 </div>
               </li>
@@ -518,7 +518,7 @@ export default function DashboardHome() {
               No hay actividad registrada aún.
             </div>
           ) : (
-            <ul className="divide-y divide-navy-50">
+            <ul className="divide-y divide-navy-50 dark:divide-zinc-800">
               {recentActivity.slice(0, 6).map(a => (
                 <li key={a.id} className="px-6 py-3">
                   <p className="text-[13px] text-navy-700 dark:text-zinc-300">{actionLabel(a.action)}</p>
@@ -718,7 +718,7 @@ function AlertRow({
   };
   return (
     <li>
-      <Link href={href} className="group flex items-center justify-between px-6 py-4 transition-colors hover:bg-navy-50 dark:hover:bg-zinc-800/50/60">
+      <Link href={href} className="group flex items-center justify-between px-6 py-4 transition-colors hover:bg-navy-50 dark:hover:bg-zinc-800/60">
         <span className="text-[13.5px] font-medium text-navy-700 dark:text-zinc-300 group-hover:text-navy-900 dark:text-white">{label}</span>
         <span className={`flex h-6 min-w-6 items-center justify-center rounded-full px-2 text-[11px] font-bold tabular-nums ring-1 ring-inset ${colors[severity]}`}>
           {customValue || count}

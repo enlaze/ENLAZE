@@ -15,7 +15,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
 import Loading from "@/components/ui/loading";
-import BackButton from "@/components/ui/back-button";
+import Breadcrumbs from "@/components/ui/breadcrumbs";
 
 interface BudgetItem {
   id: string;
@@ -309,8 +309,16 @@ export default function BudgetDetailPage() {
 
   return (
     <div className="max-w-5xl mx-auto">
-      {/* Back link */}
-      <BackButton fallbackHref="/dashboard/budgets" label="Volver a presupuestos" />
+      {/* Breadcrumbs */}
+      <Breadcrumbs
+        className="mb-6"
+        showHomeIcon
+        items={[
+          { label: "Inicio", href: "/dashboard" },
+          { label: "Presupuestos", href: "/dashboard/budgets" },
+          { label: budget.budget_number },
+        ]}
+      />
 
       {/* Header */}
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
