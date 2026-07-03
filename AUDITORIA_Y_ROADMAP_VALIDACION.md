@@ -4,6 +4,8 @@ _Fecha: 2026-07-01 · Objetivo de esta etapa: web prácticamente acabada + prime
 
 ---
 
+> **Actualización 2026-07-02:** Etapa A RESUELTA por decisión de producto — comercio local **no lleva presupuestos** (se ocultó/gateó, construcción intacto). El siguiente foco es la Etapa B (pulido visual) → C (QA).
+
 ## 1. Veredicto: dónde estás de verdad
 
 El producto está **feature-complete**, no a medias. Datos objetivos de la auditoría:
@@ -38,11 +40,10 @@ El resto de tu roadmap de abril (P1/P2): sorting+filtros+paginación en tablas, 
 
 Método fijo: **yo defino cada etapa, Claude Code ejecuta, tú validas visualmente.** Cada cambio lleva su nota de *qué cambia por dentro / qué cambia visualmente*.
 
-### Etapa A — Cerrar el wizard de presupuestos Retail  _(funcional, prioridad 1)_
-Que un comercio local pueda generar un presupuesto de principio a fin. Resolver los 4 puntos del doc de deuda técnica.
-- **Interno:** pasos/categorías por sector, fuente de verdad única del sector, guardado en `budget_items` sin romper el esquema.
-- **Visual:** desaparece "en construcción"; aparece un flujo de presupuesto real adaptado a retail (equipamiento, inventario, etc.).
-- **Reparto:** Cowork define el flujo y el mapeo de categorías → Code implementa.
+### Etapa A — Presupuestos en comercio local  _(RESUELTA · 2026-07-02)_
+Decisión de producto: el concepto de "presupuesto" es nativo de construcción y **no aplica a comercio local**. En vez de construir un wizard retail, se **ocultó y gateó** el módulo de presupuestos para `comercio_local` (construcción intacto). Reversible: se revisará en validación si algún usuario real necesita cotizar (catering, pedidos B2B).
+- **Hecho:** budgets fuera del nav de comercio_local (gate en código, no depende de migración), guard de ruta que redirige a `/dashboard`, y eliminado el cartel "en construcción".
+- **Pendiente de verificar en vivo:** como usuario comercio_local, confirmar que el nav oculta "Presupuestos" y que la URL directa redirige.
 
 ### Etapa B — Pulido visual y de consistencia  _(percepción)_
 El rediseño del briefing (ya en marcha) + una pasada de consistencia + los P1 de más impacto de tu roadmap.
