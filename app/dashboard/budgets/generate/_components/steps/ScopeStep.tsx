@@ -5,6 +5,7 @@ import { useBudgetGenerate } from "../BudgetGenerateProvider";
 import { Card } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase-browser";
 import { useSector } from "@/lib/sector-context";
+import { useToast } from "@/components/ui/toast";
 
 interface ClientOption {
   id: string;
@@ -61,6 +62,7 @@ export function ScopeStep() {
   const { state, updateState, updateSectorData } = useBudgetGenerate();
   const { serviceTypes } = useSector();
   const supabase = createClient();
+  const toast = useToast();
 
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
@@ -119,7 +121,10 @@ export function ScopeStep() {
     setIsSavingProject(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        toast.error("No hay sesión activa", { description: "Vuelve a iniciar sesión e inténtalo de nuevo." });
+        return;
+      }
 
       const { data, error } = await supabase.from("projects").insert({
         name: newProjectName.trim(),
@@ -129,14 +134,21 @@ export function ScopeStep() {
         start_date: state.startDate || null,
       }).select("id, name, client_id").single();
 
-      if (data && !error) {
-        setProjects(prev => [...prev, data]);
-        updateState({ projectId: data.id });
-        setIsCreatingProject(false);
-        setNewProjectName("");
+      if (error) {
+        console.error("[ScopeStep] create project error:", error);
+        toast.error("No se pudo crear la obra", {
+          description: `${error.message}${error.code ? ` (code ${error.code})` : ""}`,
+        });
+        return;
       }
-    } catch (e) {
+
+      setProjects(prev => [...prev, data]);
+      updateState({ projectId: data.id });
+      setIsCreatingProject(false);
+      setNewProjectName("");
+    } catch (e: any) {
       console.error(e);
+      toast.error("No se pudo crear la obra", { description: e?.message || "Error desconocido" });
     } finally {
       setIsSavingProject(false);
     }
