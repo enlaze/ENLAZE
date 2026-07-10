@@ -1,0 +1,329 @@
+{
+  "name": "ENLAZE - Importar BC3 al Banco Tecnico",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"source\": \"public_bc3\",\n  \"region\": \"test\",\n  \"edition\": \"test-2026\",\n  \"overwrite\": \"false\",\n  \"endpointUrl\": \"https://enlaze.vercel.app/api/technical-prices/import\",\n  \"filePath\": \"/Users/alvaromirallesgrande/Desktop/enlaze/scripts/fixtures/sample-technical-bank.bc3\"\n}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Configuracion",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [440, 300],
+      "notes": "EDITA AQUI los parametros de importacion.\n\n- source: public_bc3 | cype | ive | enlaze_base | manual\n- region: espana | andalucia | madrid | cataluna | test\n- edition: identificador libre (ej: 2026.1)\n- overwrite: false = no sobreescribir, true = sobreescribir existentes\n- endpointUrl: URL del endpoint (produccion o localhost)\n- filePath: ruta absoluta al archivo .bc3\n\nAlternativas de filePath:\n  - macOS local: /Users/tu_usuario/Desktop/enlaze/scripts/fixtures/sample-technical-bank.bc3\n  - Docker: /data/bc3/import.bc3\n  - Produccion: ajustar segun volumen montado"
+    },
+    {
+      "parameters": {
+        "filePath": "={{ $json.filePath }}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Leer archivo BC3",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [660, 300],
+      "notes": "Lee el archivo .bc3 desde la ruta configurada en el nodo anterior.\nEl archivo se carga como dato binario con nombre 'data'."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-source",
+              "name": "source",
+              "value": "={{ $('Configuracion').item.json.source }}",
+              "type": "string"
+            },
+            {
+              "id": "field-region",
+              "name": "region",
+              "value": "={{ $('Configuracion').item.json.region }}",
+              "type": "string"
+            },
+            {
+              "id": "field-edition",
+              "name": "edition",
+              "value": "={{ $('Configuracion').item.json.edition }}",
+              "type": "string"
+            },
+            {
+              "id": "field-overwrite",
+              "name": "overwrite",
+              "value": "={{ $('Configuracion').item.json.overwrite }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "includeBinary": true
+        }
+      },
+      "id": "a1b2c3d4-0004-4000-8000-000000000004",
+      "name": "Preparar campos",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [880, 300],
+      "notes": "Combina los campos de formulario (source, region, edition, overwrite) con el archivo binario leido del nodo anterior. includeBinary=true preserva el archivo .bc3."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Configuracion').item.json.endpointUrl }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            },
+            {
+              "parameterType": "formData",
+              "name": "source",
+              "value": "={{ $json.source }}"
+            },
+            {
+              "parameterType": "formData",
+              "name": "region",
+              "value": "={{ $json.region }}"
+            },
+            {
+              "parameterType": "formData",
+              "name": "edition",
+              "value": "={{ $json.edition }}"
+            },
+            {
+              "parameterType": "formData",
+              "name": "overwrite",
+              "value": "={{ $json.overwrite }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "id": "a1b2c3d4-0005-4000-8000-000000000005",
+      "name": "POST Import BC3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURAR",
+          "name": "ENLAZE API Key"
+        }
+      },
+      "notes": "Envia el archivo .bc3 al endpoint de importacion.\n\nCredencial requerida: 'ENLAZE API Key' (Header Auth)\n  - Header Name: Authorization\n  - Header Value: Bearer TU_AGENT_API_KEY\n\nTimeout: 120s (archivos grandes pueden tardar).",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-status-ok",
+              "leftValue": "={{ $json.statusCode }}",
+              "rightValue": 200,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0006-4000-8000-000000000006",
+      "name": "Respuesta OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1320, 300]
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"resultado\": \"IMPORTACION EXITOSA\",\n  \"ok\": {{ $json.body.ok }},\n  \"logId\": \"{{ $json.body.logId }}\",\n  \"source\": \"{{ $('Configuracion').item.json.source }}\",\n  \"region\": \"{{ $('Configuracion').item.json.region }}\",\n  \"edition\": \"{{ $('Configuracion').item.json.edition }}\",\n  \"chapters_created\": {{ $json.body.result.chapters_created || 0 }},\n  \"chapters_updated\": {{ $json.body.result.chapters_updated || 0 }},\n  \"items_created\": {{ $json.body.result.items_created || 0 }},\n  \"items_updated\": {{ $json.body.result.items_updated || 0 }},\n  \"components_created\": {{ $json.body.result.components_created || 0 }},\n  \"items_skipped\": {{ $json.body.result.items_skipped || 0 }},\n  \"warnings_count\": {{ $json.body.result.warnings?.length || 0 }},\n  \"warnings\": {{ JSON.stringify($json.body.result.warnings || []) }}\n}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0007-4000-8000-000000000007",
+      "name": "Resumen OK",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1560, 200],
+      "notes": "Extrae y formatea el resumen de la importacion exitosa."
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"resultado\": \"ERROR EN IMPORTACION\",\n  \"statusCode\": {{ $json.statusCode }},\n  \"error_tipo\": \"{{ $json.statusCode === 401 ? 'AGENT_API_KEY invalida o no configurada' : $json.statusCode === 400 ? 'Archivo o parametros invalidos' : $json.statusCode === 500 ? 'Error interno importando BC3' : 'Error desconocido (HTTP ' + $json.statusCode + ')' }}\",\n  \"detalle\": {{ JSON.stringify($json.body?.error || $json.body?.message || $json.body || 'Sin detalle') }},\n  \"source\": \"{{ $('Configuracion').item.json.source }}\",\n  \"region\": \"{{ $('Configuracion').item.json.region }}\",\n  \"endpoint\": \"{{ $('Configuracion').item.json.endpointUrl }}\"\n}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0008-4000-8000-000000000008",
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1560, 420],
+      "notes": "Formatea el mensaje de error segun el codigo HTTP:\n- 401: AGENT_API_KEY invalida o no configurada\n- 400: Archivo o parametros invalidos\n- 500: Error interno importando BC3"
+    },
+    {
+      "parameters": {},
+      "id": "a1b2c3d4-0009-4000-8000-000000000009",
+      "name": "Fin OK",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1780, 200]
+    },
+    {
+      "parameters": {},
+      "id": "a1b2c3d4-0010-4000-8000-000000000010",
+      "name": "Fin Error",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1780, 420]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Configuracion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuracion": {
+      "main": [
+        [
+          {
+            "node": "Leer archivo BC3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer archivo BC3": {
+      "main": [
+        [
+          {
+            "node": "Preparar campos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar campos": {
+      "main": [
+        [
+          {
+            "node": "POST Import BC3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST Import BC3": {
+      "main": [
+        [
+          {
+            "node": "Respuesta OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respuesta OK?": {
+      "main": [
+        [
+          {
+            "node": "Resumen OK",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Handler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resumen OK": {
+      "main": [
+        [
+          {
+            "node": "Fin OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Handler": {
+      "main": [
+        [
+          {
+            "node": "Fin Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "enlaze",
+      "id": "tag-enlaze"
+    },
+    {
+      "name": "bc3",
+      "id": "tag-bc3"
+    },
+    {
+      "name": "technical-prices",
+      "id": "tag-technical-prices"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-05-27T00:00:00.000Z",
+  "versionId": "1"
+}

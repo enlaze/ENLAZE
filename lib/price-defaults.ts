@@ -1,3 +1,5 @@
+
+
 /**
  * Hardcoded per-sector price defaults.
  * Used as fallback when sector_config.default_prices is empty in the DB.

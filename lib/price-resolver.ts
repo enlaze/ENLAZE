@@ -2,11 +2,12 @@
  * price-resolver.ts
  * Resolves material/partida prices through a priority chain:
  * 1. User's own prices (price_items)
- * 2. ENLAZE base price bank
- * 3. n8n synced prices (sector_data)
- * 4. Authorized suppliers/providers
- * 5. Web search (on-demand, not per-render)
- * 6. Internal estimate with low confidence
+ * 2. Technical price bank (BC3/FIEBDC imports — technical_price_items)
+ * 3. ENLAZE base price bank (INTERNAL_PRICE_DB hardcoded)
+ * 4. n8n synced prices (sector_data)
+ * 5. Authorized suppliers/providers
+ * 6. Web search (on-demand, not per-render)
+ * 7. Internal estimate with low confidence
  *
  * Pure logic where possible. Supabase calls isolated to resolve functions.
  * Web search only triggered explicitly, never on render.
@@ -17,6 +18,7 @@
 export type QualityTier = "basica" | "media" | "alta";
 export type PriceSourceType =
   | "user_catalog"
+  | "technical_bank"
   | "enlaze_base"
   | "n8n_market"
   | "authorized_supplier"
@@ -267,12 +269,24 @@ export function normalizeMaterialName(name: string): string {
  *
  * This function is PURE — no side effects, no network calls.
  */
+/** Technical price bank entry (from technical_price_items table) */
+export interface TechnicalPriceEntry {
+  name: string;
+  item_code: string;
+  unit: string;
+  unit_price: number;
+  confidence_score: number;
+  source: string;
+  region: string;
+}
+
 export function resolveMaterialPrice(
   request: PriceRequest,
   userPrices?: Array<{ name: string; unit_price: number; unit: string; supplier_name: string; source_type: string }>,
   enlazePrices?: Array<{ name: string; unit_price: number; unit: string; supplier_name: string }>,
   n8nPrices?: Array<{ title: string; value: number; unit: string; source: string }>,
-  webResults?: PriceAlternative[]
+  webResults?: PriceAlternative[],
+  technicalPrices?: TechnicalPriceEntry[]
 ): ResolvedPrice {
   const normalized = normalizeMaterialName(request.materialName);
   const normalizedUnit = normalizeUnit(request.unit);
@@ -312,7 +326,25 @@ export function resolveMaterialPrice(
     }
   }
 
-  // Level 2: ENLAZE base bank
+  // Level 2: Technical price bank (BC3/FIEBDC imports)
+  if (technicalPrices && technicalPrices.length > 0) {
+    const techMatch = technicalPrices.find(p => fuzzyMatch(p.name, request.materialName));
+    if (techMatch) {
+      const confidence = techMatch.confidence_score || 0.80;
+      alternatives.push({
+        supplier: `Banco tecnico (${techMatch.source})`,
+        title: techMatch.name,
+        price: techMatch.unit_price,
+        unit: techMatch.unit,
+        qualityTier: request.qualityTier,
+      });
+      return buildResult(request, normalized, techMatch.unit_price,
+        `Banco tecnico (${techMatch.source})`, "", "technical_bank",
+        confidence, now, alternatives);
+    }
+  }
+
+  // Level 3: ENLAZE base bank
   if (enlazePrices && enlazePrices.length > 0) {
     const match = enlazePrices.find(p => fuzzyMatch(p.name, request.materialName));
     if (match) {
@@ -328,7 +360,7 @@ export function resolveMaterialPrice(
     }
   }
 
-  // Level 3: n8n synced prices
+  // Level 4: n8n synced prices
   if (n8nPrices && n8nPrices.length > 0) {
     const match = n8nPrices.find(p => fuzzyMatch(p.title, request.materialName));
     if (match) {
@@ -344,10 +376,10 @@ export function resolveMaterialPrice(
     }
   }
 
-  // Level 4: Authorized suppliers (from n8n with specific supplier tags)
+  // Level 5: Authorized suppliers (from n8n with specific supplier tags)
   // Covered by level 3 for now; when we add specific supplier APIs, they go here.
 
-  // Level 5: Web search results (passed in, not fetched here)
+  // Level 6: Web search results (passed in, not fetched here)
   if (webResults && webResults.length > 0) {
     // Add all as alternatives
     webResults.forEach(wr => alternatives.push(wr));
@@ -376,7 +408,7 @@ export function resolveMaterialPrice(
       selected.url || "", "web_search", confidence, now, alternatives);
   }
 
-  // Level 6: Internal estimate (fallback)
+  // Level 7: Internal estimate (fallback)
   const dbMatch = INTERNAL_PRICE_DB.find(p => fuzzyMatch(p.name, request.materialName));
   if (dbMatch) {
     const price = request.qualityTier === "alta" ? dbMatch.price_alta
@@ -455,6 +487,7 @@ export interface BatchPriceInput {
   userPrices?: Array<{ name: string; unit_price: number; unit: string; supplier_name: string; source_type: string }>;
   enlazePrices?: Array<{ name: string; unit_price: number; unit: string; supplier_name: string }>;
   n8nPrices?: Array<{ title: string; value: number; unit: string; source: string }>;
+  technicalPrices?: TechnicalPriceEntry[];
 }
 
 /**
@@ -472,7 +505,9 @@ export function resolvePricesForBudget(
       mat,
       input.userPrices,
       input.enlazePrices,
-      input.n8nPrices
+      input.n8nPrices,
+      undefined, // webResults (resolved externally)
+      input.technicalPrices
     );
 
     if (result.sourceType === "estimated" && result.confidenceScore < 0.5) {
