@@ -5,6 +5,7 @@ import {
   type PriceRequest,
   type ResolvedPrice,
   type PriceAlternative,
+  type TechnicalPriceEntry,
   resolveMaterialPrice,
   buildCacheRow,
   normalizeMaterialName,
@@ -104,7 +105,23 @@ export async function POST(request: Request) {
       source_type: p.source_type || "manual",
     }));
 
-    // ── Step 2: Fetch sector_data market prices (level 2-3 — enlaze_base + n8n) ──
+    // ── Step 1b: Fetch technical_price_items (level 2 — technical_bank) ──
+    const { data: techPriceRows } = await supabase
+      .from("technical_price_items")
+      .select("name, item_code, unit, unit_price, confidence_score, source, region")
+      .eq("is_active", true);
+
+    const technicalPrices: TechnicalPriceEntry[] = (techPriceRows || []).map(r => ({
+      name: String(r.name || ""),
+      item_code: String(r.item_code || ""),
+      unit: String(r.unit || "ud"),
+      unit_price: Number(r.unit_price) || 0,
+      confidence_score: Number(r.confidence_score) || 0.80,
+      source: String(r.source || ""),
+      region: String(r.region || "espana"),
+    }));
+
+    // ── Step 2: Fetch sector_data market prices (level 3-4 — enlaze_base + n8n) ──
     const { data: sectorData } = await supabase
       .from("sector_data")
       .select("title, value, unit, source, category")
@@ -186,8 +203,8 @@ export async function POST(request: Request) {
         continue;
       }
 
-      // Try levels 1-3 (pure function, no web)
-      const result = resolveMaterialPrice(mat, userPrices, enlazePrices, n8nPrices);
+      // Try levels 1-4 (pure function, no web)
+      const result = resolveMaterialPrice(mat, userPrices, enlazePrices, n8nPrices, undefined, technicalPrices);
 
       if (result.sourceType === "estimated" && result.confidenceScore < 0.5) {
         // Needs web search
@@ -223,7 +240,7 @@ export async function POST(request: Request) {
         if (!mat) continue;
 
         const reResolved = resolveMaterialPrice(
-          mat, userPrices, enlazePrices, n8nPrices, webResult.alternatives
+          mat, userPrices, enlazePrices, n8nPrices, webResult.alternatives, technicalPrices
         );
 
         // Only use if it actually found web results (sourceType should be web_search)
@@ -256,6 +273,7 @@ export async function POST(request: Request) {
     const summary = {
       total: resolved.length,
       fromUserCatalog: resolved.filter(r => r.sourceType === "user_catalog").length,
+      fromTechnicalBank: resolved.filter(r => r.sourceType === "technical_bank").length,
       fromEnlaze: resolved.filter(r => r.sourceType === "enlaze_base").length,
       fromN8n: resolved.filter(r => r.sourceType === "n8n_market").length,
       fromWebSearch: resolved.filter(r => r.sourceType === "web_search").length,
@@ -271,10 +289,11 @@ export async function POST(request: Request) {
       summary,
       cachedUntil: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
     });
-  } catch (error: any) {
-    console.error("[PriceResolve] Error:", error);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[PriceResolve] Error:", message);
     return NextResponse.json(
-      { error: error.message || "Error interno al resolver precios" },
+      { error: message || "Error interno al resolver precios" },
       { status: 500 }
     );
   }
