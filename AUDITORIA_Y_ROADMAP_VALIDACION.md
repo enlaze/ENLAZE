@@ -5,6 +5,8 @@ _Fecha: 2026-07-01 · Objetivo de esta etapa: web prácticamente acabada + prime
 ---
 
 > **Actualización 2026-07-02:** Etapa A RESUELTA por decisión de producto — comercio local **no lleva presupuestos** (se ocultó/gateó, construcción intacto). El siguiente foco es la Etapa B (pulido visual) → C (QA).
+>
+> **Actualización 2026-07-08:** Etapa B HECHA y subida (breadcrumbs + consistencia dark/light). **Etapa activa: C (QA del primer usuario).** Primer usuario real probable = empresa de CONSTRUCCIÓN (padre del socio) → la QA se enfoca en el recorrido de un usuario de construcción, incluido crear un presupuesto con el wizard. Etapa E (servidor/hosting) sigue APARCADA hasta tener ese usuario listo.
 
 ## 1. Veredicto: dónde estás de verdad
 
@@ -45,13 +47,13 @@ Decisión de producto: el concepto de "presupuesto" es nativo de construcción y
 - **Hecho:** budgets fuera del nav de comercio_local (gate en código, no depende de migración), guard de ruta que redirige a `/dashboard`, y eliminado el cartel "en construcción".
 - **Pendiente de verificar en vivo:** como usuario comercio_local, confirmar que el nav oculta "Presupuestos" y que la URL directa redirige.
 
-### Etapa B — Pulido visual y de consistencia  _(percepción)_
+### Etapa B — Pulido visual y de consistencia  _(HECHA · 2026-07-03)_
 El rediseño del briefing (ya en marcha) + una pasada de consistencia + los P1 de más impacto de tu roadmap.
 - **Interno:** componentes de UI reutilizados, tablas con orden/filtro donde aporte.
 - **Visual:** el producto se siente terminado y coherente entre módulos.
 - **Reparto:** Cowork prioriza y da dirección de diseño → Code implementa.
 
-### Etapa C — Recorrido del primer usuario (QA end-to-end)  _(fiabilidad)_
+### Etapa C — Recorrido del primer usuario (QA end-to-end)  _(EN CURSO · 2026-07-08 · foco: usuario de construcción, incl. crear presupuesto)_
 Probar el funnel completo con datos reales: landing → registro → verificación email → onboarding → dashboard → generar primer presupuesto → briefing del agente. Arreglar lo que se rompa. Incluir recuperación de contraseña si falta.
 - **Interno:** se cierran bugs de flujo, estados vacíos con 1 cliente/0 datos.
 - **Visual:** cada pantalla se ve bien también "vacía", no solo llena.
