@@ -38,7 +38,7 @@ export default function LoginPage() {
         <div className="text-center mb-8">
          <Logo />
           <h1 className="text-2xl font-bold text-navy-900">Bienvenido de nuevo</h1>
-          <p className="mt-2 text-navy-600">Inicia sesion en tu cuenta</p>
+          <p className="mt-2 text-navy-600">Inicia sesión en tu cuenta</p>
         </div>
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
@@ -46,8 +46,8 @@ export default function LoginPage() {
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green" placeholder="tu@empresa.com" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-navy-700 mb-1">Contrasena</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green" placeholder="Tu contrasena" />
+            <label className="block text-sm font-medium text-navy-700 mb-1">Contraseña</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green" placeholder="Tu contraseña" />
           </div>
           {error && <p className="text-red-500 text-sm">{error}</p>}
           <button type="submit" disabled={loading} className="w-full py-3 rounded-xl bg-brand-green text-white font-semibold shadow-lg shadow-brand-green/25 hover:bg-brand-green-dark transition-colors disabled:opacity-50">

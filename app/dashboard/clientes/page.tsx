@@ -241,7 +241,7 @@ export default function ClientsPage() {
                   placeholder="+34 600 000 000"
                 />
               </FormField>
-              <FormField label="Empresa">
+              <FormField label="Empresa (opcional)">
                 <Input
                   type="text"
                   value={form.company}

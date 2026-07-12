@@ -32,15 +32,15 @@ interface Plan {
 
 const plans: Plan[] = [
   {
-    name: "Basico",
+    name: "Básico",
     monthly: 19,
-    desc: "Para emprendedores y negocios que empiezan a profesionalizar su comunicacion.",
+    desc: "Para emprendedores y negocios que empiezan a profesionalizar su comunicación.",
     features: [
       "Hasta 100 clientes",
-      "WhatsApp basico (100 msg/mes)",
-      "Emails automaticos (500/mes)",
+      "WhatsApp básico (100 msg/mes)",
+      "Emails automáticos (500/mes)",
       "1 usuario",
-      "Dashboard con analiticas",
+      "Dashboard con analíticas",
       "Soporte por email",
     ],
     cta: "Empezar prueba gratis",
@@ -49,7 +49,7 @@ const plans: Plan[] = [
   {
     name: "Profesional",
     monthly: 49,
-    desc: "Para equipos que necesitan automatizar toda su comunicacion y crecer.",
+    desc: "Para equipos que necesitan automatizar toda su comunicación y crecer.",
     features: [
       "Clientes ilimitados",
       "WhatsApp ilimitado",
@@ -75,7 +75,7 @@ const plans: Plan[] = [
       "Manager dedicado",
       "SLA garantizado",
       "Onboarding personalizado",
-      "Facturacion personalizada",
+      "Facturación personalizada",
     ],
     cta: "Contactar ventas",
     popular: false,
@@ -84,28 +84,28 @@ const plans: Plan[] = [
 
 const faqs = [
   {
-    q: "Como funciona la prueba gratuita de 10 dias?",
-    a: "Al registrarte tienes acceso completo a todas las funcionalidades de tu plan elegido durante 10 dias sin coste. No te cobramos nada hasta que termine la prueba, y puedes cancelar en cualquier momento.",
+    q: "¿Cómo funciona la prueba gratuita de 10 días?",
+    a: "Al registrarte tienes acceso completo a todas las funcionalidades de tu plan elegido durante 10 días sin coste. No te cobramos nada hasta que termine la prueba, y puedes cancelar en cualquier momento.",
   },
   {
-    q: "Puedo cambiar de plan en cualquier momento?",
-    a: "Si, puedes subir o bajar de plan cuando quieras. Los cambios se aplican inmediatamente y ajustamos la facturacion de forma proporcional.",
+    q: "¿Puedo cambiar de plan en cualquier momento?",
+    a: "Sí, puedes subir o bajar de plan cuando quieras. Los cambios se aplican inmediatamente y ajustamos la facturación de forma proporcional.",
   },
   {
-    q: "Hay compromiso de permanencia?",
-    a: "No, todos los planes son mensuales sin compromiso. Puedes cancelar cuando quieras sin penalizacion.",
+    q: "¿Hay compromiso de permanencia?",
+    a: "No, todos los planes son mensuales sin compromiso. Puedes cancelar cuando quieras sin penalización.",
   },
   {
-    q: "Que metodos de pago aceptan?",
-    a: "Aceptamos tarjetas de credito y debito (Visa, Mastercard, American Express). Tambien transferencia bancaria para el plan Empresa.",
+    q: "¿Qué métodos de pago aceptan?",
+    a: "Aceptamos tarjetas de crédito y débito (Visa, Mastercard, American Express). También transferencia bancaria para el plan Empresa.",
   },
   {
-    q: "Ofrecen descuento por pago anual?",
-    a: "Si, con el pago anual ahorras un 20% en cualquier plan. Usa el selector mensual/anual al inicio de la pagina para ver los precios.",
+    q: "¿Ofrecen descuento por pago anual?",
+    a: "Sí, con el pago anual ahorras un 20% en cualquier plan. Usa el selector mensual/anual al inicio de la página para ver los precios.",
   },
   {
-    q: "Que pasa cuando termina mi prueba gratuita?",
-    a: "Te avisamos antes de que termine. Si decides continuar, se activa la suscripcion mensual. Si no, tu cuenta pasa a modo lectura sin perder tus datos.",
+    q: "¿Qué pasa cuando termina mi prueba gratuita?",
+    a: "Te avisamos antes de que termine. Si decides continuar, se activa la suscripción mensual. Si no, tu cuenta pasa a modo lectura sin perder tus datos.",
   },
 ];
 
@@ -215,7 +215,7 @@ export default function PricingPage() {
               Un plan para cada etapa de tu negocio
             </h1>
             <p className="mt-4 text-lg text-navy-600">
-              Sin sorpresas, sin costes ocultos. Empieza con 10 dias gratis y
+              Sin sorpresas, sin costes ocultos. Empieza con 10 días gratis y
               escala cuando lo necesites.
             </p>
           </div>
@@ -267,7 +267,7 @@ export default function PricingPage() {
 
           <div className="flex justify-center mb-12">
             <div className="inline-flex items-center gap-2 rounded-full bg-brand-green/10 px-5 py-2.5 text-sm font-semibold text-brand-green">
-              🎁 10 dias de prueba gratis en todos los planes — sin tarjeta de credito
+              🎁 10 días de prueba gratis en todos los planes — sin tarjeta de crédito
             </div>
           </div>
 
@@ -283,7 +283,7 @@ export default function PricingPage() {
               >
                 {plan.popular && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-brand-green text-white text-xs font-semibold">
-                    Mas popular
+                    Más popular
                   </div>
                 )}
                 <h3 className="text-lg font-bold text-navy-900">{plan.name}</h3>

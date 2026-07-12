@@ -277,9 +277,9 @@ export function LiveSummaryPanel() {
               </>
             ) : estimatedTimeline ? (
               <div className="flex justify-between items-center text-sm mt-1">
-                <span className="text-navy-500 dark:text-zinc-400">Duracion</span>
+                <span className="text-navy-500 dark:text-zinc-400">Duración</span>
                 <span className="font-medium text-navy-900 dark:text-white">
-                  {estimatedTimeline.total_duration_weeks} semanas ({estimatedTimeline.total_duration_days} dias)
+                  {estimatedTimeline.total_duration_weeks} semanas ({estimatedTimeline.total_duration_days} días)
                 </span>
               </div>
             ) : null}
@@ -351,7 +351,7 @@ export function LiveSummaryPanel() {
             <>
               <li>Sugerencia: Revisa los precios de los materiales con los proveedores reales.</li>
               {!isMaterialBasketReal && (
-                <li>Conecta tus catalogos de compra para evitar precios estimados.</li>
+                <li>Conecta tus catálogos de compra para evitar precios estimados.</li>
               )}
             </>
           ) : null}
@@ -362,7 +362,7 @@ export function LiveSummaryPanel() {
       {state.analysisDirty && (
         <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-800 rounded-xl p-3 mb-4">
           <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
-            La propuesta ha cambiado desde el ultimo analisis. Pulsa "Generar con IA" en el paso de Partidas para recalcular.
+            La propuesta ha cambiado desde el último análisis. Pulsa "Generar con IA" en el paso de Partidas para recalcular.
           </p>
         </div>
       )}

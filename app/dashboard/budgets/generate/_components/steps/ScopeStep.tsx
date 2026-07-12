@@ -25,35 +25,35 @@ const labelCls = "block text-sm font-medium text-navy-700 dark:text-zinc-300 mb-
 const ESTANCIAS = [
   { value: "vivienda_completa", label: "Vivienda completa" },
   { value: "cocina", label: "Cocina" },
-  { value: "bano_1", label: "Bano 1" },
-  { value: "bano_2", label: "Bano 2" },
-  { value: "salon", label: "Salon" },
+  { value: "bano_1", label: "Baño 1" },
+  { value: "bano_2", label: "Baño 2" },
+  { value: "salon", label: "Salón" },
   { value: "dormitorios", label: "Dormitorios" },
   { value: "pasillo", label: "Pasillo / Recibidor" },
-  { value: "terraza", label: "Terraza / Balcon" },
+  { value: "terraza", label: "Terraza / Balcón" },
   { value: "otros", label: "Otros" },
 ];
 
 const ACTUACIONES = [
   { value: "demoliciones", label: "Demoliciones" },
-  { value: "albanileria", label: "Albanileria / Tabiqueria" },
+  { value: "albanileria", label: "Albañilería / Tabiquería" },
   { value: "electricidad", label: "Electricidad" },
-  { value: "fontaneria", label: "Fontaneria" },
-  { value: "climatizacion", label: "Climatizacion" },
+  { value: "fontaneria", label: "Fontanería" },
+  { value: "climatizacion", label: "Climatización" },
   { value: "alicatados", label: "Alicatados / Revestimientos" },
   { value: "pavimentos", label: "Pavimentos" },
   { value: "pintura", label: "Pintura" },
-  { value: "carpinteria_interior", label: "Carpinteria interior" },
-  { value: "carpinteria_exterior", label: "Carpinteria exterior / Ventanas" },
+  { value: "carpinteria_interior", label: "Carpintería interior" },
+  { value: "carpinteria_exterior", label: "Carpintería exterior / Ventanas" },
   { value: "cocina_montaje", label: "Cocina (muebles y equipamiento)" },
-  { value: "banos_sanitarios", label: "Banos / Sanitarios" },
-  { value: "iluminacion", label: "Iluminacion" },
+  { value: "banos_sanitarios", label: "Baños / Sanitarios" },
+  { value: "iluminacion", label: "Iluminación" },
   { value: "limpieza_final", label: "Limpieza final" },
-  { value: "gestion_residuos", label: "Gestion de residuos" },
+  { value: "gestion_residuos", label: "Gestión de residuos" },
 ];
 
 const CALIDADES = [
-  { value: "basica", label: "Basica", description: "Materiales estandar, acabados funcionales" },
+  { value: "basica", label: "Básica", description: "Materiales estándar, acabados funcionales" },
   { value: "media", label: "Media", description: "Materiales de gama media, acabados cuidados" },
   { value: "alta", label: "Alta", description: "Materiales premium, acabados de alta calidad" },
 ];
@@ -181,12 +181,12 @@ export function ScopeStep() {
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
-              <label className={labelCls}>Titulo del presupuesto <span className="text-red-500">*</span></label>
+              <label className={labelCls}>Título del presupuesto <span className="text-red-500">*</span></label>
               <input
                 type="text"
                 value={state.title || ""}
                 onChange={(e) => updateState({ title: e.target.value })}
-                placeholder="Ej: Reforma bano completo"
+                placeholder="Ej: Reforma baño completo"
                 className={inputCls}
                 required
               />
@@ -276,7 +276,7 @@ export function ScopeStep() {
                   const sTypes = serviceTypes();
                   const fallbackServiceTypes = [
                     { value: "reforma", label: "Reforma integral" },
-                    { value: "fontaneria", label: "Fontaneria" },
+                    { value: "fontaneria", label: "Fontanería" },
                     { value: "electricidad", label: "Electricidad" },
                     { value: "general", label: "General" },
                   ];
@@ -298,10 +298,10 @@ export function ScopeStep() {
           </div>
 
           <div>
-            <label className={labelCls}>Descripcion general para la IA</label>
+            <label className={labelCls}>Descripción general para la IA</label>
             <textarea
               className="w-full bg-white dark:bg-zinc-900 border border-navy-200 dark:border-zinc-700 rounded-lg p-3 text-sm focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green outline-none min-h-[100px]"
-              placeholder="Ej: Reforma integral de piso de 80m2 con cambio de distribucion..."
+              placeholder="Ej: Reforma integral de piso de 80m2 con cambio de distribución..."
               value={state.description}
               onChange={(e) => updateState({ description: e.target.value })}
             />
@@ -320,12 +320,12 @@ export function ScopeStep() {
         <Card>
           <h2 className="text-lg font-bold text-navy-900 dark:text-white mb-1">Alcance detallado</h2>
           <p className="text-sm text-navy-500 dark:text-zinc-400 mb-5">
-            Selecciona las estancias, actuaciones y calidad. Esto alimenta al analisis IA para generar partidas mas precisas.
+            Selecciona las estancias, actuaciones y calidad. Esto alimenta al análisis IA para generar partidas más precisas.
           </p>
 
           {/* Ubicacion y superficie */}
           <div className="mb-6">
-            <label className={labelCls}>Ubicacion de la obra (ciudad / provincia)</label>
+            <label className={labelCls}>Ubicación de la obra (ciudad / provincia)</label>
             <input
               type="text"
               value={ubicacion}
@@ -334,7 +334,7 @@ export function ScopeStep() {
               className={inputCls}
             />
             <p className="text-[11px] text-navy-400 dark:text-zinc-500 mt-1">
-              Los precios se ajustan segun la zona geografica y normativas locales (CTE, BOE, ordenanzas municipales).
+              Los precios se ajustan según la zona geográfica y normativas locales (CTE, BOE, ordenanzas municipales).
             </p>
           </div>
 
@@ -353,7 +353,7 @@ export function ScopeStep() {
               />
             </div>
             <div>
-              <label className={labelCls}>N. de banos</label>
+              <label className={labelCls}>Nº de baños</label>
               <input
                 type="number"
                 min="0"
@@ -392,7 +392,7 @@ export function ScopeStep() {
                   onChange={(e) => updateSectorData("incluye_climatizacion", e.target.checked)}
                   className="rounded border-navy-300 text-brand-green focus:ring-brand-green/20"
                 />
-                Climatizacion
+                Climatización
               </label>
             </div>
           </div>

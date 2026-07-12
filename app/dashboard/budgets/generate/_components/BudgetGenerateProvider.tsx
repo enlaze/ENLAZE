@@ -159,10 +159,10 @@ const CONSTRUCTION_FALLBACK_MATERIALS: Material[] = [
 ];
 
 const FALLBACK_PROVIDERS: ProviderOption[] = [
-  { id: "leroy-merlin", name: "Leroy Merlin", description: "Gran superficie de bricolaje y construccion", estimatedPrice: 0, deliveryTime: "24-48h", stockLevel: "Alto", rating: 4.8, isRecommended: true, materialsCount: 0, isRealData: false },
-  { id: "obramat", name: "Obramat", description: "Almacen profesional de materiales", estimatedPrice: 0, deliveryTime: "48-72h", stockLevel: "Medio", rating: 4.5, isRecommended: false, materialsCount: 0, isRealData: false },
-  { id: "saltoki", name: "Saltoki", description: "Distribuidor profesional de fontaneria y electricidad", estimatedPrice: 0, deliveryTime: "24-72h", stockLevel: "Alto", rating: 4.6, isRecommended: false, materialsCount: 0, isRealData: false },
-  { id: "referencia-mercado", name: "Referencia mercado", description: "Precios de referencia del mercado espanol", estimatedPrice: 0, deliveryTime: "Variable", stockLevel: "A consultar", rating: 4.0, isRecommended: false, materialsCount: 0, isRealData: false },
+  { id: "leroy-merlin", name: "Leroy Merlin", description: "Gran superficie de bricolaje y construcción", estimatedPrice: 0, deliveryTime: "24-48h", stockLevel: "Alto", rating: 4.8, isRecommended: true, materialsCount: 0, isRealData: false },
+  { id: "obramat", name: "Obramat", description: "Almacén profesional de materiales", estimatedPrice: 0, deliveryTime: "48-72h", stockLevel: "Medio", rating: 4.5, isRecommended: false, materialsCount: 0, isRealData: false },
+  { id: "saltoki", name: "Saltoki", description: "Distribuidor profesional de fontanería y electricidad", estimatedPrice: 0, deliveryTime: "24-72h", stockLevel: "Alto", rating: 4.6, isRecommended: false, materialsCount: 0, isRealData: false },
+  { id: "referencia-mercado", name: "Referencia mercado", description: "Precios de referencia del mercado español", estimatedPrice: 0, deliveryTime: "Variable", stockLevel: "A consultar", rating: 4.0, isRecommended: false, materialsCount: 0, isRealData: false },
 ];
 
 export interface BudgetState {
@@ -1433,7 +1433,7 @@ export function BudgetGenerateProvider({
           const isReforma = state.serviceType?.toLowerCase().includes("reforma") || !state.serviceType;
           if (isReforma) {
             toast.info("Aviso", {
-              description: "Usando motor de presupuestos local porque el analisis IA no ha respondido."
+              description: "Usando motor de presupuestos local porque el análisis IA no ha respondido."
             });
             const fbScope: BudgetScope = {
               superficie_m2: state.sectorData.superficie_m2 || 80,
@@ -1495,7 +1495,7 @@ export function BudgetGenerateProvider({
               const isReforma = state.serviceType?.toLowerCase().includes("reforma") || !state.serviceType;
               if (isReforma) {
                 toast.info("Aviso", {
-                  description: "Usando motor de presupuestos local porque el analisis IA no ha respondido."
+                  description: "Usando motor de presupuestos local porque el análisis IA no ha respondido."
                 });
                 const gScope: BudgetScope = {
                   superficie_m2: state.sectorData.superficie_m2 || 80,

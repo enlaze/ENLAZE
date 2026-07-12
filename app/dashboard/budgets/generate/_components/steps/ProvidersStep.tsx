@@ -222,7 +222,7 @@ export function ProvidersStep() {
             <span className="text-3xl mb-2 block">🏪</span>
             <h4 className="text-sm font-bold text-navy-900 dark:text-white">Sin proveedores disponibles</h4>
             <p className="text-xs text-navy-500 dark:text-zinc-400 mt-1 max-w-xs mx-auto">
-              Los proveedores se generan automaticamente con el analisis IA. Vuelve al paso anterior y usa "Generar con IA".
+              Los proveedores se generan automáticamente con el análisis IA. Vuelve al paso anterior y usa "Generar con IA".
             </p>
           </div>
         )}
@@ -311,7 +311,7 @@ export function ProvidersStep() {
               <span className="text-3xl mb-2 block">📦</span>
               <h4 className="text-sm font-bold text-navy-900 dark:text-white">Sin materiales disponibles</h4>
               <p className="text-xs text-navy-500 dark:text-zinc-400 mt-1 max-w-xs mx-auto">
-                Los materiales se generan automaticamente con la IA o desde tu catalogo de precios. Vuelve al paso anterior y usa "Generar con IA" para obtener una lista completa.
+                Los materiales se generan automáticamente con la IA o desde tu catálogo de precios. Vuelve al paso anterior y usa "Generar con IA" para obtener una lista completa.
               </p>
             </div>
           ) : (
@@ -470,7 +470,7 @@ export function ProvidersStep() {
       <Card>
         <h2 className="text-lg font-bold text-navy-900 dark:text-white mb-1">Exportar presupuesto</h2>
         <p className="text-sm text-navy-500 dark:text-zinc-400 mb-4">
-          Descarga el presupuesto en PDF antes o despues de finalizar. El PDF cliente es limpio y profesional; el interno incluye costes, margenes y notas.
+          Descarga el presupuesto en PDF antes o después de finalizar. El PDF cliente es limpio y profesional; el interno incluye costes, márgenes y notas.
         </p>
         {state.isUndervalued && (
           <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 rounded-lg">

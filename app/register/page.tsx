@@ -81,7 +81,7 @@ export default function RegisterPage() {
             <Logo href="/" size={36} />
           </div>
           <h1 className="text-2xl font-bold text-navy-900">Crea tu cuenta</h1>
-          <p className="mt-2 text-navy-600">Empieza a automatizar tu comunicacion</p>
+          <p className="mt-2 text-navy-600">Empieza a automatizar tu comunicación</p>
         </div>
         <form onSubmit={handleRegister} className="space-y-4">
           <div>
@@ -93,7 +93,7 @@ export default function RegisterPage() {
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green" placeholder="tu@empresa.com" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-navy-700 mb-1">Contrasena</label>
+            <label className="block text-sm font-medium text-navy-700 mb-1">Contraseña</label>
             <input
               type="password"
               value={password}
@@ -101,7 +101,7 @@ export default function RegisterPage() {
               required
               minLength={8}
               className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green"
-              placeholder="Minimo 8 caracteres"
+              placeholder="Mínimo 8 caracteres"
               aria-describedby="password-strength"
             />
             <div id="password-strength">
@@ -114,7 +114,7 @@ export default function RegisterPage() {
           </button>
         </form>
         <p className="mt-6 text-center text-sm text-navy-600">
-          Ya tienes cuenta? <Link href="/login" className="text-brand-green font-semibold hover:underline">Inicia sesion</Link>
+          ¿Ya tienes cuenta? <Link href="/login" className="text-brand-green font-semibold hover:underline">Inicia sesión</Link>
         </p>
       </div>
     </div>

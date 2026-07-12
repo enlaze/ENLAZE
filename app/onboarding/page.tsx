@@ -78,7 +78,7 @@ export default function OnboardingPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-extrabold text-[var(--color-navy-50)]">
-            enl<span className="text-[var(--color-brand-green)]">a</span>ze
+            enla<span className="text-[var(--color-brand-green)]">z</span>e
           </h1>
           <div className="flex items-center justify-center gap-2 mt-4">
             <div className={"h-2 rounded-full transition-all " + (step >= 1 ? "bg-[var(--color-brand-green)] w-12" : "bg-[var(--color-navy-700)] w-8")}></div>

@@ -217,11 +217,11 @@ export default function SettingsPage() {
 
         {/* Change Password */}
         <div className="rounded-2xl border border-navy-100 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="text-lg font-bold text-navy-900 dark:text-white mb-4">Cambiar contrasena</h2>
+          <h2 className="text-lg font-bold text-navy-900 dark:text-white mb-4">Cambiar contraseña</h2>
           <form onSubmit={handleChangePassword} className="space-y-4">
-            <div><label className="block text-sm font-medium text-navy-700 dark:text-zinc-300 mb-1">Nueva contrasena</label><input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required minLength={6} className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white" placeholder="Minimo 6 caracteres" /></div>
+            <div><label className="block text-sm font-medium text-navy-700 dark:text-zinc-300 mb-1">Nueva contraseña</label><input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required minLength={6} className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white" placeholder="Mínimo 6 caracteres" /></div>
             {passwordResult.text && <p className={`text-sm ${passwordResult.type === "success" ? "text-brand-green" : "text-red-500"}`}>{passwordResult.text}</p>}
-            <button type="submit" disabled={savingPassword} className="px-5 py-2.5 rounded-xl bg-navy-800 text-white text-sm font-semibold hover:bg-navy-900 transition-colors disabled:opacity-50 dark:bg-zinc-900 dark:hover:bg-zinc-800">{savingPassword ? "Actualizando..." : "Cambiar contrasena"}</button>
+            <button type="submit" disabled={savingPassword} className="px-5 py-2.5 rounded-xl bg-navy-800 text-white text-sm font-semibold hover:bg-navy-900 transition-colors disabled:opacity-50 dark:bg-zinc-900 dark:hover:bg-zinc-800">{savingPassword ? "Actualizando..." : "Cambiar contraseña"}</button>
           </form>
         </div>
 
