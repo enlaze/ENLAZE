@@ -219,6 +219,13 @@ function priorityFor(args: {
  * Heuristic importance for the clear cases. Returns `null` when the case is
  * ambiguous (category unknown) so the caller can defer it to Haiku.
  */
+/** "20h" si <24h; si no, "N día(s)". Para textos legibles. */
+function waitingPhrase(hours: number): string {
+  if (hours < 24) return `${hours}h`;
+  const d = Math.round(hours / 24);
+  return `${d} día${d === 1 ? "" : "s"}`;
+}
+
 function importanceForHeuristic(a: {
   category: EmailCategory;
   priority: PrioritySignal;
@@ -232,10 +239,10 @@ function importanceForHeuristic(a: {
   const noReply = NOREPLY_RE.test(a.fromEmail);
   if (a.priority === "urgent") return { importance: "critical", reason: "Marcado como urgente" };
   if ((a.isKnownClient || a.category === "customer") && (a.isRecurring || a.isKnownClient) && a.hoursWaiting >= 24)
-    return { importance: "critical", reason: `Cliente sin responder ${a.hoursWaiting}h` };
+    return { importance: "critical", reason: `Cliente sin responder hace ${waitingPhrase(a.hoursWaiting)}` };
   if (a.isInvoice) return { importance: "important", reason: "Factura / pago detectado" };
   if (a.category === "supplier" && a.hoursWaiting >= 48)
-    return { importance: "important", reason: `Proveedor sin responder ${a.hoursWaiting}h` };
+    return { importance: "important", reason: `Proveedor sin responder hace ${waitingPhrase(a.hoursWaiting)}` };
   if (a.isMeeting) return { importance: "important", reason: "Solicitud de reunión / cita" };
   if (a.isKnownClient || a.category === "customer") return { importance: "important", reason: "Correo de cliente" };
   if (a.category === "spam" || noReply) return { importance: "noise", reason: "Notificación automática / promo" };

@@ -51,6 +51,13 @@ const IMPORTANCE_META: Record<Importance, { label: string; variant: "red" | "ora
   noise: { label: "Ruido", variant: "gray" },
 };
 
+function formatWaiting(hours: number): string {
+  if (hours < 1) return "hace un momento";
+  if (hours < 24) return `hace ${hours}h`;
+  const d = Math.round(hours / 24);
+  return `hace ${d} día${d === 1 ? "" : "s"}`;
+}
+
 const CATEGORY_LABEL: Record<string, string> = {
   customer: "Cliente",
   supplier: "Proveedor",
@@ -162,7 +169,7 @@ export default function EmailsPage() {
         <p className="text-sm font-medium text-navy-800 dark:text-zinc-200 truncate">{t.subject}</p>
         <p className="text-sm text-navy-500 dark:text-zinc-400 truncate">{t.snippet}</p>
         <p className="mt-1 text-xs text-navy-400">
-          hace {t.hours_waiting}h · {t.importance_reason}
+          {formatWaiting(t.hours_waiting)} · {t.importance_reason}
           {t.classified_by === "haiku" ? " · IA" : ""}
         </p>
       </div>
