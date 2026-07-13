@@ -7,6 +7,7 @@ import { useSector } from "@/lib/sector-context";
 import { useToast } from "@/components/ui/toast";
 import BackButton from "@/components/ui/back-button";
 import { SECTOR_OPTIONS, normalizeSectorId } from "@/lib/sectors";
+import SectorIcon from "@/components/SectorIcon";
 
 /**
  * Map a granular sector id (from SECTOR_OPTIONS) to the coarse `sector_config.sector_key`
@@ -142,7 +143,9 @@ export default function SectorSettingsPage() {
                 }`}
             >
               <div className="flex items-start gap-3">
-                <span className="text-3xl">{s.icon}</span>
+                <span className={isSelected ? "text-brand-green" : "text-navy-400 dark:text-zinc-400"}>
+                  <SectorIcon id={s.id} size={30} />
+                </span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <h3 className={`font-semibold ${isSelected ? "text-brand-green" : "text-navy-900 dark:text-white"}`}>

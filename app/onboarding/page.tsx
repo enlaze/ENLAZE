@@ -9,6 +9,7 @@ import {
 } from "@/lib/activity-log";
 import { useToast } from "@/components/ui/toast";
 import { SECTOR_OPTIONS } from "@/lib/sectors";
+import SectorIcon from "@/components/SectorIcon";
 
 const sectors = SECTOR_OPTIONS;
 
@@ -108,7 +109,13 @@ export default function OnboardingPage() {
                       : "border-[var(--color-navy-700)] bg-[var(--color-navy-800)] hover:border-[var(--color-navy-500)]"
                   )}
                 >
-                  <div className="text-2xl mb-2">{sector.icon}</div>
+                  <div className={"mb-2 " + (
+                    selectedSector === sector.id
+                      ? "text-[var(--color-brand-green)]"
+                      : "text-[var(--color-navy-300)]"
+                  )}>
+                    <SectorIcon id={sector.id} size={26} />
+                  </div>
                   <p className="font-semibold text-[var(--color-navy-100)] text-sm">{sector.name}</p>
                   <p className="text-xs text-[var(--color-navy-400)] mt-1">{sector.desc}</p>
                 </button>
