@@ -4,19 +4,25 @@ import { NextResponse } from "next/server";
 import { analyzeProject, buildScopeHash } from "@/lib/budget-analysis";
 import { generateBudgetItems, applyCostCoefficients } from "@/lib/budget-generator-v2";
 import { resolvePricesForBudget, type TechnicalPriceEntry, type ResolvedPrice } from "@/lib/price-resolver";
+import { calculateEconomics } from "@/lib/budget-economics";
+import { calculateTimeline } from "@/lib/budget-planner";
+import { validateBudget } from "@/lib/budget-validator";
 import type {
   BudgetScopeV2,
   BudgetPreferences,
   ProjectAnalysis,
   BudgetItemV2,
+  BudgetEconomics,
+  BudgetTimeline,
+  ValidationReport,
 } from "@/lib/types/budget-v2";
 
 /**
  * POST /api/budgets/generate-v2
  *
- * Full budget generation pipeline: FASE 1 (analysis) + FASE 2 (items).
- * FASE 3 (price resolution) is integrated inline.
- * FASEs 4-6 (economics, planning, validation) will be added in later etapas.
+ * Full budget generation pipeline: all 6 phases.
+ * FASE 1 (analysis) + FASE 2 (items) + FASE 3 (price resolution)
+ * + FASE 4 (economics) + FASE 5 (planning) + FASE 6 (validation).
  *
  * Flow:
  *   1. Check analysis cache -> if miss, run FASE 1 (Claude)
@@ -267,6 +273,45 @@ export async function POST(request: Request) {
     // Apply cost coefficients for items that only have unit_cost
     items = applyCostCoefficients(items);
 
+    // ── FASE 4: Economics (deterministic) ──
+    let economics: BudgetEconomics | null = null;
+    try {
+      economics = calculateEconomics(
+        items,
+        prefs,
+        scope.project_type,
+        scope.surface_m2,
+        prefs.workers_count,
+        null, // calendarDays — calculated in FASE 5
+      );
+    } catch (e) {
+      console.warn("[GenerateV2] FASE 4 economics error (non-fatal):", e);
+    }
+
+    // ── FASE 5: Timeline / Planning (deterministic) ──
+    let timeline: BudgetTimeline | null = null;
+    try {
+      timeline = calculateTimeline(
+        items,
+        analysis,
+        prefs.workers_count,
+        scope.start_date,
+        scope.deadline_date,
+      );
+    } catch (e) {
+      console.warn("[GenerateV2] FASE 5 timeline error (non-fatal):", e);
+    }
+
+    // ── FASE 6: Validation (deterministic) ──
+    let validation: ValidationReport | null = null;
+    try {
+      if (economics) {
+        validation = validateBudget(items, economics, analysis, scope, timeline);
+      }
+    } catch (e) {
+      console.warn("[GenerateV2] FASE 6 validation error (non-fatal):", e);
+    }
+
     // ── Calculate totals ──
     const totalCost = items.reduce((sum, i) => sum + i.subtotal_cost, 0);
     const totalSale = items.reduce((sum, i) => sum + i.subtotal_sale, 0);
@@ -281,6 +326,9 @@ export async function POST(request: Request) {
       analysis,
       analysis_cached: analysisCached,
       items,
+      economics,
+      timeline,
+      validation,
       summary: {
         total_items: items.length,
         total_cost: Number(totalCost.toFixed(2)),

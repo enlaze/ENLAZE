@@ -31,6 +31,15 @@ import {
   applyProviderToAIMaterials,
   type ProviderAdjustmentMeta,
 } from "@/lib/provider-materials";
+import type {
+  BudgetItemV2,
+  BudgetEconomics,
+  BudgetTimeline as BudgetTimelineV2,
+  ValidationReport,
+  ProjectAnalysis,
+  BudgetScopeV2,
+  BudgetPreferences,
+} from "@/lib/types/budget-v2";
 
 export interface Partida {
   id: string;
@@ -248,6 +257,12 @@ export interface BudgetState {
   clientView: BudgetClientView | null;
   /** Internal view for PDF (full escandallo) */
   internalView: BudgetInternalView | null;
+  /** V2 pipeline results */
+  v2Analysis: ProjectAnalysis | null;
+  v2Economics: BudgetEconomics | null;
+  v2Timeline: BudgetTimelineV2 | null;
+  v2Validation: ValidationReport | null;
+  v2Items: BudgetItemV2[] | null;
   /** Saving states */
   isSavingDraft: boolean;
   isFinalizing: boolean;
@@ -353,6 +368,11 @@ export function BudgetGenerateProvider({
     realisticTimeline: null,
     clientView: null,
     internalView: null,
+    v2Analysis: null,
+    v2Economics: null,
+    v2Timeline: null,
+    v2Validation: null,
+    v2Items: null,
     isSavingDraft: false,
     isFinalizing: false,
     saveError: null,
@@ -937,6 +957,255 @@ export function BudgetGenerateProvider({
     }));
 
     try {
+      const isConstruction = state.sector === "construccion" || !state.sector;
+      const marginMultiplier = 1 + (state.marginPercent / 100);
+
+      // ─── V2 PIPELINE (construction) ───
+      if (isConstruction) {
+        const v2Scope: BudgetScopeV2 = {
+          project_type: (state.serviceType as any) || "reforma_integral",
+          work_category: "residencial",
+          location: state.sectorData.ubicacion || "",
+          surface_m2: state.sectorData.superficie_m2 || 80,
+          num_bathrooms: state.sectorData.num_banos || 1,
+          num_rooms: (state.sectorData.estancias || []).length || 3,
+          includes_kitchen: state.sectorData.incluye_cocina ?? true,
+          includes_windows: state.sectorData.incluye_ventanas ?? false,
+          includes_hvac: state.sectorData.incluye_climatizacion ?? false,
+          current_state: "necesita_reforma",
+          quality: (state.sectorData.calidad as any) || "media",
+          rooms: state.sectorData.estancias || [],
+          works_requested: state.sectorData.actuaciones || [],
+          start_date: state.startDate,
+          deadline_date: state.endDate,
+          description: state.description,
+          client: null,
+        };
+        const v2Prefs: BudgetPreferences = {
+          quality: (state.sectorData.calidad as any) || "media",
+          margin_percent: state.marginPercent,
+          indirect_costs_percent: 6,
+          tax_percent: state.ivaPercent,
+          workers_count: null,
+          include_alternatives: false,
+        };
+
+        const res = await fetch("/api/budgets/generate-v2", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scope: v2Scope, preferences: v2Prefs }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || "Error en pipeline v2");
+        }
+
+        const v2Data = await res.json();
+        const v2Items: BudgetItemV2[] = v2Data.items || [];
+        const v2Analysis: ProjectAnalysis | null = v2Data.analysis || null;
+        const v2Economics: BudgetEconomics | null = v2Data.economics || null;
+        const v2Timeline: BudgetTimelineV2 | null = v2Data.timeline || null;
+        const v2Validation: ValidationReport | null = v2Data.validation || null;
+
+        // Map BudgetItemV2[] to Partida[]
+        const v2Partidas: Partida[] = v2Items.map((item, idx) => ({
+          id: item.id || `v2-p-${idx}`,
+          concept: item.name,
+          description: item.description,
+          quantity: item.quantity,
+          unit: item.unit,
+          category: item.chapter || "mano_obra",
+          chapter: item.chapter,
+          unit_price: item.unit_cost,
+          subtotal_cost: item.subtotal_cost,
+          unit_price_client: item.unit_price_sale,
+          subtotal_client: item.subtotal_sale,
+          status: item.priority === "opcional" ? "opcional" as const
+            : item.confidence_score < 0.5 ? "estimada" as const
+            : "incluida" as const,
+        }));
+
+        // Map item materials to Material[]
+        const v2Materials: Material[] = [];
+        v2Items.forEach((item, itemIdx) => {
+          (item.materials || []).forEach((mat, matIdx) => {
+            v2Materials.push({
+              id: `v2-m-${itemIdx}-${matIdx}`,
+              name: mat.name,
+              quantity: mat.quantity,
+              unit: mat.unit,
+              unit_price: mat.unit_price,
+              subtotal: mat.subtotal,
+              included: true,
+              provider_id: (mat.supplier || "referencia-mercado").toLowerCase().replace(/[^a-z0-9]/g, "-"),
+              isRealData: mat.source !== "estimated",
+              sourceType: mat.source || "estimated",
+            });
+          });
+        });
+
+        // Build provider options from materials
+        const v2ProvMap = new Map<string, { name: string; count: number; total: number; isReal: boolean; sourceType: string }>();
+        v2Materials.forEach(m => {
+          const pid = m.provider_id || "referencia-mercado";
+          const existing = v2ProvMap.get(pid) || { name: pid, count: 0, total: 0, isReal: m.isRealData || false, sourceType: m.sourceType || "estimated" };
+          existing.count += 1;
+          existing.total += m.subtotal;
+          v2ProvMap.set(pid, existing);
+        });
+        const provNameMap: Record<string, string> = {
+          "leroy-merlin": "Leroy Merlin", "obramat": "Obramat", "saltoki": "Saltoki",
+          "referencia-mercado": "Referencia mercado", "banco-enlaze-base": "Banco ENLAZE base",
+        };
+        let v2Providers: ProviderOption[] = Array.from(v2ProvMap.entries()).map(([id, info]) => ({
+          id,
+          name: provNameMap[id] || info.name,
+          description: info.isReal ? "Proveedor sugerido" : "Referencia de mercado",
+          estimatedPrice: Math.round(info.total * 100) / 100,
+          deliveryTime: "Consultar",
+          stockLevel: "A consultar" as const,
+          rating: 4.5,
+          isRecommended: false,
+          materialsCount: info.count,
+          isRealData: info.isReal,
+          sourceType: info.sourceType,
+        }));
+        v2Providers.sort((a, b) => (b.materialsCount || 0) - (a.materialsCount || 0));
+        if (v2Providers.length > 0) v2Providers[0].isRecommended = true;
+
+        // Build timeline info for aiInsights
+        const timelinePhases = v2Timeline?.phases?.map(ph => ({
+          title: ph.name,
+          duration_days: ph.duration_days,
+          description: `Dia ${ph.start_day} a ${ph.end_day}`,
+        })) || v2Analysis?.phases?.map(ph => ({
+          title: ph.name,
+          duration_days: ph.estimated_days,
+          description: ph.trades.join(", "),
+        })) || [];
+        const totalDays = timelinePhases.reduce((s, p) => s + (p.duration_days || 0), 0);
+
+        // Build end date from timeline
+        let calculatedEndDate: string | null = null;
+        if (state.startDate && totalDays > 0) {
+          const start = new Date(state.startDate);
+          if (!isNaN(start.getTime())) {
+            let addedDays = 0;
+            const endDate = new Date(start);
+            while (addedDays < totalDays) {
+              endDate.setDate(endDate.getDate() + 1);
+              const dow = endDate.getDay();
+              if (dow !== 0 && dow !== 6) addedDays++;
+            }
+            calculatedEndDate = endDate.toISOString().split("T")[0];
+          }
+        }
+
+        // Build engine views for PDFs
+        const detectedArea = v2Scope.surface_m2;
+        const engineScope: BudgetScope = {
+          superficie_m2: detectedArea,
+          num_banos: v2Scope.num_bathrooms,
+          incluye_cocina: v2Scope.includes_kitchen,
+          incluye_ventanas: v2Scope.includes_windows,
+          incluye_climatizacion: v2Scope.includes_hvac,
+          estancias: v2Scope.rooms,
+          actuaciones: v2Scope.works_requested,
+          calidad: v2Scope.quality,
+          ubicacion: v2Scope.location,
+        };
+        const viewItems: EnginePartida[] = v2Partidas.map(p => ({
+          ...p,
+          chapter: p.chapter || "",
+          status: (p.status || "incluida") as "incluida" | "estimada" | "opcional",
+        }));
+        const viewMaterials: EngineMaterial[] = v2Materials.length > 0
+          ? v2Materials.map(m => ({
+              id: m.id, name: m.name, quantity: m.quantity, unit: m.unit,
+              unit_price: m.unit_price, subtotal: m.subtotal, included: m.included,
+              provider_id: m.provider_id || "referencia-mercado",
+              linked_chapter: "", isRealData: m.isRealData || false,
+              sourceType: m.sourceType || "estimated",
+            }))
+          : buildScopeMaterials(engineScope).map(em => ({ ...em }));
+        const engineMats = buildScopeMaterials(engineScope);
+        const linkedMaterials = viewMaterials.map((m, idx) => ({
+          ...m,
+          linked_chapter: engineMats[idx]?.linked_chapter || "",
+        }));
+        const computedClientView = buildClientView(engineScope, viewItems, state.ivaPercent);
+        const computedInternalView = buildInternalView(engineScope, viewItems, linkedMaterials, state.ivaPercent);
+
+        // Map market range
+        const range = getMarketRange(engineScope, state.serviceType || state.description || "");
+        const isUndervalued = v2Economics?.undervaluation_check?.is_undervalued || false;
+        const marketAdjustMessage = isUndervalued
+          ? (v2Economics?.undervaluation_check?.warnings?.map(w => w.detail).join("; ") || "Presupuesto posiblemente infravalorado")
+          : "";
+
+        // Realistic timeline from engine (for compatibility)
+        const engineTimeline = estimateRealisticTimeline(engineScope, viewItems);
+
+        setState(prev => ({
+          ...prev,
+          isAnalyzing: false,
+          lastAnalysisHash: currentHash,
+          materialsFromAI: v2Materials.length > 0,
+          partidas: v2Partidas.length > 0 ? v2Partidas : prev.partidas,
+          materials: v2Materials.length > 0 ? v2Materials : prev.materials,
+          baseAIMaterials: v2Materials.length > 0 ? v2Materials.map(m => ({ ...m })) : prev.baseAIMaterials,
+          providerOptions: v2Providers.length > 0 ? v2Providers : prev.providerOptions,
+          selectedProviderId: v2Providers.length > 0 ? v2Providers[0].id : prev.selectedProviderId,
+          endDate: calculatedEndDate || v2Timeline?.end_date_estimated || prev.endDate,
+          isUndervalued,
+          marketAdjustMessage,
+          realisticTimeline: engineTimeline,
+          clientView: computedClientView,
+          internalView: computedInternalView,
+          v2Analysis: v2Analysis,
+          v2Economics: v2Economics,
+          v2Timeline: v2Timeline,
+          v2Validation: v2Validation,
+          v2Items: v2Items,
+          aiInsights: {
+            summary: v2Analysis?.project_summary
+              ? `${v2Analysis.project_summary.project_type} - ${v2Analysis.project_summary.complexity} complejidad, ${v2Analysis.project_summary.surface_m2}m2`
+              : v2Data.summary?.toString() || "",
+            confidence_score: v2Data.summary?.avg_confidence ?? 0.75,
+            regulatory_notes: v2Analysis?.permits_needed?.map((p: string) => ({ title: p, description: p })) || [],
+            calendar_phases: timelinePhases,
+            missing_questions: v2Analysis?.missing_information || [],
+            estimated_timeline: totalDays > 0 ? {
+              total_duration_days: totalDays,
+              total_duration_weeks: Math.ceil(totalDays / 5),
+              confidence: 0.8,
+              notes: v2Timeline
+                ? `Ejecucion ${v2Timeline.estimated_duration.weeks_min}-${v2Timeline.estimated_duration.weeks_max} semanas`
+                : `Estimacion ${totalDays} dias laborables`,
+            } : undefined,
+            price_warnings: v2Validation?.warnings?.map(w => w.message) || [],
+            pricing_confidence: v2Data.summary?.avg_confidence
+              ? Math.round(v2Data.summary.avg_confidence * 100)
+              : 75,
+            estimated_price_range: { min: range.min, max: range.max },
+            detected_area_m2: detectedArea,
+            data_sources: {
+              price_items_count: v2Data.summary?.price_sources?.user_catalog || 0,
+              n8n_items_count: v2Data.summary?.price_sources?.n8n_market || 0,
+              default_items_count: v2Data.summary?.price_sources?.estimated || 0,
+              sector_price_count: v2Data.summary?.price_sources?.technical_bank || 0,
+              sector_regulation_count: v2Analysis?.permits_needed?.length || 0,
+              real_suppliers: [],
+              using_fallback: false,
+              fallback_reason: "",
+            },
+          },
+        }));
+        return true;
+      }
+
+      // ─── LEGACY PATH (non-construction sectors) ───
       const res = await fetch("/api/agent/budget-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -960,11 +1229,10 @@ export function BudgetGenerateProvider({
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "Error al analizar la petición");
+        throw new Error(errData.error || "Error al analizar la peticion");
       }
 
       const data = await res.json();
-      const marginMultiplier = 1 + (state.marginPercent / 100);
 
       // Map suggested_items to Partidas
       let newPartidas: Partida[] = (data.suggested_items || []).map((item: any, idx: number) => {
