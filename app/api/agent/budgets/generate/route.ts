@@ -166,7 +166,7 @@ RESPONDE ÚNICAMENTE con un JSON válido:
 }`;
 
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 6000,
       system: systemPrompt,
       messages: [
@@ -189,7 +189,7 @@ RESPONDE ÚNICAMENTE con un JSON válido:
     } catch {
       // Attempt repair with a second call
       const repair = await anthropic.messages.create({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         max_tokens: 4096,
         messages: [
           {

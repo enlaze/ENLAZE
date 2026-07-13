@@ -213,7 +213,7 @@ function sanitizeAnalysis(raw: Record<string, unknown>): ProjectAnalysis {
 export interface AnalyzeProjectOptions {
   /** Anthropic API key (from env) */
   apiKey: string;
-  /** Model to use (default: claude-sonnet-4-20250514) */
+  /** Model to use (default: claude-sonnet-4-6) */
   model?: string;
   /** Max tokens for response (default: 4096) */
   maxTokens?: number;
@@ -253,7 +253,7 @@ export async function analyzeProject(
 
   try {
     const anthropic = new Anthropic({ apiKey: options.apiKey });
-    const model = options.model || "claude-sonnet-4-20250514";
+    const model = options.model || "claude-sonnet-4-6";
     const maxTokens = options.maxTokens || 4096;
 
     const userMessage = buildUserMessage(scope);

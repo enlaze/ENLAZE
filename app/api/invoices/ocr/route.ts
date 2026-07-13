@@ -89,7 +89,7 @@ export async function POST(request: Request) {
     const startTime = Date.now();
     // Enviar a Claude para OCR
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 2000,
       messages: [
         {
@@ -241,7 +241,7 @@ Responde SOLO con el JSON, sin texto adicional:
     const durationMs = Date.now() - startTime;
     logAiRun(supabase, {
       run_type: "ocr_invoice",
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       prompt_version: "v1.0",
       input_hash: await hashText(file.name + file.size),
       output_hash: await hashText(responseText),

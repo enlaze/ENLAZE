@@ -197,7 +197,7 @@ Genera un análisis de mercado estructurado en JSON con esta estructura exacta:
 Sé concreto, práctico y orientado a acción. No generes contenido genérico. Responde SOLO con JSON.`;
 
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 4000,
       system: systemPrompt,
       messages: [

@@ -36,7 +36,7 @@ function extractLikelyJson(text: string) {
 
 async function repairBudgetJson(rawText: string) {
   const repairMessage = await anthropic.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     max_tokens: 4096,
     messages: [
       {
@@ -192,7 +192,7 @@ export async function POST(request: Request) {
     const startTime = Date.now();
 
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 6000,
       messages: [
         {
@@ -265,7 +265,7 @@ export async function POST(request: Request) {
     // Fire-and-forget: log AI run for compliance
     logAiRun(supabase, {
       run_type: "budget_generation",
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       prompt_version: "v1.0",
       input_hash: await hashText(description),
       output_hash: await hashText(responseText),
