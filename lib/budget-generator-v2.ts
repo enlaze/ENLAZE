@@ -453,7 +453,7 @@ export async function generateBudgetItems(
   try {
     const anthropic = new Anthropic({ apiKey: options.apiKey });
     const model = options.model || "claude-sonnet-4-6";
-    const maxTokens = options.maxTokens || 8192;
+    const maxTokens = options.maxTokens || 6000;
 
     const userMessage = buildGenerationMessage(analysis, scope, technicalPrices, userPrices);
 

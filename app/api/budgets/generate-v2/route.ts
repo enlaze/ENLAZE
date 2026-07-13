@@ -1,3 +1,6 @@
+// Allow up to 60s for two sequential Claude calls (FASE 1 + FASE 2)
+export const maxDuration = 60;
+
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
