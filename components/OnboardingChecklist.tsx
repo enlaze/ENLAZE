@@ -26,14 +26,14 @@ const STEPS: Step[] = [
   {
     id: "profile",
     label: "Completa tu perfil",
-    description: "Añade el nombre de tu empresa, logo y datos de contacto.",
+    description: "Añade tus datos y logotipo para que aparezcan en tus documentos.",
     href: "/dashboard/settings",
     checkFn: (ctx) => ctx.profileComplete,
   },
   {
     id: "client",
     label: "Crea tu primer cliente",
-    description: "Añade un cliente para empezar a gestionar presupuestos.",
+    description: "Da de alta un cliente para empezar a trabajar con él.",
     href: "/dashboard/clientes",
     checkFn: (ctx) => ctx.hasClients,
   },
@@ -47,7 +47,7 @@ const STEPS: Step[] = [
   {
     id: "budget",
     label: "Envía tu primer presupuesto",
-    description: "Crea y envía un presupuesto profesional a un cliente.",
+    description: "Genera y envía un presupuesto a un cliente.",
     href: "/dashboard/budgets",
     checkFn: (ctx) => ctx.hasBudgets,
   },
@@ -60,30 +60,60 @@ const STEPS: Step[] = [
   },
 ];
 
-const DISMISSED_KEY = "enlaze_onboarding_dismissed";
+const COLLAPSED_KEY = "enlaze_onboarding_collapsed";
+
+/* Progress ring geometry: r = 24 → circumference = 2πr ≈ 150.8 */
+const RING_CIRCUMFERENCE = 150.8;
+
+/* ─── Lucide icons (inline, strokeWidth 2) ─────────────────────────── */
+
+function RocketIcon({ size = 22, color = "#00c896" }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
+      <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
+      <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
+      <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
+    </svg>
+  );
+}
+
+function ChevronDown({ size = 15, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
+function ChevronUp({ size = 18, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="m18 15-6-6-6 6" />
+    </svg>
+  );
+}
 
 /* ─── Component ────────────────────────────────────────────────────── */
 
 export default function OnboardingChecklist() {
   const supabase = createClient();
   const [ctx, setCtx] = useState<CheckContext | null>(null);
-  const [dismissed, setDismissed] = useState(false);
-  const [collapsedSteps, setCollapsedSteps] = useState<Set<string>>(new Set());
+  const [collapsed, setCollapsed] = useState(false);
+  const [openIndex, setOpenIndex] = useState<number>(-1);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check local dismissal
-    try {
-      if (typeof window !== "undefined" && window.sessionStorage.getItem(DISMISSED_KEY) === "true") {
-        setDismissed(true);
-        setLoading(false);
-        return;
-      }
-    } catch {
-      // ignore
-    }
-
     async function check() {
+      // Restore collapsed preference
+      try {
+        if (window.sessionStorage.getItem(COLLAPSED_KEY) === "true") {
+          setCollapsed(true);
+        }
+      } catch {
+        // ignore
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
 
@@ -97,13 +127,16 @@ export default function OnboardingChecklist() {
 
       const profileComplete = !!(profile?.full_name && profile?.business_name);
 
-      setCtx({
+      const nextCtx: CheckContext = {
         hasClients: (clients.count ?? 0) > 0,
         hasBudgets: (budgets.count ?? 0) > 0,
         hasPrices: (prices.count ?? 0) > 0,
         hasSuppliers: (suppliers.count ?? 0) > 0,
         profileComplete,
-      });
+      };
+      setCtx(nextCtx);
+      // Open the first pending step by default
+      setOpenIndex(STEPS.findIndex((s) => !s.checkFn(nextCtx)));
       setLoading(false);
     }
 
@@ -111,25 +144,23 @@ export default function OnboardingChecklist() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const dismiss = useCallback(() => {
-    setDismissed(true);
-    try {
-      window.sessionStorage.setItem(DISMISSED_KEY, "true");
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  const toggleStep = useCallback((id: string) => {
-    setCollapsedSteps((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.sessionStorage.setItem(COLLAPSED_KEY, next ? "true" : "false");
+      } catch {
+        // ignore
+      }
       return next;
     });
   }, []);
 
-  if (loading || dismissed || !ctx) return null;
+  const toggleStep = useCallback((index: number) => {
+    setOpenIndex((prev) => (prev === index ? -1 : index));
+  }, []);
+
+  if (loading || !ctx) return null;
 
   const completed = STEPS.filter((s) => s.checkFn(ctx));
   const remaining = STEPS.filter((s) => !s.checkFn(ctx));
@@ -137,126 +168,163 @@ export default function OnboardingChecklist() {
   // All done → don't show
   if (remaining.length === 0) return null;
 
-  const progress = Math.round((completed.length / STEPS.length) * 100);
+  const doneCount = completed.length;
+  const pct = Math.round((doneCount / STEPS.length) * 100);
+  const ringOffset = (RING_CIRCUMFERENCE * (1 - pct / 100)).toFixed(1);
 
+  /* ─── Collapsed: small pill ──────────────────────────────────────── */
+  if (collapsed) {
+    return (
+      <button
+        onClick={toggleCollapsed}
+        className="flex items-center gap-2.5 rounded-full border border-[#e5eae8] bg-white px-4 py-2.5 text-[13.5px] font-semibold text-[#3d4f48] shadow-[0_1px_3px_rgba(15,30,26,0.04)] transition-colors hover:border-[#c8f0e2] hover:bg-[#fbfefd] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-brand-green/40 dark:hover:bg-zinc-800"
+      >
+        <RocketIcon size={16} />
+        Primeros pasos
+        <span className="rounded-full bg-[#e6faf4] px-2 py-0.5 text-[11px] font-bold text-brand-green-dark dark:bg-brand-green/15 dark:text-brand-green">
+          {pct}%
+        </span>
+        <ChevronDown size={15} className="text-[#9aa8a2] dark:text-zinc-500" />
+      </button>
+    );
+  }
+
+  /* ─── Expanded card ──────────────────────────────────────────────── */
   return (
-    <section className="overflow-hidden rounded-2xl border border-brand-green/20 bg-gradient-to-br from-brand-green/[0.04] to-white shadow-[0_1px_2px_rgba(10,25,41,0.04)] dark:border-brand-green/25 dark:from-brand-green/[0.06] dark:to-zinc-900 dark:shadow-none">
+    <section className="rounded-2xl border border-[#e5eae8] bg-white px-[26px] pt-[26px] pb-[18px] shadow-[0_1px_3px_rgba(15,30,26,0.04)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 px-6 py-5">
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-lg" aria-hidden>🚀</span>
-            <h2 className="text-[15px] font-semibold text-navy-900 dark:text-white">
-              Primeros pasos con Enlaze
-            </h2>
-          </div>
-          <p className="mt-1 text-[13px] text-navy-500 dark:text-zinc-400">
-            Completa estos pasos para sacar el máximo partido a tu cuenta.
-          </p>
+      <div className="flex items-start gap-4 px-1 pt-1">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#e6faf4] dark:bg-brand-green/15">
+          <RocketIcon size={22} />
         </div>
-        <button
-          onClick={dismiss}
-          className="shrink-0 rounded-lg p-1.5 text-navy-400 transition-colors hover:bg-navy-100 hover:text-navy-600 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
-          aria-label="Cerrar guía"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M18 6 6 18M6 6l12 12" />
+        <div className="flex flex-1 flex-col gap-0.5">
+          <div className="text-[17px] font-bold text-[#0f1e1a] dark:text-white">
+            Primeros pasos con Enlaze
+          </div>
+          <div className="text-[14px] text-[#6b7d76] dark:text-zinc-400">
+            Completa estos pasos para sacar el máximo partido a tu cuenta.
+          </div>
+        </div>
+
+        {/* Progress ring */}
+        <div className="relative h-14 w-14 shrink-0">
+          <svg width="56" height="56" viewBox="0 0 56 56">
+            <circle cx="28" cy="28" r="24" fill="none" className="stroke-[#eef2f0] dark:stroke-zinc-800" strokeWidth="5" />
+            <circle
+              cx="28"
+              cy="28"
+              r="24"
+              fill="none"
+              stroke="#00c896"
+              strokeWidth="5"
+              strokeLinecap="round"
+              strokeDasharray={RING_CIRCUMFERENCE}
+              strokeDashoffset={ringOffset}
+              transform="rotate(-90 28 28)"
+              style={{ transition: "stroke-dashoffset 0.4s ease" }}
+            />
           </svg>
+          <div className="absolute inset-0 flex items-center justify-center text-[13px] font-bold text-[#0f1e1a] dark:text-white">
+            {pct}%
+          </div>
+        </div>
+
+        {/* Collapse */}
+        <button
+          onClick={toggleCollapsed}
+          title="Ocultar esta sección"
+          aria-label="Ocultar esta sección"
+          className="-mr-1.5 -mt-1 shrink-0 rounded-lg p-1.5 text-[#9aa8a2] transition-colors hover:bg-[#f0f4f2] hover:text-[#3d4f48] dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+        >
+          <ChevronUp size={18} />
         </button>
       </div>
 
-      {/* Progress bar */}
-      <div className="px-6 pb-4">
-        <div className="flex items-center justify-between text-[11px] font-medium">
-          <span className="text-navy-500 dark:text-zinc-400">{completed.length} de {STEPS.length} completados</span>
-          <span className="text-brand-green">{progress}%</span>
-        </div>
-        <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-navy-100 dark:bg-zinc-800">
-          <div
-            className="h-full rounded-full bg-brand-green transition-all duration-500"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
+      <div className="mt-3.5 px-1 text-[13px] font-semibold text-brand-green-dark dark:text-brand-green">
+        {doneCount} de {STEPS.length} completados
       </div>
 
       {/* Steps */}
-      <ul className="border-t border-navy-100/60 dark:border-zinc-800">
-        {STEPS.map((step) => {
+      <div className="mt-3 flex flex-col gap-2">
+        {STEPS.map((step, index) => {
           const done = step.checkFn(ctx);
-          const isOpen = !done && !collapsedSteps.has(step.id);
 
-          return (
-            <li
-              key={step.id}
-              className={`border-b border-navy-100/40 last:border-b-0 dark:border-zinc-800/60 ${
-                done ? "bg-brand-green/[0.03] dark:bg-brand-green/[0.06]" : ""
-              }`}
-            >
-              <button
-                onClick={() => !done && toggleStep(step.id)}
-                className="flex w-full items-center gap-3 px-6 py-3.5 text-left transition-colors hover:bg-navy-50/50 dark:hover:bg-zinc-800/50"
+          /* Completed */
+          if (done) {
+            return (
+              <div
+                key={step.id}
+                className="flex items-center gap-3.5 rounded-xl bg-[#f7fbf9] px-3.5 py-3 dark:bg-brand-green/[0.06]"
               >
-                {/* Check circle */}
-                <span
-                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
-                    done
-                      ? "border-brand-green bg-brand-green text-white"
-                      : "border-navy-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
-                  }`}
-                >
-                  {done && (
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M20 6 9 17l-5-5" />
-                    </svg>
-                  )}
-                </span>
-
-                {/* Label */}
-                <span
-                  className={`flex-1 text-[13.5px] font-medium ${
-                    done ? "text-navy-400 line-through dark:text-zinc-500" : "text-navy-800 dark:text-zinc-100"
-                  }`}
-                >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="#00c896" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                  <circle cx="12" cy="12" r="10" stroke="none" />
+                  <path d="m9 12 2 2 4-4" />
+                </svg>
+                <div className="flex-1 text-[15px] font-medium text-[#9aa8a2] line-through dark:text-zinc-500">
                   {step.label}
-                </span>
+                </div>
+                <div className="rounded-full bg-[#e6faf4] px-2.5 py-0.5 text-[12px] font-semibold text-brand-green-dark dark:bg-brand-green/15 dark:text-brand-green">
+                  Hecho
+                </div>
+              </div>
+            );
+          }
 
-                {/* Expand chevron */}
-                {!done && (
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className={`text-navy-400 transition-transform dark:text-zinc-500 ${isOpen ? "rotate-180" : ""}`}
-                  >
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
-                )}
-              </button>
+          const isOpen = openIndex === index;
 
-              {/* Expanded detail */}
-              {isOpen && (
-                <div className="px-6 pb-4 pl-[3.25rem]">
-                  <p className="text-[12.5px] text-navy-500 dark:text-zinc-400">{step.description}</p>
+          /* Active (expanded) */
+          if (isOpen) {
+            return (
+              <div
+                key={step.id}
+                onClick={() => toggleStep(index)}
+                className="flex cursor-pointer items-start gap-3.5 rounded-xl border-[1.5px] border-brand-green bg-white p-3.5 shadow-[0_2px_8px_rgba(0,200,150,0.10)] dark:bg-zinc-900"
+              >
+                <div className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-2 border-brand-green text-[11px] font-bold text-brand-green-dark dark:text-brand-green">
+                  {index + 1}
+                </div>
+                <div className="flex flex-1 flex-col gap-1">
+                  <div className="text-[15px] font-semibold text-[#0f1e1a] dark:text-white">
+                    {step.label}
+                  </div>
+                  <div className="text-[14px] leading-relaxed text-[#6b7d76] dark:text-zinc-400">
+                    {step.description}
+                  </div>
                   <Link
                     href={step.href}
-                    className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-navy-900 px-3.5 py-1.5 text-[12px] font-semibold text-white shadow-sm transition-colors hover:bg-navy-800 dark:bg-brand-green dark:text-zinc-950 dark:hover:bg-brand-green-light"
+                    onClick={(e) => e.stopPropagation()}
+                    className="mt-2 inline-flex items-center gap-1.5 self-start rounded-[9px] bg-[#0f1e1a] px-4 py-2 text-[13.5px] font-semibold text-white transition-colors hover:bg-[#22332d] dark:bg-brand-green dark:text-zinc-950 dark:hover:bg-brand-green-light"
                   >
                     Empezar
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M5 12h14M12 5l7 7-7 7" />
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M5 12h14" />
+                      <path d="m12 5 7 7-7 7" />
                     </svg>
                   </Link>
                 </div>
-              )}
-            </li>
+                <ChevronUp size={17} className="mt-0.5 shrink-0 text-[#9aa8a2] dark:text-zinc-500" />
+              </div>
+            );
+          }
+
+          /* Pending (collapsed) */
+          return (
+            <div
+              key={step.id}
+              onClick={() => toggleStep(index)}
+              className="flex cursor-pointer items-center gap-3.5 rounded-xl border border-[#eef2f0] bg-white px-3.5 py-3 transition-colors hover:border-[#c8f0e2] hover:bg-[#fbfefd] dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-brand-green/30 dark:hover:bg-zinc-800/50"
+            >
+              <div className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-2 border-[#d4ddd9] text-[11px] font-bold text-[#9aa8a2] dark:border-zinc-700 dark:text-zinc-500">
+                {index + 1}
+              </div>
+              <div className="flex-1 text-[15px] font-medium text-[#3d4f48] dark:text-zinc-200">
+                {step.label}
+              </div>
+              <ChevronDown size={17} className="shrink-0 text-[#9aa8a2] dark:text-zinc-500" />
+            </div>
           );
         })}
-      </ul>
+      </div>
     </section>
   );
 }

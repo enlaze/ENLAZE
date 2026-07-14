@@ -638,19 +638,34 @@ function BriefingSkeleton() {
 
 function BriefingFallback() {
   return (
-    <div className="rounded-2xl border border-brand-green/20 bg-brand-green/5 p-6 shadow-sm dark:border-brand-green/10 dark:bg-brand-green/5 flex flex-col sm:flex-row items-center justify-between gap-4">
-      <div>
-        <h2 className="text-[16px] font-semibold text-navy-900 dark:text-white flex items-center gap-2 mb-1">
-          <span className="text-xl">✨</span> Aún no tienes el agente conectado
-        </h2>
-        <p className="text-[13.5px] text-navy-600 dark:text-zinc-400">
+    <div className="flex flex-col items-start gap-4 rounded-2xl border border-[#c8f0e2] bg-[#e9faf4] px-6 py-[22px] sm:flex-row sm:items-center sm:gap-[18px] dark:border-brand-green/25 dark:bg-brand-green/[0.06]">
+      {/* Icon chip — lucide triangle-alert */}
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#c8f0e2] bg-white dark:border-brand-green/25 dark:bg-zinc-900">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00c896" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </svg>
+      </div>
+
+      <div className="flex flex-1 flex-col gap-1">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <h2 className="text-[17px] font-bold text-[#0f1e1a] dark:text-white">
+            Aún no tienes el agente conectado
+          </h2>
+          <span className="rounded-full border border-[#c8f0e2] bg-white px-2.5 py-[3px] text-[11px] font-bold uppercase tracking-[0.06em] text-brand-green-dark dark:border-brand-green/25 dark:bg-zinc-900 dark:text-brand-green">
+            Prioridad
+          </span>
+        </div>
+        <p className="text-[14.5px] leading-relaxed text-[#4a5f58] dark:text-zinc-400">
           Cuando lo conectes verás aquí cada mañana el resumen, las
           oportunidades y las acciones que te tocan hoy.
         </p>
       </div>
+
       <Link
         href="/dashboard/settings/integrations"
-        className="shrink-0 px-4 py-2 rounded-lg bg-brand-green text-white hover:bg-brand-green/90 text-sm font-medium transition-colors"
+        className="shrink-0 rounded-[10px] bg-brand-green px-5 py-3 text-[14.5px] font-semibold text-white transition-colors hover:bg-[#00b586] dark:text-zinc-950"
       >
         Conectar herramientas
       </Link>
