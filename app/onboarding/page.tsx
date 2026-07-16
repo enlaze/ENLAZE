@@ -16,6 +16,18 @@ const sectors = SECTOR_OPTIONS;
 const TERMS_VERSION = "v1.0";
 const PRIVACY_VERSION = "v1.0";
 
+const PROGRESS_KEY = "enlaze:onboarding-progress:v1";
+
+type SavedProgress = {
+  step: number;
+  selectedSector: string;
+  customSector: string;
+  businessName: string;
+  acceptTerms: boolean;
+  acceptPrivacy: boolean;
+  acceptMarketing: boolean;
+};
+
 export default function OnboardingPage() {
   const supabase = createClient();
   const router = useRouter();
@@ -33,12 +45,58 @@ export default function OnboardingPage() {
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const [acceptMarketing, setAcceptMarketing] = useState(false);
 
+  // Progress is restored from sessionStorage after mount (not in a useState
+  // initializer) so the server-rendered HTML and the first client render match.
+  // Until then we render nothing below the logo, to avoid flashing step 1.
+  const [restored, setRestored] = useState(false);
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { router.push("/login"); return; }
       setUserId(user.id);
     });
   }, []);
+
+  // Restore progress. Leaving the page (e.g. opening the legal links, which are
+  // plain <a href> full page loads) otherwise throws away every answer.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(PROGRESS_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw) as Partial<SavedProgress>;
+        if (saved.step === 1 || saved.step === 2 || saved.step === 3) setStep(saved.step);
+        if (typeof saved.selectedSector === "string") setSelectedSector(saved.selectedSector);
+        if (typeof saved.customSector === "string") setCustomSector(saved.customSector);
+        if (typeof saved.businessName === "string") setBusinessName(saved.businessName);
+        if (typeof saved.acceptTerms === "boolean") setAcceptTerms(saved.acceptTerms);
+        if (typeof saved.acceptPrivacy === "boolean") setAcceptPrivacy(saved.acceptPrivacy);
+        if (typeof saved.acceptMarketing === "boolean") setAcceptMarketing(saved.acceptMarketing);
+      }
+    } catch {
+      // Corrupt or unavailable storage (private mode, quota): start clean.
+    }
+    setRestored(true);
+  }, []);
+
+  // Persist on every change, but only once restored, or the first run would
+  // overwrite the saved progress with the empty defaults.
+  useEffect(() => {
+    if (!restored) return;
+    try {
+      const progress: SavedProgress = {
+        step,
+        selectedSector,
+        customSector,
+        businessName,
+        acceptTerms,
+        acceptPrivacy,
+        acceptMarketing,
+      };
+      sessionStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+    } catch {
+      // Storage unavailable: progress just won't survive a reload.
+    }
+  }, [restored, step, selectedSector, customSector, businessName, acceptTerms, acceptPrivacy, acceptMarketing]);
 
   async function handleComplete() {
     if (!selectedSector || !acceptTerms || !acceptPrivacy) return;
@@ -68,6 +126,12 @@ export default function OnboardingPage() {
       recordMarketingConsent(supabase, "email_marketing", acceptMarketing, "onboarding"),
     ]);
 
+    try {
+      sessionStorage.removeItem(PROGRESS_KEY);
+    } catch {
+      // Nothing to clean up if storage is unavailable.
+    }
+
     router.push("/dashboard");
   }
 
@@ -81,15 +145,17 @@ export default function OnboardingPage() {
           <h1 className="text-3xl font-extrabold text-[var(--color-navy-50)]">
             enla<span className="text-[var(--color-brand-green)]">z</span>e
           </h1>
-          <div className="flex items-center justify-center gap-2 mt-4">
-            <div className={"h-2 rounded-full transition-all " + (step >= 1 ? "bg-[var(--color-brand-green)] w-12" : "bg-[var(--color-navy-700)] w-8")}></div>
-            <div className={"h-2 rounded-full transition-all " + (step >= 2 ? "bg-[var(--color-brand-green)] w-12" : "bg-[var(--color-navy-700)] w-8")}></div>
-            <div className={"h-2 rounded-full transition-all " + (step >= 3 ? "bg-[var(--color-brand-green)] w-12" : "bg-[var(--color-navy-700)] w-8")}></div>
-          </div>
+          {restored && (
+            <div className="flex items-center justify-center gap-2 mt-4">
+              <div className={"h-2 rounded-full transition-all " + (step >= 1 ? "bg-[var(--color-brand-green)] w-12" : "bg-[var(--color-navy-700)] w-8")}></div>
+              <div className={"h-2 rounded-full transition-all " + (step >= 2 ? "bg-[var(--color-brand-green)] w-12" : "bg-[var(--color-navy-700)] w-8")}></div>
+              <div className={"h-2 rounded-full transition-all " + (step >= 3 ? "bg-[var(--color-brand-green)] w-12" : "bg-[var(--color-navy-700)] w-8")}></div>
+            </div>
+          )}
         </div>
 
         {/* Step 1: Sector Selection */}
-        {step === 1 && (
+        {restored && step === 1 && (
           <div>
             <h2 className="text-xl font-bold text-[var(--color-navy-50)] text-center mb-2">
               ¿A qué se dedica tu negocio?
@@ -145,7 +211,7 @@ export default function OnboardingPage() {
         )}
 
         {/* Step 2: Business Details */}
-        {step === 2 && (
+        {restored && step === 2 && (
           <div>
             <h2 className="text-xl font-bold text-[var(--color-navy-50)] text-center mb-2">
               Cuéntanos más sobre tu negocio
@@ -196,7 +262,7 @@ export default function OnboardingPage() {
         )}
 
         {/* Step 3: Legal Acceptance & Marketing Consent */}
-        {step === 3 && (
+        {restored && step === 3 && (
           <div>
             <h2 className="text-xl font-bold text-[var(--color-navy-50)] text-center mb-2">
               Términos y consentimientos

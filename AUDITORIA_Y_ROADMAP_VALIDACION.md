@@ -53,7 +53,14 @@ El rediseño del briefing (ya en marcha) + una pasada de consistencia + los P1 d
 - **Visual:** el producto se siente terminado y coherente entre módulos.
 - **Reparto:** Cowork prioriza y da dirección de diseño → Code implementa.
 
-### Etapa C — Recorrido del primer usuario (QA end-to-end)  _(EN CURSO · 2026-07-08 · foco: usuario de construcción, incl. crear presupuesto)_
+### Etapa C — Recorrido del primer usuario (QA end-to-end)  _(QA HECHA · bugs cazados y arreglados · quedan flecos)_
+
+Recorrido de usuario de construcción ejecutado (9-10 jul). Bugs ENCONTRADOS y ARREGLADOS: email/dominio Resend, enlace a localhost, guardar perfil (RLS 42501), botón crear obra (RLS sistémico + columna `projects`), tildes/logo/campo empresa opcional, iconos onboarding + primeros pasos + ajustes.
+
+- **Pendiente funcional (único):** el onboarding se reinicia al pulsar el enlace de privacidad → persistir el progreso.
+- **En curso (pulido):** sustituir emojis por iconos lucide, pantalla por pantalla (queda ~la mitad).
+- **SIGUIENTE PASO GRANDE:** validar el presupuestador con un constructor real (padre del socio). El banco de precios vacío hace que las estimaciones no sean fiables; hay que ver si aporta valor de verdad.
+- Aparcado a lanzamiento: SMTP de Supabase (vía Resend), revocar el token de GitHub expuesto.
 Probar el funnel completo con datos reales: landing → registro → verificación email → onboarding → dashboard → generar primer presupuesto → briefing del agente. Arreglar lo que se rompa. Incluir recuperación de contraseña si falta.
 - **Interno:** se cierran bugs de flujo, estados vacíos con 1 cliente/0 datos.
 - **Visual:** cada pantalla se ve bien también "vacía", no solo llena.
