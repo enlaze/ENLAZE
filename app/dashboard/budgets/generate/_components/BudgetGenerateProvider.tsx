@@ -31,6 +31,7 @@ import {
   applyProviderToAIMaterials,
   type ProviderAdjustmentMeta,
 } from "@/lib/provider-materials";
+import { analytics } from "@/lib/analytics";
 
 export interface Partida {
   id: string;
@@ -849,6 +850,7 @@ export function BudgetGenerateProvider({
 
       setState(prev => ({ ...prev, isFinalizing: false, finalizeError: null }));
       toast.success("Presupuesto finalizado correctamente");
+      analytics.budgetFinalized(budgetId, state.totals.clientPrice * (1 + state.ivaPercent / 100));
       return budgetId;
 
     } catch (err: any) {

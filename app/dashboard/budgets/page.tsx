@@ -13,6 +13,7 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import DataTable, { type Column, type FilterDef } from "@/components/ui/data-table";
 import InfoFlipCard from "@/components/ui/InfoFlipCard";
+import { analytics } from "@/lib/analytics";
 
 type Budget = {
   id: string;
@@ -59,7 +60,9 @@ export default function BudgetsPage() {
   };
 
   const updateStatus = async (id: string, status: string) => {
+    const budget = budgets.find(b => b.id === id);
     await supabase.from("budgets").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
+    analytics.budgetStatusChanged(id, budget?.status ?? "unknown", status);
     await fetchBudgets();
   };
 

@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Logo from "@/components/Logo";
+import { createClient } from "@/lib/supabase-browser";
 
 type VerificationState = "loading" | "success" | "error" | "expired";
 
@@ -26,6 +27,7 @@ function VerifyEmailContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const email = searchParams.get("email");
+  const supabase = createClient();
 
   const [state, setState] = useState<VerificationState>("loading");
   const [message, setMessage] = useState("");
@@ -52,9 +54,23 @@ function VerifyEmailContent() {
           setState("success");
           setMessage("¡Email verificado correctamente!");
 
-          // Auto-redirect to dashboard after 2 seconds
+          // Check onboarding status before redirect
+          const { data: { user } } = await supabase.auth.getUser();
+          let redirectTo = "/onboarding";
+          if (user) {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("onboarding_completed")
+              .eq("id", user.id)
+              .single();
+            if (profile?.onboarding_completed) {
+              redirectTo = "/dashboard";
+            }
+          }
+
+          // Auto-redirect after 2 seconds
           setTimeout(() => {
-            router.push("/dashboard");
+            router.push(redirectTo);
           }, 2000);
         } else if (data.expired) {
           setState("expired");
@@ -139,7 +155,7 @@ function VerifyEmailContent() {
             </h1>
             <p className="text-center text-navy-600 mb-6">{message}</p>
             <p className="text-center text-sm text-navy-500">
-              Redirigiendo al dashboard...
+              Redirigiendo...
             </p>
           </>
         )}

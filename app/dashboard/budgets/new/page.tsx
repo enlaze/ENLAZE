@@ -9,6 +9,7 @@ import { useSector } from "@/lib/sector-context";
 import PageHeader from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
+import { analytics } from "@/lib/analytics";
 
 const fallbackServiceTypes = [
   { value: "reforma", label: "Reforma integral" },
@@ -210,6 +211,7 @@ export default function NewBudgetPage() {
       });
     }
 
+    analytics.budgetCreated("manual", serviceType);
     router.push("/dashboard/budgets/" + budget.id);
   }
 

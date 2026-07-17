@@ -3,6 +3,8 @@
  * Provides consistent error logging, formatting, and user-friendly messages
  */
 
+import { captureException } from "@/lib/sentry";
+
 /* ─────────────────────────────────────────────────────────────────────
  *  Types
  * ───────────────────────────────────────────────────────────────────── */
@@ -82,10 +84,13 @@ export function logError(error: unknown, context?: ErrorContext): void {
     console.error("[ERROR]", logData);
   }
 
-  // In production, send to error tracking service (e.g., Sentry)
+  // In production, send to Sentry
   if (process.env.NODE_ENV === "production") {
-    // TODO: Send to Sentry or similar service
-    // captureException(error, { extra: context });
+    captureException(error, {
+      component: context?.component,
+      action: context?.action,
+      extra: context?.context,
+    });
     console.error("[PRODUCTION_ERROR]", logData);
   }
 }

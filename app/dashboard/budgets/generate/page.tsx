@@ -14,6 +14,7 @@ import { ProvidersStep } from "./_components/steps/ProvidersStep";
 import { createClient } from "@/lib/supabase-browser";
 import { Button, LinkButton } from "@/components/ui/button";
 import { generateBudgetPDFHTML, printPDF } from "@/lib/pdf-generator";
+import { analytics } from "@/lib/analytics";
 
 function DraftRecoveryManager() {
   const { loadDraft, saveDraft, state } = useBudgetGenerate();
@@ -60,6 +61,7 @@ function DraftRecoveryManager() {
               onClick={() => {
                 // Inyectamos el estado crudo tal cual se guardó
                 loadDraft(d.wizard_state);
+                analytics.budgetDraftRecovered();
                 setShowModal(false);
               }}
               className="w-full text-left p-3 rounded-lg border border-navy-100 dark:border-zinc-800 hover:border-brand-green/50 hover:bg-navy-50 dark:hover:bg-zinc-800 transition group"
@@ -144,6 +146,7 @@ function WizardContent() {
     const itemsMock = [...partidasMock, ...materialsMock];
 
     const html = generateBudgetPDFHTML(budgetMock, itemsMock, mode);
+    analytics.budgetExportedPDF(mode);
     printPDF(html);
   };
 

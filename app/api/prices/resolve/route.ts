@@ -12,6 +12,14 @@ import {
   normalizeUnit,
 } from "@/lib/price-resolver";
 import { searchWebPricesBatch, type WebSearchRequest } from "@/lib/web-price-search";
+import {
+  resolveForBudget as resolveForBudgetV2,
+  type PrefetchedPriceData,
+  type CurrentPriceRow,
+  type ManualPriceRow,
+  type TechnicalPriceRow,
+  type EnlazePriceRow,
+} from "@/lib/price-resolver-v2";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -89,6 +97,183 @@ export async function POST(request: Request) {
     if (!materials || !Array.isArray(materials) || materials.length === 0) {
       return NextResponse.json({ error: "Falta la lista de materiales" }, { status: 400 });
     }
+
+    // ── Check for V2 data availability ──
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("company_id")
+      .eq("id", user.id)
+      .single();
+
+    const company_id = profile?.company_id ?? null;
+
+    // Quick check: do we have pb_price_current data?
+    const { count: pbCount } = await supabase
+      .from("pb_price_current")
+      .select("*", { count: "exact", head: true });
+
+    const useV2 = (pbCount ?? 0) > 0 && company_id;
+
+    if (useV2) {
+      // ── V2 Path: resolve via 11-level cascade ──
+      const [
+        { data: pbCurrentRows },
+        { data: pbManualRows },
+        { data: pbTechnicalRows },
+        { data: pbEnlazeRows },
+      ] = await Promise.all([
+        supabase
+          .from("pb_price_current")
+          .select(`
+            product_id, price_excl_vat, effective_price, confidence_score,
+            source_type, is_available, checked_at,
+            pb_products!inner (
+              id, commercial_name, concept_id, brand, sku, sale_unit,
+              units_per_package, unit_price,
+              pb_normalized_concepts ( id, canonical_name )
+            ),
+            pb_providers!inner (
+              id, name, province, supply_zones, is_preferred,
+              shipping_cost_flat, minimum_order, delivery_days_min, delivery_days_max,
+              company_id
+            )
+          `)
+          .or(`pb_providers.company_id.is.null,pb_providers.company_id.eq.${company_id}`),
+        supabase
+          .from("price_items")
+          .select("name, unit_price, unit, supplier_name, source_type, is_locked")
+          .eq("user_id", user.id)
+          .eq("is_active", true)
+          .eq("is_locked", true),
+        supabase
+          .from("technical_price_items")
+          .select("name, item_code, unit, unit_price, confidence_score, source, region, company_id")
+          .eq("is_active", true),
+        supabase
+          .from("sector_data")
+          .select("title, value, unit, source, category")
+          .eq("data_type", "price")
+          .in("source", ["enlaze", "base"]),
+      ]);
+
+      const v2Data: PrefetchedPriceData = {
+        current_prices: (pbCurrentRows || []).map((row: Record<string, unknown>): CurrentPriceRow => {
+          const prod = row.pb_products as Record<string, unknown> | null;
+          const prov = row.pb_providers as Record<string, unknown> | null;
+          const concept = prod?.pb_normalized_concepts as Record<string, unknown> | null;
+          return {
+            product_id: String(prod?.id ?? ""),
+            product_name: String(prod?.commercial_name ?? ""),
+            concept_id: concept?.id ? String(concept.id) : null,
+            concept_name: concept?.canonical_name ? String(concept.canonical_name) : null,
+            provider_id: String(prov?.id ?? ""),
+            provider_name: String(prov?.name ?? ""),
+            provider_province: prov?.province ? String(prov.province) : null,
+            provider_supply_zones: Array.isArray(prov?.supply_zones) ? prov.supply_zones as string[] : [],
+            is_preferred: Boolean(prov?.is_preferred),
+            brand: prod?.brand ? String(prod.brand) : null,
+            sku: prod?.sku ? String(prod.sku) : null,
+            unit: String(prod?.sale_unit ?? "ud"),
+            units_per_package: Number(prod?.units_per_package) || 1,
+            price_excl_vat: Number(row.price_excl_vat) || 0,
+            effective_price: row.effective_price ? Number(row.effective_price) : null,
+            shipping_cost: Number(prov?.shipping_cost_flat) || 0,
+            minimum_order: Number(prov?.minimum_order) || 0,
+            delivery_days_min: Number(prov?.delivery_days_min) || 1,
+            delivery_days_max: Number(prov?.delivery_days_max) || 7,
+            is_available: Boolean(row.is_available),
+            confidence_score: Number(row.confidence_score) || 0.5,
+            source_type: String(row.source_type ?? "provider_catalog"),
+            checked_at: row.checked_at ? String(row.checked_at) : null,
+            price_changed_at: null,
+            is_private_tariff: false,
+            is_negotiated: false,
+          };
+        }),
+        manual_prices: (pbManualRows || []).map((p): ManualPriceRow => ({
+          name: String(p.name || ""),
+          unit: String(p.unit || "ud"),
+          unit_price: Number(p.unit_price) || 0,
+          supplier_name: String(p.supplier_name || ""),
+          source_type: String(p.source_type || "manual"),
+          is_locked: Boolean(p.is_locked),
+        })),
+        historical_prices: [],
+        technical_prices: (pbTechnicalRows || []).map((r): TechnicalPriceRow => ({
+          name: String(r.name || ""),
+          item_code: String(r.item_code || ""),
+          unit: String(r.unit || "ud"),
+          unit_price: Number(r.unit_price) || 0,
+          confidence_score: Number(r.confidence_score) || 0.80,
+          source: String(r.source || ""),
+          region: String(r.region || "espana"),
+          is_private: Boolean(r.company_id),
+        })),
+        enlaze_prices: (pbEnlazeRows || []).map((sd): EnlazePriceRow => ({
+          name: String(sd.title || ""),
+          unit: String(sd.unit || "ud"),
+          unit_price: Number(sd.value) || 0,
+          chapter: String(sd.category || ""),
+          supplier_ref: String(sd.source || "Banco ENLAZE"),
+        })),
+      };
+
+      const v2Result = resolveForBudgetV2({
+        items: materials.map((m) => ({
+          concept_name: m.materialName,
+          category: m.category || "",
+          unit: m.unit,
+          quantity: m.quantity,
+        })),
+        context: {
+          company_id,
+          province: location || "",
+          quality_tier: (materials[0]?.qualityTier as "basica" | "media" | "alta") || "media",
+        },
+        data: v2Data,
+      });
+
+      // Convert V2 results to ResolvedPrice format for backwards compatibility
+      const qualityTier = materials[0]?.qualityTier ?? "media";
+      const resolved: ResolvedPrice[] = v2Result.results.map((r, idx) => ({
+        materialName: materials[idx].materialName,
+        normalizedName: normalizeMaterialName(materials[idx].materialName),
+        category: materials[idx].category || "",
+        unit: materials[idx].unit,
+        quantity: materials[idx].quantity,
+        qualityTier: materials[idx].qualityTier,
+        selectedPrice: r.effective_price > 0 ? r.effective_price : r.unit_price,
+        priceMin: r.unit_price,
+        priceMedian: r.unit_price,
+        priceMax: r.unit_price,
+        selectedSupplier: r.provider_name || "",
+        sourceUrl: "",
+        sourceType: r.source_type as ResolvedPrice["sourceType"],
+        confidenceScore: r.confidence_score,
+        capturedAt: r.checked_at || new Date().toISOString(),
+        alternatives: r.alternatives.map((a): PriceAlternative => ({
+          supplier: a.provider_name,
+          title: a.product_name,
+          price: a.unit_price,
+          unit: materials[idx]?.unit || "ud",
+          qualityTier,
+          url: "",
+        })),
+      }));
+
+      return NextResponse.json({
+        ok: true,
+        resolver_used: "v2" as const,
+        resolved,
+        summary: {
+          total: resolved.length,
+          ...v2Result.summary.by_source,
+          avg_confidence: v2Result.summary.avg_confidence,
+        },
+      });
+    }
+
+    // ── V1 Path (fallback) ──
 
     // ── Step 1: Fetch user's price_items (level 1 — user_catalog) ──
     const { data: userPriceItems } = await supabase

@@ -10,6 +10,7 @@ import {
 import { useToast } from "@/components/ui/toast";
 import { SECTOR_OPTIONS } from "@/lib/sectors";
 import SectorIcon from "@/components/SectorIcon";
+import { analytics } from "@/lib/analytics";
 
 const sectors = SECTOR_OPTIONS;
 
@@ -119,6 +120,9 @@ export default function OnboardingPage() {
       return;
     }
 
+    // Track onboarding completion
+    analytics.onboardingCompleted(sector, businessName);
+
     // Record legal acceptances (fire-and-forget, never blocks)
     await Promise.allSettled([
       recordLegalAcceptance(supabase, "terms", TERMS_VERSION),
@@ -201,7 +205,7 @@ export default function OnboardingPage() {
             )}
 
             <button
-              onClick={() => { if (selectedSector) setStep(2); }}
+              onClick={() => { if (selectedSector) { analytics.onboardingSectorSelected(selectedSector); setStep(2); } }}
               disabled={!selectedSector}
               className="mt-6 w-full bg-[var(--color-brand-green)] text-[var(--color-navy-900)] font-bold py-3 rounded-xl hover:opacity-90 transition disabled:opacity-30"
             >

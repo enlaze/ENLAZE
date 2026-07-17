@@ -5,6 +5,7 @@ import { ClientThemeProvider } from "./theme-provider";
 import { ToastProvider } from "@/components/ui/toast";
 import { ConfirmProvider } from "@/components/ui/confirm-dialog";
 import BrandIntro from "@/components/landing/BrandIntro";
+import AnalyticsProvider from "@/components/AnalyticsProvider";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -150,12 +151,14 @@ export default function RootLayout({
       </head>
       <body className="bg-white text-navy-900 transition-colors dark:bg-zinc-950 dark:text-zinc-200 antialiased">
         <ClientThemeProvider>
-          <ToastProvider>
-            <ConfirmProvider>
-              <BrandIntro />
-              {children}
-            </ConfirmProvider>
-          </ToastProvider>
+          <AnalyticsProvider>
+            <ToastProvider>
+              <ConfirmProvider>
+                <BrandIntro />
+                {children}
+              </ConfirmProvider>
+            </ToastProvider>
+          </AnalyticsProvider>
         </ClientThemeProvider>
       </body>
     </html>

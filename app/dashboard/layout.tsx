@@ -10,6 +10,8 @@ import ShortcutsOverlay from "@/components/ShortcutsOverlay";
 import ThemeToggle from "@/components/ThemeToggle";
 import { SectorProvider, useSector } from "@/lib/sector-context";
 import { useToast } from "@/components/ui/toast";
+import { analytics, resetAnalytics } from "@/lib/analytics";
+import { setSentryUser } from "@/lib/sentry";
 
 /* Canonical sidebar structure — single source of truth.
    Each item has a `section` (null = pinned at top, no header). */
@@ -301,6 +303,9 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
   }, []);
 
   const handleLogout = async () => {
+    analytics.userLoggedOut();
+    resetAnalytics();
+    setSentryUser(null);
     await supabase.auth.signOut();
     router.push("/");
   };
