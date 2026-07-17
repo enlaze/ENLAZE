@@ -1,7 +1,7 @@
 /**
  * price-import.ts
  *
- * Parses uploaded CSV/BC3 files into a preview format, validates rows,
+ * Parses uploaded CSV/XLSX/BC3 files into a preview format, validates rows,
  * and inserts confirmed rows into the Price Bank V2 tables.
  *
  * Workflow:
@@ -11,6 +11,7 @@
  *
  * Supports:
  *   - CSV (comma, semicolon, tab separated)
+ *   - XLSX/XLS (via SheetJS)
  *   - BC3/FIEBDC-3 (via existing bc3-parser)
  */
 
@@ -19,7 +20,7 @@ import crypto from "crypto";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type ImportFileType = "csv" | "bc3";
+export type ImportFileType = "csv" | "xlsx" | "bc3";
 
 export interface ColumnMapping {
   /** CSV column name → target field */
@@ -126,6 +127,64 @@ function parseLine(line: string, delimiter: string): string[] {
   fields.push(current.trim());
 
   return fields;
+}
+
+// ─── XLSX Parsing ─────────────────────────────────────────────────────────────
+
+/**
+ * Parse an XLSX/XLS buffer into headers + rows using SheetJS.
+ * Falls back gracefully if the `xlsx` package is not installed.
+ */
+async function parseXLSX(
+  buffer: ArrayBuffer,
+  sheetIndex = 0
+): Promise<{ headers: string[]; rows: string[][]; sheetNames: string[] }> {
+  // Dynamic import — user must install: npm install xlsx
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let XLSX: any;
+  try {
+    XLSX = await import("xlsx");
+  } catch {
+    throw new Error(
+      "El paquete 'xlsx' no está instalado. Ejecuta: npm install xlsx"
+    );
+  }
+
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const sheetNames = workbook.SheetNames as string[];
+
+  if (sheetNames.length === 0) {
+    return { headers: [], rows: [], sheetNames: [] };
+  }
+
+  const targetSheet = sheetNames[Math.min(sheetIndex, sheetNames.length - 1)];
+  const sheet = workbook.Sheets[targetSheet];
+
+  // Convert to array of arrays
+  const raw: string[][] = XLSX.utils.sheet_to_json(sheet, {
+    header: 1,
+    defval: "",
+    blankrows: false,
+  });
+
+  if (raw.length === 0) return { headers: [], rows: [], sheetNames };
+
+  // Find the header row: the first row that has ≥ 2 non-empty cells
+  let headerRowIdx = 0;
+  for (let i = 0; i < Math.min(raw.length, 10); i++) {
+    const nonEmpty = raw[i].filter((c) => String(c).trim()).length;
+    if (nonEmpty >= 2) {
+      headerRowIdx = i;
+      break;
+    }
+  }
+
+  const headers = raw[headerRowIdx].map((c) => String(c).trim());
+  const rows = raw
+    .slice(headerRowIdx + 1)
+    .map((row) => row.map((c) => String(c).trim()));
+
+  return { headers, rows, sheetNames };
 }
 
 // ─── Column detection ────────────────────────────────────────────────────────
@@ -270,6 +329,132 @@ export function analyzeCSV(
     preview: importRows.slice(0, 50), // Max 50 rows in preview
     warnings,
     errors,
+  };
+}
+
+// ─── Analyze XLSX ─────────────────────────────────────────────────────────────
+
+/**
+ * Analyze an uploaded XLSX/XLS file and return a preview with validation.
+ */
+export async function analyzeXLSX(
+  buffer: ArrayBuffer,
+  customMapping?: Partial<ColumnMapping>,
+  sheetIndex = 0
+): Promise<ImportAnalysis & { sheet_names?: string[] }> {
+  const warnings: string[] = [];
+  const errors: string[] = [];
+
+  let parsed: { headers: string[]; rows: string[][]; sheetNames: string[] };
+  try {
+    parsed = await parseXLSX(buffer, sheetIndex);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      ok: false,
+      file_type: "xlsx",
+      total_rows: 0,
+      valid_rows: 0,
+      invalid_rows: 0,
+      detected_columns: [],
+      suggested_mapping: {
+        name: null, unit: null, unit_price: null,
+        brand: null, sku: null, category: null, description: null,
+      },
+      preview: [],
+      warnings,
+      errors: [msg],
+      sheet_names: [],
+    };
+  }
+
+  const { headers, rows, sheetNames } = parsed;
+
+  if (sheetNames.length > 1) {
+    warnings.push(
+      `El archivo tiene ${sheetNames.length} hojas. Analizando: "${sheetNames[sheetIndex ?? 0]}".`
+    );
+  }
+
+  if (headers.length === 0) {
+    return {
+      ok: false,
+      file_type: "xlsx",
+      total_rows: 0,
+      valid_rows: 0,
+      invalid_rows: 0,
+      detected_columns: [],
+      suggested_mapping: {
+        name: null, unit: null, unit_price: null,
+        brand: null, sku: null, category: null, description: null,
+      },
+      preview: [],
+      warnings,
+      errors: ["El archivo está vacío o no tiene cabeceras"],
+      sheet_names: sheetNames,
+    };
+  }
+
+  const mapping = { ...suggestMapping(headers), ...customMapping };
+
+  if (!mapping.name) errors.push("No se detectó columna de nombre. Mapea manualmente.");
+  if (!mapping.unit_price) warnings.push("No se detectó columna de precio. Los productos se importarán con precio 0.");
+
+  const headerIdx = new Map<string, number>();
+  headers.forEach((h, i) => headerIdx.set(h, i));
+
+  const getVal = (row: string[], col: string | null): string => {
+    if (!col) return "";
+    const idx = headerIdx.get(col);
+    return idx !== undefined ? (row[idx] || "").trim() : "";
+  };
+
+  const importRows: ImportRow[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (row.every((cell) => !cell.trim())) continue;
+
+    const rowErrors: string[] = [];
+    const name = getVal(row, mapping.name);
+    if (!name) rowErrors.push("Nombre vacío");
+
+    const priceStr = getVal(row, mapping.unit_price)
+      .replace(/[€$,]/g, "")
+      .replace(",", ".");
+    const unit_price = parseFloat(priceStr) || 0;
+    if (mapping.unit_price && isNaN(parseFloat(priceStr))) {
+      rowErrors.push("Precio no numérico");
+    }
+
+    importRows.push({
+      row_number: i + 2,
+      name,
+      unit: getVal(row, mapping.unit) || "ud",
+      unit_price,
+      brand: getVal(row, mapping.brand) || null,
+      sku: getVal(row, mapping.sku) || null,
+      category: getVal(row, mapping.category) || null,
+      description: getVal(row, mapping.description) || null,
+      is_valid: rowErrors.length === 0,
+      errors: rowErrors,
+    });
+  }
+
+  const validCount = importRows.filter((r) => r.is_valid).length;
+
+  return {
+    ok: errors.length === 0,
+    file_type: "xlsx",
+    total_rows: importRows.length,
+    valid_rows: validCount,
+    invalid_rows: importRows.length - validCount,
+    detected_columns: headers,
+    suggested_mapping: mapping,
+    preview: importRows.slice(0, 50),
+    warnings,
+    errors,
+    sheet_names: sheetNames,
   };
 }
 

@@ -42,9 +42,12 @@ interface AnalysisResult {
   preview: ImportRow[];
   warnings: string[];
   errors: string[];
+  sheet_names?: string[];
 }
 
-type Step = "upload" | "preview" | "confirm" | "done";
+type Step = "mode" | "upload" | "preview" | "confirm" | "done";
+type ImportMode = "generic" | "source";
+type SourceType = "auto" | "bedec" | "preoc" | "cype";
 
 /* ─── Styles ─────────────────────────────────────────────────────── */
 
@@ -57,13 +60,34 @@ const BTN_PRIMARY =
 const BTN_SECONDARY =
   "inline-flex items-center gap-2 rounded-xl border border-navy-200 bg-white px-5 py-2.5 text-sm font-medium text-navy-700 shadow-sm hover:bg-navy-50 transition-colors dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700";
 
+const SOURCE_INFO: Record<string, { name: string; desc: string; icon: string }> = {
+  bedec: {
+    name: "BEDEC (ITeC)",
+    desc: "Base de datos de la construcción de Cataluña. Exporta CSV desde itec.es/bedec",
+    icon: "🏗️",
+  },
+  preoc: {
+    name: "PREOC",
+    desc: "Precios de la construcción de España por comunidad autónoma. Exporta desde preoc.es",
+    icon: "📊",
+  },
+  cype: {
+    name: "CYPE Generador de Precios",
+    desc: "El generador de precios más usado en España. Exporta CSV desde generadordeprecios.info",
+    icon: "🔧",
+  },
+};
+
 /* ═══════════════════════════════════════════════════════════════════ */
 
 export default function ImportPricesPage() {
   const router = useRouter();
   const toast = useToast();
 
-  const [step, setStep] = useState<Step>("upload");
+  const [step, setStep] = useState<Step>("mode");
+  const [importMode, setImportMode] = useState<ImportMode>("generic");
+  const [sourceType, setSourceType] = useState<SourceType>("auto");
+  const [sourceRegion, setSourceRegion] = useState("España");
   const [file, setFile] = useState<File | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [mapping, setMapping] = useState<ColumnMapping>({
@@ -76,16 +100,22 @@ export default function ImportPricesPage() {
     products_created: number;
     skipped: number;
     errors: string[];
+    source_name?: string;
   } | null>(null);
 
-  /* ── Upload & analyze ──────────────────────────────────────────── */
+  /* ── File handling ──────────────────────────────────────────────── */
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] ?? null;
     setFile(f);
     setAnalysis(null);
-    setStep("upload");
   }, []);
+
+  const acceptedFormats = importMode === "generic"
+    ? ".csv,.tsv,.txt,.xlsx,.xls"
+    : ".csv,.tsv,.txt";
+
+  /* ── Generic analyze ────────────────────────────────────────────── */
 
   const handleAnalyze = useCallback(async () => {
     if (!file) return;
@@ -116,6 +146,45 @@ export default function ImportPricesPage() {
       setLoading(false);
     }
   }, [file, toast]);
+
+  /* ── Source import (BEDEC/PREOC/CYPE) ───────────────────────────── */
+
+  const handleSourceImport = useCallback(async () => {
+    if (!file) return;
+    setLoading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("source", sourceType);
+      if (sourceRegion) formData.append("region", sourceRegion);
+
+      const res = await fetch("/api/pb/import/source", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.errors?.[0] || data.error || "Error al importar");
+        return;
+      }
+
+      setResult({
+        products_created: data.import_stats?.products_created || 0,
+        skipped: data.import_stats?.skipped || 0,
+        errors: data.errors || [],
+        source_name: data.source_name,
+      });
+      setStep("done");
+      toast.success(`${data.import_stats?.products_created || 0} productos importados desde ${data.source_name}`);
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setLoading(false);
+    }
+  }, [file, sourceType, sourceRegion, toast]);
 
   /* ── Re-analyze with updated mapping ───────────────────────────── */
 
@@ -190,54 +259,147 @@ export default function ImportPricesPage() {
     }
   }, [analysis, providerName, toast]);
 
+  /* ── Reset ──────────────────────────────────────────────────────── */
+
+  const resetAll = useCallback(() => {
+    setStep("mode");
+    setFile(null);
+    setAnalysis(null);
+    setResult(null);
+    setProviderName("");
+    setImportMode("generic");
+    setSourceType("auto");
+  }, []);
+
   /* ─── Render ───────────────────────────────────────────────────── */
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Importar precios"
-        description="Sube un CSV con productos y precios de un proveedor"
+        description="Sube CSV, XLSX, o importa desde bases de precios de construcción"
         breadcrumbs={[
           { label: "Catálogo de precios", href: "/dashboard/prices" },
           { label: "Importar" },
         ]}
       />
 
-      {/* ── Step indicator ── */}
-      <div className="flex items-center gap-3 text-sm">
-        {(["upload", "preview", "confirm", "done"] as Step[]).map((s, i) => (
-          <div key={s} className="flex items-center gap-2">
-            <div
-              className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold transition-colors ${
-                step === s
-                  ? "bg-brand-green text-white"
-                  : i < ["upload", "preview", "confirm", "done"].indexOf(step)
-                  ? "bg-brand-green/20 text-brand-green"
-                  : "bg-navy-100 text-navy-400 dark:bg-zinc-800 dark:text-zinc-500"
-              }`}
-            >
-              {i + 1}
-            </div>
-            <span className={step === s ? "font-medium text-navy-900 dark:text-white" : "text-navy-400 dark:text-zinc-500"}>
-              {s === "upload" ? "Subir" : s === "preview" ? "Preview" : s === "confirm" ? "Confirmar" : "Hecho"}
-            </span>
-            {i < 3 && <div className="h-px w-8 bg-navy-200 dark:bg-zinc-700" />}
-          </div>
-        ))}
-      </div>
+      {/* ── Step: Mode selection ── */}
+      {step === "mode" && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {/* Generic CSV/XLSX */}
+          <button
+            onClick={() => { setImportMode("generic"); setStep("upload"); }}
+            className="group rounded-2xl border-2 border-navy-200 bg-white p-6 text-left transition-all hover:border-brand-green/40 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-brand-green/40"
+          >
+            <div className="mb-3 text-3xl">📄</div>
+            <h3 className="text-base font-semibold text-navy-900 dark:text-white">
+              CSV / Excel de proveedor
+            </h3>
+            <p className="mt-1.5 text-sm text-navy-500 dark:text-zinc-400">
+              Importa tarifas de cualquier proveedor desde archivos CSV (.csv, .tsv) o Excel (.xlsx, .xls).
+              Detecta columnas automáticamente.
+            </p>
+          </button>
+
+          {/* Source databases */}
+          <button
+            onClick={() => { setImportMode("source"); setStep("upload"); }}
+            className="group rounded-2xl border-2 border-navy-200 bg-white p-6 text-left transition-all hover:border-brand-green/40 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-brand-green/40"
+          >
+            <div className="mb-3 text-3xl">🏗️</div>
+            <h3 className="text-base font-semibold text-navy-900 dark:text-white">
+              Base de precios de construcción
+            </h3>
+            <p className="mt-1.5 text-sm text-navy-500 dark:text-zinc-400">
+              Importa desde BEDEC (ITeC), PREOC, o CYPE Generador de Precios.
+              Exporta el CSV desde la fuente y súbelo aquí.
+            </p>
+          </button>
+        </div>
+      )}
 
       {/* ── Step: Upload ── */}
       {step === "upload" && (
         <div className="rounded-2xl border border-navy-200 bg-white p-8 dark:border-zinc-800 dark:bg-zinc-900">
           <div className="mx-auto max-w-md space-y-6">
+            {/* Source selection for "source" mode */}
+            {importMode === "source" && (
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-navy-600 dark:text-zinc-300">
+                    Fuente de precios
+                  </label>
+                  <select
+                    value={sourceType}
+                    onChange={(e) => setSourceType(e.target.value as SourceType)}
+                    className={INPUT_CLS}
+                  >
+                    <option value="auto">Auto-detectar formato</option>
+                    <option value="bedec">BEDEC (ITeC Barcelona)</option>
+                    <option value="preoc">PREOC (preoc.es)</option>
+                    <option value="cype">CYPE Generador de Precios</option>
+                  </select>
+                </div>
+
+                {sourceType !== "auto" && SOURCE_INFO[sourceType] && (
+                  <div className="flex items-start gap-3 rounded-xl bg-brand-green/5 px-4 py-3">
+                    <span className="text-xl">{SOURCE_INFO[sourceType].icon}</span>
+                    <div>
+                      <p className="text-sm font-medium text-navy-900 dark:text-white">
+                        {SOURCE_INFO[sourceType].name}
+                      </p>
+                      <p className="mt-0.5 text-xs text-navy-500 dark:text-zinc-400">
+                        {SOURCE_INFO[sourceType].desc}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-navy-600 dark:text-zinc-300">
+                    Comunidad autónoma
+                  </label>
+                  <select
+                    value={sourceRegion}
+                    onChange={(e) => setSourceRegion(e.target.value)}
+                    className={INPUT_CLS}
+                  >
+                    <option value="España">España (general)</option>
+                    <option value="Andalucía">Andalucía</option>
+                    <option value="Aragón">Aragón</option>
+                    <option value="Asturias">Asturias</option>
+                    <option value="Baleares">Baleares</option>
+                    <option value="Canarias">Canarias</option>
+                    <option value="Cantabria">Cantabria</option>
+                    <option value="Castilla y León">Castilla y León</option>
+                    <option value="Castilla-La Mancha">Castilla-La Mancha</option>
+                    <option value="Cataluña">Cataluña</option>
+                    <option value="Comunidad Valenciana">Comunidad Valenciana</option>
+                    <option value="Extremadura">Extremadura</option>
+                    <option value="Galicia">Galicia</option>
+                    <option value="La Rioja">La Rioja</option>
+                    <option value="Madrid">Madrid</option>
+                    <option value="Murcia">Murcia</option>
+                    <option value="Navarra">Navarra</option>
+                    <option value="País Vasco">País Vasco</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* File drop zone */}
             <div className="rounded-2xl border-2 border-dashed border-navy-200 bg-navy-50/40 p-10 text-center dark:border-zinc-700 dark:bg-zinc-800/50">
-              <div className="mb-3 text-3xl">📄</div>
+              <div className="mb-3 text-3xl">{importMode === "source" ? "🏗️" : "📄"}</div>
               <p className="mb-4 text-sm text-navy-600 dark:text-zinc-400">
-                Arrastra un archivo CSV o haz clic para seleccionar
+                {importMode === "source"
+                  ? "Arrastra el CSV exportado desde la fuente"
+                  : "Arrastra un CSV o XLSX de tu proveedor"
+                }
               </p>
               <input
                 type="file"
-                accept=".csv,.tsv,.txt"
+                accept={acceptedFormats}
                 onChange={handleFileChange}
                 className="mx-auto block w-full max-w-xs text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-brand-green/10 file:px-4 file:py-2 file:text-sm file:font-medium file:text-brand-green hover:file:bg-brand-green/20"
               />
@@ -252,13 +414,28 @@ export default function ImportPricesPage() {
               </div>
             )}
 
-            <button
-              onClick={handleAnalyze}
-              disabled={!file || loading}
-              className={BTN_PRIMARY + " w-full justify-center"}
-            >
-              {loading ? "Analizando..." : "Analizar archivo"}
-            </button>
+            <div className="flex gap-3">
+              <button onClick={() => setStep("mode")} className={BTN_SECONDARY}>
+                Volver
+              </button>
+              {importMode === "source" ? (
+                <button
+                  onClick={handleSourceImport}
+                  disabled={!file || loading}
+                  className={BTN_PRIMARY + " flex-1 justify-center"}
+                >
+                  {loading ? "Importando..." : "Importar desde fuente"}
+                </button>
+              ) : (
+                <button
+                  onClick={handleAnalyze}
+                  disabled={!file || loading}
+                  className={BTN_PRIMARY + " flex-1 justify-center"}
+                >
+                  {loading ? "Analizando..." : "Analizar archivo"}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -267,7 +444,7 @@ export default function ImportPricesPage() {
       {step === "preview" && analysis && (
         <div className="space-y-6">
           {/* Summary cards */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div className="rounded-xl border border-navy-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
               <p className="text-xs text-navy-500 dark:text-zinc-400">Total filas</p>
               <p className="mt-1 text-2xl font-bold text-navy-900 dark:text-white">{analysis.total_rows}</p>
@@ -280,14 +457,30 @@ export default function ImportPricesPage() {
               <p className="text-xs text-red-600 dark:text-red-400">Con errores</p>
               <p className="mt-1 text-2xl font-bold text-red-700 dark:text-red-300">{analysis.invalid_rows}</p>
             </div>
+            <div className="rounded-xl border border-navy-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+              <p className="text-xs text-navy-500 dark:text-zinc-400">Formato</p>
+              <p className="mt-1 text-lg font-bold uppercase text-navy-900 dark:text-white">{analysis.file_type}</p>
+            </div>
           </div>
+
+          {/* Sheet selector for XLSX */}
+          {analysis.sheet_names && analysis.sheet_names.length > 1 && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+              <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                El archivo tiene {analysis.sheet_names.length} hojas: {analysis.sheet_names.join(", ")}
+              </p>
+              <p className="mt-1 text-xs text-blue-600 dark:text-blue-400">
+                Se analizó la primera hoja. Para cambiar, re-sube el archivo indicando la hoja deseada.
+              </p>
+            </div>
+          )}
 
           {/* Warnings */}
           {analysis.warnings.length > 0 && (
             <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-900/20">
               <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300">Avisos:</p>
               {analysis.warnings.map((w, i) => (
-                <p key={i} className="mt-1 text-sm text-yellow-700 dark:text-yellow-400">• {w}</p>
+                <p key={i} className="mt-1 text-sm text-yellow-700 dark:text-yellow-400">{w}</p>
               ))}
             </div>
           )}
@@ -445,6 +638,7 @@ export default function ImportPricesPage() {
           </h3>
           <p className="mb-6 text-sm text-green-700 dark:text-green-400">
             {result.products_created} productos creados
+            {result.source_name && ` desde ${result.source_name}`}
             {result.skipped > 0 && ` · ${result.skipped} duplicados omitidos`}
           </p>
 
@@ -454,7 +648,7 @@ export default function ImportPricesPage() {
                 Errores ({result.errors.length}):
               </p>
               {result.errors.slice(0, 5).map((e, i) => (
-                <p key={i} className="text-xs text-yellow-700 dark:text-yellow-400">• {e}</p>
+                <p key={i} className="text-xs text-yellow-700 dark:text-yellow-400">{e}</p>
               ))}
               {result.errors.length > 5 && (
                 <p className="mt-1 text-xs text-yellow-500">... y {result.errors.length - 5} más</p>
@@ -463,16 +657,7 @@ export default function ImportPricesPage() {
           )}
 
           <div className="flex justify-center gap-3">
-            <button
-              onClick={() => {
-                setStep("upload");
-                setFile(null);
-                setAnalysis(null);
-                setResult(null);
-                setProviderName("");
-              }}
-              className={BTN_SECONDARY}
-            >
+            <button onClick={resetAll} className={BTN_SECONDARY}>
               Importar otro archivo
             </button>
             <button

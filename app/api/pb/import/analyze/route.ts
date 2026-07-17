@@ -1,21 +1,24 @@
 /**
  * POST /api/pb/import/analyze
  *
- * Uploads a CSV file and returns a preview with validation + column mapping.
+ * Uploads a CSV or XLSX file and returns a preview with validation + column mapping.
  *
  * Body: multipart/form-data
- *   - file: CSV file (.csv, .tsv, .txt)
+ *   - file: CSV (.csv, .tsv, .txt) or Excel (.xlsx, .xls)
  *   - mapping: optional JSON string with column mapping overrides
+ *   - sheet_index: optional sheet index for XLSX files (default: 0)
  *
  * Returns: ImportAnalysis with preview rows, detected columns, suggested mapping.
  */
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { analyzeCSV, type ColumnMapping } from "@/lib/price-import";
+import { analyzeCSV, analyzeXLSX, type ColumnMapping } from "@/lib/price-import";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
-const VALID_EXTENSIONS = [".csv", ".tsv", ".txt"];
+const CSV_EXTENSIONS = [".csv", ".tsv", ".txt"];
+const XLSX_EXTENSIONS = [".xlsx", ".xls"];
+const VALID_EXTENSIONS = [...CSV_EXTENSIONS, ...XLSX_EXTENSIONS];
 
 export async function POST(request: Request) {
   const cookieStore = await cookies();
@@ -40,12 +43,12 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const mappingStr = formData.get("mapping") as string | null;
+    const sheetIndexStr = formData.get("sheet_index") as string | null;
 
     if (!file) {
       return NextResponse.json({ error: "No se proporcionó archivo" }, { status: 400 });
     }
 
-    // Validate file
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
         { error: `Archivo demasiado grande (máx ${MAX_FILE_SIZE / 1024 / 1024} MB)` },
@@ -71,17 +74,28 @@ export async function POST(request: Request) {
       }
     }
 
-    // Read file content
-    const content = await file.text();
+    const isXLSX = XLSX_EXTENSIONS.includes(ext);
 
-    // Analyze
-    const analysis = analyzeCSV(content, customMapping);
+    if (isXLSX) {
+      const buffer = await file.arrayBuffer();
+      const sheetIndex = sheetIndexStr ? parseInt(sheetIndexStr, 10) : 0;
+      const analysis = await analyzeXLSX(buffer, customMapping, sheetIndex);
 
-    return NextResponse.json({
-      ...analysis,
-      file_name: file.name,
-      file_size: file.size,
-    });
+      return NextResponse.json({
+        ...analysis,
+        file_name: file.name,
+        file_size: file.size,
+      });
+    } else {
+      const content = await file.text();
+      const analysis = analyzeCSV(content, customMapping);
+
+      return NextResponse.json({
+        ...analysis,
+        file_name: file.name,
+        file_size: file.size,
+      });
+    }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[ImportAnalyze] Error:", message);
