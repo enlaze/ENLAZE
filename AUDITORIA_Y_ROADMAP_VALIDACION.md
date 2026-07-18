@@ -57,7 +57,9 @@ El rediseño del briefing (ya en marcha) + una pasada de consistencia + los P1 d
 
 Recorrido de usuario de construcción ejecutado (9-10 jul). Bugs ENCONTRADOS y ARREGLADOS: email/dominio Resend, enlace a localhost, guardar perfil (RLS 42501), botón crear obra (RLS sistémico + columna `projects`), tildes/logo/campo empresa opcional, iconos onboarding + primeros pasos + ajustes.
 
-- **Pendiente funcional (único):** el onboarding se reinicia al pulsar el enlace de privacidad → persistir el progreso.
+- **RESUELTO (commit 112a1f8):** el onboarding ya persiste el progreso en sessionStorage — solo falta confirmarlo en vivo.
+- **PENDIENTE FUNCIONAL (nuevo, importante):** NO existe recuperación de contraseña ("olvidé mi contraseña"). Un usuario que la olvide se queda fuera. Implementar con el mismo patrón de token + Resend que ya se usa para verificar el email.
+- **Pendiente menor:** mover "Registro de actividad" fuera del menú principal (accesible desde Cumplimiento).
 - **En curso (pulido):** sustituir emojis por iconos lucide, pantalla por pantalla (queda ~la mitad).
 - **SIGUIENTE PASO GRANDE:** validar el presupuestador con un constructor real (padre del socio). El banco de precios vacío hace que las estimaciones no sean fiables; hay que ver si aporta valor de verdad.
 - Aparcado a lanzamiento: SMTP de Supabase (vía Resend), revocar el token de GitHub expuesto.
