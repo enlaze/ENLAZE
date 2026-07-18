@@ -9,35 +9,47 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
-  const [error, setError] = useState("");
   const supabase = createClient();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
     setLoading(true);
 
-    const siteUrl = window.location.origin;
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${siteUrl}/reset-password`,
     });
 
+    // Mostramos SIEMPRE el mismo mensaje neutro, exista o no la cuenta, para no
+    // revelar qué correos están registrados. El error solo se registra para
+    // diagnóstico interno.
     if (error) {
-      setError(error.message);
-      setLoading(false);
-    } else {
-      setSent(true);
-      setLoading(false);
+      console.error("[forgot-password] resetPasswordForEmail error:", error.message);
     }
+
+    setSent(true);
+    setLoading(false);
   };
 
   if (sent) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-navy-50 px-6 dark:bg-zinc-950">
         <div className="max-w-md w-full bg-white rounded-2xl border border-navy-100 p-10 text-center shadow-lg dark:bg-zinc-900 dark:border-zinc-800">
-          <div className="w-16 h-16 mx-auto rounded-full bg-brand-green/10 flex items-center justify-center text-3xl mb-6">
-            ✉️
+          <div className="w-16 h-16 mx-auto rounded-full bg-brand-green/10 flex items-center justify-center mb-6">
+            <svg
+              className="w-8 h-8 text-brand-green"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="5" width="18" height="14" rx="2" />
+              <path d="m3 7 9 6 9-6" />
+            </svg>
           </div>
           <h2 className="text-2xl font-bold text-navy-900 dark:text-white">
             Revisa tu email
@@ -90,7 +102,6 @@ export default function ForgotPasswordPage() {
               placeholder="tu@empresa.com"
             />
           </div>
-          {error && <p className="text-red-500 text-sm">{error}</p>}
           <button
             type="submit"
             disabled={loading}

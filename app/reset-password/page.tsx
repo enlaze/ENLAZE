@@ -13,28 +13,52 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-  const [sessionReady, setSessionReady] = useState(false);
+  const [status, setStatus] = useState<"checking" | "ready" | "invalid">("checking");
   const supabase = createClient();
   const router = useRouter();
 
-  // Supabase exchanges the token from the URL hash automatically
+  // Al aterrizar desde el email, Supabase deja una sesión de recuperación.
+  // Detectamos esa sesión (evento PASSWORD_RECOVERY o sesión ya presente); si el
+  // enlace trae un error o no aparece ninguna sesión, lo tratamos como inválido.
   useEffect(() => {
+    // Si el enlace caducó o es inválido, Supabase adjunta el error en el hash
+    // (#error=...) o en el query (?error=...) al redirigir aquí.
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const queryParams = new URLSearchParams(window.location.search);
+    if (hashParams.get("error") || queryParams.get("error")) {
+      setStatus("invalid");
+      return;
+    }
+
+    let resolved = false;
+    const markReady = () => {
+      resolved = true;
+      setStatus("ready");
+    };
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event) => {
-        if (event === "PASSWORD_RECOVERY") {
-          setSessionReady(true);
+      (event, session) => {
+        if (event === "PASSWORD_RECOVERY" || (session && event === "SIGNED_IN")) {
+          markReady();
         }
       }
     );
 
-    // Also check if we already have a session (user clicked link and session was set)
+    // La sesión puede haberse establecido antes de que nos suscribamos.
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setSessionReady(true);
-      }
+      if (session) markReady();
     });
 
-    return () => subscription.unsubscribe();
+    // Red de seguridad: si no aparece ninguna sesión de recuperación, el enlace
+    // es inválido o ha caducado.
+    const timer = setTimeout(() => {
+      if (!resolved) setStatus("invalid");
+    }, 6000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timer);
+    };
   }, [supabase]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -85,7 +109,31 @@ export default function ResetPasswordPage() {
     );
   }
 
-  if (!sessionReady) {
+  if (status === "invalid") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-navy-50 px-6 dark:bg-zinc-950">
+        <div className="max-w-md w-full bg-white rounded-2xl border border-navy-100 p-10 text-center shadow-lg dark:bg-zinc-900 dark:border-zinc-800">
+          <div className="flex justify-center mb-6">
+            <Logo href="/" size={36} />
+          </div>
+          <h2 className="text-2xl font-bold text-navy-900 dark:text-white">
+            Enlace no válido
+          </h2>
+          <p className="mt-3 text-navy-600 dark:text-zinc-400">
+            Este enlace de recuperación no es válido o ha caducado. Los enlaces solo pueden usarse una vez y expiran al cabo de una hora.
+          </p>
+          <Link
+            href="/forgot-password"
+            className="mt-6 inline-block text-brand-green font-semibold hover:underline"
+          >
+            Solicitar un enlace nuevo
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "checking") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-navy-50 px-6 dark:bg-zinc-950">
         <div className="max-w-md w-full bg-white rounded-2xl border border-navy-100 p-10 text-center shadow-lg dark:bg-zinc-900 dark:border-zinc-800">
@@ -95,12 +143,6 @@ export default function ResetPasswordPage() {
           <div className="w-12 h-12 mx-auto rounded-full border-4 border-navy-200 border-t-brand-green animate-spin dark:border-zinc-700 dark:border-t-brand-green" />
           <p className="mt-4 text-navy-600 dark:text-zinc-400">
             Verificando enlace de recuperación...
-          </p>
-          <p className="mt-4 text-sm text-navy-500 dark:text-zinc-500">
-            Si no se carga en unos segundos, el enlace puede haber expirado.{" "}
-            <Link href="/forgot-password" className="text-brand-green font-semibold hover:underline">
-              Solicitar uno nuevo
-            </Link>
           </p>
         </div>
       </div>
