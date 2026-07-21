@@ -15,6 +15,10 @@ import { SkeletonKpi, SkeletonTable } from "@/components/ui/skeleton";
 import type { PriceListItem } from "@/lib/types/price";
 import { PRICE_LIST_COLUMNS, SOURCE_TYPE_LABELS } from "@/lib/types/price";
 import InfoFlipCard from "@/components/ui/InfoFlipCard";
+import PriceHistoryModal from "./_components/PriceHistoryModal";
+import PriceAlertsPanel from "./_components/PriceAlertsPanel";
+import ProviderComparePanel from "./_components/ProviderComparePanel";
+import WeeklyReportPanel from "./_components/WeeklyReportPanel";
 
 /* ─── Helpers ──────────────────────────────────────────────────────── */
 
@@ -61,6 +65,8 @@ export default function PricesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [lastSyncDate, setLastSyncDate] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"catalogo" | "alertas" | "comparar" | "informe">("catalogo");
+  const [historyModal, setHistoryModal] = useState<{ id: string; name: string } | null>(null);
 
   const normalizedSector = normalizeSector(sectorKey);
   const sectorConfig = getSectorConfig(normalizedSector);
@@ -756,6 +762,17 @@ export default function PricesPage() {
                 {row.source_type === "manual" ? "\uD83D\uDD12" : "\uD83D\uDD13"}
               </button>
             )}
+            {isPbV2 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setHistoryModal({ id: row.id, name: row.name });
+                }}
+                className="p-1.5 rounded-lg text-xs text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition"
+              >
+                Historial
+              </button>
+            )}
             {!isPbV2 && (
               <>
                 <button
@@ -957,8 +974,66 @@ export default function PricesPage() {
         )}
       </div>
 
+      {/* ─── Tabs ─────────────────────────────────────────────────── */}
+      <div className="flex gap-1 mb-6 bg-navy-50 dark:bg-zinc-800/50 rounded-xl p-1 overflow-x-auto">
+        {([
+          { key: "catalogo", label: "Catalogo" },
+          { key: "alertas", label: "Alertas" },
+          { key: "comparar", label: "Comparar proveedores" },
+          { key: "informe", label: "Informe semanal" },
+        ] as const).map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition whitespace-nowrap ${
+              activeTab === tab.key
+                ? "bg-white text-brand-green shadow-sm dark:bg-zinc-900 dark:text-brand-green"
+                : "text-navy-500 hover:text-navy-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ─── Tab: Alertas ──────────────────────────────────────────── */}
+      {activeTab === "alertas" && (
+        <div className="rounded-2xl border border-navy-100 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-6 mb-6">
+          <PriceAlertsPanel
+            onCreateAlert={(pid, pname, provider) => {
+              // Could pre-fill from a product
+            }}
+          />
+        </div>
+      )}
+
+      {/* ─── Tab: Comparar proveedores ─────────────────────────────── */}
+      {activeTab === "comparar" && (
+        <div className="rounded-2xl border border-navy-100 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-6 mb-6">
+          <ProviderComparePanel
+            onViewHistory={(id, name) => setHistoryModal({ id, name })}
+          />
+        </div>
+      )}
+
+      {/* ─── Tab: Informe semanal ──────────────────────────────────── */}
+      {activeTab === "informe" && (
+        <div className="mb-6">
+          <WeeklyReportPanel />
+        </div>
+      )}
+
+      {/* ─── History modal ─────────────────────────────────────────── */}
+      {historyModal && (
+        <PriceHistoryModal
+          productId={historyModal.id}
+          productName={historyModal.name}
+          onClose={() => setHistoryModal(null)}
+        />
+      )}
+
       {/* ─── Form panel ───────────────────────────────────────────── */}
-      {showForm && (
+      {activeTab === "catalogo" && showForm && (
         <div className="rounded-2xl border border-navy-100 bg-white p-6 mb-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-5">
             {editingId ? "Editar precio" : "Nuevo precio"}
@@ -1121,30 +1196,32 @@ export default function PricesPage() {
       )}
 
       {/* ─── DataTable ────────────────────────────────────────────── */}
-      <DataTable
-        columns={columns}
-        data={items}
-        rowKey={(row) => row.id}
-        searchable
-        searchPlaceholder={isRetail ? "Buscar producto, marca, proveedor..." : "Buscar por nombre..."}
-        searchFields={(row) => [
-          row.name,
-          row.brand,
-          row.supplier_name,
-          row.family,
-          row.subcategory,
-          row.business_subsector,
-          row.description,
-        ]}
-        filters={filters}
-        initialSort={{ key: "name", dir: "asc" }}
-        pageSize={50}
-        pageSizeOptions={[25, 50, 100]}
-        exportable
-        exportFileName={`precios-${sectorConfig.sector}`}
-        toggleableColumns={isRetail}
-        emptyMessage="No hay precios configurados. Usa 'Sync mercado' o 'Importar defecto' para empezar."
-      />
+      {activeTab === "catalogo" && (
+        <DataTable
+          columns={columns}
+          data={items}
+          rowKey={(row) => row.id}
+          searchable
+          searchPlaceholder={isRetail ? "Buscar producto, marca, proveedor..." : "Buscar por nombre..."}
+          searchFields={(row) => [
+            row.name,
+            row.brand,
+            row.supplier_name,
+            row.family,
+            row.subcategory,
+            row.business_subsector,
+            row.description,
+          ]}
+          filters={filters}
+          initialSort={{ key: "name", dir: "asc" }}
+          pageSize={50}
+          pageSizeOptions={[25, 50, 100]}
+          exportable
+          exportFileName={`precios-${sectorConfig.sector}`}
+          toggleableColumns={isRetail}
+          emptyMessage="No hay precios configurados. Usa 'Sync mercado' o 'Importar defecto' para empezar."
+        />
+      )}
     </div>
   );
 }
