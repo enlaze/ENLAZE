@@ -19,6 +19,8 @@ import PriceHistoryModal from "./_components/PriceHistoryModal";
 import PriceAlertsPanel from "./_components/PriceAlertsPanel";
 import ProviderComparePanel from "./_components/ProviderComparePanel";
 import WeeklyReportPanel from "./_components/WeeklyReportPanel";
+import AddProviderPricePanel from "./_components/AddProviderPricePanel";
+import ImportPricesPanel from "./_components/ImportPricesPanel";
 
 /* ─── Helpers ──────────────────────────────────────────────────────── */
 
@@ -65,7 +67,8 @@ export default function PricesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [lastSyncDate, setLastSyncDate] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"catalogo" | "alertas" | "comparar" | "informe">("catalogo");
+  const [activeTab, setActiveTab] = useState<"catalogo" | "alertas" | "comparar" | "informe" | "anadir" | "importar">("catalogo");
+  const [typeFilter, setTypeFilter] = useState<string>("todos");
   const [historyModal, setHistoryModal] = useState<{ id: string; name: string } | null>(null);
 
   const normalizedSector = normalizeSector(sectorKey);
@@ -116,7 +119,9 @@ export default function PricesPage() {
     const avgMargin = isRetail
       ? items.reduce((sum, i) => sum + (i.gross_margin_pct ?? 0), 0) / (total || 1)
       : 0;
-    return { total, manual, synced, avgMargin };
+    const providers = new Set(items.map((i) => i.supplier_name).filter(Boolean)).size;
+    const categories = new Set(items.map((i) => i.category).filter(Boolean)).size;
+    return { total, manual, synced, avgMargin, providers, categories };
   }, [items, isRetail]);
 
   /* ─── Load context & items ───────────────────────────────────────── */
@@ -162,18 +167,19 @@ export default function PricesPage() {
         .order("name")
         .limit(1000);
 
-      // 2. Load PB V2 products (global — from n8n scrapers)
+      // 2. Load PB V2 products (global — from n8n scrapers + seed + manual)
       const { data: pbProducts } = await supabase
         .from("pb_products")
         .select(`
           id, commercial_name, description, sale_unit,
           unit_price, brand, is_active, is_available,
+          product_type, category, subcategory,
           provider_id, pb_providers ( name )
         `)
         .eq("is_active", true)
         .eq("is_available", true)
         .order("commercial_name")
-        .limit(1000);
+        .limit(5000);
 
       // 3. Map PB V2 products → PriceListItem shape
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -181,8 +187,8 @@ export default function PricesPage() {
         id: p.id,
         name: p.commercial_name,
         description: p.description || "",
-        category: "material",
-        subcategory: "",
+        category: p.category || p.product_type || "material",
+        subcategory: p.subcategory || "",
         unit: p.sale_unit || "ud",
         unit_price: Number(p.unit_price) || 0,
         brand: p.brand || null,
@@ -192,9 +198,9 @@ export default function PricesPage() {
         vat_rate: null,
         gross_margin_pct: null,
         supplier_name: p.pb_providers?.name || "—",
-        source_type: "n8n_sync",
+        source_type: p.product_type || "n8n_sync",
         is_active: p.is_active ?? true,
-        business_subsector: null,
+        business_subsector: p.product_type || null,
         family: null,
       }));
 
@@ -961,8 +967,12 @@ export default function PricesPage() {
           <p className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-1">{kpis.manual}</p>
         </div>
         <div className="rounded-2xl border border-navy-100 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-xs font-medium text-navy-500 dark:text-zinc-400 uppercase tracking-wider">Sincronizados</p>
-          <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">{kpis.synced}</p>
+          <p className="text-xs font-medium text-navy-500 dark:text-zinc-400 uppercase tracking-wider">Proveedores</p>
+          <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">{kpis.providers}</p>
+        </div>
+        <div className="rounded-2xl border border-navy-100 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="text-xs font-medium text-navy-500 dark:text-zinc-400 uppercase tracking-wider">Categorias</p>
+          <p className="text-2xl font-bold text-purple-600 dark:text-purple-400 mt-1">{kpis.categories}</p>
         </div>
         {isRetail && (
           <div className="rounded-2xl border border-navy-100 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
@@ -978,10 +988,12 @@ export default function PricesPage() {
       <div className="flex gap-1 mb-6 bg-navy-50 dark:bg-zinc-800/50 rounded-xl p-1 overflow-x-auto">
         {([
           { key: "catalogo", label: "Catalogo" },
+          { key: "anadir", label: "Anadir precio" },
+          { key: "importar", label: "Importar CSV" },
           { key: "alertas", label: "Alertas" },
           { key: "comparar", label: "Comparar proveedores" },
           { key: "informe", label: "Informe semanal" },
-        ] as const).map((tab) => (
+        ] as { key: typeof activeTab; label: string }[]).map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
@@ -1020,6 +1032,20 @@ export default function PricesPage() {
       {activeTab === "informe" && (
         <div className="mb-6">
           <WeeklyReportPanel />
+        </div>
+      )}
+
+      {/* ─── Tab: Anadir precio / proveedor ─────────────────────────── */}
+      {activeTab === "anadir" && (
+        <div className="mb-6">
+          <AddProviderPricePanel onAdded={() => loadItems()} />
+        </div>
+      )}
+
+      {/* ─── Tab: Importar CSV ──────────────────────────────────────── */}
+      {activeTab === "importar" && (
+        <div className="mb-6">
+          <ImportPricesPanel onImported={() => loadItems()} />
         </div>
       )}
 
@@ -1195,32 +1221,74 @@ export default function PricesPage() {
         </div>
       )}
 
-      {/* ─── DataTable ────────────────────────────────────────────── */}
+      {/* ─── Product type filter + DataTable ───────────────────────── */}
       {activeTab === "catalogo" && (
-        <DataTable
-          columns={columns}
-          data={items}
-          rowKey={(row) => row.id}
-          searchable
-          searchPlaceholder={isRetail ? "Buscar producto, marca, proveedor..." : "Buscar por nombre..."}
-          searchFields={(row) => [
-            row.name,
-            row.brand,
-            row.supplier_name,
-            row.family,
-            row.subcategory,
-            row.business_subsector,
-            row.description,
-          ]}
-          filters={filters}
-          initialSort={{ key: "name", dir: "asc" }}
-          pageSize={50}
-          pageSizeOptions={[25, 50, 100]}
-          exportable
-          exportFileName={`precios-${sectorConfig.sector}`}
-          toggleableColumns={isRetail}
-          emptyMessage="No hay precios configurados. Usa 'Sync mercado' o 'Importar defecto' para empezar."
-        />
+        <>
+          {/* Quick-filter chips by product type */}
+          <div className="flex gap-2 mb-4 flex-wrap">
+            {[
+              { key: "todos", label: "Todos", icon: "📋" },
+              { key: "material", label: "Materiales", icon: "🧱" },
+              { key: "mano_obra", label: "Mano de obra", icon: "👷" },
+              { key: "maquinaria", label: "Maquinaria", icon: "🏗" },
+              { key: "transporte", label: "Transporte", icon: "🚛" },
+              { key: "residuos", label: "Residuos", icon: "♻" },
+              { key: "subcontrata", label: "Subcontratas", icon: "🤝" },
+              { key: "epi", label: "EPIs", icon: "🦺" },
+              { key: "herramienta", label: "Herramientas", icon: "🔧" },
+            ].map((chip) => (
+              <button
+                key={chip.key}
+                onClick={() => setTypeFilter(chip.key)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap ${
+                  typeFilter === chip.key
+                    ? "bg-brand-green text-white shadow-sm"
+                    : "bg-navy-100 text-navy-600 hover:bg-navy-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                }`}
+              >
+                {chip.icon} {chip.label}
+                {chip.key !== "todos" && (
+                  <span className="ml-1 opacity-70">
+                    ({items.filter((i) =>
+                      chip.key === "material"
+                        ? !i.business_subsector || i.business_subsector === "material" || !["mano_obra","maquinaria","transporte","residuos","subcontrata","epi","herramienta"].includes(i.business_subsector)
+                        : i.business_subsector === chip.key
+                    ).length})
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+          <DataTable
+            columns={columns}
+            data={typeFilter === "todos" ? items : items.filter((i) =>
+              typeFilter === "material"
+                ? !i.business_subsector || i.business_subsector === "material" || !["mano_obra","maquinaria","transporte","residuos","subcontrata","epi","herramienta"].includes(i.business_subsector)
+                : i.business_subsector === typeFilter
+            )}
+            rowKey={(row) => row.id}
+            searchable
+            searchPlaceholder="Buscar por nombre, proveedor, marca, categoria..."
+            searchFields={(row) => [
+              row.name,
+              row.brand,
+              row.supplier_name,
+              row.family,
+              row.subcategory,
+              row.business_subsector,
+              row.description,
+              row.category,
+            ]}
+            filters={filters}
+            initialSort={{ key: "name", dir: "asc" }}
+            pageSize={50}
+            pageSizeOptions={[25, 50, 100]}
+            exportable
+            exportFileName={`precios-${sectorConfig.sector}`}
+            toggleableColumns={isRetail}
+            emptyMessage="No hay precios en esta categoria. Usa 'Anadir precio' o 'Importar CSV' para empezar."
+          />
+        </>
       )}
     </div>
   );

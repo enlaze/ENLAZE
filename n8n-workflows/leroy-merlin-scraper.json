@@ -1,0 +1,149 @@
+{
+  "name": "ENLAZE - Leroy Merlin Scraper",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 24 }]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Cada 24h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Categorias de Leroy Merlin para construccion\n// Edita esta lista para añadir/quitar categorias\nconst categories = [\n  { slug: 'azulejos-y-baldosas', name: 'Azulejos y baldosas' },\n  { slug: 'cemento-y-mortero', name: 'Cemento y mortero' },\n  { slug: 'ladrillos-y-bloques', name: 'Ladrillos y bloques' },\n  { slug: 'yeso-y-escayola', name: 'Yeso y escayola' },\n  { slug: 'impermeabilizacion', name: 'Impermeabilizacion' },\n  { slug: 'aislamiento', name: 'Aislamiento' },\n  { slug: 'tubos-y-accesorios', name: 'Tubos y accesorios' },\n  { slug: 'griferia', name: 'Griferia' },\n  { slug: 'sanitarios', name: 'Sanitarios' },\n  { slug: 'pintura-interior', name: 'Pintura interior' },\n  { slug: 'pintura-exterior', name: 'Pintura exterior' },\n  { slug: 'herramientas-manuales', name: 'Herramientas manuales' },\n  { slug: 'herramientas-electricas', name: 'Herramientas electricas' },\n  { slug: 'madera-y-tableros', name: 'Madera y tableros' },\n  { slug: 'tornilleria-y-fijaciones', name: 'Tornilleria y fijaciones' }\n];\n\nreturn categories.map(c => ({ json: c }));"
+      },
+      "id": "categories",
+      "name": "Categorias",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://www.leroymerlin.es/{{$json.slug}}?page=1&size=48",
+        "options": {
+          "redirect": { "redirect": { "followRedirects": true, "maxRedirects": 5 } },
+          "timeout": 30000
+        },
+        "headerParameters": {
+          "parameters": [
+            { "name": "User-Agent", "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
+            { "name": "Accept", "value": "text/html,application/xhtml+xml" },
+            { "name": "Accept-Language", "value": "es-ES,es;q=0.9" }
+          ]
+        }
+      },
+      "id": "http-request",
+      "name": "Fetch Pagina",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 300],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrae productos del HTML de Leroy Merlin\n// El HTML puede cambiar — ajusta los selectores si es necesario\nconst html = $input.first().json.data || $input.first().json.body || '';\nconst category = $input.first().json.slug || 'general';\n\nconst products = [];\n\n// Patron 1: JSON-LD structured data\nconst jsonLdMatches = html.match(/<script type=\"application\\/ld\\+json\">[\\s\\S]*?<\\/script>/g) || [];\nfor (const match of jsonLdMatches) {\n  try {\n    const jsonStr = match.replace(/<script[^>]*>/, '').replace(/<\\/script>/, '').trim();\n    const data = JSON.parse(jsonStr);\n    if (data['@type'] === 'Product' || (data['@type'] === 'ItemList' && data.itemListElement)) {\n      const items = data.itemListElement || [data];\n      for (const item of items) {\n        const product = item.item || item;\n        if (product.name && product.offers) {\n          const offer = Array.isArray(product.offers) ? product.offers[0] : product.offers;\n          products.push({\n            name: product.name,\n            sku: product.sku || product.productID || '',\n            brand: product.brand?.name || '',\n            price: parseFloat(offer.price) || 0,\n            unit: 'ud',\n            url: product.url || '',\n            category: category,\n            is_available: offer.availability?.includes('InStock') ?? true\n          });\n        }\n      }\n    }\n  } catch(e) { /* skip malformed JSON-LD */ }\n}\n\n// Patron 2: data attributes en product cards\nconst cardPattern = /data-product-id=\"([^\"]+)\"[\\s\\S]*?data-product-name=\"([^\"]+)\"[\\s\\S]*?data-product-price=\"([^\"]+)\"/g;\nlet match;\nwhile ((match = cardPattern.exec(html)) !== null) {\n  const existing = products.find(p => p.sku === match[1]);\n  if (!existing) {\n    products.push({\n      name: match[2],\n      sku: match[1],\n      price: parseFloat(match[3]) || 0,\n      unit: 'ud',\n      category: category,\n      is_available: true\n    });\n  }\n}\n\n// Patron 3: regex fallback para precios en el HTML\nif (products.length === 0) {\n  const pricePattern = /class=\"[^\"]*product[^\"]*\"[\\s\\S]*?<[^>]*class=\"[^\"]*name[^\"]*\"[^>]*>([^<]+)<[\\s\\S]*?(\\d+[.,]\\d{2})\\s*&euro;/g;\n  while ((match = pricePattern.exec(html)) !== null) {\n    products.push({\n      name: match[1].trim(),\n      price: parseFloat(match[2].replace(',', '.')) || 0,\n      unit: 'ud',\n      category: category,\n      is_available: true\n    });\n  }\n}\n\nif (products.length === 0) {\n  return [{ json: { _empty: true, category, message: 'No se encontraron productos. Revisa los selectores.' } }];\n}\n\nreturn products.map(p => ({ json: p }));"
+      },
+      "id": "extract-products",
+      "name": "Extraer Productos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [860, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            { "value1": "={{ $json._empty }}", "value2": true, "operation": "notEqual" }
+          ]
+        }
+      },
+      "id": "filter-empty",
+      "name": "Filtrar vacios",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [1080, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 50,
+        "options": {}
+      },
+      "id": "batch",
+      "name": "Lotes de 50",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1300, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Agrupa items en formato webhook ENLAZE\nconst items = $input.all().map(i => i.json);\n\nreturn [{\n  json: {\n    action: 'upsert_products',\n    source: {\n      name: 'n8n-leroy-merlin-scraper',\n      type: 'n8n_webhook',\n      url: 'https://www.leroymerlin.es'\n    },\n    provider: {\n      name: 'Leroy Merlin',\n      website: 'https://www.leroymerlin.es',\n      region: 'ES'\n    },\n    items: items,\n    metadata: {\n      scraped_at: new Date().toISOString(),\n      workflow_id: 'leroy-merlin-scraper',\n      n8n_execution_id: $execution.id\n    }\n  }\n}];"
+      },
+      "id": "format-webhook",
+      "name": "Formato Webhook",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1520, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.ENLAZE_WEBHOOK_URL || 'https://tu-app.vercel.app/api/pb/webhook'}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "send-webhook",
+      "name": "Enviar a ENLAZE",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1740, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURAR",
+          "name": "ENLAZE Webhook Auth"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 10000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log resultado\nconst response = $input.first().json;\nconsole.log(`ENLAZE webhook response: created=${response.created}, updated=${response.updated}, errors=${response.errors?.length || 0}`);\nreturn $input.all();"
+      },
+      "id": "log-result",
+      "name": "Log Resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1960, 300]
+    }
+  ],
+  "connections": {
+    "Cada 24h": { "main": [[{ "node": "Categorias", "type": "main", "index": 0 }]] },
+    "Categorias": { "main": [[{ "node": "Fetch Pagina", "type": "main", "index": 0 }]] },
+    "Fetch Pagina": { "main": [[{ "node": "Extraer Productos", "type": "main", "index": 0 }]] },
+    "Extraer Productos": { "main": [[{ "node": "Filtrar vacios", "type": "main", "index": 0 }]] },
+    "Filtrar vacios": { "main": [[{ "node": "Lotes de 50", "type": "main", "index": 0 }]] },
+    "Lotes de 50": { "main": [[], [{ "node": "Formato Webhook", "type": "main", "index": 0 }]] },
+    "Formato Webhook": { "main": [[{ "node": "Enviar a ENLAZE", "type": "main", "index": 0 }]] },
+    "Enviar a ENLAZE": { "main": [[{ "node": "Log Resultado", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "tags": [{ "name": "ENLAZE" }, { "name": "scraping" }, { "name": "precios" }]
+}

@@ -1,0 +1,297 @@
+{
+  "name": "ENLAZE - Proveedores Extra Construccion",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 24 }]
+        }
+      },
+      "id": "trigger-schedule",
+      "name": "Cada 24h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 400],
+      "retryOnFail": true
+    },
+    {
+      "parameters": {},
+      "id": "trigger-manual",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [200, 560]
+    },
+    {
+      "parameters": {
+        "url": "https://www.bigmat.es/materiales-de-construccion",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "User-Agent", "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36" },
+            { "name": "Accept", "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
+            { "name": "Accept-Language", "value": "es-ES,es;q=0.9" },
+            { "name": "Cache-Control", "value": "no-cache" },
+            { "name": "Referer", "value": "https://www.bigmat.es/" }
+          ]
+        },
+        "options": {
+          "redirect": {},
+          "response": { "response": { "fullResponse": false, "neverError": true, "responseFormat": "text", "outputPropertyName": "data" } }
+        }
+      },
+      "id": "bigmat-materiales",
+      "name": "BigMat - Materiales",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://www.bigmat.es/herramientas",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "User-Agent", "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36" },
+            { "name": "Accept", "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
+            { "name": "Accept-Language", "value": "es-ES,es;q=0.9" },
+            { "name": "Referer", "value": "https://www.bigmat.es/" }
+          ]
+        },
+        "options": {
+          "redirect": {},
+          "response": { "response": { "fullResponse": false, "neverError": true, "responseFormat": "text", "outputPropertyName": "data" } }
+        }
+      },
+      "id": "bigmat-herramientas",
+      "name": "BigMat - Herramientas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 160]
+    },
+    {
+      "parameters": {
+        "url": "https://www.porcelanosa.com/es/productos/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "User-Agent", "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36" },
+            { "name": "Accept", "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
+            { "name": "Accept-Language", "value": "es-ES,es;q=0.9" },
+            { "name": "Referer", "value": "https://www.porcelanosa.com/" }
+          ]
+        },
+        "options": {
+          "redirect": {},
+          "response": { "response": { "fullResponse": false, "neverError": true, "responseFormat": "text", "outputPropertyName": "data" } }
+        }
+      },
+      "id": "porcelanosa-productos",
+      "name": "Porcelanosa - Productos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 320]
+    },
+    {
+      "parameters": {
+        "url": "https://www.roca.es/catalogo/bano",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "User-Agent", "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36" },
+            { "name": "Accept", "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
+            { "name": "Accept-Language", "value": "es-ES,es;q=0.9" },
+            { "name": "Referer", "value": "https://www.roca.es/" }
+          ]
+        },
+        "options": {
+          "redirect": {},
+          "response": { "response": { "fullResponse": false, "neverError": true, "responseFormat": "text", "outputPropertyName": "data" } }
+        }
+      },
+      "id": "roca-bano",
+      "name": "Roca - Bano",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 480]
+    },
+    {
+      "parameters": {
+        "url": "https://www.bauhaus.es/materiales-de-construccion/c/10000494",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "User-Agent", "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36" },
+            { "name": "Accept", "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
+            { "name": "Accept-Language", "value": "es-ES,es;q=0.9" },
+            { "name": "Referer", "value": "https://www.bauhaus.es/" }
+          ]
+        },
+        "options": {
+          "redirect": {},
+          "response": { "response": { "fullResponse": false, "neverError": true, "responseFormat": "text", "outputPropertyName": "data" } }
+        }
+      },
+      "id": "bauhaus-materiales",
+      "name": "Bauhaus - Materiales",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 640]
+    },
+    {
+      "parameters": {
+        "url": "https://www.bricoking.es/materiales-de-construccion",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "User-Agent", "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36" },
+            { "name": "Accept", "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
+            { "name": "Accept-Language", "value": "es-ES,es;q=0.9" },
+            { "name": "Referer", "value": "https://www.bricoking.es/" }
+          ]
+        },
+        "options": {
+          "redirect": {},
+          "response": { "response": { "fullResponse": false, "neverError": true, "responseFormat": "text", "outputPropertyName": "data" } }
+        }
+      },
+      "id": "bricoking-materiales",
+      "name": "Bricoking - Materiales",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 800]
+    },
+    {
+      "parameters": {
+        "url": "https://www.grupopuma.com/es-es/productos",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "User-Agent", "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36" },
+            { "name": "Accept", "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
+            { "name": "Accept-Language", "value": "es-ES,es;q=0.9" }
+          ]
+        },
+        "options": {
+          "redirect": {},
+          "response": { "response": { "fullResponse": false, "neverError": true, "responseFormat": "text", "outputPropertyName": "data" } }
+        }
+      },
+      "id": "grupopuma-productos",
+      "name": "Grupo Puma - Morteros",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 960]
+    },
+    {
+      "parameters": {},
+      "id": "merge-all",
+      "name": "Merge All",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [800, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst prices = [];\nconst seen = new Set();\n\nfunction cleanText(t) {\n  return (t || '').replace(/\\s+/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&#[0-9]+;/g, '').trim();\n}\n\nfunction detectSource(html) {\n  const lower = (html || '').toLowerCase();\n  if (lower.includes('bigmat.es')) return { name: 'BigMat', website: 'https://www.bigmat.es' };\n  if (lower.includes('porcelanosa.com')) return { name: 'Porcelanosa', website: 'https://www.porcelanosa.com' };\n  if (lower.includes('roca.es')) return { name: 'Roca', website: 'https://www.roca.es' };\n  if (lower.includes('bauhaus.es')) return { name: 'Bauhaus', website: 'https://www.bauhaus.es' };\n  if (lower.includes('bricoking.es')) return { name: 'Bricoking', website: 'https://www.bricoking.es' };\n  if (lower.includes('grupopuma.com')) return { name: 'Grupo Puma', website: 'https://www.grupopuma.com' };\n  return { name: 'Proveedor Web', website: '' };\n}\n\nfunction detectCategory(title) {\n  const t = (title || '').toLowerCase();\n  if (/cement|mortero|yeso|escayola|hormig/i.test(t)) return 'albanileria';\n  if (/azulejo|baldosa|porcelan|ceramica|gres/i.test(t)) return 'revestimientos';\n  if (/grifo|ducha|inodoro|lavabo|mampara|bañera|sanitario/i.test(t)) return 'fontaneria';\n  if (/pintura|barniz|esmalte|imprimacion/i.test(t)) return 'pintura';\n  if (/madera|tablero|panel|tarima|parquet/i.test(t)) return 'madera';\n  if (/tubo|tuberia|codo|manguito|valvula/i.test(t)) return 'instalaciones';\n  if (/ladrillo|bloque|rasilla|termoarcilla/i.test(t)) return 'obra_gruesa';\n  if (/aislamiento|lana|poliestireno|xps|eps/i.test(t)) return 'aislamiento';\n  if (/puerta|ventana|persiana|cerradura/i.test(t)) return 'carpinteria';\n  if (/cable|enchufe|interruptor|cuadro|led/i.test(t)) return 'electricidad';\n  return 'general';\n}\n\nfunction detectUnit(title) {\n  const t = (title || '').toLowerCase();\n  if (/\\/m2|por m2|metro cuadrado/i.test(t)) return 'm2';\n  if (/\\/ml|metro lineal/i.test(t)) return 'ml';\n  if (/saco|bolsa/i.test(t)) return 'saco';\n  if (/kg|kilo/i.test(t)) return 'kg';\n  if (/litro|lt/i.test(t)) return 'l';\n  return 'ud';\n}\n\nfor (const item of items) {\n  const html = item.json.data || item.json.body || '';\n  if (!html || html.length < 100) continue;\n  \n  const source = detectSource(html);\n\n  // Strategy 1: JSON-LD\n  const jsonLdBlocks = html.match(/<script type=\"application\\/ld\\+json\">[\\s\\S]*?<\\/script>/g) || [];\n  for (const block of jsonLdBlocks) {\n    try {\n      const jsonStr = block.replace(/<script[^>]*>/, '').replace(/<\\/script>/, '').trim();\n      const data = JSON.parse(jsonStr);\n      const products = data['@type'] === 'ItemList' ? (data.itemListElement || []).map(i => i.item || i) : data['@type'] === 'Product' ? [data] : [];\n      for (const p of products) {\n        if (!p.name || !p.offers) continue;\n        const offer = Array.isArray(p.offers) ? p.offers[0] : p.offers;\n        const price = parseFloat(offer.price);\n        if (!price || price <= 0 || price > 50000) continue;\n        const name = cleanText(p.name);\n        const key = `${name}|${source.name}`;\n        if (seen.has(key)) continue;\n        seen.add(key);\n        prices.push({\n          name: name.substring(0, 160),\n          sku: p.sku || p.productID || '',\n          brand: p.brand?.name || '',\n          price,\n          unit: detectUnit(name),\n          url: p.url || '',\n          category: detectCategory(name),\n          is_available: offer.availability ? offer.availability.includes('InStock') : true,\n          _source: source.name\n        });\n      }\n    } catch(e) { /* skip */ }\n  }\n\n  // Strategy 2: Price pattern matching\n  const priceBlocks = html.match(/.{0,300}(\\d{1,4}[.,]\\d{2})\\s*(?:€|&euro;|EUR).{0,100}/gi) || [];\n  for (const block of priceBlocks.slice(0, 100)) {\n    const priceMatch = block.match(/(\\d{1,4}[.,]\\d{2})\\s*(?:€|&euro;|EUR)/i);\n    if (!priceMatch) continue;\n    const value = parseFloat(priceMatch[1].replace(',', '.'));\n    if (!value || value <= 0.5 || value > 50000) continue;\n    \n    const titleMatch = block.match(/(?:title|alt|data-name|aria-label|product-name)[=\"':>\\s]*([^\"<>|]{8,140})/i)\n      || block.match(/>([^<>]{10,120})</);\n    if (!titleMatch) continue;\n    \n    const name = cleanText(titleMatch[1]);\n    if (name.length < 8 || /cookie|politi|legal|pago|envio|devolu/i.test(name)) continue;\n    \n    const key = `${name}|${source.name}`;\n    if (seen.has(key)) continue;\n    seen.add(key);\n    \n    prices.push({\n      name: name.substring(0, 160),\n      price: Number(value.toFixed(2)),\n      unit: detectUnit(name),\n      category: detectCategory(name),\n      is_available: true,\n      _source: source.name\n    });\n  }\n}\n\n// Group by provider for webhook\nconst byProvider = {};\nfor (const p of prices) {\n  const src = p._source || 'Proveedor Web';\n  if (!byProvider[src]) byProvider[src] = [];\n  delete p._source;\n  byProvider[src].push(p);\n}\n\nconst batches = Object.entries(byProvider).map(([provName, items]) => ({\n  action: 'upsert_products',\n  source: { name: `n8n-${provName.toLowerCase().replace(/\\s+/g, '-')}-scraper`, type: 'n8n_webhook', url: items[0]?.url || '' },\n  provider: { name: provName, region: 'ES' },\n  items,\n  metadata: { scraped_at: new Date().toISOString(), workflow_id: 'proveedores-extra', n8n_execution_id: $execution.id }\n}));\n\nif (batches.length === 0) {\n  return [{ json: { _empty: true, message: 'No se encontraron productos. Las webs pueden estar bloqueando scraping.' } }];\n}\n\nreturn batches.map(b => ({ json: b }));"
+      },
+      "id": "extract-all",
+      "name": "Extraer y agrupar productos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1040, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            { "value1": "={{ $json._empty }}", "value2": true, "operation": "notEqual" }
+          ]
+        }
+      },
+      "id": "filter-empty",
+      "name": "Filtrar vacios",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [1260, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.ENLAZE_WEBHOOK_URL || 'https://enlaze.vercel.app/api/pb/webhook'}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "send-webhook",
+      "name": "Enviar a ENLAZE PB V2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1480, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURAR",
+          "name": "ENLAZE Webhook Auth"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 10000
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst summary = {\n  ok: response.ok,\n  provider: response.provider_id,\n  created: response.created || 0,\n  updated: response.updated || 0,\n  errors: response.errors?.length || 0,\n  duration_ms: response.duration_ms || 0\n};\nconsole.log('ENLAZE PB webhook:', JSON.stringify(summary));\nreturn [{ json: summary }];"
+      },
+      "id": "log-result",
+      "name": "Log Resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1700, 400]
+    }
+  ],
+  "connections": {
+    "Cada 24h": {
+      "main": [[
+        { "node": "BigMat - Materiales", "type": "main", "index": 0 },
+        { "node": "BigMat - Herramientas", "type": "main", "index": 0 },
+        { "node": "Porcelanosa - Productos", "type": "main", "index": 0 },
+        { "node": "Roca - Bano", "type": "main", "index": 0 },
+        { "node": "Bauhaus - Materiales", "type": "main", "index": 0 },
+        { "node": "Bricoking - Materiales", "type": "main", "index": 0 },
+        { "node": "Grupo Puma - Morteros", "type": "main", "index": 0 }
+      ]]
+    },
+    "Manual Trigger": {
+      "main": [[
+        { "node": "BigMat - Materiales", "type": "main", "index": 0 },
+        { "node": "BigMat - Herramientas", "type": "main", "index": 0 },
+        { "node": "Porcelanosa - Productos", "type": "main", "index": 0 },
+        { "node": "Roca - Bano", "type": "main", "index": 0 },
+        { "node": "Bauhaus - Materiales", "type": "main", "index": 0 },
+        { "node": "Bricoking - Materiales", "type": "main", "index": 0 },
+        { "node": "Grupo Puma - Morteros", "type": "main", "index": 0 }
+      ]]
+    },
+    "BigMat - Materiales": { "main": [[{ "node": "Merge All", "type": "main", "index": 0 }]] },
+    "BigMat - Herramientas": { "main": [[{ "node": "Merge All", "type": "main", "index": 0 }]] },
+    "Porcelanosa - Productos": { "main": [[{ "node": "Merge All", "type": "main", "index": 0 }]] },
+    "Roca - Bano": { "main": [[{ "node": "Merge All", "type": "main", "index": 0 }]] },
+    "Bauhaus - Materiales": { "main": [[{ "node": "Merge All", "type": "main", "index": 0 }]] },
+    "Bricoking - Materiales": { "main": [[{ "node": "Merge All", "type": "main", "index": 0 }]] },
+    "Grupo Puma - Morteros": { "main": [[{ "node": "Merge All", "type": "main", "index": 0 }]] },
+    "Merge All": { "main": [[{ "node": "Extraer y agrupar productos", "type": "main", "index": 0 }]] },
+    "Extraer y agrupar productos": { "main": [[{ "node": "Filtrar vacios", "type": "main", "index": 0 }]] },
+    "Filtrar vacios": { "main": [[{ "node": "Enviar a ENLAZE PB V2", "type": "main", "index": 0 }]] },
+    "Enviar a ENLAZE PB V2": { "main": [[{ "node": "Log Resultado", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "tags": [{ "name": "ENLAZE" }, { "name": "scraping" }, { "name": "precios" }, { "name": "proveedores-extra" }]
+}
