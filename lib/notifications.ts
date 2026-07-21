@@ -12,6 +12,8 @@ export type NotificationType =
   | "compliance_alert"
   | "compliance_expiry"
   | "project_update"
+  | "price_alert"
+  | "price_report"
   | "system";
 
 export type NotificationSeverity = "info" | "warning" | "error" | "success";
@@ -189,6 +191,8 @@ export const notificationIcons: Record<string, string> = {
   compliance_alert: "⚠️",
   compliance_expiry: "📅",
   project_update: "🏗️",
+  price_alert: "📊",
+  price_report: "📈",
   system: "🔔",
 };
 

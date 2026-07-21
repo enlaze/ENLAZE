@@ -147,6 +147,9 @@ export async function POST(request: Request) {
         // ── Bridge: also insert into Price Bank V2 tables ──
         await bridgeToPriceBank(data.prices, data.source_group);
 
+        // ── Process price alerts (in-app + email notifications) ──
+        await triggerAlertProcessing();
+
         // Marcar update como completado
         await supabase
           .from("n8n_updates")
@@ -387,6 +390,25 @@ async function bridgeToPriceBank(
   } catch (err) {
     // Don't fail the main webhook if PB bridge fails
     console.error("[PB Bridge] Error:", err instanceof Error ? err.message : err);
+  }
+}
+
+// ── Trigger price alert processing after sync ──────────────────────────────
+async function triggerAlertProcessing() {
+  try {
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "http://localhost:3000");
+
+    await fetch(`${baseUrl}/api/prices/process-alerts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: "webhook" }),
+    });
+  } catch (err) {
+    console.error("[Webhook] Alert processing failed:", err instanceof Error ? err.message : err);
   }
 }
 
