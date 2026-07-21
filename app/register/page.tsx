@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import Link from "next/link";
-import Logo from "@/components/Logo";
+import AuthShell, { authLabel, authInput, authButton } from "@/components/AuthShell";
 import PasswordStrength from "@/components/PasswordStrength";
 import { analytics } from "@/lib/analytics";
 
@@ -58,94 +58,87 @@ export default function RegisterPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-navy-50 px-6 dark:bg-zinc-950">
-        <div className="max-w-md w-full bg-white rounded-2xl border border-navy-100 p-10 text-center shadow-lg dark:bg-zinc-900 dark:border-zinc-800">
-          <div className="w-16 h-16 mx-auto rounded-full bg-brand-green/10 flex items-center justify-center text-3xl mb-6">✓</div>
-          <h2 className="text-2xl font-bold text-navy-900 dark:text-white">Revisa tu email</h2>
-          <p className="mt-3 text-navy-600 dark:text-zinc-400">
-            Te hemos enviado un enlace de confirmación a <strong className="dark:text-zinc-200">{email}</strong>
+      <AuthShell panel="brand">
+        <div className="text-center">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-brand-green/10 text-3xl text-brand-green">
+            ✓
+          </div>
+          <h2 className="text-[26px] font-bold tracking-[-0.5px] text-[#101d33]">Revisa tu email</h2>
+          <p className="mt-3 text-sm text-[#5b6b80]">
+            Te hemos enviado un enlace de confirmación a <strong className="text-[#22334e]">{email}</strong>
           </p>
-          <p className="mt-4 text-sm text-navy-500 dark:text-zinc-500">
+          <p className="mt-4 text-sm text-[#95a3b8]">
             Haz clic en el enlace para verificar tu cuenta y completar el registro.
           </p>
-          <div className="mt-6 p-4 rounded-lg bg-navy-50 border border-navy-100 dark:bg-zinc-800 dark:border-zinc-700">
-            <p className="text-xs text-navy-600 dark:text-zinc-400">
-              <strong className="dark:text-zinc-300">Nota:</strong> El enlace es válido por 24 horas. Si no lo ves en tu bandeja, revisa la carpeta de spam.
+          <div className="mt-6 rounded-[10px] border border-[#dbe3ee] bg-[#fbfcfe] p-4 text-left">
+            <p className="text-xs text-[#5b6b80]">
+              <strong className="text-[#22334e]">Nota:</strong> El enlace es válido por 24 horas. Si no lo ves en tu bandeja, revisa la carpeta de spam.
             </p>
           </div>
-          <Link href="/login" className="mt-6 inline-block text-brand-green font-semibold hover:underline">
+          <Link href="/login" className="mt-6 inline-block text-sm font-semibold text-[#0e9f76] hover:underline">
             Ir al login
           </Link>
         </div>
-      </div>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-navy-50 px-6 dark:bg-zinc-950">
-      <div className="max-w-md w-full bg-white rounded-2xl border border-navy-100 p-10 shadow-lg dark:bg-zinc-900 dark:border-zinc-800">
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-6">
-            <Logo href="/" size={36} />
-          </div>
-          <h1 className="text-2xl font-bold text-navy-900 dark:text-white">Crea tu cuenta</h1>
-          <p className="mt-2 text-navy-600 dark:text-zinc-400">Empieza a automatizar tu comunicación</p>
-        </div>
-        <form onSubmit={handleRegister} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-navy-700 mb-1 dark:text-zinc-300">Nombre completo</label>
-            <input
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              required
-              className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
-              placeholder="Tu nombre"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-navy-700 mb-1 dark:text-zinc-300">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
-              placeholder="tu@empresa.com"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-navy-700 mb-1 dark:text-zinc-300">Contraseña</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-              className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
-              placeholder="Mínimo 8 caracteres"
-              aria-describedby="password-strength"
-            />
-            <div id="password-strength">
-              <PasswordStrength password={password} />
-            </div>
-          </div>
-          {error && <p className="text-red-500 text-sm">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 rounded-xl bg-brand-green text-white font-semibold shadow-lg shadow-brand-green/25 hover:bg-brand-green-dark transition-colors disabled:opacity-50"
-          >
-            {loading ? "Creando cuenta..." : "Crear cuenta"}
-          </button>
-        </form>
-        <p className="mt-6 text-center text-sm text-navy-600 dark:text-zinc-400">
-          ¿Ya tienes cuenta?{" "}
-          <Link href="/login" className="text-brand-green font-semibold hover:underline">
-            Inicia sesión
-          </Link>
-        </p>
+    <AuthShell panel="brand">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-[26px] font-bold tracking-[-0.5px] text-[#101d33]">Crea tu cuenta</h1>
+        <p className="text-sm text-[#5b6b80]">Empieza gratis en menos de un minuto.</p>
       </div>
-    </div>
+      <form onSubmit={handleRegister} className="mt-6 flex flex-col gap-4">
+        <div>
+          <label className={authLabel}>Nombre completo</label>
+          <input
+            type="text"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            required
+            className={authInput}
+            placeholder="Tu nombre"
+          />
+        </div>
+        <div>
+          <label className={authLabel}>Email</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className={authInput}
+            placeholder="tu@empresa.com"
+          />
+        </div>
+        <div>
+          <label className={authLabel}>Contraseña</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength={8}
+            className={authInput}
+            placeholder="Mínimo 8 caracteres"
+            aria-describedby="password-strength"
+          />
+          <div id="password-strength">
+            <PasswordStrength password={password} />
+          </div>
+        </div>
+        {error && <p className="text-sm text-red-500">{error}</p>}
+        <button type="submit" disabled={loading} className={authButton}>
+          {loading ? "Creando cuenta..." : <>Crear cuenta <span className="font-normal">→</span></>}
+        </button>
+      </form>
+      <p className="mt-6 text-center text-[13px] text-[#5b6b80]">
+        ¿Ya tienes cuenta?{" "}
+        <Link href="/login" className="font-semibold text-[#0e9f76] hover:underline">
+          Inicia sesión
+        </Link>
+      </p>
+    </AuthShell>
   );
 }

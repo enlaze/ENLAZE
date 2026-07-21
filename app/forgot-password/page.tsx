@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import Link from "next/link";
-import Logo from "@/components/Logo";
+import AuthShell, { authLabel, authInput, authButton } from "@/components/AuthShell";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -34,11 +34,11 @@ export default function ForgotPasswordPage() {
 
   if (sent) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-navy-50 px-6 dark:bg-zinc-950">
-        <div className="max-w-md w-full bg-white rounded-2xl border border-navy-100 p-10 text-center shadow-lg dark:bg-zinc-900 dark:border-zinc-800">
-          <div className="w-16 h-16 mx-auto rounded-full bg-brand-green/10 flex items-center justify-center mb-6">
+      <AuthShell panel="recover">
+        <div className="text-center">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-brand-green/10">
             <svg
-              className="w-8 h-8 text-brand-green"
+              className="h-8 w-8 text-brand-green"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -51,75 +51,52 @@ export default function ForgotPasswordPage() {
               <path d="m3 7 9 6 9-6" />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold text-navy-900 dark:text-white">
-            Revisa tu email
-          </h2>
-          <p className="mt-3 text-navy-600 dark:text-zinc-400">
-            Si existe una cuenta con <strong className="dark:text-zinc-200">{email}</strong>, te hemos enviado un enlace para restablecer tu contraseña.
+          <h2 className="text-[26px] font-bold tracking-[-0.5px] text-[#101d33]">Revisa tu email</h2>
+          <p className="mt-3 text-sm text-[#5b6b80]">
+            Si existe una cuenta con <strong className="text-[#22334e]">{email}</strong>, te hemos enviado un enlace para restablecer tu contraseña.
           </p>
-          <div className="mt-6 p-4 rounded-lg bg-navy-50 border border-navy-100 dark:bg-zinc-800 dark:border-zinc-700">
-            <p className="text-xs text-navy-600 dark:text-zinc-400">
-              <strong className="dark:text-zinc-300">Nota:</strong> El enlace es válido por 1 hora. Si no lo ves en tu bandeja, revisa la carpeta de spam.
+          <div className="mt-6 rounded-[10px] border border-[#dbe3ee] bg-[#fbfcfe] p-4 text-left">
+            <p className="text-xs text-[#5b6b80]">
+              <strong className="text-[#22334e]">Nota:</strong> El enlace es válido por 1 hora. Si no lo ves en tu bandeja, revisa la carpeta de spam.
             </p>
           </div>
-          <Link
-            href="/login"
-            className="mt-6 inline-block text-brand-green font-semibold hover:underline"
-          >
-            Volver al login
+          <Link href="/login" className="mt-6 inline-block text-sm font-semibold text-[#0e9f76] hover:underline">
+            ← Volver a iniciar sesión
           </Link>
         </div>
-      </div>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-navy-50 px-6 dark:bg-zinc-950">
-      <div className="max-w-md w-full bg-white rounded-2xl border border-navy-100 p-10 shadow-lg dark:bg-zinc-900 dark:border-zinc-800">
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-6">
-            <Logo href="/" size={36} />
-          </div>
-          <h1 className="text-2xl font-bold text-navy-900 dark:text-white">
-            ¿Olvidaste tu contraseña?
-          </h1>
-          <p className="mt-2 text-navy-600 dark:text-zinc-400">
-            Introduce tu email y te enviaremos un enlace para restablecerla.
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-navy-700 mb-1 dark:text-zinc-300">
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
-              placeholder="tu@empresa.com"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 rounded-xl bg-brand-green text-white font-semibold shadow-lg shadow-brand-green/25 hover:bg-brand-green-dark transition-colors disabled:opacity-50"
-          >
-            {loading ? "Enviando..." : "Enviar enlace de recuperación"}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-navy-600 dark:text-zinc-400">
-          <Link
-            href="/login"
-            className="text-brand-green font-semibold hover:underline"
-          >
-            Volver al login
-          </Link>
+    <AuthShell panel="recover">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-[26px] font-bold tracking-[-0.5px] text-[#101d33]">Recupera tu acceso</h1>
+        <p className="text-sm text-[#5b6b80]">
+          Te enviaremos un enlace para restablecer tu contraseña.
         </p>
       </div>
-    </div>
+      <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
+        <div>
+          <label className={authLabel}>Email</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className={authInput}
+            placeholder="tu@empresa.com"
+          />
+        </div>
+        <button type="submit" disabled={loading} className={authButton}>
+          {loading ? "Enviando..." : <>Enviar enlace <span className="font-normal">→</span></>}
+        </button>
+      </form>
+      <p className="mt-6 text-center text-[13px]">
+        <Link href="/login" className="font-semibold text-[#0e9f76] hover:underline">
+          ← Volver a iniciar sesión
+        </Link>
+      </p>
+    </AuthShell>
   );
 }
