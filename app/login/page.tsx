@@ -3,7 +3,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Logo from "@/components/Logo";
+import AuthShell, { authLabel, authInput, authButton } from "@/components/AuthShell";
 import { analytics, identifyUser } from "@/lib/analytics";
 import { setSentryUser } from "@/lib/sentry";
 
@@ -44,62 +44,53 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-navy-50 px-6 dark:bg-zinc-950">
-      <div className="max-w-md w-full bg-white rounded-2xl border border-navy-100 p-10 shadow-lg dark:bg-zinc-900 dark:border-zinc-800">
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-6">
-            <Logo href="/" size={36} />
-          </div>
-          <h1 className="text-2xl font-bold text-navy-900 dark:text-white">Bienvenido de nuevo</h1>
-          <p className="mt-2 text-navy-600 dark:text-zinc-400">Inicia sesión en tu cuenta</p>
-        </div>
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-navy-700 mb-1 dark:text-zinc-300">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
-              placeholder="tu@empresa.com"
-            />
-          </div>
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium text-navy-700 dark:text-zinc-300">Contraseña</label>
-              <Link
-                href="/forgot-password"
-                className="text-xs text-brand-green font-medium hover:underline"
-              >
-                ¿Olvidaste tu contraseña?
-              </Link>
-            </div>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
-              placeholder="Tu contraseña"
-            />
-          </div>
-          {error && <p className="text-red-500 text-sm">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 rounded-xl bg-brand-green text-white font-semibold shadow-lg shadow-brand-green/25 hover:bg-brand-green-dark transition-colors disabled:opacity-50"
-          >
-            {loading ? "Iniciando sesión..." : "Iniciar sesión"}
-          </button>
-        </form>
-        <p className="mt-6 text-center text-sm text-navy-600 dark:text-zinc-400">
-          ¿No tienes cuenta?{" "}
-          <Link href="/register" className="text-brand-green font-semibold hover:underline">
-            Regístrate
-          </Link>
-        </p>
+    <AuthShell panel="brand">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-[26px] font-bold tracking-[-0.5px] text-[#101d33]">Hola de nuevo</h1>
+        <p className="text-sm text-[#5b6b80]">Inicia sesión en tu cuenta.</p>
       </div>
-    </div>
+      <form onSubmit={handleLogin} className="mt-6 flex flex-col gap-4">
+        <div>
+          <label className={authLabel}>Email</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className={authInput}
+            placeholder="tu@empresa.com"
+          />
+        </div>
+        <div>
+          <div className="mb-1.5 flex items-center justify-between">
+            <label className="text-[13px] font-semibold text-[#22334e]">Contraseña</label>
+            <Link
+              href="/forgot-password"
+              className="text-xs font-semibold text-[#0e9f76] hover:underline"
+            >
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </div>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            className={authInput}
+            placeholder="Tu contraseña"
+          />
+        </div>
+        {error && <p className="text-sm text-red-500">{error}</p>}
+        <button type="submit" disabled={loading} className={authButton}>
+          {loading ? "Iniciando sesión..." : <>Iniciar sesión <span className="font-normal">→</span></>}
+        </button>
+      </form>
+      <p className="mt-6 text-center text-[13px] text-[#5b6b80]">
+        ¿No tienes cuenta?{" "}
+        <Link href="/register" className="font-semibold text-[#0e9f76] hover:underline">
+          Crea una
+        </Link>
+      </p>
+    </AuthShell>
   );
 }

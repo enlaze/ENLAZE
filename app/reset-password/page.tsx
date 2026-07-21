@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Logo from "@/components/Logo";
+import AuthShell, { authLabel, authInput, authButton } from "@/components/AuthShell";
 import PasswordStrength from "@/components/PasswordStrength";
 
 export default function ResetPasswordPage() {
@@ -93,120 +93,92 @@ export default function ResetPasswordPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-navy-50 px-6 dark:bg-zinc-950">
-        <div className="max-w-md w-full bg-white rounded-2xl border border-navy-100 p-10 text-center shadow-lg dark:bg-zinc-900 dark:border-zinc-800">
-          <div className="w-16 h-16 mx-auto rounded-full bg-brand-green/10 flex items-center justify-center text-3xl mb-6">
+      <AuthShell panel="recover">
+        <div className="text-center">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-brand-green/10 text-3xl text-brand-green">
             ✓
           </div>
-          <h2 className="text-2xl font-bold text-navy-900 dark:text-white">
-            Contraseña actualizada
-          </h2>
-          <p className="mt-3 text-navy-600 dark:text-zinc-400">
+          <h2 className="text-[26px] font-bold tracking-[-0.5px] text-[#101d33]">Contraseña actualizada</h2>
+          <p className="mt-3 text-sm text-[#5b6b80]">
             Tu contraseña ha sido restablecida correctamente. Redirigiendo al dashboard...
           </p>
         </div>
-      </div>
+      </AuthShell>
     );
   }
 
   if (status === "invalid") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-navy-50 px-6 dark:bg-zinc-950">
-        <div className="max-w-md w-full bg-white rounded-2xl border border-navy-100 p-10 text-center shadow-lg dark:bg-zinc-900 dark:border-zinc-800">
-          <div className="flex justify-center mb-6">
-            <Logo href="/" size={36} />
-          </div>
-          <h2 className="text-2xl font-bold text-navy-900 dark:text-white">
-            Enlace no válido
-          </h2>
-          <p className="mt-3 text-navy-600 dark:text-zinc-400">
+      <AuthShell panel="recover">
+        <div className="text-center">
+          <h2 className="text-[26px] font-bold tracking-[-0.5px] text-[#101d33]">Enlace no válido</h2>
+          <p className="mt-3 text-sm text-[#5b6b80]">
             Este enlace de recuperación no es válido o ha caducado. Los enlaces solo pueden usarse una vez y expiran al cabo de una hora.
           </p>
-          <Link
-            href="/forgot-password"
-            className="mt-6 inline-block text-brand-green font-semibold hover:underline"
-          >
+          <Link href="/forgot-password" className="mt-6 inline-block text-sm font-semibold text-[#0e9f76] hover:underline">
             Solicitar un enlace nuevo
           </Link>
         </div>
-      </div>
+      </AuthShell>
     );
   }
 
   if (status === "checking") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-navy-50 px-6 dark:bg-zinc-950">
-        <div className="max-w-md w-full bg-white rounded-2xl border border-navy-100 p-10 text-center shadow-lg dark:bg-zinc-900 dark:border-zinc-800">
-          <div className="flex justify-center mb-6">
-            <Logo href="/" size={36} />
-          </div>
-          <div className="w-12 h-12 mx-auto rounded-full border-4 border-navy-200 border-t-brand-green animate-spin dark:border-zinc-700 dark:border-t-brand-green" />
-          <p className="mt-4 text-navy-600 dark:text-zinc-400">
+      <AuthShell panel="recover">
+        <div className="text-center">
+          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[#e5eaf1] border-t-brand-green" />
+          <p className="mt-4 text-sm text-[#5b6b80]">
             Verificando enlace de recuperación...
           </p>
         </div>
-      </div>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-navy-50 px-6 dark:bg-zinc-950">
-      <div className="max-w-md w-full bg-white rounded-2xl border border-navy-100 p-10 shadow-lg dark:bg-zinc-900 dark:border-zinc-800">
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-6">
-            <Logo href="/" size={36} />
-          </div>
-          <h1 className="text-2xl font-bold text-navy-900 dark:text-white">
-            Nueva contraseña
-          </h1>
-          <p className="mt-2 text-navy-600 dark:text-zinc-400">
-            Introduce tu nueva contraseña
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-navy-700 mb-1 dark:text-zinc-300">
-              Nueva contraseña
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-              className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
-              placeholder="Mínimo 8 caracteres"
-              aria-describedby="password-strength"
-            />
-            <div id="password-strength">
-              <PasswordStrength password={password} />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-navy-700 mb-1 dark:text-zinc-300">
-              Confirmar contraseña
-            </label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              minLength={8}
-              className="w-full px-4 py-3 rounded-xl border border-navy-200 bg-navy-50 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
-              placeholder="Repite tu contraseña"
-            />
-          </div>
-          {error && <p className="text-red-500 text-sm">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 rounded-xl bg-brand-green text-white font-semibold shadow-lg shadow-brand-green/25 hover:bg-brand-green-dark transition-colors disabled:opacity-50"
-          >
-            {loading ? "Guardando..." : "Restablecer contraseña"}
-          </button>
-        </form>
+    <AuthShell panel="recover">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-[26px] font-bold tracking-[-0.5px] text-[#101d33]">Nueva contraseña</h1>
+        <p className="text-sm text-[#5b6b80]">Elige una contraseña nueva para tu cuenta.</p>
       </div>
-    </div>
+      <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
+        <div>
+          <label className={authLabel}>Nueva contraseña</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength={8}
+            className={authInput}
+            placeholder="Mínimo 8 caracteres"
+            aria-describedby="password-strength"
+          />
+          <div id="password-strength">
+            <PasswordStrength password={password} />
+          </div>
+        </div>
+        <div>
+          <label className={authLabel}>Confirmar contraseña</label>
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+            minLength={8}
+            className={authInput}
+            placeholder="Repite tu contraseña"
+          />
+        </div>
+        {error && <p className="text-sm text-red-500">{error}</p>}
+        <button type="submit" disabled={loading} className={authButton}>
+          {loading ? "Guardando..." : <>Restablecer contraseña <span className="font-normal">→</span></>}
+        </button>
+      </form>
+      <p className="mt-4 text-center text-xs text-[#95a3b8]">
+        Al guardarla, cerraremos las sesiones abiertas en otros dispositivos.
+      </p>
+    </AuthShell>
   );
 }
