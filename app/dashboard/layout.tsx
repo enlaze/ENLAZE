@@ -218,7 +218,7 @@ const NAV_ITEMS: NavItem[] = [
 
   // NEGOCIO
   { href: "/dashboard/budgets", label: "Presupuestos", icon: PresupuestosIcon, section: "Negocio" },
-  { href: "/dashboard/prices", label: "Banco de precios", icon: BancoPreciosIcon, section: "Negocio" },
+  { href: "/dashboard/prices", label: "Rastreador de precios", icon: BancoPreciosIcon, section: "Negocio" },
   { href: "/dashboard/projects", label: "Obras", icon: ObrasIcon, section: "Negocio" },
   { href: "/dashboard/suppliers", label: "Proveedores", icon: ProveedoresIcon, section: "Negocio" },
   { href: "/dashboard/orders", label: "Pedidos", icon: PedidosIcon, section: "Negocio" },

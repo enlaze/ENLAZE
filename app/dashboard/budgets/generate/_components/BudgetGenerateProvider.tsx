@@ -753,6 +753,41 @@ export function BudgetGenerateProvider({
         }));
       }
 
+      // Also sync budget_items so the detail page shows partidas
+      if (draftId && (state.partidas.length > 0 || state.materials.some(m => m.included))) {
+        // Delete old items and re-insert
+        await supabase.from("budget_items").delete().eq("budget_id", draftId);
+
+        const marginMultiplier = 1 + (state.marginPercent / 100);
+
+        const partidasToInsert = state.partidas.filter(p => p.status !== "opcional").map(p => ({
+          budget_id: draftId,
+          concept: p.concept,
+          description: p.description,
+          quantity: p.quantity,
+          unit: p.unit,
+          category: p.category,
+          unit_price: p.unit_price_client,
+          subtotal: p.subtotal_client
+        }));
+
+        const materialsToInsert = state.materials.filter(m => m.included).map(m => ({
+          budget_id: draftId,
+          concept: m.name,
+          description: "Material sugerido",
+          quantity: m.quantity,
+          unit: m.unit,
+          category: "material",
+          unit_price: m.unit_price * marginMultiplier,
+          subtotal: m.subtotal * marginMultiplier
+        }));
+
+        const itemsToInsert = [...partidasToInsert, ...materialsToInsert];
+        if (itemsToInsert.length > 0) {
+          await supabase.from("budget_items").insert(itemsToInsert);
+        }
+      }
+
       if (manual) {
         toast.success("Borrador guardado correctamente");
       }

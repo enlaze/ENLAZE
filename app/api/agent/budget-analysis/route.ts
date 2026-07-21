@@ -297,7 +297,7 @@ REGLAS:
 8. Los precios deben ser REALISTAS para el mercado espanol actual (2024-2026).`;
 
     const message = await anthropic.messages.create({
-      model: "claude-3-5-sonnet-20241022",
+      model: "claude-sonnet-4-6",
       max_tokens: 8192,
       system: systemPrompt,
       messages: [

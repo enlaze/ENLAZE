@@ -66,13 +66,20 @@ export default function BudgetsPage() {
     await fetchBudgets();
   };
 
-  const statusVariant = (s: string): "green" | "blue" | "yellow" | "red" =>
-    s === "accepted" ? "green" : s === "sent" ? "blue" : s === "pending" ? "yellow" : "red";
+  const statusVariant = (s: string): "green" | "blue" | "yellow" | "red" | "gray" => {
+    if (s === "aceptado" || s === "accepted") return "green";
+    if (s === "enviado" || s === "sent") return "blue";
+    if (s === "pendiente" || s === "pending") return "yellow";
+    if (s === "borrador") return "gray";
+    return "red";
+  };
   const statusLabel = (s: string) => {
-    if (s === "accepted") return "Aceptado";
-    if (s === "sent") return "Enviado";
-    if (s === "pending") return "Pendiente";
-    return "Rechazado";
+    if (s === "aceptado" || s === "accepted") return "Aceptado";
+    if (s === "enviado" || s === "sent") return "Enviado";
+    if (s === "pendiente" || s === "pending") return "Pendiente";
+    if (s === "borrador") return "Borrador";
+    if (s === "rechazado" || s === "rejected") return "Rechazado";
+    return s;
   };
   const serviceLabel = (s: string) => {
     const sTypes = serviceTypes();
@@ -80,8 +87,8 @@ export default function BudgetsPage() {
     return map[s] || s;
   };
 
-  const totalAccepted = budgets.filter(b => b.status === "accepted").reduce((sum, b) => sum + Number(b.total), 0);
-  const totalPending = budgets.filter(b => b.status === "pending" || b.status === "sent").reduce((sum, b) => sum + Number(b.total), 0);
+  const totalAccepted = budgets.filter(b => b.status === "accepted" || b.status === "aceptado").reduce((sum, b) => sum + Number(b.total), 0);
+  const totalPending = budgets.filter(b => ["pending", "sent", "pendiente", "enviado"].includes(b.status)).reduce((sum, b) => sum + Number(b.total), 0);
 
   const columns: Column<Budget>[] = [
     {
@@ -174,17 +181,17 @@ export default function BudgetsPage() {
           <LinkButton href={`/dashboard/budgets/${b.id}`} variant="secondary" size="sm">
             Ver
           </LinkButton>
-          {b.status === "pending" && (
-            <Button onClick={() => updateStatus(b.id, "sent")} variant="secondary" size="sm">
+          {(b.status === "pending" || b.status === "pendiente" || b.status === "borrador") && (
+            <Button onClick={() => updateStatus(b.id, "enviado")} variant="secondary" size="sm">
               Enviado
             </Button>
           )}
-          {b.status === "sent" && (
+          {(b.status === "sent" || b.status === "enviado") && (
             <>
-              <Button onClick={() => updateStatus(b.id, "accepted")} variant="secondary" size="sm">
+              <Button onClick={() => updateStatus(b.id, "aceptado")} variant="secondary" size="sm">
                 Aceptado
               </Button>
-              <Button onClick={() => updateStatus(b.id, "rejected")} variant="danger" size="sm">
+              <Button onClick={() => updateStatus(b.id, "rechazado")} variant="danger" size="sm">
                 Rechazado
               </Button>
             </>
@@ -202,10 +209,11 @@ export default function BudgetsPage() {
       key: "status",
       label: "Estado",
       options: [
-        { label: "Pendientes", value: "pending" },
-        { label: "Enviados", value: "sent" },
-        { label: "Aceptados", value: "accepted" },
-        { label: "Rechazados", value: "rejected" },
+        { label: "Borradores", value: "borrador" },
+        { label: "Pendientes", value: "pendiente" },
+        { label: "Enviados", value: "enviado" },
+        { label: "Aceptados", value: "aceptado" },
+        { label: "Rechazados", value: "rechazado" },
       ],
       matches: (b, v) => b.status === v,
     },

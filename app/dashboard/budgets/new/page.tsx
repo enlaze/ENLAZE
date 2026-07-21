@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import Link from "next/link";
@@ -49,8 +49,42 @@ interface ProjectOption {
   client_id: string | null;
 }
 
+interface PBSearchResult {
+  id: string;
+  name: string;
+  unit: string;
+  price: number;
+  brand: string | null;
+  sku: string | null;
+  provider_name: string;
+}
+
 function emptyPartida(): Partida {
   return { concept: "", description: "", quantity: 1, unit: "ud", category: "material", unit_price: 0, subtotal: 0 };
+}
+
+function useProductSearch() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<PBSearchResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const search = useCallback((q: string) => {
+    setQuery(q);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (q.length < 2) { setResults([]); return; }
+    setLoading(true);
+    timerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/pb/search?q=${encodeURIComponent(q)}&limit=8`);
+        const data = await res.json();
+        setResults(data.results || []);
+      } catch { setResults([]); }
+      setLoading(false);
+    }, 300);
+  }, []);
+
+  return { query, search, results, loading, clear: () => { setQuery(""); setResults([]); } };
 }
 
 const inputCls =
@@ -358,11 +392,21 @@ export default function NewBudgetPage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
                   <div className="md:col-span-3">
-                    <input
-                      type="text"
+                    <ConceptAutocomplete
                       value={p.concept}
-                      onChange={(e) => updatePartida(i, "concept", e.target.value)}
-                      placeholder="Concepto *"
+                      onChange={(val) => updatePartida(i, "concept", val)}
+                      onSelect={(product) => {
+                        updatePartida(i, "concept", product.name);
+                        updatePartida(i, "unit", product.unit);
+                        updatePartida(i, "unit_price", product.price);
+                        updatePartida(i, "subtotal", partidas[i].quantity * product.price);
+                        if (product.brand) {
+                          updatePartida(i, "description", `${product.brand} — ${product.provider_name}`);
+                        } else {
+                          updatePartida(i, "description", product.provider_name);
+                        }
+                      }}
+                      placeholder="Buscar en banco de precios o escribir concepto *"
                       className={inputSmCls}
                     />
                   </div>
@@ -483,6 +527,89 @@ export default function NewBudgetPage() {
           </Link>
         </div>
       </form>
+    </div>
+  );
+}
+
+// ─── Autocomplete component ──────────────────────────────────────────────
+
+function ConceptAutocomplete({
+  value,
+  onChange,
+  onSelect,
+  placeholder,
+  className,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  onSelect: (product: PBSearchResult) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const { search, results, loading, clear } = useProductSearch();
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          search(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => { if (results.length > 0) setOpen(true); }}
+        placeholder={placeholder}
+        className={className}
+        autoComplete="off"
+      />
+      {loading && (
+        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+          <div className="w-4 h-4 border-2 border-brand-green border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
+      {open && results.length > 0 && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white dark:bg-zinc-900 border border-navy-200 dark:border-zinc-700 rounded-xl shadow-xl max-h-64 overflow-y-auto">
+          {results.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              className="w-full text-left px-4 py-2.5 hover:bg-brand-green/10 dark:hover:bg-brand-green/10 transition border-b border-navy-100 dark:border-zinc-800 last:border-b-0"
+              onClick={() => {
+                onSelect(r);
+                clear();
+                setOpen(false);
+              }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-navy-900 dark:text-white truncate">
+                    {r.name}
+                  </p>
+                  <p className="text-xs text-navy-500 dark:text-zinc-400">
+                    {r.provider_name}{r.brand ? ` · ${r.brand}` : ""} · {r.unit}
+                  </p>
+                </div>
+                <span className="text-sm font-bold text-brand-green whitespace-nowrap">
+                  {r.price.toFixed(2)} €
+                </span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

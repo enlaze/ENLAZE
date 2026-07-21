@@ -53,7 +53,7 @@ export function getSectorConfig(value?: string | null): SectorConfig {
     sector,
     displayName: "Construcción",
     aiPreset: "construction",
-    priceLabel: "Banco de precios",
+    priceLabel: "Rastreador de precios",
     budgetLabel: "Presupuestos",
     visibleModules: [
       "dashboard",

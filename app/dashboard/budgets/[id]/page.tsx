@@ -265,6 +265,8 @@ export default function BudgetDetailPage() {
     router.push(`/dashboard/budgets/${newB.id}`);
   }
 
+  const [downloadingPDF, setDownloadingPDF] = useState(false);
+
   function generatePDF() {
     if (!budget) return;
 
@@ -283,7 +285,7 @@ export default function BudgetDetailPage() {
       },
       items.map(i => ({
         ...i,
-        subtotal_cost: 0 // In standard budget detail, cost tracking might not be fully populated yet
+        subtotal_cost: 0
       })),
       'client',
       serviceLabelsMap,
@@ -291,6 +293,39 @@ export default function BudgetDetailPage() {
     );
 
     printPDF(html);
+  }
+
+  async function downloadPDF() {
+    if (!budget) return;
+    setDownloadingPDF(true);
+    try {
+      const res = await fetch("/api/budgets/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ budgetId: budget.id }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Error generando PDF");
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${budget.budget_number}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("PDF descargado");
+    } catch (err: any) {
+      console.error("Error downloading PDF:", err);
+      toast.error(err.message || "Error al descargar el PDF");
+    } finally {
+      setDownloadingPDF(false);
+    }
   }
 
   if (loading) return <Loading />;
@@ -341,7 +376,10 @@ export default function BudgetDetailPage() {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Button onClick={generatePDF}>Generar PDF</Button>
+          <Button variant="secondary" onClick={generatePDF}>Imprimir</Button>
+          <Button onClick={downloadPDF} disabled={downloadingPDF}>
+            {downloadingPDF ? "Generando..." : "Descargar PDF"}
+          </Button>
         </div>
       </div>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase-browser";
 import { useSector } from "@/lib/sector-context";
 import { getSectorConfig, normalizeSector } from "@/lib/sector-config";
@@ -144,7 +145,8 @@ export default function PricesPage() {
     if (!userId) return;
     setLoadingItems(true);
     try {
-      const { data } = await supabase
+      // 1. Load user's own price_items (legacy table)
+      const { data: userItems } = await supabase
         .from("price_items")
         .select(PRICE_LIST_COLUMNS)
         .eq("user_id", userId)
@@ -153,7 +155,46 @@ export default function PricesPage() {
         .order("subcategory")
         .order("name")
         .limit(1000);
-      setItems((data as PriceListItem[]) || []);
+
+      // 2. Load PB V2 products (global — from n8n scrapers)
+      const { data: pbProducts } = await supabase
+        .from("pb_products")
+        .select(`
+          id, commercial_name, description, sale_unit,
+          unit_price, brand, is_active, is_available,
+          provider_id, pb_providers ( name )
+        `)
+        .eq("is_active", true)
+        .eq("is_available", true)
+        .order("commercial_name")
+        .limit(1000);
+
+      // 3. Map PB V2 products → PriceListItem shape
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mappedPb: PriceListItem[] = (pbProducts || []).map((p: any) => ({
+        id: p.id,
+        name: p.commercial_name,
+        description: p.description || "",
+        category: "material",
+        subcategory: "",
+        unit: p.sale_unit || "ud",
+        unit_price: Number(p.unit_price) || 0,
+        brand: p.brand || null,
+        format: null,
+        purchase_price: null,
+        recommended_sale_price: null,
+        vat_rate: null,
+        gross_margin_pct: null,
+        supplier_name: p.pb_providers?.name || "—",
+        source_type: "n8n_sync",
+        is_active: p.is_active ?? true,
+        business_subsector: null,
+        family: null,
+      }));
+
+      // 4. Merge: user items first, then PB V2 products
+      const combined = [...((userItems as PriceListItem[]) || []), ...mappedPb];
+      setItems(combined);
     } catch (err) {
       console.error("[prices] loadItems error:", err);
     } finally {
@@ -356,34 +397,113 @@ export default function PricesPage() {
     toast.success(newVal ? "Marcado como manual (no se sobrescribirá en sync)" : "Desbloqueado para sync automático");
   }
 
-  /* ─── Sync from market (n8n) ─────────────────────────────────────── */
+  /* ─── Sync from market (n8n + PB V2) ─────────────────────────────── */
   async function syncFromMarket() {
     if (!userId) {
       toast.error("Error: no se pudo obtener tu usuario. Recarga la página.");
       return;
     }
     const ok = await confirm({
-      title: "Importar precios actualizados",
-      description: "¿Importar precios actualizados del mercado (n8n)? Se añadirán los nuevos y se actualizarán los existentes. Los precios marcados como manuales no se sobrescribirán.",
+      title: "Sincronizar precios del mercado",
+      description: "Se importarán los precios de proveedores (BigMat, Porcelanosa, Roca, Bauhaus, Bricoking, Grupo Puma...) a tu rastreador. Los precios marcados como manuales no se sobrescribirán.",
       variant: "default",
-      confirmLabel: "Importar",
+      confirmLabel: "Sincronizar",
     });
     if (!ok) return;
     setSyncing(true);
 
+    let added = 0;
+    let updated = 0;
+    let skipped = 0;
+
     try {
-      const res = await fetch("/api/prices/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sector: sectorConfig.sector }),
-      });
-      const data = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(data.error || "Error al sincronizar precios");
+      // 1. Sync from PB V2 (n8n scraped providers)
+      const { data: pbProducts } = await supabase
+        .from("pb_products")
+        .select(`
+          id, commercial_name, description, sale_unit,
+          unit_price, brand, is_active, is_available,
+          provider_id, pb_providers ( name )
+        `)
+        .eq("is_active", true)
+        .eq("is_available", true);
+
+      if (pbProducts && pbProducts.length > 0) {
+        for (const p of pbProducts) {
+          const providerName = (p as any).pb_providers?.name || "Proveedor";
+          const productName = (p as any).commercial_name;
+
+          // Check if already exists in user's price_items (by name + supplier)
+          const { data: existing } = await supabase
+            .from("price_items")
+            .select("id, source_type")
+            .eq("user_id", userId)
+            .eq("sector", sectorConfig.sector)
+            .eq("name", productName)
+            .eq("supplier_name", providerName)
+            .limit(1)
+            .maybeSingle();
+
+          if (existing) {
+            // Skip manual overrides
+            if (existing.source_type === "manual") {
+              skipped++;
+              continue;
+            }
+            // Update existing
+            await supabase
+              .from("price_items")
+              .update({
+                unit_price: Number((p as any).unit_price) || 0,
+                unit: (p as any).sale_unit || "ud",
+                brand: (p as any).brand || null,
+                description: (p as any).description || "",
+                source_type: "n8n_sync",
+              })
+              .eq("id", existing.id);
+            updated++;
+          } else {
+            // Insert new
+            await supabase.from("price_items").insert({
+              user_id: userId,
+              sector: sectorConfig.sector,
+              name: productName,
+              description: (p as any).description || "",
+              category: "material",
+              subcategory: "",
+              unit: (p as any).sale_unit || "ud",
+              unit_price: Number((p as any).unit_price) || 0,
+              brand: (p as any).brand || null,
+              supplier_name: providerName,
+              source_type: "n8n_sync",
+              confidence_score: 0.8,
+              is_active: true,
+            });
+            added++;
+          }
+        }
       }
 
-      toast.success(data.message || "Precios sincronizados correctamente");
+      // 2. Also try legacy sync (sector_data)
+      try {
+        const res = await fetch("/api/prices/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sector: sectorConfig.sector }),
+        });
+        if (res.ok) {
+          const legacyData = await res.json();
+          if (legacyData.results) {
+            added += legacyData.results.added || 0;
+            updated += legacyData.results.updated || 0;
+            skipped += legacyData.results.skipped || 0;
+          }
+        }
+      } catch {
+        // Legacy sync may fail if sector_data is empty — that's ok
+      }
+
+      toast.success(`Sincronizado: ${added} nuevos, ${updated} actualizados, ${skipped} omitidos`);
       loadLastSync();
     } catch (err: any) {
       console.error("Error sincronizando:", err);
@@ -401,7 +521,7 @@ export default function PricesPage() {
     }
     const ok = await confirm({
       title: "Importar precios del sector",
-      description: "¿Importar precios por defecto del sector? Se añadirán a tu banco de precios actual.",
+      description: "¿Importar precios por defecto del sector? Se añadirán a tu rastreador de precios actual.",
       variant: "default",
       confirmLabel: "Importar",
     });
@@ -512,16 +632,14 @@ export default function PricesPage() {
       exportValue: (row) => row.subcategory,
     });
 
-    if (isRetail) {
-      base.push({
-        key: "supplier_name",
-        header: "Proveedor",
-        sortable: true,
-        hidden: "hidden lg:table-cell",
-        render: (row) => <span className="text-sm text-navy-600 dark:text-zinc-400">{row.supplier_name || "\u2014"}</span>,
-        exportValue: (row) => row.supplier_name ?? "",
-      });
-    }
+    base.push({
+      key: "supplier_name",
+      header: "Proveedor",
+      sortable: true,
+      hidden: "hidden lg:table-cell",
+      render: (row) => <span className="text-sm text-navy-600 dark:text-zinc-400">{row.supplier_name || "\u2014"}</span>,
+      exportValue: (row) => row.supplier_name ?? "",
+    });
 
     if (isRetail) {
       base.push(
@@ -583,20 +701,20 @@ export default function PricesPage() {
       defaultHidden: isRetail,
     });
 
-    if (isRetail) {
-      base.push({
-        key: "source_type",
-        header: "Fuente",
-        align: "center",
-        hidden: "hidden lg:table-cell",
-        render: (row) => (
-          <Badge variant={sourceVariant(row.source_type)}>
-            {SOURCE_TYPE_LABELS[row.source_type ?? ""] || row.source_type || "Manual"}
-          </Badge>
-        ),
-        exportValue: (row) => SOURCE_TYPE_LABELS[row.source_type ?? ""] || "Manual",
-      });
+    base.push({
+      key: "source_type",
+      header: "Fuente",
+      align: "center",
+      hidden: "hidden lg:table-cell",
+      render: (row) => (
+        <Badge variant={sourceVariant(row.source_type)}>
+          {SOURCE_TYPE_LABELS[row.source_type ?? ""] || row.source_type || "Manual"}
+        </Badge>
+      ),
+      exportValue: (row) => SOURCE_TYPE_LABELS[row.source_type ?? ""] || "Manual",
+    });
 
+    if (isRetail) {
       base.push({
         key: "is_active",
         header: "Estado",
@@ -617,44 +735,52 @@ export default function PricesPage() {
       header: "",
       align: "right",
       alwaysVisible: true,
-      render: (row) => (
-        <div className="flex items-center justify-end gap-1">
-          {isRetail && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleToggleManual(row);
-              }}
-              title={row.source_type === "manual" ? "Desbloquear para sync" : "Marcar como manual"}
-              className={`p-1.5 rounded-lg text-xs transition ${
-                row.source_type === "manual"
-                  ? "text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
-                  : "text-navy-400 hover:bg-navy-50 dark:text-zinc-500 dark:hover:bg-zinc-800"
-              }`}
-            >
-              {row.source_type === "manual" ? "\uD83D\uDD12" : "\uD83D\uDD13"}
-            </button>
-          )}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              startEdit(row);
-            }}
-            className="p-1.5 rounded-lg text-xs text-brand-green hover:bg-brand-green/10 transition"
-          >
-            Editar
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDelete(row.id);
-            }}
-            className="p-1.5 rounded-lg text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition"
-          >
-            Eliminar
-          </button>
-        </div>
-      ),
+      render: (row) => {
+        // PB V2 products (n8n_sync without supplier_name from price_items) are read-only
+        const isPbV2 = row.source_type === "n8n_sync" && !row.subcategory;
+        return (
+          <div className="flex items-center justify-end gap-1">
+            {isRetail && !isPbV2 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleToggleManual(row);
+                }}
+                title={row.source_type === "manual" ? "Desbloquear para sync" : "Marcar como manual"}
+                className={`p-1.5 rounded-lg text-xs transition ${
+                  row.source_type === "manual"
+                    ? "text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
+                    : "text-navy-400 hover:bg-navy-50 dark:text-zinc-500 dark:hover:bg-zinc-800"
+                }`}
+              >
+                {row.source_type === "manual" ? "\uD83D\uDD12" : "\uD83D\uDD13"}
+              </button>
+            )}
+            {!isPbV2 && (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startEdit(row);
+                  }}
+                  className="p-1.5 rounded-lg text-xs text-brand-green hover:bg-brand-green/10 transition"
+                >
+                  Editar
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(row.id);
+                  }}
+                  className="p-1.5 rounded-lg text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition"
+                >
+                  Eliminar
+                </button>
+              </>
+            )}
+          </div>
+        );
+      },
     });
 
     return base;
@@ -673,6 +799,17 @@ export default function PricesPage() {
       matches: (row, val) => row.category === val,
     });
 
+    // Supplier filter (both sectors — PB V2 products always have provider)
+    const suppliers = [...new Set(items.map((i) => i.supplier_name).filter((s) => Boolean(s) && s !== "—"))] as string[];
+    if (suppliers.length > 0) {
+      f.push({
+        key: "supplier_name",
+        label: "Proveedor",
+        options: suppliers.sort().map((s) => ({ label: s, value: s })),
+        matches: (row, val) => row.supplier_name === val,
+      });
+    }
+
     if (isRetail) {
       // Family filter
       const families = [...new Set(items.map((i) => i.family).filter(Boolean))] as string[];
@@ -682,17 +819,6 @@ export default function PricesPage() {
           label: "Familia",
           options: families.sort().map((fam) => ({ label: fam, value: fam })),
           matches: (row, val) => row.family === val,
-        });
-      }
-
-      // Supplier filter
-      const suppliers = [...new Set(items.map((i) => i.supplier_name).filter(Boolean))] as string[];
-      if (suppliers.length > 0) {
-        f.push({
-          key: "supplier",
-          label: "Proveedor",
-          options: suppliers.sort().map((s) => ({ label: s, value: s })),
-          matches: (row, val) => row.supplier_name === val,
         });
       }
 
@@ -707,19 +833,6 @@ export default function PricesPage() {
         });
       }
 
-      // Source type filter
-      f.push({
-        key: "source_type",
-        label: "Fuente",
-        options: [
-          { label: "Manual", value: "manual" },
-          { label: "n8n Sync", value: "n8n_sync" },
-          { label: "CSV Import", value: "import_csv" },
-          { label: "Por defecto", value: "default" },
-        ],
-        matches: (row, val) => (row.source_type ?? "manual") === val,
-      });
-
       // Active filter
       f.push({
         key: "is_active",
@@ -731,6 +844,19 @@ export default function PricesPage() {
         matches: (row, val) => String(row.is_active !== false) === val,
       });
     }
+
+    // Source type filter (both sectors — useful to distinguish manual vs n8n)
+    f.push({
+      key: "source_type",
+      label: "Fuente",
+      options: [
+        { label: "Manual", value: "manual" },
+        { label: "n8n Sync", value: "n8n_sync" },
+        { label: "CSV Import", value: "import_csv" },
+        { label: "Por defecto", value: "default" },
+      ],
+      matches: (row, val) => (row.source_type ?? "manual") === val,
+    });
 
     return f;
   }, [isRetail, categories, items]);
@@ -763,9 +889,9 @@ export default function PricesPage() {
         countLabel="precios"
         titleAdornment={
           <InfoFlipCard
-            label="Información sobre el Banco de precios"
-            what="Tu lista de servicios y materiales con sus precios ya guardados. Como una carta de precios propia que ENLAZE recuerda por ti."
-            howTo="Para no tener que escribir los mismos servicios una y otra vez cada vez que haces un presupuesto. Guardas aquí todo lo que ofreces — mano de obra, materiales, servicios — con su precio, y al crear un presupuesto solo tienes que elegirlos de la lista. Más rápido, sin errores y con los precios siempre actualizados."
+            label="Información sobre el Rastreador de precios"
+            what="Tu rastreador de precios del mercado. Compara precios de materiales y servicios de múltiples proveedores (Leroy Merlin, BigMat, Roca, Porcelanosa, Bauhaus...) actualizados automáticamente."
+            howTo="Los precios se actualizan cada 24h desde proveedores reales vía n8n. Al crear un presupuesto, puedes buscar cualquier material y ENLAZE te sugiere el mejor precio disponible. También puedes importar tus propias tarifas desde CSV/XLSX."
           />
         }
         actions={
@@ -788,6 +914,12 @@ export default function PricesPage() {
             >
               Importar defecto
             </button>
+            <Link
+              href="/dashboard/prices/import"
+              className="inline-flex items-center gap-2 rounded-xl border border-brand-green bg-brand-green/10 px-4 py-2.5 text-sm font-medium text-brand-green hover:bg-brand-green/20 dark:border-brand-green/60 dark:bg-brand-green/10 dark:text-brand-green dark:hover:bg-brand-green/20 transition"
+            >
+              Importar CSV/XLSX
+            </Link>
             <button
               onClick={() => {
                 resetForm();
