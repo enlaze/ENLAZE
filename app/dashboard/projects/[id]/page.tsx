@@ -11,6 +11,7 @@ import { logActivity } from "@/lib/activity-log";
 import ChaptersPanel from "@/app/dashboard/projects/_components/ChaptersPanel";
 import ProgressPanel from "@/app/dashboard/projects/_components/ProgressPanel";
 import DocumentsPanel from "@/app/dashboard/projects/_components/DocumentsPanel";
+import SignaturePanel from "@/app/dashboard/projects/_components/SignaturePanel";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import Breadcrumbs from "@/components/ui/breadcrumbs";
@@ -260,7 +261,7 @@ const emptyMilestoneForm = {
 
 /* ═══════════════════════════ Page ═══════════════════════════ */
 
-type TabKey = "resumen" | "capitulos" | "avance" | "documentos" | "presupuestos" | "facturas" | "cobros" | "cambios" | "hitos" | "proveedores" | "trazabilidad";
+type TabKey = "resumen" | "capitulos" | "avance" | "documentos" | "firmas" | "presupuestos" | "facturas" | "cobros" | "cambios" | "hitos" | "proveedores" | "trazabilidad";
 
 export default function ProjectDetailPage() {
   const params = useParams();
@@ -930,6 +931,7 @@ export default function ProjectDetailPage() {
           { key: "capitulos" as TabKey, label: "Capítulos" },
           { key: "avance" as TabKey, label: "Avance" },
           { key: "documentos" as TabKey, label: "Documentos" },
+          { key: "firmas" as TabKey, label: "Firmas" },
           { key: "presupuestos" as TabKey, label: "Presupuestos", count: kpis.nPresupuestos },
           { key: "facturas" as TabKey, label: "Facturas", count: kpis.nFacturas },
           { key: "cobros" as TabKey, label: "Cobros", count: kpis.nCobros },
@@ -995,6 +997,11 @@ export default function ProjectDetailPage() {
       {/* ═══════ TAB: Documentos ═══════ */}
       {activeTab === "documentos" && userId && project && (
         <DocumentsPanel projectId={project.id} userId={userId} />
+      )}
+
+      {/* ═══════ TAB: Firmas ═══════ */}
+      {activeTab === "firmas" && userId && project && (
+        <SignaturePanel projectId={project.id} userId={userId} />
       )}
 
       {activeTab === "presupuestos" && (
