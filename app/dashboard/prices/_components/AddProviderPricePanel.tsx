@@ -102,7 +102,7 @@ const CATEGORIES: Record<string, { value: string; label: string }[]> = {
 
 const UNITS = ["ud", "m2", "ml", "m3", "kg", "t", "h", "dia", "mes", "viaje", "par", "m2/mes"];
 
-export default function AddProviderPricePanel({ onAdded }: { onAdded?: () => void }) {
+export default function AddProviderPricePanel({ onAdded, sector = "construccion" }: { onAdded?: () => void; sector?: string }) {
   const supabase = createClient();
   const toast = useToast();
 
@@ -211,6 +211,7 @@ export default function AddProviderPricePanel({ onAdded }: { onAdded?: () => voi
         product_type: productType,
         category,
         subcategory,
+        sector,
         region: "ES",
         is_active: true,
         is_available: true,

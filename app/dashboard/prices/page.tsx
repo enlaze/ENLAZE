@@ -167,7 +167,7 @@ export default function PricesPage() {
         .order("name")
         .limit(1000);
 
-      // 2. Load PB V2 products (global — from n8n scrapers + seed + manual)
+      // 2. Load PB V2 products (filtered by sector)
       const { data: pbProducts } = await supabase
         .from("pb_products")
         .select(`
@@ -178,6 +178,7 @@ export default function PricesPage() {
         `)
         .eq("is_active", true)
         .eq("is_available", true)
+        .eq("sector", sectorConfig.sector)
         .order("commercial_name")
         .limit(5000);
 
@@ -429,7 +430,7 @@ export default function PricesPage() {
     let skipped = 0;
 
     try {
-      // 1. Sync from PB V2 (n8n scraped providers)
+      // 1. Sync from PB V2 (n8n scraped providers, filtered by sector)
       const { data: pbProducts } = await supabase
         .from("pb_products")
         .select(`
@@ -438,7 +439,8 @@ export default function PricesPage() {
           provider_id, pb_providers ( name )
         `)
         .eq("is_active", true)
-        .eq("is_available", true);
+        .eq("is_available", true)
+        .eq("sector", sectorConfig.sector);
 
       if (pbProducts && pbProducts.length > 0) {
         for (const p of pbProducts) {
@@ -1038,7 +1040,7 @@ export default function PricesPage() {
       {/* ─── Tab: Anadir precio / proveedor ─────────────────────────── */}
       {activeTab === "anadir" && (
         <div className="mb-6">
-          <AddProviderPricePanel onAdded={() => loadItems()} />
+          <AddProviderPricePanel onAdded={() => loadItems()} sector={sectorConfig.sector} />
         </div>
       )}
 

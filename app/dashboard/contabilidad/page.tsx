@@ -147,10 +147,7 @@ export default function ContabilidadPage() {
 
   // Download PDF
   function handleDownload() {
-    if (!userId) return;
-
     const params = new URLSearchParams({
-      user_id: userId,
       type: viewType,
       period,
       year: year.toString(),

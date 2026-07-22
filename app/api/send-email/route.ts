@@ -1,15 +1,38 @@
 import { Resend } from "resend";
 import { NextResponse } from "next/server";
+import { escapeHtml, sanitizeEmail, sanitizeText } from "@/lib/sanitize";
+import { rateLimitSensitive, getClientIp } from "@/lib/rate-limit";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(request: Request) {
   try {
-    const { to, subject, message, clientName } = await request.json();
+    // Rate limit: 10 emails per minute per IP
+    const rl = rateLimitSensitive(request);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Demasiadas solicitudes. Intenta de nuevo en unos minutos." },
+        { status: 429 }
+      );
+    }
 
-    if (!to || !subject || !message) {
+    const body = await request.json();
+    const to = sanitizeEmail(body.to);
+    const subject = sanitizeText(body.subject, 200);
+    const message = sanitizeText(body.message, 5000);
+    const clientName = sanitizeText(body.clientName, 100);
+
+    if (!to) {
+      return NextResponse.json({ error: "Email de destino invalido" }, { status: 400 });
+    }
+    if (!subject || !message) {
       return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 });
     }
+
+    // Escape HTML in user-provided content to prevent XSS
+    const safeClientName = escapeHtml(clientName || "");
+    const safeMessage = escapeHtml(message);
+    const safeSubject = escapeHtml(subject);
 
     const htmlContent = `
       <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
@@ -19,8 +42,8 @@ export async function POST(request: Request) {
           </div>
         </div>
         <div style="background: #f4f7fa; border-radius: 16px; padding: 32px; border: 1px solid #e8eef4;">
-          <p style="color: #0a1929; margin: 0 0 8px 0;">Hola ${clientName || ""},</p>
-          <div style="color: #3b5068; line-height: 1.7; white-space: pre-wrap;">${message}</div>
+          <p style="color: #0a1929; margin: 0 0 8px 0;">Hola ${safeClientName},</p>
+          <div style="color: #3b5068; line-height: 1.7; white-space: pre-wrap;">${safeMessage}</div>
         </div>
         <p style="text-align: center; color: #8899a8; font-size: 12px; margin-top: 24px;">Enviado con Enlaze</p>
       </div>
@@ -29,7 +52,7 @@ export async function POST(request: Request) {
     const { data, error } = await resend.emails.send({
       from: "Enlaze <onboarding@resend.dev>",
       to: [to],
-      subject: subject,
+      subject: safeSubject,
       html: htmlContent,
     });
 
@@ -38,7 +61,8 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ success: true, id: data?.id });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "Error interno";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

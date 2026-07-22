@@ -76,14 +76,7 @@ function PrintReport() {
   const [printed, setPrinted] = useState(false);
 
   const fetchData = useCallback(async () => {
-    const userId = searchParams.get("user_id");
-    if (!userId) {
-      setError("Falta user_id");
-      return;
-    }
-
     const params = new URLSearchParams();
-    params.set("user_id", userId);
     params.set("type", searchParams.get("type") || "all");
     params.set("period", searchParams.get("period") || "year");
     params.set("year", searchParams.get("year") || new Date().getFullYear().toString());

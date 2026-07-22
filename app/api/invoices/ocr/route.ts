@@ -1,8 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { createClient } from "@supabase/supabase-js";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
 import sharp from "sharp";
 import { logAiRun, hashText } from "@/lib/ai-logger";
+import { rateLimitSensitive } from "@/lib/rate-limit";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -61,21 +63,38 @@ async function prepareImageForClaude(file: File) {
   };
 }
 
-const supabase = createClient(
+// Service client only for storage uploads (needs cross-bucket access)
+const supabaseService = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
 export async function POST(request: Request) {
   try {
+    // Rate limit: 10 OCR requests per minute
+    const rl = rateLimitSensitive(request);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Demasiadas solicitudes. Intenta de nuevo en unos minutos." },
+        { status: 429 }
+      );
+    }
+
+    // Authenticate user from session
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
     const formData = await request.formData();
     const file = formData.get("file") as File;
-    const userId = formData.get("userId") as string;
+    const userId = user.id; // Use authenticated user, ignore client-sent userId
     const clientId = formData.get("clientId") as string;
     const projectId = formData.get("projectId") as string;
 
-    if (!file || !userId) {
-      return NextResponse.json({ error: "Archivo y userId requeridos" }, { status: 400 });
+    if (!file) {
+      return NextResponse.json({ error: "Archivo requerido" }, { status: 400 });
     }
 
     if (file.size > 12_000_000) {
@@ -152,8 +171,9 @@ Responde SOLO con el JSON, sin texto adicional:
     }
 
     // Subir imagen a Supabase Storage
-    const fileName = `${userId}/${Date.now()}-${file.name}`;
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const fileName = `${userId}/${Date.now()}-${sanitizedFileName}`;
+    const { data: uploadData, error: uploadError } = await supabaseService.storage
       .from("invoices")
       .upload(fileName, file, { contentType: file.type });
 
@@ -162,7 +182,7 @@ Responde SOLO con el JSON, sin texto adicional:
       console.error("Storage upload error:", uploadError);
     }
     if (!uploadError && uploadData) {
-      const { data: urlData } = supabase.storage.from("invoices").getPublicUrl(fileName);
+      const { data: urlData } = supabaseService.storage.from("invoices").getPublicUrl(fileName);
       imageUrl = urlData.publicUrl;
     }
 

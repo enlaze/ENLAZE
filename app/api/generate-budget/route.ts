@@ -1,18 +1,14 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
 import { getSectorConfig } from "@/lib/agent-prompts";
 import { normalizeSector } from "@/lib/sector-config";
 import { logAiRun, hashText } from "@/lib/ai-logger";
+import { rateLimitSensitive } from "@/lib/rate-limit";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 function stripCodeFences(text: string) {
   let cleaned = text.trim();
@@ -62,7 +58,24 @@ async function repairBudgetJson(rawText: string) {
 
 export async function POST(request: Request) {
   try {
-    const { description, serviceType, userId } = await request.json();
+    // Rate limit AI generation
+    const rl = rateLimitSensitive(request);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Demasiadas solicitudes. Intenta de nuevo en unos minutos." },
+        { status: 429 }
+      );
+    }
+
+    // Auth from session
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    const { description, serviceType } = await request.json();
+    const userId = user.id;
 
     if (!description) {
       return NextResponse.json({ error: "Descripcion requerida" }, { status: 400 });

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
+import { sanitizeEmail, isValidUuid } from "@/lib/sanitize";
+import { rateLimitAuth } from "@/lib/rate-limit";
+import { escapeHtml } from "@/lib/sanitize";
+import crypto from "crypto";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,15 +14,32 @@ const supabase = createClient(
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 function generateOTP(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  // Use crypto for secure random generation
+  const bytes = crypto.randomBytes(3);
+  const num = (bytes[0] * 65536 + bytes[1] * 256 + bytes[2]) % 900000 + 100000;
+  return num.toString();
 }
 
 export async function POST(request: Request) {
   try {
-    const { signature_id, email } = await request.json();
+    // Strict rate limit: 5 OTP sends per minute per IP
+    const rl = rateLimitAuth(request);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Demasiados intentos. Espera unos minutos antes de solicitar otro código." },
+        { status: 429 }
+      );
+    }
 
-    if (!signature_id || !email) {
-      return NextResponse.json({ error: "Faltan signature_id y email" }, { status: 400 });
+    const body = await request.json();
+    const signature_id = body.signature_id;
+    const email = sanitizeEmail(body.email);
+
+    if (!signature_id || !isValidUuid(signature_id)) {
+      return NextResponse.json({ error: "signature_id invalido" }, { status: 400 });
+    }
+    if (!email) {
+      return NextResponse.json({ error: "Email invalido" }, { status: 400 });
     }
 
     // Verify signature exists
@@ -72,7 +93,7 @@ export async function POST(request: Request) {
 
           <div style="background: #f4f7fa; border-radius: 16px; padding: 32px; border: 1px solid #e8eef4; text-align: center;">
             <p style="color: #0a1929; font-size: 16px; margin: 0 0 8px 0;">
-              Hola ${sig.signer_name},
+              Hola ${escapeHtml(sig.signer_name)},
             </p>
             <p style="color: #3b5068; font-size: 14px; margin: 0 0 24px 0;">
               Tu código de verificación para firmar el ${docLabel} es:

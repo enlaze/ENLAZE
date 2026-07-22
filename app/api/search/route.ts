@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+import { createClient } from "@/lib/supabase-server";
+import { sanitizeText } from "@/lib/sanitize";
+import { rateLimitStandard } from "@/lib/rate-limit";
 
 interface SearchResult {
   id: string;
@@ -15,14 +14,25 @@ interface SearchResult {
 }
 
 export async function GET(req: NextRequest) {
-  const q = req.nextUrl.searchParams.get("q")?.trim();
-  const userId = req.nextUrl.searchParams.get("user_id");
+  // Rate limit search
+  const rl = rateLimitStandard(req);
+  if (!rl.allowed) {
+    return NextResponse.json({ error: "Demasiadas solicitudes" }, { status: 429 });
+  }
 
-  if (!q || q.length < 2 || !userId) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  const q = sanitizeText(req.nextUrl.searchParams.get("q") || "", 100).trim();
+  const userId = user.id;
+
+  if (!q || q.length < 2) {
     return NextResponse.json({ results: [] });
   }
 
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
   const query = `%${q.toLowerCase()}%`;
 
   const results: SearchResult[] = [];

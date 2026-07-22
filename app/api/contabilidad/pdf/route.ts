@@ -1,10 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { createClient } from "@/lib/supabase-server";
 
 interface InvoiceRow {
   id: string;
@@ -40,17 +35,22 @@ interface IssuedRow {
 
 export async function GET(request: Request) {
   try {
-    const url = new URL(request.url);
-    const userId = url.searchParams.get("user_id");
-    const type = url.searchParams.get("type") || "all"; // received, issued, all
-    const period = url.searchParams.get("period") || "year"; // month, quarter, year
-    const year = parseInt(url.searchParams.get("year") || new Date().getFullYear().toString());
-    const month = url.searchParams.get("month"); // 1-12
-    const quarter = url.searchParams.get("quarter"); // 1-4
+    const supabase = await createClient();
 
-    if (!userId) {
-      return NextResponse.json({ error: "Falta user_id" }, { status: 400 });
+    // Get authenticated user — middleware already checked auth,
+    // but we need the user ID to scope queries
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
+
+    const userId = user.id;
+    const url = new URL(request.url);
+    const type = url.searchParams.get("type") || "all";
+    const period = url.searchParams.get("period") || "year";
+    const year = parseInt(url.searchParams.get("year") || new Date().getFullYear().toString());
+    const month = url.searchParams.get("month");
+    const quarter = url.searchParams.get("quarter");
 
     // Calculate date range
     let startDate: string;
@@ -78,7 +78,7 @@ export async function GET(request: Request) {
       periodLabel = `${year}`;
     }
 
-    // Fetch data
+    // Fetch data — using user's session client (RLS enforced)
     let received: InvoiceRow[] = [];
     let issued: IssuedRow[] = [];
 
@@ -114,7 +114,6 @@ export async function GET(request: Request) {
     const companyName = profile?.company_name || "Mi Empresa";
     const companyNif = profile?.nif || "";
 
-    // Build JSON data for PDF generation
     const pdfData = {
       companyName,
       companyNif,
@@ -164,7 +163,6 @@ export async function GET(request: Request) {
       },
     };
 
-    // Return JSON — the client will generate the PDF
     return NextResponse.json(pdfData);
   } catch (err) {
     return NextResponse.json(

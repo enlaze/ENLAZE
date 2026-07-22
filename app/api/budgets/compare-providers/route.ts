@@ -46,16 +46,17 @@ export async function POST(request: Request) {
     const body = await request.json();
     const mode = body.mode || "single";
 
-    // Get company_id
+    // Get company_id and sector
     const { data: profile } = await supabase
       .from("profiles")
-      .select("company_id")
+      .select("company_id, business_sector")
       .eq("id", user.id)
       .single();
 
     const company_id = profile?.company_id ?? null;
+    const sector = profile?.business_sector === "construccion" ? "construccion" : "comercio_local";
 
-    // Fetch comparison data (products, providers, current prices)
+    // Fetch comparison data (products, providers, current prices) — filtered by sector
     const [
       { data: products },
       { data: providers },
@@ -64,11 +65,13 @@ export async function POST(request: Request) {
       supabase
         .from("pb_products")
         .select("*")
-        .eq("is_active", true),
+        .eq("is_active", true)
+        .eq("sector", sector),
       supabase
         .from("pb_providers")
         .select("*")
         .eq("is_active", true)
+        .eq("sector", sector)
         .or(`company_id.is.null${company_id ? `,company_id.eq.${company_id}` : ""}`),
       supabase
         .from("pb_price_current")

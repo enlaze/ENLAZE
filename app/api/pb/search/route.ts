@@ -33,6 +33,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ results: [] });
   }
 
+  // Get user sector for filtering
+  const sector = url.searchParams.get("sector") || "construccion";
+
   // Search products by commercial_name, join provider for name
   const { data, error } = await supabase
     .from("pb_products")
@@ -48,6 +51,7 @@ export async function GET(request: Request) {
     `)
     .eq("is_active", true)
     .eq("is_available", true)
+    .eq("sector", sector)
     .ilike("commercial_name", `%${q}%`)
     .order("commercial_name")
     .limit(limit);

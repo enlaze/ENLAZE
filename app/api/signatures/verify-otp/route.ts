@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { isValidUuid, sanitizeText } from "@/lib/sanitize";
+import { rateLimitAuth } from "@/lib/rate-limit";
+import crypto from "crypto";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -8,10 +11,24 @@ const supabase = createClient(
 
 export async function POST(request: Request) {
   try {
-    const { signature_id, code } = await request.json();
+    // Strict rate limit: 5 OTP verifications per minute per IP
+    const rl = rateLimitAuth(request);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Demasiados intentos. Espera unos minutos." },
+        { status: 429 }
+      );
+    }
 
-    if (!signature_id || !code) {
-      return NextResponse.json({ error: "Faltan signature_id y code" }, { status: 400 });
+    const body = await request.json();
+    const signature_id = body.signature_id;
+    const code = sanitizeText(body.code || "", 6);
+
+    if (!signature_id || !isValidUuid(signature_id)) {
+      return NextResponse.json({ error: "signature_id invalido" }, { status: 400 });
+    }
+    if (!code || code.length !== 6 || !/^\d{6}$/.test(code)) {
+      return NextResponse.json({ error: "Código invalido" }, { status: 400 });
     }
 
     // Find the latest unused OTP for this signature
@@ -44,8 +61,12 @@ export async function POST(request: Request) {
       .update({ attempts: otp.attempts + 1 })
       .eq("id", otp.id);
 
-    // Verify code
-    if (otp.code !== code.trim()) {
+    // Verify code using timing-safe comparison to prevent timing attacks
+    const codeMatch = crypto.timingSafeEqual(
+      Buffer.from(otp.code),
+      Buffer.from(code.trim().padEnd(otp.code.length))
+    );
+    if (!codeMatch) {
       return NextResponse.json(
         { error: `Código incorrecto. Te quedan ${4 - otp.attempts} intentos.` },
         { status: 401 }
