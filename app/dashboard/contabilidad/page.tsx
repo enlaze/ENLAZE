@@ -66,7 +66,7 @@ export default function ContabilidadPage() {
   const [received, setReceived] = useState<ReceivedInvoice[]>([]);
   const [issued, setIssued] = useState<IssuedInvoice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [downloading, setDownloading] = useState(false);
+  const downloading = false; // kept for button disabled state
 
   // Filters
   const currentYear = new Date().getFullYear();
@@ -146,42 +146,19 @@ export default function ContabilidadPage() {
       : `${year}`;
 
   // Download PDF
-  async function handleDownload() {
+  function handleDownload() {
     if (!userId) return;
-    setDownloading(true);
 
-    try {
-      const params = new URLSearchParams({
-        user_id: userId,
-        type: viewType,
-        period,
-        year: year.toString(),
-      });
-      if (period === "month") params.set("month", month.toString());
-      if (period === "quarter") params.set("quarter", quarter.toString());
+    const params = new URLSearchParams({
+      user_id: userId,
+      type: viewType,
+      period,
+      year: year.toString(),
+    });
+    if (period === "month") params.set("month", month.toString());
+    if (period === "quarter") params.set("quarter", quarter.toString());
 
-      const res = await fetch(`/api/contabilidad/download?${params}`);
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Error al generar PDF");
-      }
-
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      let filename = `contabilidad-${year}`;
-      if (period === "quarter") filename += `-${quarter}T`;
-      if (period === "month") filename += `-${String(month).padStart(2, "0")}`;
-      a.download = `${filename}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error("Download error:", err);
-      alert(err instanceof Error ? err.message : "Error al descargar");
-    }
-
-    setDownloading(false);
+    window.open(`/contabilidad-print?${params}`, "_blank");
   }
 
   // Years available
