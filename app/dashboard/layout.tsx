@@ -154,6 +154,17 @@ const MargenesIcon = (
   </svg>
 );
 
+const ContabilidadIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+    <line x1="9" y1="4" x2="9" y2="20" />
+    <text x="5" y="8.5" fontFamily="sans-serif" fontSize="4" fontWeight="600" fill="currentColor" stroke="none">€</text>
+    <line x1="12" y1="14" x2="18" y2="14" strokeOpacity="0.5" />
+    <line x1="12" y1="17" x2="16" y2="17" strokeOpacity="0.5" />
+  </svg>
+);
+
 const AjustesIcon = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
     <path d="M4 7h13" />
@@ -230,6 +241,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard/issued-invoices", label: "Facturas emitidas", icon: FacturasEmitidasIcon, section: "Finanzas" },
   { href: "/dashboard/payments", label: "Pagos y tesorería", icon: PagosTesoreriaIcon, section: "Finanzas" },
   { href: "/dashboard/margins", label: "Márgenes", icon: MargenesIcon, section: "Finanzas" },
+  { href: "/dashboard/contabilidad", label: "Contabilidad", icon: ContabilidadIcon, section: "Finanzas" },
 
   // SISTEMA
   { href: "/dashboard/settings", label: "Ajustes", icon: AjustesIcon, section: "Sistema" },
