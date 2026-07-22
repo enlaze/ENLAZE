@@ -8,6 +8,9 @@ import { useSector } from "@/lib/sector-context";
 import AcceptanceTimeline from "@/components/AcceptanceTimeline";
 import { saveDocumentVersion, getNextVersion } from "@/lib/document-versions";
 import { logActivity } from "@/lib/activity-log";
+import ChaptersPanel from "@/app/dashboard/projects/_components/ChaptersPanel";
+import ProgressPanel from "@/app/dashboard/projects/_components/ProgressPanel";
+import DocumentsPanel from "@/app/dashboard/projects/_components/DocumentsPanel";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import Breadcrumbs from "@/components/ui/breadcrumbs";
@@ -257,7 +260,7 @@ const emptyMilestoneForm = {
 
 /* ═══════════════════════════ Page ═══════════════════════════ */
 
-type TabKey = "resumen" | "presupuestos" | "facturas" | "cobros" | "cambios" | "hitos" | "proveedores" | "trazabilidad";
+type TabKey = "resumen" | "capitulos" | "avance" | "documentos" | "presupuestos" | "facturas" | "cobros" | "cambios" | "hitos" | "proveedores" | "trazabilidad";
 
 export default function ProjectDetailPage() {
   const params = useParams();
@@ -924,6 +927,9 @@ export default function ProjectDetailPage() {
       <div className="flex gap-1 mb-6 rounded-2xl border border-navy-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 p-1 overflow-x-auto">
         {([
           { key: "resumen" as TabKey, label: "Resumen" },
+          { key: "capitulos" as TabKey, label: "Capítulos" },
+          { key: "avance" as TabKey, label: "Avance" },
+          { key: "documentos" as TabKey, label: "Documentos" },
           { key: "presupuestos" as TabKey, label: "Presupuestos", count: kpis.nPresupuestos },
           { key: "facturas" as TabKey, label: "Facturas", count: kpis.nFacturas },
           { key: "cobros" as TabKey, label: "Cobros", count: kpis.nCobros },
@@ -976,6 +982,21 @@ export default function ProjectDetailPage() {
       )}
 
       {/* ═══════ TAB: Presupuestos ═══════ */}
+      {/* ═══════ TAB: Capítulos ═══════ */}
+      {activeTab === "capitulos" && userId && project && (
+        <ChaptersPanel projectId={project.id} userId={userId} />
+      )}
+
+      {/* ═══════ TAB: Avance ═══════ */}
+      {activeTab === "avance" && userId && project && (
+        <ProgressPanel projectId={project.id} userId={userId} budgetAmount={Number(project.budget_amount || 0)} />
+      )}
+
+      {/* ═══════ TAB: Documentos ═══════ */}
+      {activeTab === "documentos" && userId && project && (
+        <DocumentsPanel projectId={project.id} userId={userId} />
+      )}
+
       {activeTab === "presupuestos" && (
         <Card padding={false} className="mb-10 overflow-hidden">
           <div className="p-5 border-b border-navy-100 dark:border-zinc-800 flex items-center justify-between">
