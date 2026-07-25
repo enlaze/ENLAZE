@@ -57,13 +57,14 @@ El rediseño del briefing (ya en marcha) + una pasada de consistencia + los P1 d
 
 Recorrido de usuario de construcción ejecutado (9-10 jul). Bugs ENCONTRADOS y ARREGLADOS: email/dominio Resend, enlace a localhost, guardar perfil (RLS 42501), botón crear obra (RLS sistémico + columna `projects`), tildes/logo/campo empresa opcional, iconos onboarding + primeros pasos + ajustes.
 
-- **RESUELTO (commit 112a1f8):** el onboarding ya persiste el progreso en sessionStorage — solo falta confirmarlo en vivo.
-- **RESUELTO (b5c2479, ee5ab5e):** la recuperación de contraseña ya existía y se ha endurecido (enlace caducado con pantalla clara, mensaje neutro que no filtra qué emails existen, redirectTo con NEXT_PUBLIC_SITE_URL, flujo PKCE). Pendiente solo probarla en vivo.
-- **BLOQUEANTE DE EMAIL (lo importante ahora):** los emails de Supabase están topados a ~2/hora, así que el reseteo de contraseña y el email de registro NO llegan de forma fiable. Falta configurar **Resend como SMTP de Supabase** — eso desbloquea los dos de golpe.
+- **RESUELTO y VERIFICADO EN VIVO (21 jul):** el onboarding persiste el progreso en sessionStorage — se comprobó que al abrir la política de privacidad y volver, NO se reinicia.
+- **RESUELTO (b5c2479, ee5ab5e):** la recuperación de contraseña ya existía y se ha endurecido (enlace caducado con pantalla clara, mensaje neutro que no filtra qué emails existen, redirectTo con NEXT_PUBLIC_SITE_URL, flujo PKCE). **VERIFICADO EN VIVO (21 jul):** email llega, enlace lleva a la nueva contraseña, y el caso de enlace usado/caducado muestra la pantalla "Enlace no válido" correctamente.
+- **RESUELTO (20 jul):** Resend configurado como **SMTP de Supabase**. Los emails ya salen desde `Enlaze <noreply@enlaze.es>` y se acabó el tope de ~2/hora. Desbloquea reseteo de contraseña **y** email de registro.
+- **Pendiente de email:** personalizar las plantillas (ahora son las genéricas de Supabase, sin marca y medio en inglés) — en marcha con Claude Design. Y ojo: los primeros envíos caen en **spam** por reputación de dominio nueva; mejora con el tiempo y con plantillas mejor hechas.
 - **Pendiente menor:** mover "Registro de actividad" fuera del menú principal (accesible desde Cumplimiento).
 - **En curso (pulido):** sustituir emojis por iconos lucide, pantalla por pantalla (queda ~la mitad).
 - **SIGUIENTE PASO GRANDE:** validar el presupuestador con un constructor real (padre del socio). El banco de precios vacío hace que las estimaciones no sean fiables; hay que ver si aporta valor de verdad.
-- Aparcado a lanzamiento: SMTP de Supabase (vía Resend), revocar el token de GitHub expuesto.
+- Aparcado: revocar el token de GitHub expuesto.
 Probar el funnel completo con datos reales: landing → registro → verificación email → onboarding → dashboard → generar primer presupuesto → briefing del agente. Arreglar lo que se rompa. Incluir recuperación de contraseña si falta.
 - **Interno:** se cierran bugs de flujo, estados vacíos con 1 cliente/0 datos.
 - **Visual:** cada pantalla se ve bien también "vacía", no solo llena.
