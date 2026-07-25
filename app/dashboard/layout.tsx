@@ -184,17 +184,6 @@ const CumplimientoIcon = (
   </svg>
 );
 
-const RegistroActividadIcon = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-    <circle cx="5.5" cy="7" r="1.7" fill="currentColor" stroke="none" />
-    <path d="M9.25 7h10.25" />
-    <circle cx="5.5" cy="12" r="1.15" fill="currentColor" stroke="none" />
-    <path d="M8.75 12h9.25" />
-    <circle cx="5.5" cy="17" r="1.15" fill="currentColor" stroke="none" />
-    <path d="M8.75 17h7.5" />
-  </svg>
-);
-
 const FacturasRecibidasIcon = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
     <path d="M6 4.5h7.5L17 8v9.25A2.25 2.25 0 0 1 14.75 19.5H6A2.25 2.25 0 0 1 3.75 17.25v-10.5A2.25 2.25 0 0 1 6 4.5Z" />
@@ -246,7 +235,8 @@ const NAV_ITEMS: NavItem[] = [
   // SISTEMA
   { href: "/dashboard/settings", label: "Ajustes", icon: AjustesIcon, section: "Sistema" },
   { href: "/dashboard/compliance", label: "Cumplimiento", icon: CumplimientoIcon, section: "Sistema" },
-  { href: "/dashboard/audit-log", label: "Registro de actividad", icon: RegistroActividadIcon, section: "Sistema" },
+  // "Registro de actividad" (/dashboard/audit-log) se retira del menú lateral: no es de
+  // uso diario. La página sigue existiendo y accesible desde Cumplimiento → "Historial de actividad".
 ];
 
 const SECTION_ORDER: Array<NavItem["section"]> = [null, "General", "Negocio", "Finanzas", "Sistema"];
@@ -257,7 +247,6 @@ const ALWAYS_VISIBLE_HREFS = new Set([
   "/dashboard/clientes",
   "/dashboard/settings",
   "/dashboard/compliance",
-  "/dashboard/audit-log",
 ]);
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
