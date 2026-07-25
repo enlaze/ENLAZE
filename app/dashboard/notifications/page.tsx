@@ -13,6 +13,7 @@ import {
   type NotificationSeverity,
 } from "@/lib/notifications";
 import Link from "next/link";
+import { Bell } from "lucide-react";
 
 const ITEMS_PER_PAGE = 20;
 
@@ -156,7 +157,7 @@ export default function NotificationsPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="rounded-xl border border-navy-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-16 text-center">
-          <p className="text-4xl mb-3">🔔</p>
+          <Bell className="h-9 w-9 text-[#00c896] mb-3 mx-auto" />
           <p className="text-sm text-navy-500 dark:text-zinc-500">
             {filter === "all"
               ? "No hay notificaciones todavía"

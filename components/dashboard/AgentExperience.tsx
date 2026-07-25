@@ -7,8 +7,10 @@ import {
   useEffect,
   useMemo,
   useState,
+  type ReactNode,
 } from "react";
 import Link from "next/link";
+import { ScrollText, Wallet, Store, Calendar, Package, BarChart3, Wrench, RadioTower, Star } from "lucide-react";
 import { createClient } from "@/lib/supabase-browser";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -168,15 +170,16 @@ const NO_CONNECTIONS: LiveConnections = { gmail: false, calendar: false, sheets:
 
 /* ─── Helpers ───────────────────────────────────────────────────────── */
 
-const signalTypeLabels: Record<string, { label: string; icon: string }> = {
-  regulation: { label: "Normativa", icon: "📜" },
-  subsidy: { label: "Ayuda", icon: "💰" },
-  competitor: { label: "Competencia", icon: "🏪" },
-  rating_change: { label: "Rating", icon: "⭐" },
-  local_event: { label: "Evento", icon: "📅" },
-  stock_alert: { label: "Stock", icon: "📦" },
-  margin_alert: { label: "Margen", icon: "📊" },
-  supplier_alert: { label: "Proveedor", icon: "🔧" },
+const ICON_CLS = "h-5 w-5 text-[#00c896]";
+const signalTypeLabels: Record<string, { label: string; icon: ReactNode }> = {
+  regulation: { label: "Normativa", icon: <ScrollText className={ICON_CLS} /> },
+  subsidy: { label: "Ayuda", icon: <Wallet className={ICON_CLS} /> },
+  competitor: { label: "Competencia", icon: <Store className={ICON_CLS} /> },
+  rating_change: { label: "Rating", icon: <Star className={ICON_CLS} /> },
+  local_event: { label: "Evento", icon: <Calendar className={ICON_CLS} /> },
+  stock_alert: { label: "Stock", icon: <Package className={ICON_CLS} /> },
+  margin_alert: { label: "Margen", icon: <BarChart3 className={ICON_CLS} /> },
+  supplier_alert: { label: "Proveedor", icon: <Wrench className={ICON_CLS} /> },
 };
 
 const priorityColors: Record<string, "red" | "yellow" | "blue" | "gray"> = {
@@ -855,7 +858,7 @@ function SignalsTab({
       {items.map((s) => {
         const st = signalTypeLabels[s.signal_type] || {
           label: s.signal_type,
-          icon: "📡",
+          icon: <RadioTower className={ICON_CLS} />,
         };
         const badgeVariant =
           s.severity === "warning"

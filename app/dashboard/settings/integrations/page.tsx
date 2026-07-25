@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import BackButton from "@/components/ui/back-button";
+import { Mail, Calendar, BarChart3 } from "lucide-react";
 
 interface Integration {
   id: string;
@@ -179,19 +180,19 @@ export default function IntegrationsPage() {
     {
       id: "gmail",
       name: "Gmail",
-      icon: "📧",
+      icon: <Mail className="h-6 w-6 text-[#00c896]" />,
       description: "Permite al agente leer correos importantes de clientes y proveedores, y redactar respuestas automáticas.",
     },
     {
       id: "google_calendar",
       name: "Google Calendar",
-      icon: "📅",
+      icon: <Calendar className="h-6 w-6 text-[#00c896]" />,
       description: "Conecta tu agenda para que el agente vea tus huecos libres, te recuerde citas y organice reuniones.",
     },
     {
       id: "google_sheets",
       name: "Google Sheets",
-      icon: "📊",
+      icon: <BarChart3 className="h-6 w-6 text-[#00c896]" />,
       description: "Vincula hojas de cálculo para que el agente tenga control de stock, escandallos o ventas en tiempo real.",
     }
   ];

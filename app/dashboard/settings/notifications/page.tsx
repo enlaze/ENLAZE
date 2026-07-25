@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import BackButton from "@/components/ui/back-button";
+import { ClipboardList, Receipt, Wallet, Shield, Construction, Settings } from "lucide-react";
 
 interface NotificationPref {
   id?: string;
@@ -16,37 +17,37 @@ const CATEGORIES = [
     key: "budgets",
     label: "Presupuestos",
     description: "Aceptados, rechazados, enviados, vistos por el cliente",
-    icon: "📋",
+    icon: <ClipboardList className="h-5 w-5 text-[#00c896]" />,
   },
   {
     key: "invoices",
     label: "Facturas",
     description: "Pagadas, vencidas, enviadas, anuladas",
-    icon: "🧾",
+    icon: <Receipt className="h-5 w-5 text-[#00c896]" />,
   },
   {
     key: "payments",
     label: "Cobros y pagos",
     description: "Pagos recibidos, vencimientos, recordatorios",
-    icon: "💰",
+    icon: <Wallet className="h-5 w-5 text-[#00c896]" />,
   },
   {
     key: "compliance",
     label: "Cumplimiento",
     description: "Alertas legales, fiscales, seguridad, caducidades",
-    icon: "🛡️",
+    icon: <Shield className="h-5 w-5 text-[#00c896]" />,
   },
   {
     key: "projects",
     label: "Obras / Proyectos",
     description: "Actualizaciones, cambios aprobados, hitos",
-    icon: "🏗️",
+    icon: <Construction className="h-5 w-5 text-[#00c896]" />,
   },
   {
     key: "system",
     label: "Sistema",
     description: "Actualizaciones de la plataforma, mantenimiento",
-    icon: "⚙️",
+    icon: <Settings className="h-5 w-5 text-[#00c896]" />,
   },
 ];
 

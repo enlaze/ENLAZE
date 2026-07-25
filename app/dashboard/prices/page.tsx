@@ -18,6 +18,7 @@ import InfoFlipCard from "@/components/ui/InfoFlipCard";
 import PriceHistoryModal from "./_components/PriceHistoryModal";
 import PriceAlertsPanel from "./_components/PriceAlertsPanel";
 import ProviderComparePanel from "./_components/ProviderComparePanel";
+import { ClipboardList, BrickWall, HardHat, Construction, Truck, Handshake, Wrench, Recycle } from "lucide-react";
 import WeeklyReportPanel from "./_components/WeeklyReportPanel";
 import AddProviderPricePanel from "./_components/AddProviderPricePanel";
 import ImportPricesPanel from "./_components/ImportPricesPanel";
@@ -1229,15 +1230,15 @@ export default function PricesPage() {
           {/* Quick-filter chips by product type */}
           <div className="flex gap-2 mb-4 flex-wrap">
             {[
-              { key: "todos", label: "Todos", icon: "📋" },
-              { key: "material", label: "Materiales", icon: "🧱" },
-              { key: "mano_obra", label: "Mano de obra", icon: "👷" },
-              { key: "maquinaria", label: "Maquinaria", icon: "🏗" },
-              { key: "transporte", label: "Transporte", icon: "🚛" },
-              { key: "residuos", label: "Residuos", icon: "♻" },
-              { key: "subcontrata", label: "Subcontratas", icon: "🤝" },
-              { key: "epi", label: "EPIs", icon: "🦺" },
-              { key: "herramienta", label: "Herramientas", icon: "🔧" },
+              { key: "todos", label: "Todos", icon: <ClipboardList className="h-3.5 w-3.5" /> },
+              { key: "material", label: "Materiales", icon: <BrickWall className="h-3.5 w-3.5" /> },
+              { key: "mano_obra", label: "Mano de obra", icon: <HardHat className="h-3.5 w-3.5" /> },
+              { key: "maquinaria", label: "Maquinaria", icon: <Construction className="h-3.5 w-3.5" /> },
+              { key: "transporte", label: "Transporte", icon: <Truck className="h-3.5 w-3.5" /> },
+              { key: "residuos", label: "Residuos", icon: <Recycle className="h-3.5 w-3.5" /> },
+              { key: "subcontrata", label: "Subcontratas", icon: <Handshake className="h-3.5 w-3.5" /> },
+              { key: "epi", label: "EPIs", icon: <HardHat className="h-3.5 w-3.5" /> },
+              { key: "herramienta", label: "Herramientas", icon: <Wrench className="h-3.5 w-3.5" /> },
             ].map((chip) => (
               <button
                 key={chip.key}
@@ -1248,7 +1249,7 @@ export default function PricesPage() {
                     : "bg-navy-100 text-navy-600 hover:bg-navy-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
                 }`}
               >
-                {chip.icon} {chip.label}
+                <span className="inline-flex items-center gap-1.5 align-middle">{chip.icon}</span> {chip.label}
                 {chip.key !== "todos" && (
                   <span className="ml-1 opacity-70">
                     ({items.filter((i) =>

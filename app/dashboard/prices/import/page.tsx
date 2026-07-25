@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/toast";
 import PageHeader from "@/components/ui/page-header";
+import { Construction, BarChart3, Wrench, FileText, CheckCircle2 } from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────────────── */
 
@@ -60,21 +61,21 @@ const BTN_PRIMARY =
 const BTN_SECONDARY =
   "inline-flex items-center gap-2 rounded-xl border border-navy-200 bg-white px-5 py-2.5 text-sm font-medium text-navy-700 shadow-sm hover:bg-navy-50 transition-colors dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700";
 
-const SOURCE_INFO: Record<string, { name: string; desc: string; icon: string }> = {
+const SOURCE_INFO: Record<string, { name: string; desc: string; icon: ReactNode }> = {
   bedec: {
     name: "BEDEC (ITeC)",
     desc: "Base de datos de la construcción de Cataluña. Exporta CSV desde itec.es/bedec",
-    icon: "🏗️",
+    icon: <Construction className="h-5 w-5 text-[#00c896]" />,
   },
   preoc: {
     name: "PREOC",
     desc: "Precios de la construcción de España por comunidad autónoma. Exporta desde preoc.es",
-    icon: "📊",
+    icon: <BarChart3 className="h-5 w-5 text-[#00c896]" />,
   },
   cype: {
     name: "CYPE Generador de Precios",
     desc: "El generador de precios más usado en España. Exporta CSV desde generadordeprecios.info",
-    icon: "🔧",
+    icon: <Wrench className="h-5 w-5 text-[#00c896]" />,
   },
 };
 
@@ -292,7 +293,7 @@ export default function ImportPricesPage() {
             onClick={() => { setImportMode("generic"); setStep("upload"); }}
             className="group rounded-2xl border-2 border-navy-200 bg-white p-6 text-left transition-all hover:border-brand-green/40 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-brand-green/40"
           >
-            <div className="mb-3 text-3xl">📄</div>
+            <div className="mb-3"><FileText className="h-8 w-8 text-[#00c896]" /></div>
             <h3 className="text-base font-semibold text-navy-900 dark:text-white">
               CSV / Excel de proveedor
             </h3>
@@ -307,7 +308,7 @@ export default function ImportPricesPage() {
             onClick={() => { setImportMode("source"); setStep("upload"); }}
             className="group rounded-2xl border-2 border-navy-200 bg-white p-6 text-left transition-all hover:border-brand-green/40 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-brand-green/40"
           >
-            <div className="mb-3 text-3xl">🏗️</div>
+            <div className="mb-3"><Construction className="h-8 w-8 text-[#00c896]" /></div>
             <h3 className="text-base font-semibold text-navy-900 dark:text-white">
               Base de precios de construcción
             </h3>
@@ -390,7 +391,7 @@ export default function ImportPricesPage() {
 
             {/* File drop zone */}
             <div className="rounded-2xl border-2 border-dashed border-navy-200 bg-navy-50/40 p-10 text-center dark:border-zinc-700 dark:bg-zinc-800/50">
-              <div className="mb-3 text-3xl">{importMode === "source" ? "🏗️" : "📄"}</div>
+              <div className="mb-3 flex justify-center">{importMode === "source" ? <Construction className="h-8 w-8 text-[#00c896]" /> : <FileText className="h-8 w-8 text-[#00c896]" />}</div>
               <p className="mb-4 text-sm text-navy-600 dark:text-zinc-400">
                 {importMode === "source"
                   ? "Arrastra el CSV exportado desde la fuente"
@@ -632,7 +633,7 @@ export default function ImportPricesPage() {
       {/* ── Step: Done ── */}
       {step === "done" && result && (
         <div className="rounded-2xl border border-green-200 bg-green-50 p-8 text-center dark:border-green-900 dark:bg-green-900/20">
-          <div className="mb-3 text-4xl">✅</div>
+          <div className="mb-3 flex justify-center"><CheckCircle2 className="h-10 w-10 text-[#00c896]" /></div>
           <h3 className="mb-2 text-lg font-semibold text-green-800 dark:text-green-300">
             Importación completada
           </h3>

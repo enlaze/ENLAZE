@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, type ReactNode } from "react";
+import { FileText, Camera, Ruler, ClipboardList, Wrench, Pencil, Landmark } from "lucide-react";
 import { createClient } from "@/lib/supabase-browser";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,14 +35,14 @@ const DOC_TYPES = [
   { value: "licencia", label: "Licencia / Permiso" },
 ];
 
-const typeIcons: Record<string, string> = {
-  documento: "📄",
-  foto: "📷",
-  plano: "📐",
-  acta: "📋",
-  parte: "🔧",
-  contrato: "📝",
-  licencia: "🏛️",
+const typeIcons: Record<string, ReactNode> = {
+  documento: <FileText className="h-10 w-10 text-[#00c896]" />,
+  foto: <Camera className="h-10 w-10 text-[#00c896]" />,
+  plano: <Ruler className="h-10 w-10 text-[#00c896]" />,
+  acta: <ClipboardList className="h-10 w-10 text-[#00c896]" />,
+  parte: <Wrench className="h-10 w-10 text-[#00c896]" />,
+  contrato: <Pencil className="h-10 w-10 text-[#00c896]" />,
+  licencia: <Landmark className="h-10 w-10 text-[#00c896]" />,
 };
 
 function formatFileSize(bytes: number) {
@@ -366,7 +367,7 @@ export default function DocumentsPanel({
                 {/* Non-image icon */}
                 {!isImage && (
                   <div className="h-24 bg-navy-50 dark:bg-zinc-800 flex items-center justify-center">
-                    <span className="text-4xl">{typeIcons[doc.doc_type] || "📄"}</span>
+                    <span className="text-4xl">{typeIcons[doc.doc_type] || <FileText className="h-10 w-10 text-[#00c896]" />}</span>
                   </div>
                 )}
 

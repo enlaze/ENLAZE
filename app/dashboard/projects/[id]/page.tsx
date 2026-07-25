@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import Link from "next/link";
+import { MapPin, Link as LinkIcon, Building2, Mail, Smartphone, Wallet, Calendar } from "lucide-react";
 import { useSector } from "@/lib/sector-context";
 import AcceptanceTimeline from "@/components/AcceptanceTimeline";
 import { saveDocumentVersion, getNextVersion } from "@/lib/document-versions";
@@ -813,7 +814,7 @@ export default function ProjectDetailPage() {
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-navy-900 dark:text-white">{project.name}</h1>
-          {project.address && <p className="text-navy-500 dark:text-zinc-400 text-sm mt-0.5">📍 {project.address}</p>}
+          {project.address && <p className="text-navy-500 dark:text-zinc-400 text-sm mt-0.5 flex items-center gap-1.5"><MapPin className="h-4 w-4 text-[#00c896] shrink-0" /> {project.address}</p>}
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusColorMap[project.status] || defaultStatusColor}`}>
@@ -844,7 +845,7 @@ export default function ProjectDetailPage() {
               setTimeout(() => setLinkCopied(false), 3000);
             }}
             className="px-4 py-1.5 rounded-lg text-sm font-medium border border-navy-200 bg-white text-navy-700 hover:bg-navy-50 hover:border-navy-300 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:hover:border-zinc-700 transition flex items-center gap-1.5">
-            {linkCopied ? "✓ Enlace copiado" : "🔗 Compartir con cliente"}
+            {linkCopied ? "✓ Enlace copiado" : <><LinkIcon className="h-4 w-4" /> Compartir con cliente</>}
           </button>
         </div>
       </div>
@@ -877,9 +878,9 @@ export default function ProjectDetailPage() {
           {client ? (
             <div className="space-y-2 text-sm">
               <p className="text-navy-900 dark:text-white font-medium text-base">{client.name}</p>
-              {client.company && <p className="text-navy-600 dark:text-zinc-300">🏢 {client.company}</p>}
-              {client.email && <p className="text-navy-600 dark:text-zinc-300">📧 {client.email}</p>}
-              {client.phone && <p className="text-navy-600 dark:text-zinc-300">📱 {client.phone}</p>}
+              {client.company && <p className="text-navy-600 dark:text-zinc-300 flex items-center gap-1.5"><Building2 className="h-4 w-4 text-[#00c896] shrink-0" /> {client.company}</p>}
+              {client.email && <p className="text-navy-600 dark:text-zinc-300 flex items-center gap-1.5"><Mail className="h-4 w-4 text-[#00c896] shrink-0" /> {client.email}</p>}
+              {client.phone && <p className="text-navy-600 dark:text-zinc-300 flex items-center gap-1.5"><Smartphone className="h-4 w-4 text-[#00c896] shrink-0" /> {client.phone}</p>}
             </div>
           ) : (
             <p className="text-navy-500 dark:text-zinc-400 text-sm">Sin cliente asignado</p>
@@ -1216,8 +1217,8 @@ export default function ProjectDetailPage() {
                           </div>
                           {c.description && <p className="text-sm text-navy-600 dark:text-zinc-300 mb-2">{c.description}</p>}
                           <div className="flex flex-wrap gap-4 text-xs text-navy-500 dark:text-zinc-400">
-                            <span>💰 {eur(c.economic_impact)}</span>
-                            {c.time_impact_days > 0 && <span>📅 +{c.time_impact_days} días</span>}
+                            <span className="inline-flex items-center gap-1"><Wallet className="h-3.5 w-3.5 text-[#00c896]" /> {eur(c.economic_impact)}</span>
+                            {c.time_impact_days > 0 && <span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5 text-[#00c896]" /> +{c.time_impact_days} días</span>}
                             <span>Creado: {fmtDate(c.created_at)}</span>
                             {c.approved_date && <span>Aprobado: {fmtDate(c.approved_date)}</span>}
                           </div>

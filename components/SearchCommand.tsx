@@ -8,9 +8,11 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
+import { ClipboardList, Receipt, Users, Banknote, Shield, Wrench, Settings } from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────────────────── */
 
@@ -40,15 +42,16 @@ const typeLabels: Record<string, string> = {
   received_invoice: "Facturas recibidas",
 };
 
-const quickActions = [
-  { label: "Nuevo presupuesto", href: "/dashboard/budgets/new", icon: "📋", keys: "N P" },
-  { label: "Nueva factura", href: "/dashboard/issued-invoices/new", icon: "🧾", keys: "N F" },
-  { label: "Ver clientes", href: "/dashboard/clientes", icon: "👥", keys: "G C" },
-  { label: "Ver pagos", href: "/dashboard/payments", icon: "💵", keys: "G P" },
-  { label: "Cumplimiento", href: "/dashboard/compliance", icon: "🛡️", keys: "G X" },
-  { label: "Proveedores", href: "/dashboard/suppliers", icon: "🔧", keys: "G V" },
-  { label: "Facturas recibidas", href: "/dashboard/suppliers/invoices", icon: "🧾", keys: "G R" },
-  { label: "Ajustes", href: "/dashboard/settings", icon: "⚙️", keys: "G S" },
+const QA_ICON = "h-4 w-4 text-[#00c896]";
+const quickActions: { label: string; href: string; icon: ReactNode; keys: string }[] = [
+  { label: "Nuevo presupuesto", href: "/dashboard/budgets/new", icon: <ClipboardList className={QA_ICON} />, keys: "N P" },
+  { label: "Nueva factura", href: "/dashboard/issued-invoices/new", icon: <Receipt className={QA_ICON} />, keys: "N F" },
+  { label: "Ver clientes", href: "/dashboard/clientes", icon: <Users className={QA_ICON} />, keys: "G C" },
+  { label: "Ver pagos", href: "/dashboard/payments", icon: <Banknote className={QA_ICON} />, keys: "G P" },
+  { label: "Cumplimiento", href: "/dashboard/compliance", icon: <Shield className={QA_ICON} />, keys: "G X" },
+  { label: "Proveedores", href: "/dashboard/suppliers", icon: <Wrench className={QA_ICON} />, keys: "G V" },
+  { label: "Facturas recibidas", href: "/dashboard/suppliers/invoices", icon: <Receipt className={QA_ICON} />, keys: "G R" },
+  { label: "Ajustes", href: "/dashboard/settings", icon: <Settings className={QA_ICON} />, keys: "G S" },
 ];
 
 /* ─── Context + hook ─────────────────────────────────────────────────── */
@@ -182,7 +185,7 @@ function SearchCommandModal({ onClose }: { onClose: () => void }) {
   const items: {
     label: string;
     subtitle?: string;
-    icon: string;
+    icon: ReactNode;
     href: string;
     type?: string;
   }[] =

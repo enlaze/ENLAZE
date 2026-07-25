@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { PartyPopper } from "lucide-react";
 import { useSector } from "@/lib/sector-context";
 import { normalizeSector } from "@/lib/sector-config";
 import PageHeader from "@/components/ui/page-header";
@@ -154,7 +155,7 @@ function WizardContent() {
     return (
       <div className="flex flex-col items-center justify-center p-12 bg-white dark:bg-zinc-900 border border-brand-green/30 rounded-2xl animate-in fade-in zoom-in-95 mt-8 shadow-sm">
         <div className="w-20 h-20 bg-brand-green/20 rounded-full flex items-center justify-center mb-6">
-          <span className="text-4xl">🎉</span>
+          <PartyPopper className="h-9 w-9 text-[#00c896]" />
         </div>
         <h2 className="text-2xl font-bold text-navy-900 dark:text-white mb-2">¡Presupuesto Finalizado!</h2>
         <p className="text-navy-600 dark:text-zinc-400 text-center max-w-md mb-8">

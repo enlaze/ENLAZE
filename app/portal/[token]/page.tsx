@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Lock, MapPin, User } from "lucide-react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { useToast } from "@/components/ui/toast";
@@ -332,7 +333,7 @@ export default function ClientPortalPage() {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-center max-w-md">
-          <div className="text-5xl mb-4">🔒</div>
+          <div className="mb-4 flex justify-center"><Lock className="h-12 w-12 text-[#00c896]" /></div>
           <h1 className="text-xl font-bold text-[var(--color-navy-100)] mb-2">Enlace no válido</h1>
           <p className="text-[var(--color-navy-400)]">Este enlace de acceso no existe o ha sido desactivado. Contacta con tu profesional para obtener un enlace actualizado.</p>
         </div>
@@ -356,8 +357,8 @@ export default function ClientPortalPage() {
         <h1 className="text-2xl font-bold text-[var(--color-navy-50)] mt-3">{project.name}</h1>
         <div className="flex flex-wrap items-center gap-3 mt-2">
           <span className={`px-3 py-1 rounded-full text-sm font-medium ${stColor}`}>{stLabel}</span>
-          {project.address && <span className="text-sm text-[var(--color-navy-400)]">📍 {project.address}</span>}
-          {client && <span className="text-sm text-[var(--color-navy-400)]">👤 {client.name}{client.company ? ` — ${client.company}` : ""}</span>}
+          {project.address && <span className="text-sm text-[var(--color-navy-400)] inline-flex items-center gap-1.5"><MapPin className="h-4 w-4 text-[#00c896]" /> {project.address}</span>}
+          {client && <span className="text-sm text-[var(--color-navy-400)] inline-flex items-center gap-1.5"><User className="h-4 w-4 text-[#00c896]" /> {client.name}{client.company ? ` — ${client.company}` : ""}</span>}
         </div>
         {project.description && <p className="text-sm text-[var(--color-navy-400)] mt-2">{project.description}</p>}
       </div>

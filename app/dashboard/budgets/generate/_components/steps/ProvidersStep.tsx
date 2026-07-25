@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback } from "react";
+import { Store, Package } from "lucide-react";
 import { useBudgetGenerate, type BudgetState } from "../BudgetGenerateProvider";
 import { Card } from "@/components/ui/card";
 import type { PDFBudget } from "@/lib/pdf-generator";
@@ -219,7 +220,7 @@ export function ProvidersStep() {
 
         {providerOptions.length === 0 && (
           <div className="text-center py-10 bg-navy-50 dark:bg-zinc-900/50 rounded-xl border border-dashed border-navy-200 dark:border-zinc-700 mb-8">
-            <span className="text-3xl mb-2 block">🏪</span>
+            <Store className="h-8 w-8 text-[#00c896] mb-2 mx-auto" />
             <h4 className="text-sm font-bold text-navy-900 dark:text-white">Sin proveedores disponibles</h4>
             <p className="text-xs text-navy-500 dark:text-zinc-400 mt-1 max-w-xs mx-auto">
               Los proveedores se generan automáticamente con el análisis IA. Vuelve al paso anterior y usa "Generar con IA".
@@ -308,7 +309,7 @@ export function ProvidersStep() {
 
           {materials.length === 0 ? (
             <div className="text-center py-10 bg-navy-50 dark:bg-zinc-900/50 rounded-xl border border-dashed border-navy-200 dark:border-zinc-700">
-              <span className="text-3xl mb-2 block">📦</span>
+              <Package className="h-8 w-8 text-[#00c896] mb-2 mx-auto" />
               <h4 className="text-sm font-bold text-navy-900 dark:text-white">Sin materiales disponibles</h4>
               <p className="text-xs text-navy-500 dark:text-zinc-400 mt-1 max-w-xs mx-auto">
                 Los materiales se generan automáticamente con la IA o desde tu catálogo de precios. Vuelve al paso anterior y usa "Generar con IA" para obtener una lista completa.

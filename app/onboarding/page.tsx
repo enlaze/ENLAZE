@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { CheckCircle2 } from "lucide-react";
 import { createClient } from "@/lib/supabase-browser";
 import { useRouter } from "next/navigation";
 import {
@@ -239,11 +240,11 @@ export default function OnboardingPage() {
               <div className="bg-[var(--color-navy-700)] rounded-lg p-4">
                 <p className="text-sm font-medium text-[var(--color-navy-200)] mb-2">Lo que configuraremos para ti:</p>
                 <div className="space-y-2 text-sm text-[var(--color-navy-400)]">
-                  <p>✅ Agente IA especializado en tu sector</p>
-                  <p>✅ Banco de precios adaptado a tu actividad</p>
-                  <p>✅ Plantillas de presupuestos profesionales</p>
-                  <p>✅ Normativas y regulaciones de tu sector</p>
-                  <p>✅ Actualizaciones automáticas de precios de mercado</p>
+                  <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-[#00c896] shrink-0" /> Agente IA especializado en tu sector</p>
+                  <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-[#00c896] shrink-0" /> Banco de precios adaptado a tu actividad</p>
+                  <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-[#00c896] shrink-0" /> Plantillas de presupuestos profesionales</p>
+                  <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-[#00c896] shrink-0" /> Normativas y regulaciones de tu sector</p>
+                  <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-[#00c896] shrink-0" /> Actualizaciones automáticas de precios de mercado</p>
                 </div>
               </div>
             </div>

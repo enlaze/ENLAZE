@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { Gift } from "lucide-react";
 import Logo from "@/components/Logo";
 
 const Check = () => (
@@ -267,7 +268,7 @@ export default function PricingPage() {
 
           <div className="flex justify-center mb-12">
             <div className="inline-flex items-center gap-2 rounded-full bg-brand-green/10 px-5 py-2.5 text-sm font-semibold text-brand-green">
-              🎁 10 días de prueba gratis en todos los planes — sin tarjeta de crédito
+              <Gift className="h-4 w-4" /> 10 días de prueba gratis en todos los planes — sin tarjeta de crédito
             </div>
           </div>
 

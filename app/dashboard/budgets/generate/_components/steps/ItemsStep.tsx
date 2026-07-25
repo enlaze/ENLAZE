@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback } from "react";
+import { Sparkles, Construction } from "lucide-react";
 import { useBudgetGenerate, Partida } from "../BudgetGenerateProvider";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
@@ -35,14 +36,14 @@ export function ItemsStep() {
               disabled={state.isAnalyzing}
               className="hidden sm:flex px-4 py-2 bg-brand-green/20 text-brand-green border border-brand-green/30 rounded-lg text-sm font-bold items-center gap-2 hover:bg-brand-green/30 transition disabled:opacity-50"
             >
-              {state.isAnalyzing ? "✨ Regenerando propuesta con IA..." : "✨ Generar con IA"}
+              <Sparkles className="h-4 w-4" /> {state.isAnalyzing ? "Regenerando propuesta con IA..." : "Generar con IA"}
             </button>
           </div>
         </div>
         
         {partidas.length === 0 ? (
           <div className="text-center py-12 bg-navy-50 dark:bg-zinc-900/50">
-            <span className="text-4xl mb-3 block">🏗️</span>
+            <Construction className="h-9 w-9 text-[#00c896] mb-3 mx-auto" />
             <h3 className="text-lg font-bold text-navy-900 dark:text-white">Aún no hay partidas</h3>
             <p className="text-sm text-navy-500 dark:text-zinc-400 mt-1 max-w-sm mx-auto">
               Añade partidas manualmente o usa la IA para generarlas.
