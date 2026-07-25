@@ -286,7 +286,6 @@ export async function POST(request: Request) {
             product_type: p.category || "material",
             is_active: true,
             is_available: true,
-            country: "ES",
             last_synced_at: new Date().toISOString(),
             source_url: source_url || null,
             price_trend: "stable",
