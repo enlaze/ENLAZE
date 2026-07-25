@@ -29,6 +29,8 @@ const PUBLIC_API_ROUTES = [
   "/api/signatures/public", // Public signing API
   "/api/signatures/verify-otp", // OTP verification (has its own security)
   "/api/signatures/send-otp",   // OTP sending (rate limited internally)
+  "/api/pb/ingest",        // Price ingest from n8n (Bearer token auth internally)
+  "/api/pb/sync/run",      // Sync trigger (Bearer token auth internally)
 ];
 
 function isPublicRoute(pathname: string): boolean {
