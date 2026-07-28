@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import Logo from "@/components/Logo";
+import AccountDeletedNotice from "@/components/AccountDeletedNotice";
 import AnimatedBlock from "@/components/landing/AnimatedBlock";
 import Section from "@/components/landing/Section";
 import FeatureCard from "@/components/landing/FeatureCard";
@@ -1108,6 +1109,7 @@ function FooterCol({
 export default function Home() {
   return (
     <main className="min-h-screen bg-[#f4f7f5] text-navy-900 transition-colors antialiased">
+      <AccountDeletedNotice />
       <Navbar />
       <HeroMotion />
       {/* Bridge dark → cream — funde Hero (navy líquido) con PainPoints. */}

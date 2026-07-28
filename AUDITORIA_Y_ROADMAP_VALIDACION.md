@@ -62,7 +62,9 @@ Recorrido de usuario de construcción ejecutado (9-10 jul). Bugs ENCONTRADOS y A
 - **RESUELTO (20 jul):** Resend configurado como **SMTP de Supabase**. Los emails ya salen desde `Enlaze <noreply@enlaze.es>` y se acabó el tope de ~2/hora. Desbloquea reseteo de contraseña **y** email de registro.
 - **Pendiente de email:** personalizar las plantillas (ahora son las genéricas de Supabase, sin marca y medio en inglés) — en marcha con Claude Design. Y ojo: los primeros envíos caen en **spam** por reputación de dominio nueva; mejora con el tiempo y con plantillas mejor hechas.
 - **Pendiente menor:** mover "Registro de actividad" fuera del menú principal (accesible desde Cumplimiento).
-- **En curso (pulido):** sustituir emojis por iconos lucide, pantalla por pantalla (queda ~la mitad).
+- **HECHO (247daa0):** emojis → iconos lucide-react en toda la app (18 archivos). Solo quedan los sets data-driven de notificaciones/eventos (refactor limpio aparte) y las plantillas de email.
+- **HECHO:** "Registro de actividad" movido fuera del menú principal (accesible desde Cumplimiento).
+- **PENDIENTE FUNCIONAL (nuevo):** el botón "Eliminar cuenta" en Ajustes no tiene onClick — nunca se implementó. En marcha.
 - **SIGUIENTE PASO GRANDE:** validar el presupuestador con un constructor real (padre del socio). El banco de precios vacío hace que las estimaciones no sean fiables; hay que ver si aporta valor de verdad.
 - Aparcado: revocar el token de GitHub expuesto.
 Probar el funnel completo con datos reales: landing → registro → verificación email → onboarding → dashboard → generar primer presupuesto → briefing del agente. Arreglar lo que se rompa. Incluir recuperación de contraseña si falta.

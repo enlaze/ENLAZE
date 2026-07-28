@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { useTheme } from "@/lib/theme-context";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import Link from "next/link";
 
 type ThemePreference = "light" | "dark" | "system";
@@ -162,7 +163,10 @@ export default function SettingsPage() {
   const [passwordResult, setPasswordResult] = useState({ type: "", text: "" });
   const [themePreference, setThemePreference] = useState<ThemePreference>("system");
   const [savingTheme, setSavingTheme] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const { setTheme } = useTheme();
+  const confirm = useConfirm();
   const supabase = createClient();
 
   useEffect(() => {
@@ -243,6 +247,53 @@ export default function SettingsPage() {
     }
     setSavingTheme(false);
     setTimeout(() => setResult({ type: "", text: "" }), 4000);
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleteError("");
+
+    const confirmed = await confirm({
+      title: "Eliminar cuenta permanentemente",
+      description:
+        "Se borrarán tu perfil y tus datos: clientes, proyectos, presupuestos, proveedores, precios y documentos. Esta acción es irreversible y no podrás recuperar la información.",
+      variant: "danger",
+      confirmLabel: "Eliminar cuenta",
+      cancelLabel: "Cancelar",
+      requireText: "ELIMINAR",
+      details: (
+        <div className="mt-4 rounded-[10px] border border-[#e5eae8] bg-[#f7faf9] p-3.5 text-[13px] leading-relaxed text-[#3d4f48] dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-300">
+          Por obligación legal se conservarán, <strong>desvinculadas de tu identidad</strong>, tus{" "}
+          <strong>facturas emitidas y recibidas</strong> (Hacienda exige guardarlas unos 4 años) y
+          la <strong>prueba de los consentimientos</strong> que aceptaste. Ya no estarán asociadas
+          a tu cuenta ni serán accesibles desde Enlaze.
+        </div>
+      ),
+    });
+    if (!confirmed) return;
+
+    setDeletingAccount(true);
+    try {
+      const res = await fetch("/api/account/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: "ELIMINAR" }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setDeleteError(data?.error || "No se pudo eliminar la cuenta. Inténtalo de nuevo.");
+        setDeletingAccount(false);
+        return;
+      }
+
+      await supabase.auth.signOut();
+      // Navegación dura: limpia todo el estado del cliente tras el borrado.
+      window.location.href = "/?cuenta=eliminada";
+    } catch (error) {
+      console.error("[settings/delete-account]", error);
+      setDeleteError("Error de conexión. No se ha eliminado la cuenta.");
+      setDeletingAccount(false);
+    }
   };
 
   return (
@@ -414,10 +465,18 @@ export default function SettingsPage() {
             <div className="text-[13.5px] text-[#a96a6a] dark:text-red-400/70">Estas acciones son irreversibles. Procede con cuidado.</div>
           </div>
         </div>
-        <button className="mt-[18px] flex items-center gap-2 rounded-[10px] border border-[#f0bcbc] bg-white px-[18px] py-[11px] text-[14px] font-semibold text-[#d64545] transition-colors hover:border-[#e89a9a] hover:bg-[#fdeeee] dark:border-red-900/50 dark:bg-transparent dark:text-red-400 dark:hover:bg-red-950/20">
+        <button
+          type="button"
+          onClick={handleDeleteAccount}
+          disabled={deletingAccount}
+          className="mt-[18px] flex items-center gap-2 rounded-[10px] border border-[#f0bcbc] bg-white px-[18px] py-[11px] text-[14px] font-semibold text-[#d64545] transition-colors hover:border-[#e89a9a] hover:bg-[#fdeeee] disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-900/50 dark:bg-transparent dark:text-red-400 dark:hover:bg-red-950/20"
+        >
           <IcoTrash />
-          Eliminar cuenta
+          {deletingAccount ? "Eliminando cuenta..." : "Eliminar cuenta"}
         </button>
+        {deleteError && (
+          <p className="mt-3 text-[13.5px] font-medium text-[#c03535] dark:text-red-400">{deleteError}</p>
+        )}
       </div>
     </div>
   );
