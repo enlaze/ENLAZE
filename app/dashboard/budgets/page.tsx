@@ -44,18 +44,23 @@ export default function BudgetsPage() {
 
   const handleDelete = async (id: string) => {
     const ok = await confirm({
-      title: "Eliminar presupuesto",
-      description: "¿Eliminar este presupuesto?",
+      title: "Mover presupuesto a la papelera",
+      description: "Podrás recuperar el presupuesto y sus partidas desde Papelera.",
       variant: "danger",
-      confirmLabel: "Eliminar",
+      confirmLabel: "Mover a la papelera",
     });
     if (!ok) return;
     try {
-      await supabase.from("budgets").delete().eq("id", id);
+      const { data, error } = await supabase.rpc("move_to_trash", {
+        p_entity_type: "budget",
+        p_entity_id: id,
+      });
+      if (error) throw error;
+      if (!data) throw new Error("No se encontró el presupuesto");
       await fetchBudgets();
-      toast.success("Presupuesto eliminado");
+      toast.success("Presupuesto movido a la papelera");
     } catch (error) {
-      toast.error("Error al eliminar el presupuesto");
+      toast.error("No se pudo mover el presupuesto a la papelera");
     }
   };
 

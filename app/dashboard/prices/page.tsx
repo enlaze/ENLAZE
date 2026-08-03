@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase-browser";
 import { useSector } from "@/lib/sector-context";
@@ -52,6 +52,27 @@ const INPUT_CLS =
 
 const LABEL_CLS = "block text-xs font-medium text-navy-600 dark:text-zinc-300 mb-1.5";
 
+interface N8nSyncRequest {
+  id: string;
+  status: "pending" | "running" | "completed" | "failed";
+  progress?: {
+    completed?: number;
+    total?: number;
+    label?: string;
+  } | null;
+  result?: {
+    products?: number;
+    inserted?: number;
+    updated?: number;
+    unchanged?: number;
+  } | null;
+  error?: string | null;
+  completed_at?: string | null;
+}
+
+const wait = (milliseconds: number) =>
+  new Promise((resolve) => setTimeout(resolve, milliseconds));
+
 /* ═══════════════════════════════════════════════════════════════════ */
 
 export default function PricesPage() {
@@ -64,6 +85,13 @@ export default function PricesPage() {
   const [contextLoaded, setContextLoaded] = useState(false);
   const [loadingItems, setLoadingItems] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncLabel, setSyncLabel] = useState("Rastrear mercado");
+  const [syncProgress, setSyncProgress] = useState({
+    completed: 0,
+    total: 5,
+    label: "Preparando el rastreo",
+  });
+  const syncPollGeneration = useRef(0);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -157,35 +185,53 @@ export default function PricesPage() {
     if (!userId) return;
     setLoadingItems(true);
     try {
-      // 1. Load user's own price_items (legacy table)
-      const { data: userItems } = await supabase
-        .from("price_items")
-        .select(PRICE_LIST_COLUMNS)
-        .eq("user_id", userId)
-        .eq("sector", sectorConfig.sector)
-        .order("category")
-        .order("subcategory")
-        .order("name")
-        .limit(1000);
+      // Supabase limits the number of rows returned by a single REST request.
+      // Fetch in deterministic pages so the KPI and catalogue include every row.
+      const pageSize = 1000;
+      const userItems: PriceListItem[] = [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pbProducts: any[] = [];
 
-      // 2. Load PB V2 products (filtered by sector)
-      const { data: pbProducts } = await supabase
-        .from("pb_products")
-        .select(`
-          id, commercial_name, description, sale_unit,
-          unit_price, brand, is_active, is_available,
-          product_type, category, subcategory,
-          provider_id, pb_providers ( name )
-        `)
-        .eq("is_active", true)
-        .eq("is_available", true)
-        .eq("sector", sectorConfig.sector)
-        .order("commercial_name")
-        .limit(5000);
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await supabase
+          .from("price_items")
+          .select(PRICE_LIST_COLUMNS)
+          .eq("user_id", userId)
+          .eq("sector", sectorConfig.sector)
+          .order("category")
+          .order("subcategory")
+          .order("name")
+          .order("id")
+          .range(from, from + pageSize - 1);
+
+        if (error) throw error;
+        userItems.push(...((data as PriceListItem[]) || []));
+        if (!data || data.length < pageSize) break;
+      }
+
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await supabase
+          .from("pb_products")
+          .select(`
+            id, commercial_name, description, sale_unit,
+            unit_price, brand, is_active, is_available,
+            product_type, category, subcategory,
+            provider_id, pb_providers ( name )
+          `)
+          .eq("is_active", true)
+          .eq("is_available", true)
+          .eq("sector", sectorConfig.sector)
+          .order("commercial_name")
+          .order("id")
+          .range(from, from + pageSize - 1);
+
+        if (error) throw error;
+        pbProducts.push(...(data || []));
+        if (!data || data.length < pageSize) break;
+      }
 
       // 3. Map PB V2 products → PriceListItem shape
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mappedPb: PriceListItem[] = (pbProducts || []).map((p: any) => ({
+      const mappedPb: PriceListItem[] = pbProducts.map((p) => ({
         id: p.id,
         name: p.commercial_name,
         description: p.description || "",
@@ -207,7 +253,7 @@ export default function PricesPage() {
       }));
 
       // 4. Merge: user items first, then PB V2 products
-      const combined = [...((userItems as PriceListItem[]) || []), ...mappedPb];
+      const combined = [...userItems, ...mappedPb];
       setItems(combined);
     } catch (err) {
       console.error("[prices] loadItems error:", err);
@@ -228,9 +274,27 @@ export default function PricesPage() {
         .order("finished_at", { ascending: false })
         .limit(1)
         .single();
-      
-      if (data?.finished_at) {
-        setLastSyncDate(new Date(data.finished_at).toLocaleString("es-ES", {
+
+      let latestTimestamp = data?.finished_at || null;
+
+      const n8nResponse = await fetch("/api/prices/n8n-sync?latest=1", {
+        cache: "no-store",
+      });
+      if (n8nResponse.ok) {
+        const n8nData = await n8nResponse.json();
+        const n8nCompletedAt = n8nData?.request?.completed_at;
+        if (
+          n8nCompletedAt &&
+          (!latestTimestamp ||
+            new Date(n8nCompletedAt).getTime() >
+              new Date(latestTimestamp).getTime())
+        ) {
+          latestTimestamp = n8nCompletedAt;
+        }
+      }
+
+      if (latestTimestamp) {
+        setLastSyncDate(new Date(latestTimestamp).toLocaleString("es-ES", {
           dateStyle: "short",
           timeStyle: "short"
         }));
@@ -244,8 +308,16 @@ export default function PricesPage() {
     if (!userId) return;
     loadItems();
     loadLastSync();
+    resumeActiveN8nSync();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, sectorConfig.sector]);
+
+  useEffect(() => {
+    return () => {
+      // Solo detenemos el sondeo de esta pantalla. El proceso real continúa en n8n.
+      syncPollGeneration.current += 1;
+    };
+  }, []);
 
   /* ─── Form handlers ──────────────────────────────────────────────── */
   function resetForm() {
@@ -412,120 +484,206 @@ export default function PricesPage() {
   }
 
   /* ─── Sync from market (n8n + PB V2) ─────────────────────────────── */
+  async function waitForN8nSync(requestId: string, generation: number) {
+    // El sondeo pertenece a esta visita, pero la tarea real pertenece a n8n.
+    for (let attempt = 0; attempt < 1080; attempt += 1) {
+      await wait(5000);
+
+      if (generation !== syncPollGeneration.current) return;
+
+      const response = await fetch(
+        `/api/prices/n8n-sync?id=${encodeURIComponent(requestId)}`,
+        { cache: "no-store" }
+      );
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(payload.error || "No se pudo consultar el estado de n8n");
+      }
+
+      if (generation !== syncPollGeneration.current) return;
+
+      const request = payload.request as N8nSyncRequest;
+      if (request.status === "pending") {
+        setSyncLabel("Esperando a n8n...");
+        setSyncProgress({
+          completed: Math.max(0, request.progress?.completed ?? 0),
+          total: Math.max(1, request.progress?.total ?? 5),
+          label: request.progress?.label || "Esperando a n8n",
+        });
+        continue;
+      }
+
+      if (request.status === "running") {
+        const total = Math.max(1, request.progress?.total ?? 5);
+        const completed = Math.min(
+          total,
+          Math.max(0, request.progress?.completed ?? 0)
+        );
+        setSyncProgress({
+          completed,
+          total,
+          label: request.progress?.label || "Rastreando precios",
+        });
+        setSyncLabel(`Rastreando ${completed}/${total}...`);
+        continue;
+      }
+
+      if (request.status === "failed") {
+        throw new Error(request.error || "n8n no pudo completar el rastreo");
+      }
+
+      if (request.status === "completed") {
+        const total = Math.max(1, request.progress?.total ?? 5);
+        setSyncProgress({
+          completed: total,
+          total,
+          label: "Rastreo completado",
+        });
+        setSyncLabel("Actualizando catálogo...");
+        const products = request.result?.products || 0;
+        await loadItems();
+        await loadLastSync();
+        toast.success(
+          products > 0
+            ? `Rastreo terminado: ${products} precios procesados`
+            : "El rastreo terminó y los precios están actualizados"
+        );
+        return;
+      }
+    }
+
+    throw new Error(
+      "El rastreo sigue ejecutándose en n8n. Puedes volver más tarde para ver los precios."
+    );
+  }
+
+  async function resumeActiveN8nSync() {
+    const generation = ++syncPollGeneration.current;
+
+    try {
+      const response = await fetch("/api/prices/n8n-sync?active=1", {
+        cache: "no-store",
+      });
+
+      if (response.status === 404 || generation !== syncPollGeneration.current) {
+        return;
+      }
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        console.error("[prices] No se pudo recuperar el rastreo activo", payload);
+        return;
+      }
+
+      const request = payload.request as N8nSyncRequest;
+      if (request.status === "failed") {
+        toast.error(request.error || "El último rastreo no pudo completarse");
+        return;
+      }
+      if (request.status === "completed") return;
+
+      const total = Math.max(1, request.progress?.total ?? 5);
+      const completed = Math.min(
+        total,
+        Math.max(0, request.progress?.completed ?? 0)
+      );
+
+      setSyncing(true);
+      setSyncProgress({
+        completed,
+        total,
+        label:
+          request.progress?.label ||
+          (request.status === "running" ? "Rastreando precios" : "Esperando a n8n"),
+      });
+      setSyncLabel(
+        request.status === "running"
+          ? `Rastreando ${completed}/${total}...`
+          : "Esperando a n8n..."
+      );
+
+      await waitForN8nSync(request.id, generation);
+    } catch (error) {
+      if (generation === syncPollGeneration.current) {
+        console.error("[prices] Error al reanudar el seguimiento", error);
+      }
+    } finally {
+      if (generation === syncPollGeneration.current) {
+        setSyncing(false);
+        setSyncLabel("Rastrear mercado");
+      }
+    }
+  }
+
   async function syncFromMarket() {
     if (!userId) {
       toast.error("Error: no se pudo obtener tu usuario. Recarga la página.");
       return;
     }
     const ok = await confirm({
-      title: "Sincronizar precios del mercado",
-      description: "Se importarán los precios de proveedores (BigMat, Porcelanosa, Roca, Bauhaus, Bricoking, Grupo Puma...) a tu rastreador. Los precios marcados como manuales no se sobrescribirán.",
+      title: "Rastrear precios del mercado",
+      description: "Se rastrearán los precios de ManoMano y se enviarán los cambios a ENLAZE. Mantén el Mac encendido y n8n abierto durante el proceso.",
       variant: "default",
-      confirmLabel: "Sincronizar",
+      confirmLabel: "Rastrear mercado",
     });
     if (!ok) return;
-    setSyncing(true);
 
-    let added = 0;
-    let updated = 0;
-    let skipped = 0;
+    const generation = ++syncPollGeneration.current;
+    setSyncing(true);
+    setSyncLabel("Enviando a n8n...");
+    setSyncProgress({
+      completed: 0,
+      total: 5,
+      label: "Enviando solicitud a n8n",
+    });
 
     try {
-      // 1. Sync from PB V2 (n8n scraped providers, filtered by sector)
-      const { data: pbProducts } = await supabase
-        .from("pb_products")
-        .select(`
-          id, commercial_name, description, sale_unit,
-          unit_price, brand, is_active, is_available,
-          provider_id, pb_providers ( name )
-        `)
-        .eq("is_active", true)
-        .eq("is_available", true)
-        .eq("sector", sectorConfig.sector);
+      const response = await fetch("/api/prices/n8n-sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sector: sectorConfig.sector }),
+      });
+      const payload = await response.json().catch(() => ({}));
 
-      if (pbProducts && pbProducts.length > 0) {
-        for (const p of pbProducts) {
-          const providerName = (p as any).pb_providers?.name || "Proveedor";
-          const productName = (p as any).commercial_name;
-
-          // Check if already exists in user's price_items (by name + supplier)
-          const { data: existing } = await supabase
-            .from("price_items")
-            .select("id, source_type")
-            .eq("user_id", userId)
-            .eq("sector", sectorConfig.sector)
-            .eq("name", productName)
-            .eq("supplier_name", providerName)
-            .limit(1)
-            .maybeSingle();
-
-          if (existing) {
-            // Skip manual overrides
-            if (existing.source_type === "manual") {
-              skipped++;
-              continue;
-            }
-            // Update existing
-            await supabase
-              .from("price_items")
-              .update({
-                unit_price: Number((p as any).unit_price) || 0,
-                unit: (p as any).sale_unit || "ud",
-                brand: (p as any).brand || null,
-                description: (p as any).description || "",
-                source_type: "n8n_sync",
-              })
-              .eq("id", existing.id);
-            updated++;
-          } else {
-            // Insert new
-            await supabase.from("price_items").insert({
-              user_id: userId,
-              sector: sectorConfig.sector,
-              name: productName,
-              description: (p as any).description || "",
-              category: "material",
-              subcategory: "",
-              unit: (p as any).sale_unit || "ud",
-              unit_price: Number((p as any).unit_price) || 0,
-              brand: (p as any).brand || null,
-              supplier_name: providerName,
-              source_type: "n8n_sync",
-              confidence_score: 0.8,
-              is_active: true,
-            });
-            added++;
-          }
-        }
+      if (!response.ok || !payload?.request?.id) {
+        throw new Error(
+          payload.error || "No se pudo enviar la solicitud a n8n"
+        );
       }
 
-      // 2. Also try legacy sync (sector_data)
-      try {
-        const res = await fetch("/api/prices/sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sector: sectorConfig.sector }),
-        });
-        if (res.ok) {
-          const legacyData = await res.json();
-          if (legacyData.results) {
-            added += legacyData.results.added || 0;
-            updated += legacyData.results.updated || 0;
-            skipped += legacyData.results.skipped || 0;
-          }
-        }
-      } catch {
-        // Legacy sync may fail if sector_data is empty — that's ok
+      const request = payload.request as N8nSyncRequest;
+      const initialTotal = Math.max(1, request.progress?.total ?? 5);
+      const initialCompleted = Math.min(
+        initialTotal,
+        Math.max(0, request.progress?.completed ?? 0)
+      );
+      setSyncProgress({
+        completed: initialCompleted,
+        total: initialTotal,
+        label:
+          request.progress?.label ||
+          (request.status === "running" ? "Rastreo iniciado" : "Esperando a n8n"),
+      });
+      setSyncLabel(
+        request.status === "running"
+          ? `Rastreando ${initialCompleted}/${initialTotal}...`
+          : "Esperando a n8n..."
+      );
+      await waitForN8nSync(request.id, generation);
+    } catch (err: unknown) {
+      if (generation === syncPollGeneration.current) {
+        console.error("Error sincronizando:", err);
+        toast.error(
+          err instanceof Error ? err.message : "Error al sincronizar precios"
+        );
       }
-
-      toast.success(`Sincronizado: ${added} nuevos, ${updated} actualizados, ${skipped} omitidos`);
-      loadLastSync();
-    } catch (err: any) {
-      console.error("Error sincronizando:", err);
-      toast.error(err.message || "Error al sincronizar precios");
+    } finally {
+      if (generation === syncPollGeneration.current) {
+        setSyncing(false);
+        setSyncLabel("Rastrear mercado");
+      }
     }
-    setSyncing(false);
-    loadItems();
   }
 
   /* ─── Import defaults ────────────────────────────────────────────── */
@@ -887,6 +1045,11 @@ export default function PricesPage() {
     return f;
   }, [isRetail, categories, items]);
 
+  const syncProgressPercent = Math.min(
+    100,
+    Math.max(0, Math.round((syncProgress.completed / syncProgress.total) * 100))
+  );
+
   /* ─── Loading state ──────────────────────────────────────────────── */
   if (!contextLoaded || loadingItems) {
     return (
@@ -932,7 +1095,7 @@ export default function PricesPage() {
               disabled={syncing}
               className="inline-flex items-center gap-2 rounded-xl border border-navy-200 bg-white px-4 py-2.5 text-sm font-medium text-navy-700 hover:bg-navy-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 disabled:opacity-50 transition"
             >
-              {syncing ? "Sincronizando..." : "Sync mercado"}
+              {syncing ? syncLabel : "Rastrear mercado"}
             </button>
             <button
               onClick={importDefaults}
@@ -958,6 +1121,47 @@ export default function PricesPage() {
           </div>
         }
       />
+
+      {syncing && (
+        <section
+          className="mb-6 rounded-2xl border border-brand-green/30 bg-brand-green/5 p-4 dark:border-brand-green/30 dark:bg-brand-green/10"
+          aria-live="polite"
+          aria-label="Progreso del rastreo de precios"
+        >
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-navy-900 dark:text-zinc-100">
+                Rastreando precios del mercado
+              </p>
+              <p className="text-xs text-navy-500 dark:text-zinc-400">
+                {syncProgress.completed >= syncProgress.total
+                  ? "Actualizando el catálogo con los resultados"
+                  : syncProgress.completed > 0
+                    ? `Última categoría completada: ${syncProgress.label}`
+                    : syncProgress.label}
+              </p>
+            </div>
+            <span className="text-sm font-semibold tabular-nums text-brand-green">
+              {syncProgress.completed}/{syncProgress.total} categorías · {syncProgressPercent}%
+            </span>
+          </div>
+          <div
+            className="h-3 overflow-hidden rounded-full bg-navy-100 dark:bg-zinc-800"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={syncProgressPercent}
+          >
+            <div
+              className="h-full rounded-full bg-brand-green transition-[width] duration-700 ease-out"
+              style={{ width: `${syncProgressPercent}%` }}
+            />
+          </div>
+          <p className="mt-2 text-xs text-navy-500 dark:text-zinc-400">
+            Mantén el Mac encendido y n8n abierto. Puedes seguir utilizando ENLAZE mientras termina.
+          </p>
+        </section>
+      )}
 
       {/* ─── KPI cards ────────────────────────────────────────────── */}
       <div className={`grid ${isRetail ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-3"} gap-4 mb-6`}>

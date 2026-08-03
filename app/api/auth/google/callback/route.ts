@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { createClient } from "@supabase/supabase-js";
 import { encryptToken } from "@/lib/crypto";
+import { verifyOAuthState } from "@/lib/oauth-state";
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID
+  ?.replace(/^["']|["']$/g, "")
+  .trim();
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET
+  ?.replace(/^["']|["']$/g, "")
+  .trim();
 
 // APP_BASE_URL will be computed inside the handler based on the request origin
 
@@ -37,12 +41,6 @@ export async function GET(req: NextRequest) {
   const APP_BASE_URL = isLocal ? "http://localhost:3000" : "https://enlaze.vercel.app";
   const GOOGLE_REDIRECT_URI = `${APP_BASE_URL}/api/auth/google/callback`;
 
-  console.log(`[Google OAuth Callback] host received: ${host}`);
-  console.log(`[Google OAuth Callback] origin received: ${req.nextUrl.origin}`);
-  console.log(`[Google OAuth Callback] isLocal calculated: ${isLocal}`);
-  console.log(`[Google OAuth Callback] APP_BASE_URL final: ${APP_BASE_URL}`);
-  console.log(`[Google OAuth Callback] GOOGLE_REDIRECT_URI final: ${GOOGLE_REDIRECT_URI}`);
-
   try {
     const code = req.nextUrl.searchParams.get("code");
     const stateString = req.nextUrl.searchParams.get("state");
@@ -50,52 +48,49 @@ export async function GET(req: NextRequest) {
 
     if (error) {
       // If we don't have safeReturnTo yet, just use APP_BASE_URL
-      return NextResponse.redirect(new URL(`${APP_BASE_URL}/dashboard/settings/integrations?integration_error=${error}`));
+      return NextResponse.redirect(
+        new URL(
+          `${APP_BASE_URL}/dashboard/settings/integrations?integration_error=${encodeURIComponent(error)}`
+        )
+      );
     }
 
     if (!code || !stateString) {
       return NextResponse.json({ error: "Missing code or state" }, { status: 400 });
     }
 
-    // Decode state
-    let state;
-    try {
-      state = JSON.parse(Buffer.from(stateString, "base64").toString("utf8"));
-    } catch (e) {
-      return NextResponse.json({ error: "Invalid state parameter" }, { status: 400 });
+    const state = verifyOAuthState(stateString);
+    if (!state) {
+      return NextResponse.redirect(
+        new URL(
+          `${APP_BASE_URL}/dashboard/settings/integrations?integration_error=invalid_or_expired_state`
+        )
+      );
     }
-
     const { userId, module, returnTo } = state;
-    if (!userId || !module) {
-      return NextResponse.json({ error: "Invalid state contents" }, { status: 400 });
-    }
 
     const safeReturnTo = (returnTo && isValidReturnUrl(returnTo)) ? returnTo : APP_BASE_URL;
 
-    console.log(`[Google OAuth] Starting callback for User: ${userId}, Module: ${module}`);
-    console.log(`[Google OAuth] Redirect URI used: ${GOOGLE_REDIRECT_URI}`);
-    console.log(`[Google OAuth] Return To URL: ${safeReturnTo}`);
-
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value;
-          },
-          set() {},
-          remove() {},
-        },
-      }
-    );
-
-    // Verify authenticated session matches the state userId
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user || user.id !== userId) {
-      return NextResponse.redirect(new URL(`${safeReturnTo}/dashboard/settings/integrations?integration_error=unauthorized`));
+    if (
+      !GOOGLE_CLIENT_ID ||
+      !GOOGLE_CLIENT_SECRET ||
+      !process.env.SUPABASE_SERVICE_ROLE_KEY
+    ) {
+      return NextResponse.redirect(
+        new URL(
+          `${safeReturnTo}/dashboard/settings/integrations?integration_error=server_configuration`
+        )
+      );
     }
+
+    // The signed state was created only after an authenticated request.
+    // The service client is needed because Google always returns to the
+    // canonical domain while the user may be working on a Vercel alias.
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    );
 
     // Exchange code for tokens
     const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
@@ -113,10 +108,8 @@ export async function GET(req: NextRequest) {
     });
 
     const tokenData = await tokenResponse.json();
-    console.log(`[Google OAuth] Token exchange result OK: ${tokenResponse.ok}`);
-
     if (!tokenResponse.ok) {
-      console.error("[Google OAuth] Token exchange failed:", tokenData);
+      console.error("[Google OAuth] Token exchange failed", tokenData?.error);
       return NextResponse.redirect(new URL(`${safeReturnTo}/dashboard/settings/integrations?integration_error=token_exchange_failed`));
     }
 
@@ -128,7 +121,6 @@ export async function GET(req: NextRequest) {
     });
     const userInfo = await userInfoResponse.json();
     const email = userInfo.email;
-    console.log(`[Google OAuth] Fetched UserInfo, Email: ${email}`);
 
     // Encrypt tokens
     const encryptedAccess = encryptToken(access_token);
@@ -174,7 +166,6 @@ export async function GET(req: NextRequest) {
     };
 
     if (existingConnection) {
-      console.log(`[Google OAuth] Updating existing connection for ${module}`);
       const { error: updateError } = await supabase
         .from("agent_connections")
         .update(payload)
@@ -182,27 +173,24 @@ export async function GET(req: NextRequest) {
         .eq("module", module);
         
       if (updateError) {
-        console.error(`[Google OAuth] Update error:`, updateError);
+        console.error("[Google OAuth] Update error", updateError.code);
         throw updateError;
       }
     } else {
-      console.log(`[Google OAuth] Inserting new connection for ${module}`);
       const { error: insertError } = await supabase
         .from("agent_connections")
         .insert(payload);
         
       if (insertError) {
-        console.error(`[Google OAuth] Insert error:`, insertError);
+        console.error("[Google OAuth] Insert error", insertError.code);
         throw insertError;
       }
     }
 
-    console.log(`[Google OAuth] Successfully saved connection for ${module}`);
-    return NextResponse.redirect(new URL(`${safeReturnTo}/dashboard/settings/integrations?integration_success=true`));
-  } catch (err: any) {
+    return NextResponse.redirect(new URL(`${safeReturnTo}/dashboard/settings/integrations?integration_success=${module}`));
+  } catch (err: unknown) {
     console.error("Google OAuth Callback Error:", err);
-    // If safeReturnTo is not defined because state parsing failed, fallback to APP_BASE_URL
-    const fallbackUrl = APP_BASE_URL;
-    return NextResponse.redirect(new URL(`${fallbackUrl}/dashboard/settings/integrations?integration_error=${encodeURIComponent(err.message)}`));
+    const message = err instanceof Error ? err.message : "unknown_error";
+    return NextResponse.redirect(new URL(`${APP_BASE_URL}/dashboard/settings/integrations?integration_error=${encodeURIComponent(message)}`));
   }
 }

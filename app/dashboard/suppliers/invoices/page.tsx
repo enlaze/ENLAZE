@@ -13,6 +13,8 @@ import { FormField, Input, Select, SearchInput } from "@/components/ui/form-fiel
 import EmptyState from "@/components/ui/empty-state";
 import Loading from "@/components/ui/loading";
 import { useToast } from "@/components/ui/toast";
+import { Camera, Loader2 } from "lucide-react";
+import { prepareInvoiceImage } from "@/lib/invoice-image-client";
 import {
   getReceivedInvoices,
   createReceivedInvoice,
@@ -36,6 +38,7 @@ const emptyForm = {
   irpf_percent: "0",
   payment_method: "transferencia",
   notes: "",
+  document_url: "",
 };
 
 export default function ReceivedInvoicesPage() {
@@ -54,6 +57,7 @@ export default function ReceivedInvoicesPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [scanning, setScanning] = useState(false);
 
   useEffect(() => {
     async function doLoad() {
@@ -105,6 +109,84 @@ export default function ReceivedInvoicesPage() {
     }
   }
 
+  async function handleScan(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Selecciona una foto JPG, PNG o WEBP");
+      return;
+    }
+
+    setScanning(true);
+    try {
+      const optimizedFile = await prepareInvoiceImage(file);
+      const body = new FormData();
+      body.append("file", optimizedFile);
+      body.append("mode", "extract");
+
+      const response = await fetch("/api/invoices/ocr", {
+        method: "POST",
+        body,
+      });
+      const contentType = response.headers.get("content-type") || "";
+      const result = contentType.includes("application/json")
+        ? await response.json()
+        : { error: `El servidor devolvió un error ${response.status}` };
+
+      if (!response.ok || !result.success || !result.ocr_data) {
+        throw new Error(result.error || "No se pudo analizar la factura");
+      }
+
+      const data = result.ocr_data as Record<string, unknown>;
+      const supplierName = String(data.supplier_name || "");
+      const supplierNif = String(data.supplier_nif || "");
+      const normalizedNif = supplierNif.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+      const normalizedName = supplierName.trim().toLocaleLowerCase("es");
+      const matchingSupplier = suppliers.find((supplier) => {
+        const candidateNif = (supplier.nif || "")
+          .replace(/[^a-zA-Z0-9]/g, "")
+          .toUpperCase();
+        return (
+          (normalizedNif && candidateNif === normalizedNif) ||
+          (normalizedName &&
+            supplier.name.trim().toLocaleLowerCase("es") === normalizedName)
+        );
+      });
+      const paymentMethod = String(data.payment_method || "").toLowerCase();
+
+      setForm({
+        invoice_number: String(data.invoice_number || ""),
+        supplier_id: matchingSupplier?.id || "",
+        supplier_name: matchingSupplier?.name || supplierName,
+        supplier_nif: matchingSupplier?.nif || supplierNif,
+        issue_date:
+          String(data.invoice_date || "") ||
+          new Date().toISOString().split("T")[0],
+        due_date: String(data.due_date || ""),
+        subtotal: String(Number(data.base_amount || 0) || ""),
+        iva_percent: String(Number(data.iva_percentage ?? 21)),
+        irpf_percent: String(Number(data.irpf_percentage ?? 0)),
+        payment_method: paymentMethodLabels[paymentMethod]
+          ? paymentMethod
+          : "transferencia",
+        notes: String(data.notes || ""),
+        document_url: String(result.image_url || ""),
+      });
+      setShowForm(true);
+      toast.success("Factura analizada", {
+        description: "Revisa los datos antes de registrarla.",
+      });
+    } catch (error) {
+      toast.error("No se pudo analizar la factura", {
+        description:
+          error instanceof Error ? error.message : "Inténtalo de nuevo.",
+      });
+    } finally {
+      setScanning(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -131,6 +213,7 @@ export default function ReceivedInvoicesPage() {
       total,
       payment_method: form.payment_method || null,
       notes: form.notes || null,
+      document_url: form.document_url || null,
     });
 
     if (!error) {
@@ -160,12 +243,31 @@ export default function ReceivedInvoicesPage() {
     <div className="max-w-6xl mx-auto">
       <PageHeader
         title="Facturas recibidas"
+        description="Sube fotos de facturas y la IA extrae los datos automáticamente"
         count={total}
         countLabel={`factura${total !== 1 ? "s" : ""}`}
         actions={
-          <Button onClick={() => { setShowForm(true); setForm(emptyForm); }}>
-            + Registrar factura
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-medium transition ${scanning ? "pointer-events-none cursor-not-allowed bg-navy-100 text-navy-400 dark:text-zinc-500" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
+              {scanning ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Camera className="h-4 w-4" />
+              )}
+              {scanning ? "Analizando factura..." : "Escanear factura"}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                capture="environment"
+                onChange={handleScan}
+                disabled={scanning}
+                className="hidden"
+              />
+            </label>
+            <Button onClick={() => { setShowForm(true); setForm(emptyForm); }}>
+              + Nueva factura
+            </Button>
+          </div>
         }
       />
 
@@ -324,7 +426,20 @@ export default function ReceivedInvoicesPage() {
         <EmptyState
           title="Sin facturas recibidas"
           description="Registra tu primera factura de proveedor para controlar gastos y vencimientos."
-          action={<Button onClick={() => setShowForm(true)}>+ Registrar factura</Button>}
+          action={
+            <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700">
+              <Camera className="h-4 w-4" />
+              Escanear factura
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                capture="environment"
+                onChange={handleScan}
+                disabled={scanning}
+                className="hidden"
+              />
+            </label>
+          }
         />
       ) : (
         <Card>

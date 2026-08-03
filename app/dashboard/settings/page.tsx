@@ -155,6 +155,8 @@ const THEME_OPTIONS: { id: ThemePreference; name: string; desc: string; icon: Re
 export default function SettingsPage() {
   const [fullName, setFullName] = useState("");
   const [companyName, setCompanyName] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [email, setEmail] = useState("");
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState({ type: "", text: "" });
@@ -178,7 +180,11 @@ export default function SettingsPage() {
         const savedTheme = user.user_metadata?.theme_preference as ThemePreference || "system";
         setThemePreference(savedTheme);
         const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-        if (data) { setFullName(data.full_name || ""); setCompanyName(data.business_name || ""); }
+        if (data) {
+          setFullName(data.full_name || "");
+          setCompanyName(data.business_name || "");
+          setLogoUrl(data.logo_url || "");
+        }
       }
     };
     load();
@@ -223,6 +229,96 @@ export default function SettingsPage() {
     setResult({ type: "success", text: "Perfil actualizado correctamente" });
     setSaving(false);
     setTimeout(() => setResult({ type: "", text: "" }), 4000);
+  };
+
+  const handleLogoUpload = async (file: File | null) => {
+    if (!file) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setResult({ type: "error", text: "El logo debe ser PNG, JPG o WebP." });
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setResult({ type: "error", text: "El logo no puede superar los 2 MB." });
+      return;
+    }
+
+    setUploadingLogo(true);
+    setResult({ type: "", text: "" });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setResult({ type: "error", text: "No hay sesión activa." });
+      setUploadingLogo(false);
+      return;
+    }
+
+    const extension = file.type === "image/png"
+      ? "png"
+      : file.type === "image/webp"
+        ? "webp"
+        : "jpg";
+    const objectPath = `${user.id}/logo-${Date.now()}.${extension}`;
+    const { error: uploadError } = await supabase.storage
+      .from("company-branding")
+      .upload(objectPath, file, {
+        cacheControl: "31536000",
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      setResult({ type: "error", text: `No se pudo subir el logo: ${uploadError.message}` });
+      setUploadingLogo(false);
+      return;
+    }
+
+    const { data: publicData } = supabase.storage
+      .from("company-branding")
+      .getPublicUrl(objectPath);
+    const newLogoUrl = publicData.publicUrl;
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .upsert({
+        id: user.id,
+        email: user.email,
+        logo_url: newLogoUrl,
+        updated_at: new Date().toISOString(),
+      });
+
+    if (profileError) {
+      await supabase.storage.from("company-branding").remove([objectPath]);
+      setResult({ type: "error", text: `No se pudo guardar el logo: ${profileError.message}` });
+      setUploadingLogo(false);
+      return;
+    }
+
+    setLogoUrl(newLogoUrl);
+    setResult({ type: "success", text: "Logo de empresa actualizado." });
+    setUploadingLogo(false);
+  };
+
+  const handleLogoRemove = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    setUploadingLogo(true);
+    const { data: objects } = await supabase.storage
+      .from("company-branding")
+      .list(user.id, { limit: 100 });
+    if (objects?.length) {
+      await supabase.storage
+        .from("company-branding")
+        .remove(objects.map((object) => `${user.id}/${object.name}`));
+    }
+    const { error } = await supabase
+      .from("profiles")
+      .update({ logo_url: null, updated_at: new Date().toISOString() })
+      .eq("id", user.id);
+    if (error) {
+      setResult({ type: "error", text: `No se pudo eliminar el logo: ${error.message}` });
+    } else {
+      setLogoUrl("");
+      setResult({ type: "success", text: "Logo eliminado." });
+    }
+    setUploadingLogo(false);
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -376,6 +472,59 @@ export default function SettingsPage() {
             <IcoUser />
           </div>
           <div className="text-[17px] font-bold text-[#0f1e1a] dark:text-white">Perfil</div>
+        </div>
+
+        <div className="mt-5 rounded-xl border border-[#e5eae8] bg-[#f8faf9] p-4 dark:border-zinc-800 dark:bg-zinc-800/40">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-[#d4ddd9] bg-white dark:border-zinc-700 dark:bg-zinc-900">
+              {logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt="Logo de la empresa"
+                  className="h-full w-full object-contain p-2"
+                />
+              ) : (
+                <IcoBuilding size={34} />
+              )}
+            </div>
+            <div className="flex-1">
+              <div className="text-[14.5px] font-bold text-[#0f1e1a] dark:text-white">
+                Imagen de la empresa
+              </div>
+              <p className="mt-1 text-[12.5px] leading-relaxed text-[#6b7d76] dark:text-zinc-400">
+                Se mostrará en presupuestos, facturas y correos enviados. Usa un PNG, JPG o WebP de hasta 2 MB.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <label
+                  htmlFor="company-logo-upload"
+                  className="cursor-pointer rounded-[9px] bg-[#0f1e1a] px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-[#22332d] dark:bg-white dark:text-zinc-900"
+                >
+                  {uploadingLogo ? "Procesando..." : logoUrl ? "Cambiar imagen" : "Subir imagen"}
+                </label>
+                <input
+                  id="company-logo-upload"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  disabled={uploadingLogo}
+                  onChange={(event) => {
+                    void handleLogoUpload(event.target.files?.[0] || null);
+                    event.currentTarget.value = "";
+                  }}
+                  className="sr-only"
+                />
+                {logoUrl && (
+                  <button
+                    type="button"
+                    disabled={uploadingLogo}
+                    onClick={() => void handleLogoRemove()}
+                    className="rounded-[9px] border border-red-200 bg-white px-4 py-2 text-[13px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900/50 dark:bg-transparent dark:text-red-400"
+                  >
+                    Eliminar
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
         <form onSubmit={handleSaveProfile} className="mt-5 flex flex-col gap-4">

@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import BackButton from "@/components/ui/back-button";
-import { Mail, Calendar, BarChart3 } from "lucide-react";
+import { Mail, Calendar, BarChart3, MessageCircle } from "lucide-react";
 
 interface Integration {
   id: string;
@@ -29,6 +29,13 @@ export default function IntegrationsPage() {
   const [showSheetSelector, setShowSheetSelector] = useState(false);
   const [selectedSheetId, setSelectedSheetId] = useState("");
   const [savingSheet, setSavingSheet] = useState(false);
+  const [showWhatsAppForm, setShowWhatsAppForm] = useState(false);
+  const [savingWhatsApp, setSavingWhatsApp] = useState(false);
+  const [whatsAppForm, setWhatsAppForm] = useState({
+    access_token: "",
+    phone_number_id: "",
+    whatsapp_business_account_id: "",
+  });
 
   const supabase = createClient();
   const router = useRouter();
@@ -54,8 +61,24 @@ export default function IntegrationsPage() {
 
     // Check url params for success or error
     const params = new URLSearchParams(window.location.search);
-    if (params.get("integration_success")) {
-      // Clear URL
+    const connectedModule = params.get("integration_success");
+    const integrationError = params.get("integration_error");
+    if (connectedModule) {
+      toast.success("Integración conectada correctamente");
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (integrationError) {
+      const errorMessages: Record<string, string> = {
+        access_denied: "Has cancelado la autorización.",
+        invalid_or_expired_state: "La autorización ha caducado. Inténtalo de nuevo.",
+        token_exchange_failed: "Google no pudo completar la conexión. Inténtalo de nuevo.",
+        server_configuration: "Falta completar la configuración segura de la integración.",
+        unauthorized: "La sesión ha caducado. Vuelve a iniciar sesión.",
+      };
+      toast.error("No se pudo conectar", {
+        description:
+          errorMessages[integrationError] ||
+          "Revisa los permisos de Google e inténtalo de nuevo.",
+      });
       window.history.replaceState({}, document.title, window.location.pathname);
     }
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
@@ -108,6 +131,23 @@ export default function IntegrationsPage() {
     });
     if (!ok) return;
 
+    if (module === "whatsapp") {
+      const response = await fetch("/api/integrations/whatsapp", {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        toast.error("No se pudo desconectar", {
+          description: data?.error || "Error de WhatsApp",
+        });
+        return;
+      }
+      toast.success("WhatsApp desconectado");
+      setShowWhatsAppForm(false);
+      loadIntegrations();
+      return;
+    }
+
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { error } = await supabase
@@ -127,7 +167,37 @@ export default function IntegrationsPage() {
   };
 
   const handleConnect = (module: string) => {
+    if (module === "whatsapp") {
+      setShowWhatsAppForm(true);
+      return;
+    }
     window.location.assign(`/api/auth/google?module=${module}`);
+  };
+
+  const handleSaveWhatsApp = async () => {
+    setSavingWhatsApp(true);
+    const response = await fetch("/api/integrations/whatsapp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(whatsAppForm),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      toast.error("No se pudo conectar WhatsApp", {
+        description: data?.error || "Revisa los datos de Meta.",
+      });
+      setSavingWhatsApp(false);
+      return;
+    }
+    toast.success("WhatsApp Business conectado");
+    setWhatsAppForm({
+      access_token: "",
+      phone_number_id: "",
+      whatsapp_business_account_id: "",
+    });
+    setShowWhatsAppForm(false);
+    await loadIntegrations();
+    setSavingWhatsApp(false);
   };
 
   const handleFetchSheets = async () => {
@@ -194,7 +264,13 @@ export default function IntegrationsPage() {
       name: "Google Sheets",
       icon: <BarChart3 className="h-6 w-6 text-[#00c896]" />,
       description: "Vincula hojas de cálculo para que el agente tenga control de stock, escandallos o ventas en tiempo real.",
-    }
+    },
+    {
+      id: "whatsapp",
+      name: "WhatsApp Business",
+      icon: <MessageCircle className="h-6 w-6 text-[#00c896]" />,
+      description: "Envía mensajes reales a tus clientes desde el número de WhatsApp Business de tu empresa.",
+    },
   ];
 
   return (
@@ -246,6 +322,14 @@ export default function IntegrationsPage() {
                         Conectado como: <span className="font-medium text-navy-700 dark:text-zinc-300">{metadata.email}</span>
                       </p>
                     )}
+                    {connected && mod.id === "whatsapp" && (
+                      <p className="text-xs text-navy-500 dark:text-zinc-500 mt-2">
+                        Número conectado:{" "}
+                        <span className="font-medium text-navy-700 dark:text-zinc-300">
+                          {metadata?.display_phone_number || "verificado por Meta"}
+                        </span>
+                      </p>
+                    )}
                   </div>
                 </div>
                 
@@ -267,6 +351,62 @@ export default function IntegrationsPage() {
                   )}
                 </div>
               </div>
+
+              {mod.id === "whatsapp" && showWhatsAppForm && !connected && (
+                <div className="mt-2 pl-4 sm:pl-20">
+                  <div className="space-y-3 rounded-xl border border-navy-100 bg-navy-50 p-4 dark:border-zinc-800 dark:bg-zinc-800/50">
+                    <div>
+                      <h4 className="text-sm font-semibold text-navy-900 dark:text-white">
+                        Datos de WhatsApp Cloud API
+                      </h4>
+                      <p className="mt-1 text-xs text-navy-500 dark:text-zinc-400">
+                        Crea un token permanente en Meta Business y copia el identificador del número. El token se guarda cifrado.
+                      </p>
+                    </div>
+                    <input
+                      type="password"
+                      value={whatsAppForm.access_token}
+                      onChange={(event) => setWhatsAppForm({ ...whatsAppForm, access_token: event.target.value })}
+                      placeholder="Token permanente de Meta"
+                      autoComplete="off"
+                      className="w-full rounded-lg border border-navy-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                    />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={whatsAppForm.phone_number_id}
+                      onChange={(event) => setWhatsAppForm({ ...whatsAppForm, phone_number_id: event.target.value })}
+                      placeholder="ID del número de teléfono"
+                      className="w-full rounded-lg border border-navy-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                    />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={whatsAppForm.whatsapp_business_account_id}
+                      onChange={(event) => setWhatsAppForm({ ...whatsAppForm, whatsapp_business_account_id: event.target.value })}
+                      placeholder="ID de la cuenta de WhatsApp Business (opcional)"
+                      className="w-full rounded-lg border border-navy-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleSaveWhatsApp()}
+                        disabled={savingWhatsApp}
+                        className="rounded-lg bg-brand-green px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                      >
+                        {savingWhatsApp ? "Verificando..." : "Verificar y conectar"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowWhatsAppForm(false)}
+                        className="rounded-lg border border-navy-200 bg-white px-4 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
               
               {/* Extra settings for Google Sheets */}
               {connected && mod.id === "google_sheets" && (

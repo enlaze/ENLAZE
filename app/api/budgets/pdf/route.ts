@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     // Load company info from profile
     const { data: profile } = await supabase
       .from("profiles")
-      .select("full_name, business_name")
+      .select("full_name, business_name, logo_url")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -72,6 +72,7 @@ export async function POST(request: Request) {
 
     const company = {
       name: profile?.business_name || profile?.full_name || "Mi Empresa",
+      logo_url: profile?.logo_url || "",
       nif: (fiscal as any)?.nif || (fiscal as any)?.cif || "",
       address: (fiscal as any)?.address || (fiscal as any)?.fiscal_address || "",
       phone: (fiscal as any)?.phone || "",
@@ -114,6 +115,25 @@ export async function POST(request: Request) {
     const id = randomUUID();
     const jsonPath = join(tmpDir, `budget-${id}.json`);
     const pdfPath = join(tmpDir, `budget-${id}.pdf`);
+    const logoPath = join(tmpDir, `budget-logo-${id}`);
+
+    if (company.logo_url && /^https:\/\/[^\s]+$/i.test(company.logo_url)) {
+      try {
+        const logoResponse = await fetch(company.logo_url);
+        const contentType = logoResponse.headers.get("content-type") || "";
+        if (
+          logoResponse.ok &&
+          ["image/png", "image/jpeg", "image/webp"].some((type) =>
+            contentType.startsWith(type)
+          )
+        ) {
+          writeFileSync(logoPath, Buffer.from(await logoResponse.arrayBuffer()));
+          (company as typeof company & { logo_path?: string }).logo_path = logoPath;
+        }
+      } catch (logoError) {
+        console.warn("[PDF] Company logo could not be downloaded");
+      }
+    }
 
     writeFileSync(jsonPath, JSON.stringify(pdfData, null, 2));
 
@@ -154,6 +174,7 @@ export async function POST(request: Request) {
     // Cleanup
     try { unlinkSync(jsonPath); } catch {}
     try { unlinkSync(pdfPath); } catch {}
+    try { unlinkSync(logoPath); } catch {}
 
     return new NextResponse(pdfBuffer, {
       status: 200,

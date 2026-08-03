@@ -21,8 +21,8 @@ export function ItemsStep() {
       <Card padding={false} className="overflow-hidden">
         <div className="p-6 border-b border-navy-100 dark:border-zinc-800 flex justify-between items-center bg-white dark:bg-zinc-900">
           <div>
-            <h2 className="text-xl font-bold text-navy-900 dark:text-white">Constructor de Partidas</h2>
-            <p className="text-sm text-navy-600 dark:text-zinc-400">Desglosa los trabajos y materiales</p>
+            <h2 className="text-xl font-bold text-navy-900 dark:text-white">Presupuesto por capítulos y partidas</h2>
+            <p className="text-sm text-navy-600 dark:text-zinc-400">Revisa mediciones, tiempos, costes y ajuste geográfico antes de finalizar.</p>
           </div>
           <div className="flex gap-2">
             <button 
@@ -81,6 +81,35 @@ export function ItemsStep() {
                         className="w-full text-xs text-navy-500 dark:text-zinc-400 bg-transparent border-none p-0 focus:ring-0 mt-1"
                         placeholder="Descripción detallada..."
                       />
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <input
+                          type="text"
+                          value={p.chapter || ""}
+                          onChange={(e) => updatePartida(p.id, { chapter: e.target.value })}
+                          className="min-w-[150px] flex-1 text-[11px] font-semibold text-brand-green bg-brand-green/5 border border-brand-green/20 rounded px-2 py-1"
+                          placeholder="Capítulo"
+                          aria-label="Capítulo de la partida"
+                        />
+                        <label className="text-[11px] text-navy-500 dark:text-zinc-400 flex items-center gap-1">
+                          Horas
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            value={p.estimated_hours || ""}
+                            onChange={(e) => updatePartida(p.id, { estimated_hours: parseFloat(e.target.value) || undefined })}
+                            className="w-16 text-right bg-transparent border border-navy-200 dark:border-zinc-700 rounded px-1.5 py-1"
+                          />
+                        </label>
+                        {p.geographic_factor && p.geographic_factor !== 1 && (
+                          <span
+                            className="text-[10px] font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 rounded px-2 py-1"
+                            title={p.geographic_profile}
+                          >
+                            Zona ×{p.geographic_factor.toFixed(2)}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="p-4">
                       <select 

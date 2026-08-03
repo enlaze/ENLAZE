@@ -173,6 +173,7 @@ export default function IssuedInvoiceDetailPage() {
 
   const [invoice, setInvoice] = useState<IssuedInvoice | null>(null);
   const [lines, setLines] = useState<InvoiceLine[]>([]);
+  const [companyLogoUrl, setCompanyLogoUrl] = useState("");
   const [loading, setLoading] = useState(true);
 
   const [showLineForm, setShowLineForm] = useState(false);
@@ -192,9 +193,13 @@ export default function IssuedInvoiceDetailPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push("/login"); return; }
 
-    const { data: inv, error } = await supabase.from("issued_invoices").select("*").eq("id", invoiceId).single();
+    const [{ data: inv, error }, { data: profile }] = await Promise.all([
+      supabase.from("issued_invoices").select("*").eq("id", invoiceId).single(),
+      supabase.from("profiles").select("logo_url").eq("id", user.id).maybeSingle(),
+    ]);
     if (error || !inv) { router.push("/dashboard/issued-invoices"); return; }
     setInvoice(inv);
+    setCompanyLogoUrl(profile?.logo_url || "");
 
     const { data: linesData } = await supabase.from("issued_invoice_lines").select("*").eq("invoice_id", invoiceId).order("sort_order");
     setLines((linesData as InvoiceLine[]) || []);
@@ -472,9 +477,20 @@ export default function IssuedInvoiceDetailPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div className="bg-white dark:bg-zinc-900 border border-navy-100 dark:border-zinc-800 shadow-sm dark:shadow-none rounded-xl p-4">
           <p className="text-xs text-navy-500 dark:text-zinc-400 mb-2 uppercase">Emisor</p>
-          <p className="text-sm font-medium text-navy-900 dark:text-white">{invoice.issuer_name}</p>
-          <p className="text-xs text-navy-500 dark:text-zinc-500">NIF: {invoice.issuer_nif}</p>
-          <p className="text-xs text-navy-500 dark:text-zinc-500">{invoice.issuer_address}</p>
+          <div className="flex items-start gap-3">
+            {companyLogoUrl && (
+              <img
+                src={companyLogoUrl}
+                alt={invoice.issuer_name}
+                className="h-14 w-20 shrink-0 rounded-lg object-contain"
+              />
+            )}
+            <div>
+              <p className="text-sm font-medium text-navy-900 dark:text-white">{invoice.issuer_name}</p>
+              <p className="text-xs text-navy-500 dark:text-zinc-500">NIF: {invoice.issuer_nif}</p>
+              <p className="text-xs text-navy-500 dark:text-zinc-500">{invoice.issuer_address}</p>
+            </div>
+          </div>
         </div>
         <div className="bg-white dark:bg-zinc-900 border border-navy-100 dark:border-zinc-800 shadow-sm dark:shadow-none rounded-xl p-4">
           <p className="text-xs text-navy-500 dark:text-zinc-400 mb-2 uppercase">Cliente</p>

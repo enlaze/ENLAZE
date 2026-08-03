@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Guía n8n — Sincronización de Precios ENLAZE</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --card-hover: #334155;
+    --green: #22c55e;
+    --green-dim: #16a34a;
+    --blue: #3b82f6;
+    --orange: #f59e0b;
+    --red: #ef4444;
+    --purple: #a855f7;
+    --text: #f1f5f9;
+    --text-dim: #94a3b8;
+    --border: #334155;
+    --code-bg: #0d1117;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 2.2rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--green), var(--blue));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+  }
+  .subtitle { color: var(--text-dim); font-size: 1.1rem; margin-bottom: 2rem; }
+  h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--green);
+    margin: 2.5rem 0 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--border);
+  }
+  h3 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--blue);
+    margin: 1.5rem 0 0.5rem;
+  }
+  p { margin-bottom: 0.8rem; color: var(--text-dim); }
+  strong { color: var(--text); }
+
+  .alert {
+    background: rgba(239, 68, 68, 0.1);
+    border-left: 4px solid var(--red);
+    padding: 1rem 1.2rem;
+    border-radius: 0 8px 8px 0;
+    margin: 1rem 0;
+  }
+  .alert.info {
+    background: rgba(59, 130, 246, 0.1);
+    border-left-color: var(--blue);
+  }
+  .alert.success {
+    background: rgba(34, 197, 94, 0.1);
+    border-left-color: var(--green);
+  }
+
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    margin: 0.8rem 0 1.2rem;
+  }
+  code {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    color: var(--green);
+  }
+  pre code { color: var(--text-dim); }
+  .kw { color: var(--purple); }
+  .str { color: var(--green); }
+  .num { color: var(--orange); }
+  .cmt { color: #6b7280; font-style: italic; }
+
+  .sector-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+  .provider-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.2rem;
+    transition: border-color 0.2s;
+  }
+  .provider-card:hover { border-color: var(--green); }
+  .provider-card .name {
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--text);
+    margin-bottom: 0.3rem;
+  }
+  .provider-card .url {
+    font-size: 0.8rem;
+    color: var(--blue);
+    word-break: break-all;
+  }
+  .provider-card .tags {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    margin-top: 0.6rem;
+  }
+  .tag {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border-radius: 9999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+  .tag.easy { background: rgba(34,197,94,0.2); color: var(--green); }
+  .tag.medium { background: rgba(245,158,11,0.2); color: var(--orange); }
+  .tag.hard { background: rgba(239,68,68,0.2); color: var(--red); }
+  .tag.sector { background: rgba(168,85,247,0.2); color: var(--purple); }
+
+  .steps {
+    counter-reset: step;
+    padding-left: 0;
+    list-style: none;
+  }
+  .steps li {
+    counter-increment: step;
+    position: relative;
+    padding: 1rem 0 1rem 3.5rem;
+    border-left: 2px solid var(--border);
+    margin-left: 1rem;
+  }
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: -0.85rem;
+    top: 0.9rem;
+    width: 1.7rem;
+    height: 1.7rem;
+    background: var(--green);
+    color: var(--bg);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 0.8rem;
+  }
+  .steps li:last-child { border-left-color: transparent; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+  }
+  th { color: var(--text); font-weight: 600; background: var(--card); }
+  td { color: var(--text-dim); }
+
+  .env-box {
+    background: var(--card);
+    border: 1px solid var(--green);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+  }
+
+  @media (max-width: 768px) {
+    body { padding: 1rem; }
+    .sector-grid { grid-template-columns: 1fr; }
+    h1 { font-size: 1.6rem; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Guía de Sincronización de Precios</h1>
+<p class="subtitle">Configura n8n para rastrear precios del mercado español automáticamente y enviarlos a ENLAZE</p>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<h2>1. Configuración Inicial</h2>
+
+<h3>1.1 Variable de entorno necesaria</h3>
+<p>Añade esta variable en tu <code>.env</code> de ENLAZE (Vercel):</p>
+
+<div class="env-box">
+<pre><code><span class="cmt"># Genera una clave segura:</span>
+<span class="cmt"># openssl rand -hex 32</span>
+SYNC_API_KEY=tu_clave_secreta_aqui_de_64_caracteres</code></pre>
+</div>
+
+<p>Esta misma clave la configurarás en n8n como credencial para autenticar las llamadas.</p>
+
+<h3>1.2 Configuración en n8n</h3>
+<ol class="steps">
+  <li>
+    <strong>Crea una credencial "Header Auth"</strong> en n8n:<br>
+    Name: <code>ENLAZE Sync API</code><br>
+    Header Name: <code>Authorization</code><br>
+    Header Value: <code>Bearer TU_SYNC_API_KEY</code>
+  </li>
+  <li>
+    <strong>URL del endpoint:</strong><br>
+    <code>https://tu-dominio.vercel.app/api/pb/ingest</code><br>
+    Método: <code>POST</code><br>
+    Content-Type: <code>application/json</code>
+  </li>
+  <li>
+    <strong>Formato del body</strong> que n8n debe enviar:
+<pre><code>{
+  <span class="str">"provider_name"</span>: <span class="str">"Leroy Merlin"</span>,
+  <span class="str">"sector"</span>: <span class="str">"construccion"</span>,
+  <span class="str">"source_url"</span>: <span class="str">"https://www.leroymerlin.es/..."</span>,
+  <span class="str">"products"</span>: [
+    {
+      <span class="str">"name"</span>: <span class="str">"Cemento Portland 25kg"</span>,
+      <span class="str">"price"</span>: <span class="num">4.95</span>,
+      <span class="str">"unit"</span>: <span class="str">"saco"</span>,
+      <span class="str">"category"</span>: <span class="str">"material"</span>,
+      <span class="str">"subcategory"</span>: <span class="str">"cementos"</span>,
+      <span class="str">"brand"</span>: <span class="str">"Lafarge"</span>,
+      <span class="str">"sku"</span>: <span class="str">"LM-12345"</span>
+    }
+  ]
+}</code></pre>
+  </li>
+  <li>
+    <strong>Programa el Schedule Trigger</strong> de cada workflow para ejecutarse <strong>cada día a las 06:00 AM</strong> (o la hora que prefieras).
+  </li>
+</ol>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<h2>2. Estructura del Workflow n8n (Plantilla)</h2>
+<p>Cada workflow de scraping sigue esta estructura de 5 nodos:</p>
+
+<ol class="steps">
+  <li>
+    <strong>Schedule Trigger</strong> — Cron: <code>0 6 * * *</code> (cada día a las 6:00)<br>
+    <span style="color: var(--text-dim);">O puedes usar "Every day at 06:00"</span>
+  </li>
+  <li>
+    <strong>HTTP Request</strong> — GET a la URL del proveedor<br>
+    Configuración: Response Format = <code>Text</code>, Follow Redirects = sí<br>
+    Añadir Headers: <code>User-Agent: Mozilla/5.0 ...</code>
+  </li>
+  <li>
+    <strong>HTML Extract</strong> — Extrae los datos con selectores CSS<br>
+    Extraction Values: name, price, unit, brand, sku (selectores específicos por proveedor, ver sección 3)
+  </li>
+  <li>
+    <strong>Code (JavaScript)</strong> — Transforma y limpia los datos:
+<pre><code><span class="cmt">// Nodo "Code" en n8n — transformar datos extraídos</span>
+<span class="kw">const</span> products = [];
+
+<span class="kw">for</span> (<span class="kw">const</span> item <span class="kw">of</span> $input.all()) {
+  <span class="kw">const</span> rawPrice = item.json.price || <span class="str">""</span>;
+  <span class="cmt">// Limpiar precio: "4,95 €" → 4.95</span>
+  <span class="kw">const</span> price = parseFloat(
+    rawPrice.replace(<span class="str">/[^\d,\.]/g</span>, <span class="str">""</span>)
+           .replace(<span class="str">","</span>, <span class="str">"."</span>)
+  );
+
+  <span class="kw">if</span> (!item.json.name || isNaN(price)) <span class="kw">continue</span>;
+
+  products.push({
+    name: item.json.name.trim(),
+    price: price,
+    unit: item.json.unit || <span class="str">"ud"</span>,
+    category: item.json.category || <span class="str">"material"</span>,
+    subcategory: item.json.subcategory || <span class="str">""</span>,
+    brand: item.json.brand || <span class="str">""</span>,
+    sku: item.json.sku || <span class="str">""</span>,
+  });
+}
+
+<span class="kw">return</span> [{
+  json: {
+    provider_name: <span class="str">"NOMBRE_PROVEEDOR"</span>,
+    sector: <span class="str">"SECTOR"</span>,
+    source_url: $input.first().json.url || <span class="str">""</span>,
+    products: products
+  }
+}];</code></pre>
+  </li>
+  <li>
+    <strong>HTTP Request</strong> — POST a ENLAZE<br>
+    URL: <code>https://tu-dominio.vercel.app/api/pb/ingest</code><br>
+    Auth: Credencial "ENLAZE Sync API"<br>
+    Body: <code>{{ $json }}</code>
+  </li>
+</ol>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<h2>3. Proveedores por Sector — URLs y Selectores</h2>
+
+<div class="alert info">
+  <strong>Nota importante:</strong> Los selectores CSS pueden cambiar cuando los proveedores actualizan sus webs. Si un workflow deja de funcionar, revisa los selectores en el inspector del navegador (F12 → Elements). El endpoint <code>/api/pb/ingest</code> registra errores en <code>price_sync_logs</code> para que puedas detectar problemas.
+</div>
+
+<!-- ─── CONSTRUCCIÓN ─── -->
+<h3>🏗️ Construcción y Reformas</h3>
+<div class="sector-grid">
+  <div class="provider-card">
+    <div class="name">Leroy Merlin</div>
+    <div class="url">https://www.leroymerlin.es/productos/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Categorías útiles: /materiales-construccion, /fontaneria, /electricidad, /pintura, /herramientas</p>
+    <p style="font-size:0.8rem"><strong>Selectores CSS:</strong><br>
+      Nombre: <code>.product-card .product-title</code><br>
+      Precio: <code>.product-card .price-amount</code><br>
+      Unidad: <code>.product-card .price-unit</code></p>
+    <div class="tags"><span class="tag easy">Fácil</span><span class="tag sector">construccion</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Bricomart</div>
+    <div class="url">https://www.bricomart.es/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Enfocado en profesionales. Categorías: /construccion, /fontaneria, /electricidad</p>
+    <p style="font-size:0.8rem"><strong>Selectores CSS:</strong><br>
+      Nombre: <code>.product-name a</code><br>
+      Precio: <code>.price .value</code><br>
+      Unidad: <code>.price .unit</code></p>
+    <div class="tags"><span class="tag easy">Fácil</span><span class="tag sector">construccion</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">BigMat</div>
+    <div class="url">https://www.bigmat.es/catalogo/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Materiales de obra: áridos, cementos, ladrillos, aislantes</p>
+    <p style="font-size:0.8rem"><strong>Selectores CSS:</strong><br>
+      Nombre: <code>.product-item .product-name</code><br>
+      Precio: <code>.product-item .price</code></p>
+    <div class="tags"><span class="tag medium">Medio</span><span class="tag sector">construccion</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Würth</div>
+    <div class="url">https://eshop.wurth.es/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Tornillería, fijaciones, herramientas, químicos</p>
+    <p style="font-size:0.8rem"><strong>Selectores CSS:</strong><br>
+      Nombre: <code>.product-tile__name</code><br>
+      Precio: <code>.product-tile__price</code><br>
+      SKU: <code>.product-tile__sku</code></p>
+    <div class="tags"><span class="tag medium">Medio</span><span class="tag sector">construccion</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Roca</div>
+    <div class="url">https://www.roca.es/catalogo/productos/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Sanitarios, griferías, bañeras, duchas</p>
+    <p style="font-size:0.8rem"><strong>Nota:</strong> Web con renderizado JS. Usar nodo <code>Puppeteer</code> o la API de catálogo si disponible.</p>
+    <div class="tags"><span class="tag hard">Avanzado</span><span class="tag sector">construccion</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Porcelanosa</div>
+    <div class="url">https://www.porcelanosa.com/productos/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Cerámicas, porcelanatos, baños, cocinas</p>
+    <p style="font-size:0.8rem"><strong>Nota:</strong> Requiere scraping avanzado o contacto con comercial para catálogo CSV/API.</p>
+    <div class="tags"><span class="tag hard">Avanzado</span><span class="tag sector">construccion</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">ManoMano</div>
+    <div class="url">https://www.manomano.es/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Marketplace de bricolaje — miles de productos con precios visibles</p>
+    <p style="font-size:0.8rem"><strong>Selectores CSS:</strong><br>
+      Nombre: <code>[data-testid="product-title"]</code><br>
+      Precio: <code>[data-testid="price-amount"]</code></p>
+    <div class="tags"><span class="tag easy">Fácil</span><span class="tag sector">construccion</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Schneider Electric</div>
+    <div class="url">https://www.se.com/es/es/product-range/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Material eléctrico: mecanismos, cuadros, protecciones, automáticos</p>
+    <div class="tags"><span class="tag hard">Avanzado</span><span class="tag sector">construccion</span></div>
+  </div>
+</div>
+
+<!-- ─── COMERCIO LOCAL ─── -->
+<h3>🏪 Comercio Local / Retail</h3>
+<div class="sector-grid">
+  <div class="provider-card">
+    <div class="name">Makro</div>
+    <div class="url">https://www.makro.es/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Cash & carry líder. Alimentación, bebidas, limpieza, packaging. Requiere login de socio.</p>
+    <p style="font-size:0.8rem"><strong>Enfoque:</strong> Usar catálogo digital o folletos semanales (PDF scraping)</p>
+    <div class="tags"><span class="tag medium">Medio</span><span class="tag sector">comercio_local</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">GM Cash & Carry</div>
+    <div class="url">https://www.gmcash.es/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Mayorista alimentación. Productos frescos, secos, limpieza</p>
+    <div class="tags"><span class="tag medium">Medio</span><span class="tag sector">comercio_local</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Gros Mercat (Transgourmet)</div>
+    <div class="url">https://www.grosmercat.es/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Cash & carry para comercio y hostelería</p>
+    <div class="tags"><span class="tag medium">Medio</span><span class="tag sector">comercio_local</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Coviran</div>
+    <div class="url">https://www.coviran.es/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Cooperativa de supermercados — catálogo disponible para socios</p>
+    <div class="tags"><span class="tag medium">Medio</span><span class="tag sector">comercio_local</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Raja Pack</div>
+    <div class="url">https://www.rajapack.es/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Embalaje, cajas, bolsas, film, etiquetado. Precios públicos.</p>
+    <p style="font-size:0.8rem"><strong>Selectores CSS:</strong><br>
+      Nombre: <code>.product-title</code><br>
+      Precio: <code>.price .amount</code></p>
+    <div class="tags"><span class="tag easy">Fácil</span><span class="tag sector">comercio_local</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Papelmatic</div>
+    <div class="url">https://www.papelmatic.com/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Productos de limpieza e higiene profesional</p>
+    <div class="tags"><span class="tag medium">Medio</span><span class="tag sector">comercio_local</span></div>
+  </div>
+</div>
+
+<!-- ─── PELUQUERÍA ─── -->
+<h3>💇 Peluquería / Estética</h3>
+<div class="sector-grid">
+  <div class="provider-card">
+    <div class="name">Bifull / Eurostil</div>
+    <div class="url">https://www.bifull.com/ / https://www.eurostil.com/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Distribuidores principales de peluquería profesional en España. Herramientas, consumibles, mobiliario.</p>
+    <p style="font-size:0.8rem"><strong>Selectores CSS (Bifull):</strong><br>
+      Nombre: <code>.product-miniature .product-title a</code><br>
+      Precio: <code>.product-miniature .price</code></p>
+    <div class="tags"><span class="tag easy">Fácil</span><span class="tag sector">estetica</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Montibello</div>
+    <div class="url">https://www.montibello.com/es/productos/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Marca española premium: tintes, tratamientos, styling</p>
+    <div class="tags"><span class="tag medium">Medio</span><span class="tag sector">estetica</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Salerm Cosmetics</div>
+    <div class="url">https://www.salerm.com/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Cosmética capilar profesional española: tintes, decoloración, tratamientos</p>
+    <div class="tags"><span class="tag medium">Medio</span><span class="tag sector">estetica</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Tahe</div>
+    <div class="url">https://www.tahe.es/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Marca profesional española: productos capilares y estéticos</p>
+    <div class="tags"><span class="tag easy">Fácil</span><span class="tag sector">estetica</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">GHD España</div>
+    <div class="url">https://www.ghdhair.com/es</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Planchas, secadores, cepillos — precios públicos en web</p>
+    <p style="font-size:0.8rem"><strong>Selectores CSS:</strong><br>
+      Nombre: <code>.product-name</code><br>
+      Precio: <code>.product-price .price</code></p>
+    <div class="tags"><span class="tag easy">Fácil</span><span class="tag sector">estetica</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Sorisa (Aparatología)</div>
+    <div class="url">https://www.sorisa.com/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Equipamiento de estética profesional: radiofrecuencia, láser, presoterapia</p>
+    <div class="tags"><span class="tag hard">Avanzado</span><span class="tag sector">estetica</span></div>
+  </div>
+</div>
+
+<!-- ─── HOSTELERÍA ─── -->
+<h3>🍽️ Hostelería</h3>
+<div class="sector-grid">
+  <div class="provider-card">
+    <div class="name">Makro Hostelería</div>
+    <div class="url">https://www.makro.es/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Canal HORECA: alimentación, bebidas a granel, menaje, equipamiento</p>
+    <div class="tags"><span class="tag medium">Medio</span><span class="tag sector">hosteleria</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Expomaquinaria</div>
+    <div class="url">https://www.expomaquinaria.es/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Maquinaria hostelera: hornos, freidoras, vitrinas, mesas frías. Precios públicos.</p>
+    <p style="font-size:0.8rem"><strong>Selectores CSS:</strong><br>
+      Nombre: <code>.product-title a</code><br>
+      Precio: <code>.product-price-and-shipping .price</code></p>
+    <div class="tags"><span class="tag easy">Fácil</span><span class="tag sector">hosteleria</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Edenox</div>
+    <div class="url">https://www.edenox.com/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Equipamiento industrial: lavavajillas, campanas, mostradores, cámaras</p>
+    <div class="tags"><span class="tag medium">Medio</span><span class="tag sector">hosteleria</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Rational</div>
+    <div class="url">https://www.rational-online.com/es_es/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Hornos combinados profesionales — referencia en cocinas profesionales</p>
+    <div class="tags"><span class="tag hard">Avanzado</span><span class="tag sector">hosteleria</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Araven</div>
+    <div class="url">https://www.araven.com/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Contenedores, recipientes GN, almacenaje alimentario APPCC</p>
+    <div class="tags"><span class="tag medium">Medio</span><span class="tag sector">hosteleria</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Mahou San Miguel (Bebidas)</div>
+    <div class="url">Catálogo vía comercial / API distribuidores</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Cerveza, agua, refrescos. Precios según acuerdo comercial</p>
+    <div class="tags"><span class="tag hard">Avanzado</span><span class="tag sector">hosteleria</span></div>
+  </div>
+</div>
+
+<!-- ─── AUTOMOCIÓN ─── -->
+<h3>🚗 Automoción</h3>
+<div class="sector-grid">
+  <div class="provider-card">
+    <div class="name">Oscaro</div>
+    <div class="url">https://www.oscaro.es/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Mayor e-commerce de recambios en España. Millones de referencias. Precios públicos.</p>
+    <p style="font-size:0.8rem"><strong>Selectores CSS:</strong><br>
+      Nombre: <code>.product-item .product-name</code><br>
+      Precio: <code>.product-item .price</code><br>
+      Marca: <code>.product-item .brand</code></p>
+    <div class="tags"><span class="tag easy">Fácil</span><span class="tag sector">automocion</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Norauto</div>
+    <div class="url">https://www.norauto.es/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Neumáticos, mantenimiento, accesorios. Tarifas de mano de obra públicas.</p>
+    <p style="font-size:0.8rem"><strong>Selectores CSS:</strong><br>
+      Nombre: <code>.product-tile .product-name</code><br>
+      Precio: <code>.product-tile .price-box .price</code></p>
+    <div class="tags"><span class="tag easy">Fácil</span><span class="tag sector">automocion</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Aurgi</div>
+    <div class="url">https://www.aurgi.com/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Neumáticos, baterías, aceites, escobillas. Precios públicos.</p>
+    <div class="tags"><span class="tag easy">Fácil</span><span class="tag sector">automocion</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Feu Vert</div>
+    <div class="url">https://www.feuvert.es/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Mantenimiento, neumáticos, accesorios coche</p>
+    <div class="tags"><span class="tag easy">Fácil</span><span class="tag sector">automocion</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div name="name">Recambiosauto.com</div>
+    <div class="url">https://www.recambiosauto.es/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Recambios online con buscador por matrícula. Precios públicos.</p>
+    <div class="tags"><span class="tag easy">Fácil</span><span class="tag sector">automocion</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Repsol Lubricantes</div>
+    <div class="url">https://www.repsol.es/lubricantes/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Aceites motor, transmisión, hidráulicos. Catálogo y precios orientativos.</p>
+    <div class="tags"><span class="tag medium">Medio</span><span class="tag sector">automocion</span></div>
+  </div>
+</div>
+
+<!-- ─── EDUCACIÓN ─── -->
+<h3>📚 Educación / Academia</h3>
+<div class="sector-grid">
+  <div class="provider-card">
+    <div class="name">Liderpapel</div>
+    <div class="url">https://www.liderpapel.com/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Material escolar y oficina: cuadernos, bolígrafos, carpetas, rotuladores. Precios públicos.</p>
+    <p style="font-size:0.8rem"><strong>Selectores CSS:</strong><br>
+      Nombre: <code>.product-name a</code><br>
+      Precio: <code>.price-box .price</code></p>
+    <div class="tags"><span class="tag easy">Fácil</span><span class="tag sector">educacion</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Staedtler / Faber-Castell</div>
+    <div class="url">https://www.staedtler.com/es/ / https://www.faber-castell.es/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Material de escritura y arte profesional</p>
+    <div class="tags"><span class="tag medium">Medio</span><span class="tag sector">educacion</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Casa del Libro / Amazon Libros</div>
+    <div class="url">https://www.casadellibro.com/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Libros de texto y material educativo. PVP regulado en España.</p>
+    <div class="tags"><span class="tag easy">Fácil</span><span class="tag sector">educacion</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">SMART Technologies / Promethean</div>
+    <div class="url">https://www.smarttech.com/es / https://www.prometheanworld.com/es/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Pizarras interactivas, pantallas, tecnología aula</p>
+    <div class="tags"><span class="tag hard">Avanzado</span><span class="tag sector">educacion</span></div>
+  </div>
+
+  <div class="provider-card">
+    <div class="name">Blinklearning / Aula Planeta</div>
+    <div class="url">https://www.blinklearning.com/ / https://www.aulaplaneta.com/</div>
+    <p style="font-size:0.85rem; margin-top:0.4rem">Plataformas educativas digitales — licencias y suscripciones</p>
+    <div class="tags"><span class="tag medium">Medio</span><span class="tag sector">educacion</span></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<h2>4. Ejemplo Completo: Workflow "Leroy Merlin → Cementos"</h2>
+
+<p>Te muestro paso a paso un workflow real para scrapear una categoría de Leroy Merlin:</p>
+
+<h3>Nodo 1: Schedule Trigger</h3>
+<pre><code>Trigger: Cron
+Expression: 0 6 * * *
+<span class="cmt">// Cada día a las 06:00</span></code></pre>
+
+<h3>Nodo 2: HTTP Request</h3>
+<pre><code>Method: GET
+URL: https://www.leroymerlin.es/productos/materiales-construccion/cementos-y-morteros/
+Headers:
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+  Accept: text/html
+Response Format: Text</code></pre>
+
+<h3>Nodo 3: HTML Extract</h3>
+<pre><code>Source Data: Body
+Extraction Values:
+  - Key: name     | CSS Selector: .product-card .product-title | Return: text
+  - Key: price    | CSS Selector: .product-card .price-amount  | Return: text
+  - Key: unit     | CSS Selector: .product-card .price-unit    | Return: text
+  - Key: brand    | CSS Selector: .product-card .product-brand | Return: text
+  - Key: sku      | CSS Selector: .product-card [data-ref]     | Return: attr (data-ref)
+Return Array: Yes</code></pre>
+
+<h3>Nodo 4: Code (JavaScript)</h3>
+<pre><code><span class="kw">const</span> products = [];
+
+<span class="kw">for</span> (<span class="kw">const</span> item <span class="kw">of</span> $input.all()) {
+  <span class="kw">const</span> rawPrice = item.json.price || <span class="str">""</span>;
+  <span class="kw">const</span> price = parseFloat(
+    rawPrice.replace(<span class="str">/[^\d,\.]/g</span>, <span class="str">""</span>).replace(<span class="str">","</span>, <span class="str">"."</span>)
+  );
+
+  <span class="kw">if</span> (!item.json.name || isNaN(price) || price <= <span class="num">0</span>) <span class="kw">continue</span>;
+
+  products.push({
+    name: item.json.name.trim(),
+    price,
+    unit: (item.json.unit || <span class="str">"ud"</span>).trim(),
+    category: <span class="str">"material"</span>,
+    subcategory: <span class="str">"cementos"</span>,
+    brand: (item.json.brand || <span class="str">""</span>).trim(),
+    sku: (item.json.sku || <span class="str">""</span>).trim(),
+  });
+}
+
+<span class="kw">return</span> [{
+  json: {
+    provider_name: <span class="str">"Leroy Merlin"</span>,
+    sector: <span class="str">"construccion"</span>,
+    source_url: <span class="str">"https://www.leroymerlin.es/productos/materiales-construccion/cementos-y-morteros/"</span>,
+    products
+  }
+}];</code></pre>
+
+<h3>Nodo 5: HTTP Request → ENLAZE</h3>
+<pre><code>Method: POST
+URL: https://tu-dominio.vercel.app/api/pb/ingest
+Authentication: Header Auth → "ENLAZE Sync API"
+Content Type: JSON
+Body: Expression → {{ $json }}
+
+<span class="cmt">// La respuesta será algo como:</span>
+{
+  <span class="str">"ok"</span>: <span class="kw">true</span>,
+  <span class="str">"inserted"</span>: <span class="num">12</span>,
+  <span class="str">"updated"</span>: <span class="num">3</span>,
+  <span class="str">"unchanged"</span>: <span class="num">5</span>,
+  <span class="str">"errors"</span>: <span class="num">0</span>,
+  <span class="str">"total"</span>: <span class="num">20</span>
+}</code></pre>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<h2>5. Workflows Recomendados para Empezar</h2>
+
+<p>Empieza por los proveedores marcados como <span class="tag easy">Fácil</span> — tienen precios públicos visibles y selectores CSS estables:</p>
+
+<table>
+  <thead>
+    <tr><th>Prioridad</th><th>Workflow</th><th>Sector</th><th>Productos estimados</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>1</td><td>Leroy Merlin (por categoría)</td><td>Construcción</td><td>~500-1000</td></tr>
+    <tr><td>2</td><td>ManoMano (por categoría)</td><td>Construcción</td><td>~300-800</td></tr>
+    <tr><td>3</td><td>Oscaro (recambios populares)</td><td>Automoción</td><td>~200-500</td></tr>
+    <tr><td>4</td><td>Norauto / Aurgi</td><td>Automoción</td><td>~100-300</td></tr>
+    <tr><td>5</td><td>Bifull (catálogo completo)</td><td>Peluquería</td><td>~200-400</td></tr>
+    <tr><td>6</td><td>GHD España</td><td>Peluquería</td><td>~30-50</td></tr>
+    <tr><td>7</td><td>Expomaquinaria</td><td>Hostelería</td><td>~200-500</td></tr>
+    <tr><td>8</td><td>Raja Pack</td><td>Comercio Local</td><td>~100-300</td></tr>
+    <tr><td>9</td><td>Liderpapel</td><td>Educación</td><td>~200-500</td></tr>
+    <tr><td>10</td><td>Casa del Libro (textos)</td><td>Educación</td><td>~100-200</td></tr>
+  </tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<h2>6. Monitorización y Alertas</h2>
+
+<div class="alert success">
+  <strong>El endpoint <code>/api/pb/ingest</code> registra automáticamente</strong> cada sincronización en la tabla <code>price_sync_logs</code> y cada precio en <code>pb_price_observations</code>. Puedes ver el estado en tu dashboard de ENLAZE en la pestaña "Informe" del rastreador de precios.
+</div>
+
+<h3>Crear un workflow de alerta en n8n:</h3>
+<p>Puedes crear un workflow que revise <code>price_sync_logs</code> cada día y te envíe un email/Telegram si hubo errores:</p>
+
+<pre><code><span class="cmt">// Nodo Code para verificar última sincronización</span>
+<span class="kw">const</span> response = <span class="kw">await</span> $http.get(
+  <span class="str">"https://tu-dominio.vercel.app/api/pb/sync/status"</span>,
+  { headers: { Authorization: <span class="str">"Bearer TU_KEY"</span> } }
+);
+
+<span class="kw">const</span> { lastRun, staleProducts } = response.data;
+
+<span class="kw">if</span> (staleProducts > <span class="num">50</span> || !lastRun) {
+  <span class="kw">return</span> [{ json: { alert: <span class="kw">true</span>, message: <span class="str">`${staleProducts} productos sin actualizar`</span> } }];
+}
+<span class="kw">return</span> [];</code></pre>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<h2>7. Consejos y Mejores Prácticas</h2>
+
+<table>
+  <thead>
+    <tr><th>Tema</th><th>Recomendación</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>Rate limiting</strong></td><td>No hagas más de 1 petición por segundo a cada web. Usa el nodo "Wait" de n8n entre páginas.</td></tr>
+    <tr><td><strong>User-Agent</strong></td><td>Usa un User-Agent de navegador real para evitar bloqueos.</td></tr>
+    <tr><td><strong>Paginación</strong></td><td>Muchas webs paginan los productos. Usa un Loop en n8n: página 1, 2, 3... hasta que no haya más.</td></tr>
+    <tr><td><strong>Errores</strong></td><td>Configura reintentos (Retry on Fail = 2) en los nodos HTTP Request.</td></tr>
+    <tr><td><strong>Webs con JS</strong></td><td>Para webs que renderizan con JavaScript (React, Angular), necesitas un nodo Puppeteer/Playwright o un servicio como ScrapingBee.</td></tr>
+    <tr><td><strong>Límite del endpoint</strong></td><td>Máximo 500 productos por llamada a <code>/api/pb/ingest</code>. Si tienes más, divide en lotes.</td></tr>
+    <tr><td><strong>Sectores válidos</strong></td><td><code>construccion</code>, <code>comercio_local</code>, <code>estetica</code>, <code>hosteleria</code>, <code>automocion</code>, <code>educacion</code></td></tr>
+    <tr><td><strong>Precios</strong></td><td>Envía siempre precios SIN IVA y en EUR. El campo <code>price</code> es numérico (no string).</td></tr>
+  </tbody>
+</table>
+
+<div class="alert" style="margin-top:2rem">
+  <strong>Aviso legal:</strong> El scraping de precios de webs públicas para uso privado/interno generalmente está permitido en España (datos públicos), pero respeta siempre los <code>robots.txt</code> de cada web y no sobrecargues sus servidores. Si un proveedor ofrece una API oficial, úsala en vez de scraping.
+</div>
+
+</body>
+</html>

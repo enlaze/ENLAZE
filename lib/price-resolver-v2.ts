@@ -201,19 +201,89 @@ function tryLevel(
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
-function fuzzyMatch(a: string, b: string): boolean {
-  const na = normalizeMaterialName(a);
-  const nb = normalizeMaterialName(b);
-  if (na === nb) return true;
-  if (na.includes(nb) || nb.includes(na)) return true;
-  const wordsA = na.split(" ").filter((w) => w.length > 2);
-  const wordsB = nb.split(" ").filter((w) => w.length > 2);
-  if (wordsA.length === 0 || wordsB.length === 0) return false;
+function materialMatchScore(a: string, b: string): number {
+  const materialAliases = [
+    { canonical: "placayeso", aliases: ["placa yeso laminado", "carton yeso", "pladur"] },
+    { canonical: "adhesivoceramico", aliases: ["cemento cola", "adhesivo ceramico", "adhesivo porcelanico"] },
+    { canonical: "revestimientoceramico", aliases: ["azulejo", "revestimiento ceramico", "baldosa ceramica"] },
+    { canonical: "pavimentoporcelanico", aliases: ["pavimento porcelanico", "suelo porcelanico", "baldosa porcelanica"] },
+    { canonical: "grifo", aliases: ["griferia", "grifo", "monomando"] },
+    { canonical: "inodoro", aliases: ["inodoro", "wc", "sanitario"] },
+    { canonical: "impermeabilizante", aliases: ["lamina impermeabilizante", "membrana impermeabilizante", "impermeabilizacion"] },
+    { canonical: "pinturaplastica", aliases: ["pintura plastica", "pintura interior", "pintura paredes"] },
+    { canonical: "imprimacion", aliases: ["imprimacion", "fijador", "sellador paredes"] },
+  ];
+  const expandAliases = (value: string) => {
+    const normalized = normalizeMaterialName(value)
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const additions = materialAliases
+      .filter((group) => group.aliases.some((alias) => normalized.includes(alias)))
+      .map((group) => group.canonical);
+    return `${normalized} ${additions.join(" ")}`.trim();
+  };
+  const na = expandAliases(a);
+  const nb = expandAliases(b);
+  if (na === nb) return 1;
+  if (na.includes(nb) || nb.includes(na)) return 0.95;
+  const ignored = new Set([
+    "para", "con", "sin", "tipo", "color", "blanco", "blanca", "negro",
+    "negra", "pack", "unidad", "unidades", "material", "suministro",
+  ]);
+  const wordsA = Array.from(new Set(na.split(" ").filter((w) => w.length > 2 && !ignored.has(w))));
+  const wordsB = Array.from(new Set(nb.split(" ").filter((w) => w.length > 2 && !ignored.has(w))));
+  if (wordsA.length === 0 || wordsB.length === 0) return 0;
   const overlap = wordsA.filter((w) =>
     wordsB.some((wb) => wb.includes(w) || w.includes(wb))
   );
-  const threshold = Math.min(wordsA.length, wordsB.length) <= 2 ? 1 : 2;
-  return overlap.length >= threshold;
+  const baseScore = overlap.length / Math.max(1, Math.min(wordsA.length, wordsB.length));
+  const extractMeasurements = (value: string) =>
+    Array.from(new Set(
+      value
+        .replace(/,/g, ".")
+        .match(/\d+(?:\.\d+)?\s*(?:mm|cm|m2|m3|ml|kg|l)\b/g) || []
+    )).map((measurement) => measurement.replace(/\s+/g, ""));
+  const measurementsA = extractMeasurements(na);
+  const measurementsB = extractMeasurements(nb);
+  if (
+    measurementsA.length > 0 &&
+    measurementsB.length > 0 &&
+    !measurementsA.some((measurement) => measurementsB.includes(measurement))
+  ) {
+    return 0;
+  }
+  const measurementBonus =
+    measurementsA.length > 0 &&
+    measurementsB.length > 0 &&
+    measurementsA.some((measurement) => measurementsB.includes(measurement))
+      ? 0.15
+      : 0;
+  return Math.min(1, baseScore + measurementBonus);
+}
+
+function fuzzyMatch(a: string, b: string): boolean {
+  return materialMatchScore(a, b) >= 0.5;
+}
+
+function referencePriceForInput(
+  input: ResolveConceptInput,
+  data: PrefetchedPriceData
+): number | null {
+  const candidates = [
+    ...data.technical_prices
+      .filter((price) => fuzzyMatch(price.name, input.concept_name))
+      .map((price) => price.unit_price),
+    ...data.enlaze_prices
+      .filter((price) => fuzzyMatch(price.name, input.concept_name))
+      .map((price) => price.unit_price),
+    ...data.manual_prices
+      .filter((price) => fuzzyMatch(price.name, input.concept_name))
+      .map((price) => price.unit_price),
+  ].filter((price) => Number.isFinite(price) && price > 0);
+  if (candidates.length === 0) return null;
+  candidates.sort((left, right) => left - right);
+  return candidates[Math.floor(candidates.length / 2)];
 }
 
 function providerServesProvince(
@@ -222,9 +292,30 @@ function providerServesProvince(
   target_province: string
 ): boolean {
   if (!target_province) return true;
-  const tp = target_province.toLowerCase();
-  if (provider_province && provider_province.toLowerCase() === tp) return true;
-  if (supply_zones.some((z) => z.toLowerCase() === tp)) return true;
+  const normalizeRegion = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9*]+/g, " ")
+      .trim();
+  const tp = normalizeRegion(target_province);
+  const nationwideZones = new Set([
+    "*", "all", "es", "espana", "nacional", "nacional espana",
+    "toda espana", "peninsula", "peninsular",
+  ]);
+  if (provider_province && normalizeRegion(provider_province) === tp) return true;
+  if (
+    supply_zones.some((zone) => {
+      const normalizedZone = normalizeRegion(zone);
+      return (
+        nationwideZones.has(normalizedZone) ||
+        normalizedZone === tp ||
+        normalizedZone.includes(tp) ||
+        tp.includes(normalizedZone)
+      );
+    })
+  ) return true;
   if (!provider_province && supply_zones.length === 0) return true;
   return false;
 }
@@ -375,11 +466,22 @@ function tryProviderUpdated(
   );
   if (matches.length === 0) return null;
 
+  const referencePrice = referencePriceForInput(input, data);
   const withCost = matches.map((m) => ({
     match: m,
+    matchScore: materialMatchScore(m.product_name, input.concept_name),
     breakdown: buildEffectiveCost(m.price_excl_vat, input.quantity, m.units_per_package, m.shipping_cost, m.minimum_order),
-  }));
-  withCost.sort((a, b) => a.breakdown.effective_per_unit - b.breakdown.effective_per_unit);
+  })).filter(({ breakdown }) => {
+    if (!referencePrice) return true;
+    const ratio = breakdown.effective_per_unit / referencePrice;
+    return ratio >= 0.45 && ratio <= 2.5;
+  });
+  if (withCost.length === 0) return null;
+  withCost.sort(
+    (a, b) =>
+      b.matchScore - a.matchScore ||
+      a.breakdown.effective_per_unit - b.breakdown.effective_per_unit
+  );
   const best = withCost[0];
 
   return {
@@ -388,7 +490,8 @@ function tryProviderUpdated(
     provider_id: best.match.provider_id, provider_name: best.match.provider_name,
     source_id: null, unit_price: best.match.price_excl_vat,
     effective_price: best.breakdown.effective_per_unit, effective_cost_breakdown: best.breakdown,
-    source_type: "provider_updated", confidence_score: best.match.confidence_score || 0.82,
+    source_type: "provider_updated",
+    confidence_score: Math.min(best.match.confidence_score || 0.82, best.matchScore),
     selection_reason: `Mejor coste efectivo de ${withCost.length} proveedor(es)`,
     checked_at: best.match.checked_at || now,
   };

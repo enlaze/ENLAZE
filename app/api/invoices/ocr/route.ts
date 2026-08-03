@@ -7,7 +7,8 @@ import { logAiRun, hashText } from "@/lib/ai-logger";
 import { rateLimitSensitive } from "@/lib/rate-limit";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
+const OCR_MODEL =
+  process.env.ANTHROPIC_OCR_MODEL?.trim() || "claude-sonnet-4-6";
 
 async function prepareImageForClaude(file: File) {
   const inputBuffer = Buffer.from(await file.arrayBuffer());
@@ -92,6 +93,7 @@ export async function POST(request: Request) {
     const userId = user.id; // Use authenticated user, ignore client-sent userId
     const clientId = formData.get("clientId") as string;
     const projectId = formData.get("projectId") as string;
+    const extractOnly = formData.get("mode") === "extract";
 
     if (!file) {
       return NextResponse.json({ error: "Archivo requerido" }, { status: 400 });
@@ -108,7 +110,7 @@ export async function POST(request: Request) {
     const startTime = Date.now();
     // Enviar a Claude para OCR
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: OCR_MODEL,
       max_tokens: 2000,
       messages: [
         {
@@ -186,6 +188,28 @@ Responde SOLO con el JSON, sin texto adicional:
       imageUrl = urlData.publicUrl;
     }
 
+    if (extractOnly) {
+      const durationMs = Date.now() - startTime;
+      logAiRun(supabase, {
+        run_type: "ocr_invoice",
+        model: OCR_MODEL,
+        prompt_version: "v1.0",
+        input_hash: await hashText(file.name + file.size),
+        output_hash: await hashText(responseText),
+        tokens_in: message.usage?.input_tokens,
+        tokens_out: message.usage?.output_tokens,
+        duration_ms: durationMs,
+        entity_type: "received_invoice_draft",
+      });
+
+      return NextResponse.json({
+        success: true,
+        ocr_data: invoiceData,
+        image_url: imageUrl,
+        message: "Datos extraídos. Revisa la factura antes de guardarla.",
+      });
+    }
+
     // Calcular trimestre fiscal
     const invoiceDate = invoiceData.invoice_date ? new Date(invoiceData.invoice_date) : new Date();
     const month = invoiceDate.getMonth() + 1;
@@ -261,7 +285,7 @@ Responde SOLO con el JSON, sin texto adicional:
     const durationMs = Date.now() - startTime;
     logAiRun(supabase, {
       run_type: "ocr_invoice",
-      model: "claude-sonnet-4-20250514",
+      model: OCR_MODEL,
       prompt_version: "v1.0",
       input_hash: await hashText(file.name + file.size),
       output_hash: await hashText(responseText),
@@ -279,8 +303,25 @@ Responde SOLO con el JSON, sin texto adicional:
       message: "Factura procesada correctamente",
     });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("OCR Error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    if (err instanceof Anthropic.NotFoundError) {
+      return NextResponse.json(
+        {
+          error:
+            "El servicio de lectura de facturas necesitaba una actualización. Ya puedes volver a intentarlo.",
+        },
+        { status: 502 }
+      );
+    }
+    return NextResponse.json(
+      {
+        error:
+          err instanceof Error
+            ? err.message
+            : "No se pudo analizar la factura",
+      },
+      { status: 500 }
+    );
   }
 }

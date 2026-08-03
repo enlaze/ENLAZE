@@ -6,7 +6,9 @@
     "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "scrape:prices": "node scripts/scraper-precios.js",
+    "scrape:suppliers": "node scripts/scraper-proveedores-oficiales.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
@@ -19,6 +21,8 @@
     "next": "16.2.1",
     "ogl": "^1.0.11",
     "posthog-js": "^1.403.0",
+    "puppeteer": "^25.4.0",
+    "puppeteer-core": "^24.43.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "resend": "^6.9.4",

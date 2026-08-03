@@ -10,9 +10,23 @@ import Badge from "@/components/ui/badge";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import InfoFlipCard from "@/components/ui/InfoFlipCard";
+import Link from "next/link";
 
 type Client = { id: string; name: string };
-type Event = { id: string; title: string; description: string; event_date: string; event_time: string; duration_minutes: number; status: string; client_id: string; clients: { name: string } | null };
+type Event = {
+  id: string;
+  title: string;
+  description: string;
+  event_date: string;
+  event_time: string;
+  duration_minutes: number;
+  status: string;
+  client_id: string;
+  clients: { name: string } | null;
+  source?: "enlaze" | "google";
+  google_event_id?: string | null;
+  google_html_link?: string | null;
+};
 
 const daysOfWeek = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
@@ -23,6 +37,8 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [calendarConnected, setCalendarConnected] = useState<boolean | null>(null);
+  const [calendarEmail, setCalendarEmail] = useState("");
   const [form, setForm] = useState({ title: "", description: "", event_date: "", event_time: "10:00", duration_minutes: 30, client_id: "" });
   const supabase = createClient();
   const confirm = useConfirm();
@@ -38,8 +54,60 @@ export default function CalendarPage() {
     const month = currentDate.getMonth();
     const start = new Date(year, month, 1).toISOString().split("T")[0];
     const end = new Date(year, month + 1, 0).toISOString().split("T")[0];
-    const { data } = await supabase.from("events").select("*, clients(name)").gte("event_date", start).lte("event_date", end).order("event_time");
-    if (data) setEvents(data as Event[]);
+    const [{ data }, googleResponse] = await Promise.all([
+      supabase
+        .from("events")
+        .select("*, clients(name)")
+        .gte("event_date", start)
+        .lte("event_date", end)
+        .order("event_time"),
+      fetch(`/api/calendar/events?start=${start}&end=${end}`, {
+        cache: "no-store",
+      }).catch(() => null),
+    ]);
+
+    const localEvents = ((data as Event[]) || []).map((event) => ({
+      ...event,
+      source: "enlaze" as const,
+    }));
+    let googleEvents: Event[] = [];
+    if (googleResponse) {
+      const googleData = await googleResponse.json().catch(() => null);
+      setCalendarConnected(Boolean(googleData?.connected));
+      setCalendarEmail(googleData?.email || "");
+      const localGoogleIds = new Set(
+        localEvents
+          .map((event) => event.google_event_id)
+          .filter((id): id is string => Boolean(id))
+      );
+      googleEvents = (googleData?.events || [])
+        .filter((event: { id: string }) => !localGoogleIds.has(event.id))
+        .map((event: {
+          id: string;
+          title: string;
+          description: string;
+          event_date: string;
+          event_time: string;
+          duration_minutes: number;
+          html_link: string;
+        }) => ({
+          id: `google:${event.id}`,
+          title: event.title,
+          description: event.description,
+          event_date: event.event_date,
+          event_time: event.event_time,
+          duration_minutes: event.duration_minutes,
+          status: "scheduled",
+          client_id: "",
+          clients: null,
+          source: "google" as const,
+          google_event_id: event.id,
+          google_html_link: event.html_link,
+        }));
+    } else {
+      setCalendarConnected(false);
+    }
+    setEvents([...localEvents, ...googleEvents]);
   };
 
   useEffect(() => { fetchClients(); fetchEvents(); }, [currentDate]);
@@ -47,13 +115,51 @@ export default function CalendarPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from("events").insert({ ...form, user_id: user?.id, client_id: form.client_id || null });
+    const { data: localEvent, error: localError } = await supabase
+      .from("events")
+      .insert({
+        ...form,
+        user_id: user?.id,
+        client_id: form.client_id || null,
+      })
+      .select("*")
+      .single();
+    if (localError || !localEvent) {
+      toast.error("No se pudo guardar la cita");
+      return;
+    }
+
+    const googleResponse = await fetch("/api/calendar/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(form),
+    }).catch(() => null);
+    if (googleResponse?.ok) {
+      const googleEvent = await googleResponse.json();
+      await supabase
+        .from("events")
+        .update({
+          google_event_id: googleEvent.id,
+          google_html_link: googleEvent.html_link,
+        })
+        .eq("id", localEvent.id);
+      toast.success("Cita guardada en Enlaze y Google Calendar");
+    } else {
+      const googleError = googleResponse
+        ? await googleResponse.json().catch(() => null)
+        : null;
+      toast.success("Cita guardada en Enlaze", {
+        description:
+          googleError?.error ||
+          "Conecta Google Calendar para verla también en tu cuenta de Google.",
+      });
+    }
     setForm({ title: "", description: "", event_date: "", event_time: "10:00", duration_minutes: 30, client_id: "" });
     setShowForm(false);
     await fetchEvents();
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (event: Event) => {
     const ok = await confirm({
       title: "Eliminar cita",
       description: "¿Eliminar esta cita?",
@@ -62,7 +168,20 @@ export default function CalendarPage() {
     });
     if (!ok) return;
     try {
-      await supabase.from("events").delete().eq("id", id);
+      if (event.google_event_id) {
+        const response = await fetch("/api/calendar/events", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ event_id: event.google_event_id }),
+        });
+        if (!response.ok) {
+          const data = await response.json().catch(() => null);
+          throw new Error(data?.error || "No se pudo eliminar de Google Calendar");
+        }
+      }
+      if (event.source !== "google") {
+        await supabase.from("events").delete().eq("id", event.id);
+      }
       await fetchEvents();
       toast.success("Cita eliminada");
     } catch (error) {
@@ -101,9 +220,20 @@ export default function CalendarPage() {
           />
         }
         actions={
-          <Button onClick={() => { setShowForm(true); setForm({ ...form, event_date: selectedDate || today }); }}>
-            + Nueva cita
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {calendarConnected ? (
+              <span className="rounded-lg border border-brand-green/30 bg-brand-green/10 px-3 py-2 text-xs font-semibold text-brand-green">
+                Google Calendar conectado{calendarEmail ? ` · ${calendarEmail}` : ""}
+              </span>
+            ) : (
+              <Link href="/dashboard/settings/integrations">
+                <Button variant="secondary">Conectar Google Calendar</Button>
+              </Link>
+            )}
+            <Button onClick={() => { setShowForm(true); setForm({ ...form, event_date: selectedDate || today }); }}>
+              + Nueva cita
+            </Button>
+          </div>
         }
       />
 
@@ -202,10 +332,25 @@ export default function CalendarPage() {
                   <div key={ev.id} className="px-6 py-4">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-medium text-navy-900 dark:text-white">{ev.title}</span>
-                      <button onClick={() => handleDelete(ev.id)} className="text-xs text-red-600 hover:underline font-medium">Eliminar</button>
+                      <div className="flex items-center gap-2">
+                        {ev.google_html_link && (
+                          <a
+                            href={ev.google_html_link}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs text-blue-600 hover:underline font-medium"
+                          >
+                            Abrir en Google
+                          </a>
+                        )}
+                        <button onClick={() => handleDelete(ev)} className="text-xs text-red-600 hover:underline font-medium">Eliminar</button>
+                      </div>
                     </div>
                     {ev.clients && <p className="text-xs text-brand-green font-medium">{ev.clients.name}</p>}
                     <p className="text-xs text-navy-500 dark:text-zinc-400 mt-1">{ev.event_time?.slice(0, 5)} · {ev.duration_minutes} min</p>
+                    <p className="mt-1 text-[11px] font-medium text-navy-400">
+                      {ev.source === "google" ? "Google Calendar" : ev.google_event_id ? "Enlaze + Google Calendar" : "Enlaze"}
+                    </p>
                     {ev.description && <p className="text-xs text-navy-600 dark:text-zinc-400 mt-1">{ev.description}</p>}
                     <div className="mt-2">{statusBadge(ev.status)}</div>
                   </div>

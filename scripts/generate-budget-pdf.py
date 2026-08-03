@@ -16,6 +16,7 @@ from reportlab.lib.colors import HexColor, black, white, Color
 from reportlab.pdfgen import canvas
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 from reportlab.platypus import Table, TableStyle
+from reportlab.lib.utils import ImageReader
 from datetime import datetime
 
 # ── Colors ──────────────────────────────────────────────────────────────────
@@ -45,20 +46,43 @@ def fmt(n):
         n = 0
     return f"{n:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " EUR"
 
+def draw_company_logo(c, company, x, y, max_w, max_h):
+    """Draw the uploaded company logo while preserving its aspect ratio."""
+    logo_path = safe(company, "logo_path")
+    if not logo_path:
+        return False
+    try:
+        image = ImageReader(logo_path)
+        width, height = image.getSize()
+        if not width or not height:
+            return False
+        scale = min(max_w / width, max_h / height)
+        draw_w = width * scale
+        draw_h = height * scale
+        c.drawImage(
+            image,
+            x,
+            y + (max_h - draw_h) / 2,
+            width=draw_w,
+            height=draw_h,
+            preserveAspectRatio=True,
+            mask="auto",
+        )
+        return True
+    except Exception:
+        return False
+
 def draw_header(c, budget, company, page_num=0, total_pages=0):
     """Draw consistent header on every page."""
     # Top bar
     c.setFillColor(NAVY_900)
     c.rect(0, H - 28*mm, W, 28*mm, fill=1, stroke=0)
 
-    # Logo
-    c.setFillColor(WHITE)
-    c.setFont("Helvetica-Bold", 22)
-    c.drawString(15*mm, H - 20*mm, "enlaze")
-    c.setFillColor(BRAND_GREEN)
-    c.drawString(15*mm + c.stringWidth("enl", "Helvetica-Bold", 22), H - 20*mm, "a")
-    c.setFillColor(WHITE)
-    c.drawString(15*mm + c.stringWidth("enla", "Helvetica-Bold", 22), H - 20*mm, "ze")
+    # Company logo (fallback to company name)
+    if not draw_company_logo(c, company, 15*mm, H - 25*mm, 45*mm, 19*mm):
+        c.setFillColor(WHITE)
+        c.setFont("Helvetica-Bold", 18)
+        c.drawString(15*mm, H - 19*mm, safe(company, "name", "Enlaze")[:32])
 
     # Budget number + date
     c.setFont("Helvetica", 9)
@@ -154,15 +178,11 @@ def draw_cover_page(c, budget, company, items):
     c.setFillColor(NAVY_900)
     c.rect(6*mm, H - 90*mm, W - 6*mm, 90*mm, fill=1, stroke=0)
 
-    # Logo big
-    c.setFillColor(WHITE)
-    c.setFont("Helvetica-Bold", 36)
-    c.drawString(25*mm, H - 40*mm, "enlaze")
-    c.setFillColor(BRAND_GREEN)
-    logo_x = 25*mm + c.stringWidth("enl", "Helvetica-Bold", 36)
-    c.drawString(logo_x, H - 40*mm, "a")
-    c.setFillColor(WHITE)
-    c.drawString(logo_x + c.stringWidth("a", "Helvetica-Bold", 36), H - 40*mm, "ze")
+    # Company logo big (fallback to company name)
+    if not draw_company_logo(c, company, 25*mm, H - 48*mm, 65*mm, 28*mm):
+        c.setFillColor(WHITE)
+        c.setFont("Helvetica-Bold", 28)
+        c.drawString(25*mm, H - 40*mm, safe(company, "name", "Enlaze")[:28])
 
     # Title
     c.setFont("Helvetica-Bold", 24)

@@ -16,7 +16,9 @@ export function LiveSummaryPanel() {
 
   // Real data check
   // Real data check (don't show as real if it's default/fallback)
-  const isMaterialBasketReal = isRealDataMode && activeProvider?.isRealData && activeProvider?.name !== "Banco ENLAZE base" && activeProvider?.name !== "Referencia mercado";
+  const isMaterialBasketReal =
+    state.priceVerification.verified > 0 ||
+    (isRealDataMode && activeProvider?.isRealData && activeProvider?.name !== "Banco ENLAZE base" && activeProvider?.name !== "Referencia mercado");
 
   // EUR/m2 calculation — user scope always takes priority
   let detectedArea = state.sectorData?.superficie_m2 || state.aiInsights?.detected_area_m2;
@@ -80,6 +82,14 @@ export function LiveSummaryPanel() {
       sector_regulation_count: 0
     };
   }
+  const trackerProductsAvailable =
+    dataSources?.tracker_products_count ||
+    state.priceVerification.trackerProductsAvailable ||
+    0;
+  const hasConnectedTracker = trackerProductsAvailable > 0;
+  const verifiedMaterials = state.priceVerification.verified;
+  const totalMaterialsToVerify = state.priceVerification.total;
+  const pendingMaterials = state.priceVerification.estimated;
 
 
 
@@ -291,23 +301,46 @@ export function LiveSummaryPanel() {
       {dataSources && (
         <div className="bg-navy-50 dark:bg-zinc-800/50 border border-navy-100 dark:border-zinc-800 rounded-xl p-4 mb-6">
           <h4 className="text-xs font-bold text-navy-800 dark:text-zinc-300 uppercase tracking-wider mb-2 flex items-center">
-            <BarChart3 className="mr-2 h-4 w-4 text-[#00c896]" /> Fuentes de datos
+            <BarChart3 className="mr-2 h-4 w-4 text-[#00c896]" /> Cobertura y trazabilidad
           </h4>
           <ul className="text-[11px] text-navy-600 dark:text-zinc-400 space-y-1">
             <li className="flex justify-between">
-              <span>Datos reales sincronizados (n8n):</span>
-              <span className="font-bold text-navy-900 dark:text-white">{dataSources.n8n_items_count} precios</span>
+              <span>Productos disponibles en el rastreador:</span>
+              <span className="font-bold text-navy-900 dark:text-white">
+                {trackerProductsAvailable.toLocaleString("es-ES")}
+              </span>
             </li>
             <li className="flex justify-between">
-              <span>Banco base ENLAZE:</span>
-              <span className="font-bold text-navy-900 dark:text-white">{dataSources.default_items_count} referencias</span>
+              <span>Materiales verificados en este presupuesto:</span>
+              <span className="font-bold text-navy-900 dark:text-white">
+                {verifiedMaterials}/{totalMaterialsToVerify}
+              </span>
             </li>
-            {dataSources.using_fallback && (
-              <li className="text-amber-600 dark:text-amber-400 mt-1 font-medium">
-                ⚠️ {dataSources.fallback_reason}
+            <li className="flex justify-between">
+              <span>Referencias técnicas por validar:</span>
+              <span className={`font-bold ${pendingMaterials > 0 ? "text-navy-700 dark:text-zinc-300" : "text-brand-green"}`}>
+                {pendingMaterials}
+              </span>
+            </li>
+            {state.sectorData.ubicacion && (
+              <li className="pt-1 text-navy-500 dark:text-zinc-400">
+                Zona: <strong>{state.sectorData.ubicacion}</strong>. El ajuste local afecta a mano de obra y logística, no al precio del producto.
               </li>
             )}
           </ul>
+          <div className={`mt-3 rounded-lg border p-2.5 text-[11px] leading-4 ${
+            !hasConnectedTracker
+              ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-300"
+              : verifiedMaterials === totalMaterialsToVerify && totalMaterialsToVerify > 0
+                ? "border-green-200 bg-green-50 text-green-800 dark:border-green-900/50 dark:bg-green-950/20 dark:text-green-300"
+                : "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-300"
+          }`}>
+            {!hasConnectedTracker
+              ? "El catálogo de mercado está pendiente de sincronización. La propuesta conserva referencias técnicas identificadas y editables."
+              : verifiedMaterials === totalMaterialsToVerify && totalMaterialsToVerify > 0
+                ? "Cesta verificada: todos los materiales seleccionados tienen una referencia comercial trazable."
+                : `Catálogo conectado con ${trackerProductsAvailable.toLocaleString("es-ES")} productos. ENLAZE está validando las equivalencias comerciales de esta cesta y mantiene claramente identificadas las referencias pendientes.`}
+          </div>
         </div>
       )}
 
@@ -350,9 +383,12 @@ export function LiveSummaryPanel() {
             <li>Describe el alcance para que la IA genere recomendaciones personalizadas.</li>
           ) : !state.aiInsights && state.partidas.length > 0 && isConstruction ? (
             <>
-              <li>Sugerencia: Revisa los precios de los materiales con los proveedores reales.</li>
-              {!isMaterialBasketReal && (
-                <li>Conecta tus catálogos de compra para evitar precios estimados.</li>
+              <li>Revisa la cobertura de cada material antes de finalizar el presupuesto.</li>
+              {!isMaterialBasketReal && hasConnectedTracker && (
+                <li>El catálogo está conectado; las referencias pendientes requieren una equivalencia comercial exacta.</li>
+              )}
+              {!isMaterialBasketReal && !hasConnectedTracker && (
+                <li>Sincroniza el rastreador para incorporar precios comerciales verificables.</li>
               )}
             </>
           ) : null}

@@ -31,6 +31,23 @@ export interface PDFBudget {
   iva_amount: number;
   total: number;
   notes?: string | null;
+  company_name?: string | null;
+  company_logo_url?: string | null;
+  location?: string | null;
+  geographic_profile?: string | null;
+  geographic_adjustment?: string | null;
+  technical_document_names?: string[];
+  execution_weeks_min?: number | null;
+  execution_weeks_max?: number | null;
+  total_weeks_min?: number | null;
+  total_weeks_max?: number | null;
+  execution_phases?: Array<{
+    title: string;
+    duration_days_min?: number;
+    duration_days_max?: number;
+    description?: string;
+    depends_on?: string[];
+  }>;
 }
 
 export interface PDFBudgetItem {
@@ -83,10 +100,13 @@ const fmt = (n: number) => n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
 function buildHeaderHTML(budget: PDFBudget, isInternal: boolean): string {
   const accent = isInternal ? "#334155" : "#00c896";
+  const companyIdentity = budget.company_logo_url
+    ? `<img src="${budget.company_logo_url}" alt="${budget.company_name || "Empresa"}" style="display:block;max-width:160px;max-height:66px;object-fit:contain;" />`
+    : `<div style="font-size:28px;font-weight:800;color:#0a1628;">${budget.company_name || 'enl<span style="color:#00c896;">a</span>ze'}</div>`;
   return `
     <div class="header" style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:30px;border-bottom:3px solid ${accent};padding-bottom:20px;">
       <div>
-        <div style="font-size:28px;font-weight:800;color:#0a1628;">enl<span style="color:#00c896;">a</span>ze</div>
+        ${companyIdentity}
         <div style="font-size:12px;color:#64748b;margin-top:4px;">
           Presupuesto profesional
           ${isInternal ? '<span style="background:#ef4444;color:white;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:bold;margin-left:8px;vertical-align:middle;">USO INTERNO</span>' : ''}
@@ -118,10 +138,10 @@ function buildClientInfoHTML(budget: PDFBudget): string {
     </div>`;
 }
 
-function buildFooterHTML(): string {
+function buildFooterHTML(budget: PDFBudget): string {
   return `
     <div style="margin-top:40px;text-align:center;font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:16px;">
-      Presupuesto generado con <strong>Enlaze</strong> &middot; enlaze.es<br/>
+      <strong>${budget.company_name || "Tu empresa"}</strong> &middot; Documento generado con Enlaze<br/>
       Este presupuesto tiene validez contractual una vez aceptado por ambas partes.
     </div>`;
 }
@@ -229,7 +249,7 @@ export function generateClientPDFHTML(
 
   ${budget.notes ? `<div style="clear:both;margin-top:24px;"><div style="font-size:14px;font-weight:700;color:#00c896;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Notas</div><div class="notes">${budget.notes}</div></div>` : ""}
 
-  ${buildFooterHTML()}
+  ${buildFooterHTML(budget)}
 </body>
 </html>`;
 }
@@ -244,6 +264,34 @@ export function generateInternalPDFHTML(
   const sLabel = (serviceLabelsMap && serviceLabelsMap[budget.service_type]) ||
     fallbackServiceLabels[budget.service_type] || budget.service_type;
 
+  const phasesHTML = (budget.execution_phases || []).map((phase, index) => `
+    <tr style="border-bottom:1px solid #e2e8f0;">
+      <td style="padding:6px;font-size:11px;">${index + 1}. ${phase.title}</td>
+      <td style="padding:6px;font-size:11px;text-align:center;">${phase.duration_days_min ?? "-"}-${phase.duration_days_max ?? "-"} dias</td>
+      <td style="padding:6px;font-size:11px;">${phase.depends_on?.join(", ") || "Sin dependencia previa"}</td>
+      <td style="padding:6px;font-size:11px;">${phase.description || ""}</td>
+    </tr>
+  `).join("");
+
+  const planningHTML = `
+    <div style="margin-bottom:24px;padding:14px;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;">
+      <div style="font-size:14px;font-weight:700;color:#334155;margin-bottom:10px;">PLANIFICACION Y CRITERIOS DEL PRESUPUESTO</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+        <div class="break-card"><div class="break-label">Ubicacion</div><div class="break-value" style="font-size:12px;">${budget.location || "Base nacional"}</div></div>
+        <div class="break-card"><div class="break-label">Ajuste geografico</div><div class="break-value" style="font-size:12px;">${budget.geographic_profile || "Media nacional"}</div></div>
+        <div class="break-card"><div class="break-label">Ejecucion</div><div class="break-value" style="font-size:12px;">${budget.execution_weeks_min ?? "-"}-${budget.execution_weeks_max ?? "-"} semanas</div></div>
+        <div class="break-card"><div class="break-label">Plazo total</div><div class="break-value" style="font-size:12px;">${budget.total_weeks_min ?? "-"}-${budget.total_weeks_max ?? "-"} semanas</div></div>
+      </div>
+      ${budget.geographic_adjustment ? `<div style="font-size:11px;color:#475569;margin-bottom:8px;"><strong>Criterio geografico:</strong> ${budget.geographic_adjustment}</div>` : ""}
+      ${(budget.technical_document_names || []).length > 0 ? `<div style="font-size:11px;color:#475569;margin-bottom:8px;"><strong>Documentacion tecnica utilizada:</strong> ${budget.technical_document_names!.join(", ")}</div>` : ""}
+      ${phasesHTML ? `
+        <table style="margin-top:8px;">
+          <thead><tr><th style="text-align:left;">Fase</th><th>Duracion</th><th style="text-align:left;">Dependencias</th><th style="text-align:left;">Alcance</th></tr></thead>
+          <tbody>${phasesHTML}</tbody>
+        </table>
+      ` : ""}
+    </div>`;
+
   let chapterIdx = 0;
   const chaptersHTML = internalView.chapters.map(ch => {
     chapterIdx++;
@@ -255,6 +303,37 @@ export function generateInternalPDFHTML(
     // Confidence bar
     const confColor = ch.avgConfidence >= 70 ? "#059669" : ch.avgConfidence >= 50 ? "#d97706" : "#dc2626";
     const confWidth = Math.min(Math.max(ch.avgConfidence, 10), 100);
+
+    const itemRows = (ch.items || []).map((item) => `
+      <tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:4px 6px;font-size:10px;"><strong>${item.concept}</strong>${item.description ? `<br/><span style="color:#64748b;">${item.description}</span>` : ""}</td>
+        <td style="padding:4px 6px;font-size:10px;text-align:center;">${item.quantity} ${unitLabels[item.unit] || item.unit}</td>
+        <td style="padding:4px 6px;font-size:10px;text-align:right;">${fmt(item.baseUnitPrice)} &euro;</td>
+        <td style="padding:4px 6px;font-size:10px;text-align:center;">x${item.geographicFactor.toFixed(2)}</td>
+        <td style="padding:4px 6px;font-size:10px;text-align:right;">${fmt(item.unitCost)} &euro;</td>
+        <td style="padding:4px 6px;font-size:10px;text-align:right;">${fmt(item.subtotalCost)} &euro;</td>
+        <td style="padding:4px 6px;font-size:10px;text-align:center;">${item.estimatedHours ?? "-"} h</td>
+        <td style="padding:4px 6px;font-size:10px;text-align:right;">${fmt(item.clientPrice)} &euro;</td>
+        <td style="padding:4px 6px;font-size:10px;text-align:right;color:#059669;">+${fmt(item.margin)} &euro;</td>
+      </tr>
+    `).join("");
+    const itemsHTML = `
+      <table style="margin:4px 0 8px 0;width:100%;">
+        <thead>
+          <tr>
+            <th style="text-align:left;">Partida y alcance</th>
+            <th>Cantidad</th>
+            <th>Base ud.</th>
+            <th>Zona</th>
+            <th>Coste ud.</th>
+            <th>Coste</th>
+            <th>Horas</th>
+            <th>PVP</th>
+            <th>Margen</th>
+          </tr>
+        </thead>
+        <tbody>${itemRows}</tbody>
+      </table>`;
 
     // Materials table for this chapter
     let materialsHTML = "";
@@ -311,6 +390,7 @@ export function generateInternalPDFHTML(
         </div>
       </div>
       <div style="padding:4px 12px;">
+        ${itemsHTML}
         <div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
           <div class="break-card">
             <div class="break-label">M.Obra</div>
@@ -415,6 +495,8 @@ export function generateInternalPDFHTML(
   <div style="font-size:16px;font-weight:700;color:#0a1628;margin-bottom:4px;">${budget.title}</div>
   <div style="font-size:13px;color:#64748b;margin-bottom:16px;">${sLabel}</div>
 
+  ${planningHTML}
+
   <div style="margin-bottom:24px;">
     <div style="font-size:14px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Escandallo por capitulos</div>
     ${chaptersHTML}
@@ -433,7 +515,7 @@ export function generateInternalPDFHTML(
 
   ${budget.notes ? `<div style="clear:both;margin-top:24px;"><div style="font-size:14px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Notas</div><div class="notes">${budget.notes}</div></div>` : ""}
 
-  ${buildFooterHTML()}
+  ${buildFooterHTML(budget)}
 </body>
 </html>`;
 }
@@ -580,7 +662,7 @@ export function generateBudgetPDFHTML(
 
   ${budget.notes ? `<div style="clear:both;margin-top:24px;"><div style="font-size:14px;font-weight:700;color:${mode === 'internal' ? '#334155' : '#00c896'};text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Notas</div><div class="notes">${budget.notes}</div></div>` : ""}
 
-  ${buildFooterHTML()}
+  ${buildFooterHTML(budget)}
 </body>
 </html>`;
 }

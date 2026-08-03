@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
 import Loading from "@/components/ui/loading";
 import Breadcrumbs from "@/components/ui/breadcrumbs";
+import Link from "next/link";
 
 interface BudgetItem {
   id: string;
@@ -108,6 +109,7 @@ export default function BudgetDetailPage() {
   const toast = useToast();
   const [budget, setBudget] = useState<Budget | null>(null);
   const [items, setItems] = useState<BudgetItem[]>([]);
+  const [branding, setBranding] = useState({ name: "", logoUrl: "" });
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
 
@@ -128,14 +130,24 @@ export default function BudgetDetailPage() {
         return;
       }
 
-      const { data: bi } = await supabase
-        .from("budget_items")
-        .select("*")
-        .eq("budget_id", params.id)
-        .order("created_at", { ascending: true });
+      const [{ data: bi }, { data: profile }] = await Promise.all([
+        supabase
+          .from("budget_items")
+          .select("*")
+          .eq("budget_id", params.id)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("profiles")
+          .select("business_name, full_name, logo_url")
+          .maybeSingle(),
+      ]);
 
       setBudget(b);
       setItems(bi || []);
+      setBranding({
+        name: profile?.business_name || profile?.full_name || "",
+        logoUrl: profile?.logo_url || "",
+      });
     } catch {
       router.push("/dashboard/budgets");
     } finally {
@@ -200,20 +212,24 @@ export default function BudgetDetailPage() {
   async function deleteBudget() {
     if (!budget) return;
     const ok = await confirm({
-      title: "Eliminar presupuesto",
-      description: "¿Estás seguro de eliminar este presupuesto? Esta acción no se puede deshacer.",
+      title: "Mover presupuesto a la papelera",
+      description: "El presupuesto y todas sus partidas se conservarán y podrás recuperarlos desde Papelera.",
       variant: "danger",
-      confirmLabel: "Eliminar",
+      confirmLabel: "Mover a la papelera",
     });
     if (!ok) return;
 
     try {
-      await supabase.from("budget_items").delete().eq("budget_id", budget.id);
-      await supabase.from("budgets").delete().eq("id", budget.id);
-      toast.success("Presupuesto eliminado");
+      const { data, error } = await supabase.rpc("move_to_trash", {
+        p_entity_type: "budget",
+        p_entity_id: budget.id,
+      });
+      if (error) throw error;
+      if (!data) throw new Error("No se encontró el presupuesto");
+      toast.success("Presupuesto movido a la papelera");
       router.push("/dashboard/budgets");
     } catch (error) {
-      toast.error("Error al eliminar el presupuesto");
+      toast.error("No se pudo mover el presupuesto a la papelera");
     }
   }
 
@@ -278,6 +294,8 @@ export default function BudgetDetailPage() {
     const html = generateBudgetPDFHTML(
       {
         ...budget,
+        company_name: branding.name,
+        company_logo_url: branding.logoUrl,
         client_name: budget.client_name,
         client_email: budget.client_email,
         client_phone: budget.client_phone,
@@ -376,6 +394,12 @@ export default function BudgetDetailPage() {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <Link
+            href={`/dashboard/budgets/${budget.id}/edit`}
+            className="inline-flex items-center justify-center rounded-lg border border-navy-200 bg-white px-4 py-2 text-sm font-medium text-navy-700 transition hover:bg-navy-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            Editar
+          </Link>
           <Button variant="secondary" onClick={generatePDF}>Imprimir</Button>
           <Button onClick={downloadPDF} disabled={downloadingPDF}>
             {downloadingPDF ? "Generando..." : "Descargar PDF"}

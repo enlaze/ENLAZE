@@ -42,7 +42,7 @@ const CONFIRMATION_TOKEN = "ELIMINAR";
 const RETENTION_MIGRATION = "supabase/migrations/20260728_account_deletion_retention.sql";
 
 /** Bucket de Storage donde se suben ficheros bajo el prefijo `${userId}/`. */
-const STORAGE_BUCKETS = ["invoices"];
+const STORAGE_BUCKETS = ["invoices", "company-branding"];
 
 /**
  * Tablas hijas sin columna de usuario: se borran a partir de los ids del padre.

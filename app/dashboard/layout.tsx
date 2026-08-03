@@ -9,6 +9,7 @@ import { SearchCommandProvider, useSearchCommand } from "@/components/SearchComm
 import ShortcutsOverlay from "@/components/ShortcutsOverlay";
 import ThemeToggle from "@/components/ThemeToggle";
 import { SectorProvider, useSector } from "@/lib/sector-context";
+import PriceTrackerBackgroundStatus from "@/components/PriceTrackerBackgroundStatus";
 import { useToast } from "@/components/ui/toast";
 import { analytics, resetAnalytics } from "@/lib/analytics";
 import { setSentryUser } from "@/lib/sentry";
@@ -207,6 +208,15 @@ const PagosTesoreriaIcon = (
   </svg>
 );
 
+const PapeleraIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <path d="M4 7h16" />
+    <path d="M9 3h6l1 4H8l1-4Z" />
+    <path d="m6 7 1 14h10l1-14" />
+    <path d="M10 11v6M14 11v6" />
+  </svg>
+);
+
 const NAV_ITEMS: NavItem[] = [
   // Centro de control — sin sección, siempre arriba del todo
   { href: "/dashboard", label: "Centro de control", icon: ControlCenterIcon, section: null },
@@ -233,6 +243,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard/contabilidad", label: "Contabilidad", icon: ContabilidadIcon, section: "Finanzas" },
 
   // SISTEMA
+  { href: "/dashboard/trash", label: "Papelera", icon: PapeleraIcon, section: "Sistema" },
   { href: "/dashboard/settings", label: "Ajustes", icon: AjustesIcon, section: "Sistema" },
   { href: "/dashboard/compliance", label: "Cumplimiento", icon: CumplimientoIcon, section: "Sistema" },
   // "Registro de actividad" (/dashboard/audit-log) se retira del menú lateral: no es de
@@ -246,6 +257,7 @@ const ALWAYS_VISIBLE_HREFS = new Set([
   "/dashboard",
   "/dashboard/clientes",
   "/dashboard/settings",
+  "/dashboard/trash",
   "/dashboard/compliance",
 ]);
 
@@ -344,6 +356,10 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
     ? NAV_ITEMS
         .filter((item) => sectorHrefs.has(item.href) || ALWAYS_VISIBLE_HREFS.has(item.href))
         .map((item) => {
+          // Keep the price tracker name canonical. Legacy sector_config rows
+          // still contain "Banco precios" and load after hydration.
+          if (item.href === "/dashboard/prices") return item;
+
           const sectorLabel = sectorLabelByHref.get(item.href);
           return sectorLabel ? { ...item, label: sectorLabel } : item;
         })
@@ -544,6 +560,9 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
 
         <div className="px-6 py-10 md:px-12 md:py-14">{children}</div>
       </main>
+
+      {/* El rastreo continúa en n8n aunque el usuario cambie de pantalla. */}
+      <PriceTrackerBackgroundStatus />
 
       {/* Keyboard shortcuts help (press ?) */}
       <ShortcutsOverlay />
