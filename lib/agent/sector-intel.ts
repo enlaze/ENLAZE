@@ -255,6 +255,191 @@ const automocion: SectorIntelProfile = {
   ],
 };
 
+const legal: SectorIntelProfile = {
+  sector_key: "legal",
+  news_queries: [
+    "novedades legislativas España",
+    "reforma ley pymes y autónomos",
+    "colegio de abogados {ciudad}",
+    "BOE novedades laboral y fiscal",
+    "justicia digital España",
+  ],
+  news_max_items: 5,
+  kpis_focus: [
+    "Horas facturables vs no facturables",
+    "Tarifa/hora efectiva",
+    "Expedientes abiertos vs cerrados",
+    "Cobro pendiente/deudores",
+    "Plazos procesales próximos",
+    "Conversión consulta→encargo",
+  ],
+  seasonal_focus: [
+    { key: "campana_renta", name: "Campaña de la Renta", months: [4, 5, 6], note: "Pico de asesoría fiscal; ofrece revisión de declaración." },
+    { key: "vacaciones_judiciales", name: "Vacaciones judiciales", months: [8], note: "Agosto inhábil, plazos suspendidos; ponte al día con expedientes y captación." },
+    { key: "cierre_fiscal", name: "Cierre fiscal y modelos anuales", months: [1, 7], note: "Recuerda vencimientos (347, 390) a clientes." },
+    { key: "vuelta_septiembre", name: "Vuelta de septiembre", months: [9], note: "Repunte; retoma expedientes y propuestas aparcadas." },
+  ],
+  campaign_archetypes: [
+    "Primera consulta gratuita",
+    "Iguala mensual de asesoría",
+    "Newsletter de cambios legales",
+    "Alianza con gestorías",
+    "Contenido divulgativo sobre normativa",
+  ],
+  regulatory_notes: [
+    "Secreto profesional",
+    "RGPD (datos sensibles)",
+    "Ley 10/2010 de blanqueo (identificación de clientes)",
+    "Colegiación obligatoria",
+    "Hoja de encargo por escrito",
+  ],
+  supplier_types: [
+    "Software de gestión de despachos",
+    "Bases de datos jurídicas (Aranzadi, La Ley)",
+    "Procuradores",
+    "Peritos y tasadores",
+    "Notarías y registros",
+  ],
+};
+
+const educacion: SectorIntelProfile = {
+  sector_key: "educacion",
+  news_queries: [
+    "calendario escolar {ciudad}",
+    "convocatoria oposiciones España",
+    "becas y ayudas educación España",
+    "reforma educativa EBAU",
+    "formación bonificada FUNDAE",
+  ],
+  news_max_items: 5,
+  kpis_focus: [
+    "Alumnos matriculados/activos",
+    "Retención mensual (bajas)",
+    "Ocupación de aulas y franjas",
+    "Ingreso medio por alumno",
+    "Altas vs bajas",
+    "Conversión de clases de prueba",
+  ],
+  seasonal_focus: [
+    { key: "vuelta_al_cole", name: "Vuelta al cole / matrículas", months: [9], note: "Pico anual; ten captación y horarios listos en agosto." },
+    { key: "segundo_cuatrimestre", name: "Segundo cuatrimestre", months: [1, 2], note: "Segunda ola de matrículas; ofrece refuerzo." },
+    { key: "examenes_oposiciones", name: "Preparación de exámenes/EBAU/oposiciones", months: [3, 4, 5], note: "Demanda de intensivos." },
+    { key: "cursos_verano", name: "Cursos de verano", months: [6, 7], note: "Intensivos, refuerzo, campamentos." },
+  ],
+  campaign_archetypes: [
+    "Clase de prueba gratuita",
+    "Descuento matrícula anticipada/hermanos",
+    "Formación bonificada FUNDAE para empresas",
+    "Programa de recomendación",
+    "Intensivos de verano y de exámenes",
+  ],
+  regulatory_notes: [
+    "Protección de datos de menores (consentimiento de tutores)",
+    "Seguro de responsabilidad civil",
+    "Normativa de centros si es reglada",
+    "Requisitos FUNDAE si dan bonificada",
+  ],
+  supplier_types: [
+    "Plataforma e-learning/LMS",
+    "Editoriales y material didáctico",
+    "Software de gestión de academias",
+    "Pasarela de pago y domiciliación",
+  ],
+};
+
+const tecnologia: SectorIntelProfile = {
+  sector_key: "tecnologia",
+  news_queries: [
+    "ayudas digitalización pymes Kit Digital",
+    "subvenciones I+D+i España",
+    "ciberseguridad pymes España",
+    "tendencias desarrollo e IA",
+    "novedades cloud y SaaS para empresas",
+  ],
+  news_max_items: 5,
+  kpis_focus: [
+    "Horas facturables vs internas",
+    "Ingresos recurrentes (MRR de mantenimientos)",
+    "Proyectos activos",
+    "Pipeline de propuestas",
+    "Margen por proyecto",
+    "Cobro pendiente",
+  ],
+  seasonal_focus: [
+    { key: "presupuestos_anuales", name: "Presupuestos anuales de clientes", months: [1], note: "Momento de cerrar proyectos y retainers." },
+    { key: "convocatorias_ayudas", name: "Convocatorias de ayudas / Kit Digital", months: [2, 3, 9, 10], note: "Vende proyectos subvencionados." },
+    { key: "ralentizacion_verano", name: "Ralentización de verano", months: [8], note: "B2B flojo; trabajo interno, formación, propuestas." },
+    { key: "cierre_de_ano", name: "Cierre de año", months: [11, 12], note: "Clientes gastan presupuesto restante; urgencias." },
+  ],
+  campaign_archetypes: [
+    "Auditoría/diagnóstico gratuito",
+    "Retainer de mantenimiento mensual",
+    "Tramitar el Kit Digital al cliente",
+    "Casos de éxito y portfolio",
+    "Referidos B2B",
+  ],
+  regulatory_notes: [
+    "RGPD y LOPD (datos de clientes)",
+    "Contratos con SLA por escrito",
+    "Propiedad intelectual del código",
+    "Ciberseguridad y copias de seguridad",
+  ],
+  supplier_types: [
+    "Proveedores cloud (AWS, Azure, Google Cloud)",
+    "Licencias y herramientas SaaS",
+    "Freelancers y subcontratación",
+    "Pasarelas de pago",
+    "Dominios y hosting",
+  ],
+};
+
+const eventos: SectorIntelProfile = {
+  sector_key: "eventos",
+  news_queries: [
+    "calendario de ferias y eventos {ciudad}",
+    "temporada de bodas España",
+    "tendencias fotografía y vídeo de eventos",
+    "normativa drones AESA España",
+    "ayudas autónomos sector cultural",
+  ],
+  news_max_items: 5,
+  kpis_focus: [
+    "Encargos reservados por mes",
+    "Ticket medio por evento",
+    "Ocupación de fines de semana (libres vs reservados)",
+    "Anticipos cobrados",
+    "Conversión de presupuestos",
+    "Coste por evento",
+  ],
+  seasonal_focus: [
+    { key: "temporada_bodas", name: "Temporada alta de bodas", months: [5, 6, 7, 8, 9], note: "La agenda de findes se llena con meses de antelación." },
+    { key: "comuniones", name: "Comuniones", months: [3, 4, 5], note: "Reportajes de comunión; packs familiares." },
+    { key: "eventos_empresa_navidad", name: "Eventos de empresa y retratos de Navidad", months: [11, 12], note: "Capta encargos corporativos." },
+    { key: "temporada_baja", name: "Temporada baja / invierno", months: [1, 2], note: "Capta reservas del año, edita lo pendiente, renueva portfolio." },
+  ],
+  campaign_archetypes: [
+    "Reserva anticipada de fecha con descuento",
+    "Packs (boda+preboda+álbum)",
+    "Sesiones de temporada (Navidad, comunión)",
+    "Alianza con wedding planners y locales",
+    "Portfolio en redes",
+  ],
+  regulatory_notes: [
+    "Derechos de imagen y consentimiento (cesión de uso)",
+    "Licencia AESA para drones",
+    "Contrato con anticipo y política de cancelación",
+    "Propiedad intelectual de fotos/vídeos",
+    "SGAE si hay música",
+  ],
+  supplier_types: [
+    "Laboratorio de impresión y álbumes",
+    "Alquiler de equipo",
+    "Segundos fotógrafos/freelancers",
+    "Wedding planners y locales",
+    "Software de edición y almacenamiento",
+  ],
+};
+
 const defaultProfile: SectorIntelProfile = {
   sector_key: "default",
   news_queries: [
@@ -296,6 +481,10 @@ export const SECTOR_INTEL: Record<string, SectorIntelProfile> = {
   comercio,
   salud,
   automocion,
+  legal,
+  educacion,
+  tecnologia,
+  eventos,
   default: defaultProfile,
 };
 
