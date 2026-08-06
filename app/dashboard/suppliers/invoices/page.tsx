@@ -8,7 +8,6 @@ import { createClient } from "@/lib/supabase-browser";
 import PageHeader from "@/components/ui/page-header";
 import { Card, StatCard } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import Badge from "@/components/ui/badge";
 import { FormField, Input, Select, SearchInput } from "@/components/ui/form-fields";
 import EmptyState from "@/components/ui/empty-state";
 import Loading from "@/components/ui/loading";
@@ -18,6 +17,7 @@ import { prepareInvoiceImage } from "@/lib/invoice-image-client";
 import {
   getReceivedInvoices,
   createReceivedInvoice,
+  updateReceivedInvoice,
   getExpenseSummary,
   receivedInvoiceStatusLabels,
   paymentMethodLabels,
@@ -58,6 +58,7 @@ export default function ReceivedInvoicesPage() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [pendingInvoiceId, setPendingInvoiceId] = useState("");
 
   useEffect(() => {
     async function doLoad() {
@@ -109,10 +110,90 @@ export default function ReceivedInvoicesPage() {
     }
   }
 
+  const isOcrDraftUrl = (value: string) =>
+    value.startsWith("storage://received-invoice-documents/") &&
+    value.includes("/drafts/");
+
+  async function deleteOcrDraft(draftUrl: string) {
+    const response = await fetch("/api/invoices/ocr", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ draft_url: draftUrl }),
+    });
+    if (response.ok) return;
+
+    const result = await response.json().catch(() => ({}));
+    throw new Error(result.error || "No se pudo eliminar el borrador OCR");
+  }
+
+  async function promoteOcrDraft(draftUrl: string, invoiceId: string) {
+    const response = await fetch("/api/invoices/ocr", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ draft_url: draftUrl, invoice_id: invoiceId }),
+    });
+    if (response.ok) return;
+
+    const result = await response.json().catch(() => ({}));
+    throw new Error(
+      result.error || "No se pudo conservar el documento de la factura"
+    );
+  }
+
+  async function handleNewInvoice() {
+    if (pendingInvoiceId) {
+      toast.error("La factura ya está registrada", {
+        description: "Reintenta primero la conservación de su documento.",
+      });
+      return;
+    }
+
+    if (isOcrDraftUrl(form.document_url)) {
+      try {
+        await deleteOcrDraft(form.document_url);
+      } catch (error) {
+        toast.error("No se pudo descartar el borrador", {
+          description: error instanceof Error ? error.message : "Inténtalo de nuevo.",
+        });
+        return;
+      }
+    }
+
+    setForm(emptyForm);
+    setShowForm(true);
+  }
+
+  async function handleCancelForm() {
+    if (pendingInvoiceId) {
+      toast.error("La factura ya está registrada", {
+        description: "Reintenta primero la conservación de su documento.",
+      });
+      return;
+    }
+
+    if (isOcrDraftUrl(form.document_url)) {
+      try {
+        await deleteOcrDraft(form.document_url);
+      } catch (error) {
+        toast.error("No se pudo descartar el borrador", {
+          description: error instanceof Error ? error.message : "Inténtalo de nuevo.",
+        });
+        return;
+      }
+    }
+
+    setForm(emptyForm);
+    setShowForm(false);
+  }
+
   async function handleScan(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
+    if (pendingInvoiceId) {
+      toast.error("Reintenta primero la conservación de la factura registrada");
+      return;
+    }
     if (!file.type.startsWith("image/")) {
       toast.error("Selecciona una foto JPG, PNG o WEBP");
       return;
@@ -136,6 +217,21 @@ export default function ReceivedInvoicesPage() {
 
       if (!response.ok || !result.success || !result.ocr_data) {
         throw new Error(result.error || "No se pudo analizar la factura");
+      }
+
+      const newDraftUrl = String(result.image_url || "");
+      const previousDraftUrl = isOcrDraftUrl(form.document_url)
+        ? form.document_url
+        : "";
+      if (previousDraftUrl && previousDraftUrl !== newDraftUrl) {
+        try {
+          await deleteOcrDraft(previousDraftUrl);
+        } catch (cleanupError) {
+          // Keep the previous form usable. The newly uploaded draft is not
+          // exposed to the UI unless the replacement can be completed.
+          await deleteOcrDraft(newDraftUrl).catch(() => {});
+          throw cleanupError;
+        }
       }
 
       const data = result.ocr_data as Record<string, unknown>;
@@ -171,7 +267,7 @@ export default function ReceivedInvoicesPage() {
           ? paymentMethod
           : "transferencia",
         notes: String(data.notes || ""),
-        document_url: String(result.image_url || ""),
+        document_url: newDraftUrl,
       });
       setShowForm(true);
       toast.success("Factura analizada", {
@@ -198,32 +294,86 @@ export default function ReceivedInvoicesPage() {
     const irpfAmount = subtotal * (irpfPct / 100);
     const total = subtotal + ivaAmount - irpfAmount;
 
-    const { error } = await createReceivedInvoice(supabase, {
-      invoice_number: form.invoice_number,
-      supplier_id: form.supplier_id || null,
-      supplier_name: form.supplier_name,
-      supplier_nif: form.supplier_nif || null,
-      issue_date: form.issue_date,
-      due_date: form.due_date || null,
-      subtotal,
-      iva_percent: ivaPct,
-      iva_amount: ivaAmount,
-      irpf_percent: irpfPct,
-      irpf_amount: irpfAmount,
-      total,
-      payment_method: form.payment_method || null,
-      notes: form.notes || null,
-      document_url: form.document_url || null,
-    });
+    let invoiceId = pendingInvoiceId;
 
-    if (!error) {
-      toast.success("Factura registrada");
-      setForm(emptyForm);
-      setShowForm(false);
-      load();
+    if (!invoiceId) {
+      const { data, error } = await createReceivedInvoice(supabase, {
+        invoice_number: form.invoice_number,
+        supplier_id: form.supplier_id || null,
+        supplier_name: form.supplier_name,
+        supplier_nif: form.supplier_nif || null,
+        issue_date: form.issue_date,
+        due_date: form.due_date || null,
+        subtotal,
+        iva_percent: ivaPct,
+        iva_amount: ivaAmount,
+        irpf_percent: irpfPct,
+        irpf_amount: irpfAmount,
+        total,
+        payment_method: form.payment_method || null,
+        notes: form.notes || null,
+        document_url: form.document_url || null,
+      });
+
+      if (error || !data) {
+        toast.error("Error al registrar la factura");
+        setSaving(false);
+        return;
+      }
+      invoiceId = data.id;
+      if (isOcrDraftUrl(form.document_url)) {
+        setPendingInvoiceId(invoiceId);
+      }
     } else {
-      toast.error("Error al registrar la factura");
+      // A previous submit already created the invoice and only failed while
+      // retrying OCR promotion below. Persist any corrections made to the
+      // form in the meantime, or they are silently discarded once this
+      // retry succeeds and the form closes.
+      const { error } = await updateReceivedInvoice(supabase, invoiceId, {
+        invoice_number: form.invoice_number,
+        supplier_id: form.supplier_id || null,
+        supplier_name: form.supplier_name,
+        supplier_nif: form.supplier_nif || null,
+        issue_date: form.issue_date,
+        due_date: form.due_date || null,
+        subtotal,
+        iva_percent: ivaPct,
+        iva_amount: ivaAmount,
+        irpf_percent: irpfPct,
+        irpf_amount: irpfAmount,
+        total,
+        payment_method: form.payment_method || null,
+        notes: form.notes || null,
+      });
+
+      if (error) {
+        toast.error("No se pudieron guardar las correcciones", {
+          description: "Reintenta antes de conservar el documento.",
+        });
+        setSaving(false);
+        return;
+      }
     }
+
+    if (isOcrDraftUrl(form.document_url)) {
+      try {
+        await promoteOcrDraft(form.document_url, invoiceId);
+      } catch (error) {
+        toast.error("Factura registrada; documento pendiente", {
+          description:
+            (error instanceof Error ? error.message : "Error de conservación") +
+            ". Pulsa de nuevo para reintentar sin crear otra factura.",
+        });
+        setSaving(false);
+        return;
+      }
+    }
+
+    setPendingInvoiceId("");
+    toast.success("Factura registrada");
+    setForm(emptyForm);
+    setShowForm(false);
+    await load();
     setSaving(false);
   }
 
@@ -264,7 +414,7 @@ export default function ReceivedInvoicesPage() {
                 className="hidden"
               />
             </label>
-            <Button onClick={() => { setShowForm(true); setForm(emptyForm); }}>
+            <Button onClick={handleNewInvoice}>
               + Nueva factura
             </Button>
           </div>
@@ -411,9 +561,13 @@ export default function ReceivedInvoicesPage() {
 
             <div className="flex gap-3 pt-2">
               <Button type="submit" disabled={saving}>
-                {saving ? "Guardando..." : "Registrar factura"}
+                {saving
+                  ? "Guardando..."
+                  : pendingInvoiceId
+                    ? "Reintentar conservación"
+                    : "Registrar factura"}
               </Button>
-              <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>
+              <Button type="button" variant="secondary" onClick={handleCancelForm}>
                 Cancelar
               </Button>
             </div>

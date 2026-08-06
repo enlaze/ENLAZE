@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:p1": "node --import tsx --test __tests__/p1-review.test.mjs",
     "scrape:prices": "node scripts/scraper-precios.js",
     "scrape:suppliers": "node scripts/scraper-proveedores-oficiales.js"
   },
@@ -37,6 +38,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",
+    "tsx": "^4.23.7",
     "typescript": "^5"
   }
 }

@@ -5,6 +5,13 @@ import { NextResponse } from "next/server";
 import sharp from "sharp";
 import { logAiRun, hashText } from "@/lib/ai-logger";
 import { rateLimitSensitive } from "@/lib/rate-limit";
+import { randomUUID } from "crypto";
+import {
+  RETAINED_INVOICE_BUCKET,
+  buildConfirmedInvoiceDocument,
+  parseOwnedOcrDraftUrl,
+  retainedInvoiceStorageUrl,
+} from "@/lib/invoice-ocr-drafts";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const OCR_MODEL =
@@ -172,20 +179,41 @@ Responde SOLO con el JSON, sin texto adicional:
       return NextResponse.json({ error: "No se pudo parsear la respuesta de Claude", raw: responseText }, { status: 422 });
     }
 
-    // Subir imagen a Supabase Storage
+    // Drafts for received_invoices must live in retained, private storage.
+    // The legacy invoices table remains in the deletable invoices bucket.
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const fileName = `${userId}/${Date.now()}-${sanitizedFileName}`;
+    const objectName = `${Date.now()}-${randomUUID()}-${sanitizedFileName}`;
+    const fileName = extractOnly
+      ? `${userId}/drafts/${objectName}`
+      : `${userId}/${objectName}`;
+    const storageBucket = extractOnly ? RETAINED_INVOICE_BUCKET : "invoices";
     const { data: uploadData, error: uploadError } = await supabaseService.storage
-      .from("invoices")
-      .upload(fileName, file, { contentType: file.type });
+      .from(storageBucket)
+      .upload(fileName, file, {
+        contentType: file.type,
+        cacheControl: "31536000",
+        upsert: false,
+      });
 
     let imageUrl = "";
     if (uploadError) {
       console.error("Storage upload error:", uploadError);
+      if (extractOnly) {
+        return NextResponse.json(
+          { error: "No se pudo conservar el documento original de la factura." },
+          { status: 500 }
+        );
+      }
     }
     if (!uploadError && uploadData) {
-      const { data: urlData } = supabaseService.storage.from("invoices").getPublicUrl(fileName);
-      imageUrl = urlData.publicUrl;
+      if (extractOnly) {
+        imageUrl = retainedInvoiceStorageUrl(uploadData.path);
+      } else {
+        const { data: urlData } = supabaseService.storage
+          .from(storageBucket)
+          .getPublicUrl(fileName);
+        imageUrl = urlData.publicUrl;
+      }
     }
 
     if (extractOnly) {
@@ -302,7 +330,6 @@ Responde SOLO con el JSON, sin texto adicional:
       ocr_data: invoiceData,
       message: "Factura procesada correctamente",
     });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: unknown) {
     console.error("OCR Error:", err);
     if (err instanceof Anthropic.NotFoundError) {
@@ -324,4 +351,222 @@ Responde SOLO con el JSON, sin texto adicional:
       { status: 500 }
     );
   }
+}
+
+async function retainedObjectExists(objectPath: string): Promise<boolean> {
+  const separator = objectPath.lastIndexOf("/");
+  const directory = objectPath.slice(0, separator);
+  const fileName = objectPath.slice(separator + 1);
+  const { data, error } = await supabaseService.storage
+    .from(RETAINED_INVOICE_BUCKET)
+    .list(directory, { limit: 10, search: fileName });
+
+  return !error && (data ?? []).some((entry) => entry.name === fileName);
+}
+
+/**
+ * Promote a referenced OCR draft to its immutable fiscal-document location.
+ * Copy -> row update -> draft removal keeps at least one valid object through
+ * every retryable failure and makes the operation idempotent.
+ */
+export async function PATCH(request: Request) {
+  const rl = rateLimitSensitive(request);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Demasiadas solicitudes. Inténtalo de nuevo en unos minutos." },
+      { status: 429 }
+    );
+  }
+
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json(
+      { error: "La conservación de documentos no está configurada." },
+      { status: 500 }
+    );
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  let body: { draft_url?: unknown; invoice_id?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Solicitud inválida" }, { status: 400 });
+  }
+
+  const draftUrl = typeof body.draft_url === "string" ? body.draft_url : "";
+  const invoiceId = typeof body.invoice_id === "string" ? body.invoice_id : "";
+  const draft = parseOwnedOcrDraftUrl(draftUrl, user.id);
+  const confirmed = draft
+    ? buildConfirmedInvoiceDocument(user.id, invoiceId, draft.fileName)
+    : null;
+  if (!draft || !confirmed) {
+    return NextResponse.json({ error: "Borrador OCR inválido" }, { status: 400 });
+  }
+
+  const { data: invoice, error: invoiceError } = await supabase
+    .from("received_invoices")
+    .select("id, document_url")
+    .eq("id", invoiceId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (invoiceError) {
+    return NextResponse.json(
+      { error: "No se pudo validar la factura" },
+      { status: 500 }
+    );
+  }
+  if (!invoice) {
+    return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 });
+  }
+
+  if (invoice.document_url === confirmed.storageUrl) {
+    await supabaseService.storage
+      .from(RETAINED_INVOICE_BUCKET)
+      .remove([draft.objectPath]);
+    return NextResponse.json({ success: true, document_url: invoice.document_url });
+  }
+  if (invoice.document_url !== draftUrl) {
+    return NextResponse.json(
+      { error: "El borrador no pertenece a esta factura" },
+      { status: 409 }
+    );
+  }
+
+  let copiedByThisRequest = false;
+  const { error: copyError } = await supabaseService.storage
+    .from(RETAINED_INVOICE_BUCKET)
+    .copy(draft.objectPath, confirmed.objectPath);
+  if (copyError) {
+    // A retry may find the destination created by a previous request that
+    // failed after copying. Only continue after verifying that exact object.
+    if (!(await retainedObjectExists(confirmed.objectPath))) {
+      console.error("OCR draft copy error:", copyError);
+      return NextResponse.json(
+        { error: "No se pudo conservar el documento de la factura" },
+        { status: 500 }
+      );
+    }
+  } else {
+    copiedByThisRequest = true;
+  }
+
+  const { data: updatedInvoice, error: updateError } = await supabase
+    .from("received_invoices")
+    .update({ document_url: confirmed.storageUrl })
+    .eq("id", invoiceId)
+    .eq("user_id", user.id)
+    .eq("document_url", draftUrl)
+    .select("id, document_url")
+    .maybeSingle();
+
+  if (updateError || !updatedInvoice) {
+    const { data: currentInvoice } = await supabase
+      .from("received_invoices")
+      .select("document_url")
+      .eq("id", invoiceId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const alreadyPromoted =
+      currentInvoice?.document_url === confirmed.storageUrl;
+
+    if (!alreadyPromoted) {
+      if (copiedByThisRequest) {
+        await supabaseService.storage
+          .from(RETAINED_INVOICE_BUCKET)
+          .remove([confirmed.objectPath]);
+      }
+      return NextResponse.json(
+        { error: "No se pudo asociar el documento conservado a la factura" },
+        { status: 500 }
+      );
+    }
+  }
+
+  const { error: removeError } = await supabaseService.storage
+    .from(RETAINED_INVOICE_BUCKET)
+    .remove([draft.objectPath]);
+  if (removeError) {
+    // The confirmed copy is already attached. Leaving an unreferenced draft is
+    // safer than rolling back the fiscal document and can be cleaned later.
+    console.warn("OCR draft cleanup error:", removeError.message);
+  }
+
+  return NextResponse.json({
+    success: true,
+    document_url: confirmed.storageUrl,
+    draft_cleanup_pending: Boolean(removeError),
+  });
+}
+
+/** Delete an owned OCR draft only while no received invoice references it. */
+export async function DELETE(request: Request) {
+  const rl = rateLimitSensitive(request);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Demasiadas solicitudes. Inténtalo de nuevo en unos minutos." },
+      { status: 429 }
+    );
+  }
+
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json(
+      { error: "La gestión de borradores no está configurada." },
+      { status: 500 }
+    );
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  let rawDraftUrl: unknown;
+  try {
+    rawDraftUrl = (await request.json() as { draft_url?: unknown }).draft_url;
+  } catch {
+    return NextResponse.json({ error: "Solicitud inválida" }, { status: 400 });
+  }
+
+  const draft = parseOwnedOcrDraftUrl(rawDraftUrl, user.id);
+  if (!draft) {
+    return NextResponse.json({ error: "Borrador OCR inválido" }, { status: 400 });
+  }
+
+  // Use service role for the reference check so detached fiscal rows (marked
+  // during a retryable account deletion) cannot become invisible and lose
+  // their retained source document.
+  const { count, error: referenceError } = await supabaseService
+    .from("received_invoices")
+    .select("id", { count: "exact", head: true })
+    .eq("document_url", rawDraftUrl as string);
+  if (referenceError) {
+    return NextResponse.json(
+      { error: "No se pudo comprobar el uso del borrador" },
+      { status: 500 }
+    );
+  }
+  if ((count ?? 0) > 0) {
+    return NextResponse.json(
+      { error: "El documento ya está asociado a una factura" },
+      { status: 409 }
+    );
+  }
+
+  const { error: removeError } = await supabaseService.storage
+    .from(RETAINED_INVOICE_BUCKET)
+    .remove([draft.objectPath]);
+  if (removeError) {
+    return NextResponse.json(
+      { error: "No se pudo eliminar el borrador OCR" },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ success: true });
 }

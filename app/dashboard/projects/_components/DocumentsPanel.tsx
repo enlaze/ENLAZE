@@ -23,6 +23,7 @@ interface ProjectDocument {
   mime_type: string;
   tags: string[];
   created_at: string;
+  download_url?: string;
 }
 
 const DOC_TYPES = [
@@ -89,13 +90,15 @@ export default function DocumentsPanel({
 
     const rows = (data as ProjectDocument[]) || [];
     const hydrated = await Promise.all(rows.map(async (document) => {
-      if (/^https?:\/\//i.test(document.file_url)) return document;
+      if (/^https?:\/\//i.test(document.file_url)) {
+        return { ...document, download_url: document.file_url };
+      }
       const { data: signed } = await supabase.storage
         .from("project-docs")
         .createSignedUrl(document.file_url, 3600);
       return {
         ...document,
-        file_url: signed?.signedUrl || document.file_url,
+        download_url: signed?.signedUrl || document.file_url,
       };
     }));
     setDocuments(hydrated);
@@ -191,7 +194,31 @@ export default function DocumentsPanel({
       confirmLabel: "Eliminar",
     });
     if (!ok) return;
-    await supabase.from("project_documents").delete().eq("id", id);
+    const document = documents.find((candidate) => candidate.id === id);
+    if (!document) return;
+
+    if (!/^https?:\/\//i.test(document.file_url)) {
+      const { error: storageError } = await supabase.storage
+        .from("project-docs")
+        .remove([document.file_url]);
+      if (storageError) {
+        toast.error("No se pudo eliminar el archivo", {
+          description: storageError.message,
+        });
+        return;
+      }
+    }
+
+    const { error: rowError } = await supabase
+      .from("project_documents")
+      .delete()
+      .eq("id", id);
+    if (rowError) {
+      toast.error("El archivo se eliminó, pero no se pudo borrar su registro", {
+        description: rowError.message,
+      });
+      return;
+    }
     await loadData();
     toast.success("Documento eliminado");
   }
@@ -361,7 +388,7 @@ export default function DocumentsPanel({
                 {isImage && (
                   <div className="h-40 bg-navy-50 dark:bg-zinc-800 flex items-center justify-center overflow-hidden">
                     <img
-                      src={doc.file_url}
+                      src={doc.download_url || doc.file_url}
                       alt={doc.name}
                       className="w-full h-full object-cover"
                       onError={(e) => {
@@ -401,7 +428,7 @@ export default function DocumentsPanel({
                     </span>
                     <div className="flex items-center gap-2">
                       <a
-                        href={doc.file_url}
+                        href={doc.download_url || doc.file_url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-xs text-brand-green hover:underline"

@@ -35,6 +35,7 @@ import {
   getGeographicCostProfile,
   getGeographicFactorForCategory,
 } from "@/lib/geographic-costs";
+import { isTraceableCommercialPrice } from "@/lib/price-traceability";
 
 export interface Partida {
   id: string;
@@ -256,22 +257,7 @@ async function verifyMaterialsAgainstTracker(
 
   const updatedMaterials = materials.map((material) => {
     const resolved = resolvedByMaterialId.get(material.id);
-    const resolvedSourceType = String(resolved?.sourceType || "");
-    const commercialSources = new Set([
-      "n8n_market",
-      "provider_updated",
-      "preferred_supplier",
-      "private_tariff",
-      "negotiated",
-      "authorized_supplier",
-      "web_search",
-    ]);
-    const traceableCommercialPrice =
-      Boolean(resolved) &&
-      commercialSources.has(resolvedSourceType) &&
-      Boolean(resolved?.sourceUrl) &&
-      (resolved?.confidenceScore || 0) >= 0.75;
-    if (!resolved || resolved.selectedPrice <= 0 || !traceableCommercialPrice) {
+    if (!resolved || !isTraceableCommercialPrice(resolved)) {
       return {
         ...material,
         isRealData: false,
@@ -1582,12 +1568,14 @@ export function BudgetGenerateProvider({
 
           finalMaterials = finalMaterials.map((material) => {
             const resolved = resolvedByMaterialId.get(material.id);
-            if (!resolved || resolved.selectedPrice <= 0 || resolved.sourceType === "estimated") {
+            if (!resolved || !isTraceableCommercialPrice(resolved)) {
               return {
                 ...material,
                 isRealData: false,
                 sourceType: "estimated",
                 sourceName: "Estimación pendiente de coincidencia exacta",
+                matchedProductName: resolved?.selectedProductName,
+                sourceUrl: resolved?.sourceUrl || undefined,
                 confidenceScore: resolved?.confidenceScore ?? material.confidenceScore ?? 0.2,
               };
             }

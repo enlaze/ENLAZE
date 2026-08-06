@@ -100,13 +100,13 @@ export async function POST(request: Request) {
     }
 
     // ── Check for V2 data availability ──
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("company_id")
-      .eq("id", user.id)
-      .single();
-
-    const company_id = profile?.company_id ?? null;
+    // Price-bank ownership is defined by company_id = auth.uid() in the
+    // current schema/RLS policies. Do not trust profiles.company_id here: the
+    // tracker client may use service role and would otherwise turn a mutable
+    // profile value into cross-tenant read access.
+    const companyScopeId = user.id;
+    const visibleProviderFilter =
+      `company_id.is.null,company_id.eq.${companyScopeId}`;
     const trackerDb = process.env.SUPABASE_SERVICE_ROLE_KEY
       ? createClient(
           process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -123,7 +123,7 @@ export async function POST(request: Request) {
       .eq("sector", "construccion")
       .eq("is_active", true)
       .eq("is_available", true)
-      .is("pb_providers.company_id", null)
+      .or(visibleProviderFilter, { referencedTable: "pb_providers" })
       .gt("unit_price", 0);
     if (pbCountError) {
       console.error("[PriceResolve] Shared tracker count failed:", pbCountError.message);
@@ -171,7 +171,7 @@ export async function POST(request: Request) {
             )
           `)
           .eq("pb_products.sector", "construccion")
-          .is("pb_providers.company_id", null),
+          .or(visibleProviderFilter, { referencedTable: "pb_providers" }),
         trackerSearchTokens.length > 0
           ? trackerDb
               .from("pb_products")
@@ -187,7 +187,7 @@ export async function POST(request: Request) {
               .eq("sector", "construccion")
               .eq("is_active", true)
               .eq("is_available", true)
-              .is("pb_providers.company_id", null)
+              .or(visibleProviderFilter, { referencedTable: "pb_providers" })
               .gt("unit_price", 0)
               .or(trackerSearchTokens.map((token) => `commercial_name.ilike.%${token}%`).join(","))
               .order("checked_at", { ascending: false })
@@ -239,8 +239,13 @@ export async function POST(request: Request) {
             source_type: String(row.source_type ?? "provider_catalog"),
             checked_at: row.checked_at ? String(row.checked_at) : null,
             price_changed_at: null,
-            is_private_tariff: false,
-            is_negotiated: false,
+            is_private_tariff:
+              String(row.source_type || "") === "private_tariff" ||
+              (
+                String(prov?.company_id || "") === companyScopeId &&
+                String(row.source_type || "") !== "negotiated"
+              ),
+            is_negotiated: String(row.source_type || "") === "negotiated",
           };
         });
 
@@ -272,7 +277,7 @@ export async function POST(request: Request) {
           source_type: "n8n_market",
           checked_at: row.checked_at ? String(row.checked_at) : null,
           price_changed_at: null,
-          is_private_tariff: false,
+          is_private_tariff: String(prov?.company_id || "") === companyScopeId,
           is_negotiated: false,
         };
       });
@@ -334,7 +339,7 @@ export async function POST(request: Request) {
           quantity: m.quantity,
         })),
         context: {
-          company_id: company_id || user.id,
+          company_id: companyScopeId,
           province: location || "",
           quality_tier: (materials[0]?.qualityTier as "basica" | "media" | "alta") || "media",
         },

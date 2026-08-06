@@ -2,6 +2,17 @@ import { NextResponse } from "next/server";
 import { createClient as createSessionClient } from "@/lib/supabase-server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { rateLimitSensitive } from "@/lib/rate-limit";
+import {
+  RETAINED_INVOICE_BUCKET,
+  parseRetainedReceivedInvoiceDocumentUrl,
+} from "@/lib/invoice-ocr-drafts";
+import { deleteStorageTree } from "@/lib/storage-cleanup";
+import {
+  FISCALLY_DEFINITIVE_ISSUED_INVOICE_STATUSES,
+  isAccountDeletionCleanupComplete,
+  isFiscallyDefinitiveIssuedInvoiceStatus,
+  markAccountDeletionCleanupComplete,
+} from "@/lib/account-deletion-retention";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/account/delete — Borrado de cuenta (RGPD, art. 17 "derecho al
@@ -20,8 +31,9 @@ import { rateLimitSensitive } from "@/lib/rate-limit";
 // cascade no está garantizado. Borrar explícitamente es correcto en ambos
 // casos (si hay cascade, las filas ya no estarán y el DELETE es un no-op).
 //
-// EXCEPCIÓN — cuatro tablas se ANONIMIZAN en lugar de borrarse (ver
-// anonymizeRetainedRows). El derecho de supresión del RGPD (art. 17) no es
+// EXCEPCIÓN — cuatro tablas contienen filas que se ANONIMIZAN en lugar de
+// borrarse (ver anonymizeRetainedRows; los issued_invoices en draft sí se
+// eliminan). El derecho de supresión del RGPD (art. 17) no es
 // absoluto: decae cuando el tratamiento es necesario para cumplir una
 // obligación legal (art. 17.3.b) o para formular o defender reclamaciones
 // (art. 17.3.e). En esos casos la vía correcta no es conservar el dato tal
@@ -42,16 +54,15 @@ const CONFIRMATION_TOKEN = "ELIMINAR";
 const RETENTION_MIGRATION = "supabase/migrations/20260728_account_deletion_retention.sql";
 
 /** Bucket de Storage donde se suben ficheros bajo el prefijo `${userId}/`. */
-const STORAGE_BUCKETS = ["invoices", "company-branding"];
+const STORAGE_BUCKETS = ["invoices", "company-branding", "project-docs"];
 
 /**
  * Tablas hijas sin columna de usuario: se borran a partir de los ids del padre.
  * Se ejecuta ANTES que OWNED_TABLES para no dejar FKs colgando.
  *
- * issued_invoice_lines y fiscal_events NO aparecen aquí a propósito: cuelgan de
- * issued_invoices, que se conserva. Las líneas son contenido obligatorio de la
- * factura (una factura sin líneas no es una factura válida) y fiscal_events es
- * su traza de auditoría Verifactu.
+ * issued_invoice_lines y fiscal_events se tratan aparte: se conservan con las
+ * facturas fiscalmente definitivas, pero se borran junto a las que aún están en
+ * estado draft.
  */
 const CHILD_TABLES: { table: string; column: string; parent: ParentKey }[] = [
   { table: "delivery_note_lines", column: "delivery_note_id", parent: "delivery_notes" },
@@ -90,7 +101,8 @@ const PARENT_TABLES: ParentKey[] = [
  * (p. ej. payments → invoices → clients).
  *
  * NO incluye issued_invoices, received_invoices, legal_acceptances ni
- * marketing_consents: esas cuatro se anonimizan (ver anonymizeRetainedRows).
+ * marketing_consents: los borradores emitidos se eliminan y el resto de esas
+ * filas se anonimiza (ver anonymizeRetainedRows).
  */
 const OWNED_TABLES: { table: string; column: string }[] = [
   // Banco de precios propio del usuario
@@ -176,6 +188,11 @@ const IGNORABLE_CODES = new Set([
   "PGRST205", // tabla no encontrada en el schema cache
 ]);
 
+// A deployment may genuinely omit an optional retention table, but an
+// existing fiscal table without deleted_by cannot provide retry safety and
+// must abort instead of being mistaken for an ignorable schema variation.
+const MISSING_TABLE_CODES = new Set(["42P01", "PGRST106", "PGRST205"]);
+
 interface DeletionError {
   table: string;
   message: string;
@@ -231,6 +248,38 @@ async function collectIds(
   return (data ?? []).map((row) => String((row as { id: unknown }).id));
 }
 
+/** Tamaño de página al paginar SELECTs que pueden superar el límite de PostgREST. */
+const SELECT_PAGE_SIZE = 1000;
+
+/**
+ * Repite un SELECT paginando con .range() hasta agotar los resultados. Sin
+ * esto, una cuenta con más filas que el límite de respuesta de PostgREST
+ * perdería en silencio las páginas siguientes — crítico en las lecturas que
+ * alimentan la lista de documentos a conservar antes de borrar Storage.
+ */
+async function selectAllRows<T>(
+  buildQuery: (
+    from: number,
+    to: number
+  ) => PromiseLike<{ data: T[] | null; error: { code?: string; message: string } | null }>
+): Promise<{ data: T[]; error: { code?: string; message: string } | null }> {
+  const rows: T[] = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await buildQuery(from, from + SELECT_PAGE_SIZE - 1);
+    if (error) {
+      return { data: rows, error };
+    }
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < SELECT_PAGE_SIZE) {
+      break;
+    }
+    from += SELECT_PAGE_SIZE;
+  }
+  return { data: rows, error: null };
+}
+
 /** Cuenta cuántos de esos ids siguen existiendo en la tabla. */
 async function countRows(
   admin: SupabaseClient,
@@ -258,13 +307,15 @@ async function countRows(
  *   a) estas filas apuntan por FK a clients / projects / budgets / suppliers /
  *      expense_categories; hay que poner esas referencias a null antes de
  *      borrar esas tablas o el DELETE fallaría.
- *   b) si la anonimización falla, se aborta sin haber borrado nada.
+ *   b) si falla, se aborta antes del borrado general y de Auth; las operaciones
+ *      que ya terminaron son idempotentes y se redescubren mediante deleted_by.
  *
  * ── issued_invoices y received_invoices ────────────────────────────────────
- * NO se borran: el art. 30 del Código de Comercio y la LGT obligan a conservar
- * las facturas —emitidas Y recibidas— (~4 años, 6 los libros mercantiles). Es
- * una obligación legal del art. 17.3.b RGPD, que prevalece sobre el derecho de
- * supresión. Lo que se hace es desvincular la factura de la cuenta:
+ * Las issued_invoices en draft aún son documentos editables, no facturas
+ * fiscalmente definitivas: se borran junto a sus líneas y eventos. Las emitidas
+ * que ya salieron de draft y todas las recibidas sí se conservan por el art. 30
+ * del Código de Comercio y la LGT (~4 años, 6 los libros mercantiles). Es una
+ * obligación legal del art. 17.3.b RGPD. Esas filas se desvinculan de la cuenta:
  *   · user_id → null. Requiere la migración RETENTION_MIGRATION: de fábrica
  *     estas tablas tienen user_id NOT NULL con FK a auth.users sin ON DELETE,
  *     lo que hace imposible desvincular la fila e impide incluso borrar el
@@ -281,8 +332,14 @@ async function countRows(
  * alterarlos la invalidaría ante Hacienda y rompería la cadena de hash
  * Verifactu. Anonimizarlos vaciaría de sentido la propia conservación.
  * En recibidas se mantiene también document_url: apunta al documento del
- * proveedor, que es justo lo que hay que conservar (y no vive en el bucket
- * que se vacía, que es el de la tabla invoices).
+ * proveedor, que es justo lo que hay que conservar.
+ *
+ * La desvinculación (user_id -> null) actúa además como barrera estable frente
+ * a la promoción OCR: PATCH solo puede cambiar una fila que aún tenga el
+ * user_id autenticado. Las rutas de Storage se vuelven a leer DESPUÉS de esa
+ * barrera. Así, o se observa la copia confirmada o se conserva el draft que
+ * sigue referenciado, pero nunca una instantánea intermedia susceptible de
+ * cambiar durante la limpieza.
  *
  * ── legal_acceptances y marketing_consents ─────────────────────────────────
  * NO se borran: son la PRUEBA de que se aceptaron los términos y de que se
@@ -297,32 +354,62 @@ async function anonymizeRetainedRows(
   admin: SupabaseClient,
   userId: string,
   errors: DeletionError[]
-): Promise<{ issuedIds: string[]; receivedIds: string[] }> {
-  const issuedIds = await collectIds(admin, "issued_invoices", "user_id", userId);
-  const receivedIds = await collectIds(admin, "received_invoices", "user_id", userId);
+): Promise<{
+  issuedIds: string[];
+  receivedIds: string[];
+  legacyReceivedInvoicePaths: Set<string>;
+  retainedReceivedInvoicePaths: Set<string>;
+}> {
+  // deleted_by is a retry marker. Once user_id becomes null, a later attempt
+  // must still rediscover fiscal rows until the durable Auth checkpoint says
+  // all destructive cleanup has completed.
+  const retryableOwnerFilter =
+    `user_id.eq.${userId},deleted_by.eq.${userId}`;
+  const { data: candidateIssuedRows, error: issuedSelectError } =
+    await selectAllRows<{ id: string; status: string | null }>((from, to) =>
+      admin
+        .from("issued_invoices")
+        .select("id, status")
+        .or(retryableOwnerFilter)
+        .order("id", { ascending: true })
+        .range(from, to)
+    );
+  if (issuedSelectError && !MISSING_TABLE_CODES.has(issuedSelectError.code ?? "")) {
+    errors.push({ table: "issued_invoices", message: issuedSelectError.message });
+  }
 
-  const updates: { table: string; values: Record<string, unknown> }[] = [
+  const draftIssuedIds = (candidateIssuedRows ?? [])
+    .filter((row) => !isFiscallyDefinitiveIssuedInvoiceStatus(row.status))
+    .map((row) => String(row.id));
+
+  const fiscalUpdates = [
     {
       table: "issued_invoices",
       values: {
         user_id: null,
+        deleted_by: userId,
         client_id: null,
         project_id: null,
         budget_id: null,
         client_email: null,
         notes: null,
       },
+      statuses: FISCALLY_DEFINITIVE_ISSUED_INVOICE_STATUSES,
     },
     {
       table: "received_invoices",
       values: {
         user_id: null,
+        deleted_by: userId,
         supplier_id: null,
         category_id: null,
         project_id: null,
         notes: null,
       },
+      statuses: null,
     },
+  ];
+  const evidenceUpdates: { table: string; values: Record<string, unknown> }[] = [
     {
       table: "legal_acceptances",
       values: { user_id: null, ip_address: null, user_agent: null },
@@ -333,7 +420,24 @@ async function anonymizeRetainedRows(
     },
   ];
 
-  for (const { table, values } of updates) {
+  for (const { table, values, statuses } of fiscalUpdates) {
+    let query = admin
+      .from(table)
+      .update(values)
+      .or(retryableOwnerFilter);
+    if (statuses) query = query.in("status", [...statuses]);
+    const { error } = await query;
+    if (!error || MISSING_TABLE_CODES.has(error.code ?? "")) continue;
+
+    const needsMigration = error.code === "23502" || error.code === "23503";
+    const message = needsMigration
+      ? `${error.message} — ${table}.user_id no admite quedarse sin titular. ` +
+        `Aplica la migración ${RETENTION_MIGRATION} (user_id nullable + FK ON DELETE SET NULL).`
+      : error.message;
+    errors.push({ table, message });
+  }
+
+  for (const { table, values } of evidenceUpdates) {
     const { error } = await admin.from(table).update(values).eq("user_id", userId);
     if (!error || IGNORABLE_CODES.has(error.code ?? "")) continue;
 
@@ -348,7 +452,132 @@ async function anonymizeRetainedRows(
     errors.push({ table, message });
   }
 
-  return { issuedIds, receivedIds };
+  // A draft is not subject to fiscal retention. Remove its dependent content
+  // explicitly before deleting the parent; this also works on schemas without
+  // ON DELETE CASCADE and repairs drafts marked by an earlier partial attempt.
+  if (errors.length === 0) {
+    await deleteByIn(
+      admin,
+      "issued_invoice_lines",
+      "invoice_id",
+      draftIssuedIds,
+      errors
+    );
+    await deleteByIn(
+      admin,
+      "fiscal_events",
+      "invoice_id",
+      draftIssuedIds,
+      errors
+    );
+    await deleteByIn(admin, "issued_invoices", "id", draftIssuedIds, errors);
+  }
+
+  if (errors.length > 0) {
+    return {
+      issuedIds: [],
+      receivedIds: [],
+      legacyReceivedInvoicePaths: new Set(),
+      retainedReceivedInvoicePaths: new Set(),
+    };
+  }
+
+  // Stable read: after the update above, OCR promotion can no longer satisfy
+  // its user_id compare-and-set. The referenced URL cannot change underneath
+  // Storage cleanup.
+  const { data: issuedRows, error: stableIssuedError } = await selectAllRows<{
+    id: string;
+  }>((from, to) =>
+    admin
+      .from("issued_invoices")
+      .select("id")
+      .eq("deleted_by", userId)
+      .in("status", [...FISCALLY_DEFINITIVE_ISSUED_INVOICE_STATUSES])
+      .order("id", { ascending: true })
+      .range(from, to)
+  );
+  const { data: receivedRows, error: stableReceivedError } = await selectAllRows<{
+    id: string;
+    document_url: string | null;
+  }>((from, to) =>
+    admin
+      .from("received_invoices")
+      .select("id, document_url")
+      .eq("deleted_by", userId)
+      .order("id", { ascending: true })
+      .range(from, to)
+  );
+
+  for (const [table, error] of [
+    ["issued_invoices", stableIssuedError],
+    ["received_invoices", stableReceivedError],
+  ] as const) {
+    if (error && !MISSING_TABLE_CODES.has(error.code ?? "")) {
+      errors.push({ table, message: error.message });
+    }
+  }
+
+  const legacyReceivedInvoicePaths = new Set<string>();
+  const retainedReceivedInvoicePaths = new Set<string>();
+  for (const row of receivedRows ?? []) {
+    const invoiceId = String(row.id);
+    const storedValue = typeof row.document_url === "string" ? row.document_url : "";
+    const retainedDocument = parseRetainedReceivedInvoiceDocumentUrl(
+      storedValue,
+      userId,
+      invoiceId
+    );
+    if (retainedDocument) {
+      retainedReceivedInvoicePaths.add(retainedDocument.objectPath);
+    }
+
+    const storageMarkers = [
+      "/storage/v1/object/public/invoices/",
+      "/storage/v1/object/sign/invoices/",
+    ];
+    let objectPath = "";
+    for (const marker of storageMarkers) {
+      if (!storedValue.includes(marker)) continue;
+      try {
+        objectPath = decodeURIComponent(
+          (storedValue.split(marker)[1] || "").split("?", 1)[0]
+        );
+      } catch {
+        objectPath = "";
+      }
+      break;
+    }
+    if (!objectPath && storedValue.startsWith(`${userId}/`)) {
+      objectPath = storedValue;
+    }
+    if (objectPath.startsWith(`${userId}/`)) {
+      legacyReceivedInvoicePaths.add(objectPath);
+    }
+  }
+
+  return {
+    issuedIds: (issuedRows ?? []).map((row) => String(row.id)),
+    receivedIds: (receivedRows ?? []).map((row) => String(row.id)),
+    legacyReceivedInvoicePaths,
+    retainedReceivedInvoicePaths,
+  };
+}
+
+async function clearFiscalRetryMarkers(
+  admin: SupabaseClient,
+  userId: string
+): Promise<DeletionError[]> {
+  const errors: DeletionError[] = [];
+  for (const table of ["issued_invoices", "received_invoices"] as const) {
+    const { error } = await admin
+      .from(table)
+      .update({ deleted_by: null })
+      .eq("deleted_by", userId);
+    if (error && !MISSING_TABLE_CODES.has(error.code ?? "")) {
+      errors.push({ table, message: error.message });
+    }
+  }
+  return errors;
 }
 
 /** Pone a null las referencias de autoría en tablas que no son del usuario. */
@@ -394,31 +623,52 @@ async function deletePrivatePriceBank(
   await deleteBy(admin, "pb_providers", "company_id", userId, errors);
 }
 
-/** Borra los ficheros del usuario en Storage (prefijo `${userId}/`). */
-async function deleteStorageFiles(admin: SupabaseClient, userId: string) {
-  const PAGE = 100;
+/** Borra recursivamente los ficheros del usuario bajo `${userId}/`. */
+async function deleteStorageFiles(
+  admin: SupabaseClient,
+  userId: string,
+  errors: DeletionError[],
+  legacyReceivedInvoicePaths: ReadonlySet<string>,
+  retainedReceivedInvoicePaths: ReadonlySet<string>
+) {
   for (const bucket of STORAGE_BUCKETS) {
-    // list() pagina: hay que vaciar en bucle o se quedarían ficheros atrás.
-    // Se borra siempre la primera página porque al eliminarla el resto sube.
-    for (;;) {
-      const { data, error } = await admin.storage
-        .from(bucket)
-        .list(userId, { limit: PAGE, offset: 0 });
-      if (error) {
-        console.error(`[account/delete] storage list ${bucket}:`, error.message);
-        break;
-      }
-      if (!data || data.length === 0) break;
-
-      const paths = data.map((file) => `${userId}/${file.name}`);
-      const { error: removeError } = await admin.storage.from(bucket).remove(paths);
-      if (removeError) {
-        // No bloquea el borrado de la cuenta: se registra para poder limpiarlo.
-        console.error(`[account/delete] storage ${bucket}:`, removeError.message);
-        break;
-      }
-      if (data.length < PAGE) break;
+    try {
+      await deleteStorageTree(
+        admin.storage.from(bucket),
+        userId,
+        100,
+        bucket === "invoices" ? legacyReceivedInvoicePaths : new Set()
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[account/delete] storage ${bucket}:`, message);
+      errors.push({ table: `storage.${bucket}`, message });
     }
+  }
+
+  // This bucket also contains transient OCR drafts. Delete the entire owner
+  // tree recursively, retaining only exact paths still referenced by the
+  // stable fiscal rows selected above. Usually they are confirmed immutable
+  // paths; an in-flight promotion fenced by deletion can leave its source draft
+  // as the stable referenced document. A partial failure leaves Auth untouched,
+  // so the same cleanup can safely be retried.
+  try {
+    await deleteStorageTree(
+      admin.storage.from(RETAINED_INVOICE_BUCKET),
+      userId,
+      100,
+      retainedReceivedInvoicePaths
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(
+      `[account/delete] storage ${RETAINED_INVOICE_BUCKET}:`,
+      message
+    );
+    errors.push({
+      table: `storage.${RETAINED_INVOICE_BUCKET}`,
+      message,
+    });
   }
 }
 
@@ -441,6 +691,10 @@ export async function POST(request: Request) {
   if (sessionError || !user) {
     return NextResponse.json({ error: "No hay sesión activa." }, { status: 401 });
   }
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
   // 2) Confirmación explícita, revalidada en servidor.
   let confirmation: unknown;
@@ -474,23 +728,102 @@ export async function POST(request: Request) {
   const errors: DeletionError[] = [];
 
   try {
+    // A previous attempt may have completed every destructive cleanup step
+    // and then failed while clearing markers or deleting Auth. The protected
+    // Auth checkpoint makes this branch durable: never enumerate or delete
+    // Storage again, because the fiscal markers may already be gone.
+    if (isAccountDeletionCleanupComplete(user.app_metadata)) {
+      // A write racing the first cleanup pass (e.g. another authenticated tab
+      // inserting a pb_providers row after deletePrivatePriceBank already ran)
+      // can leave an owned row whose Auth FK blocks deleteUser below. Every
+      // step here deletes by owner id and is a no-op once nothing is left, so
+      // repeating it on every retry is safe and closes that race instead of
+      // getting stuck forever once the checkpoint is set.
+      const retryParentIds = {} as Record<ParentKey, string[]>;
+      for (const table of PARENT_TABLES) {
+        retryParentIds[table] = await collectIds(admin, table, "user_id", userId);
+      }
+      const ownershipRetryErrors: DeletionError[] = [];
+      for (const { table, column, parent } of CHILD_TABLES) {
+        await deleteByIn(admin, table, column, retryParentIds[parent], ownershipRetryErrors);
+      }
+      for (const { table, column } of OWNED_TABLES) {
+        await deleteBy(admin, table, column, userId, ownershipRetryErrors);
+      }
+      await deletePrivatePriceBank(admin, userId, ownershipRetryErrors);
+      await clearAuthorReferences(admin, userId, ownershipRetryErrors);
+      if (ownershipRetryErrors.length > 0) {
+        console.error(
+          "[account/delete] reintento de limpieza de propiedad:",
+          ownershipRetryErrors
+        );
+        return NextResponse.json(
+          {
+            error:
+              "Tus datos ya están casi limpios, pero falló un reintento de limpieza. Reinténtalo.",
+            details: ownershipRetryErrors,
+          },
+          { status: 500 }
+        );
+      }
+
+      const markerCleanupErrors = await clearFiscalRetryMarkers(admin, userId);
+      if (markerCleanupErrors.length > 0) {
+        console.error(
+          "[account/delete] reintento de marcadores fiscales:",
+          markerCleanupErrors
+        );
+        return NextResponse.json(
+          {
+            error:
+              "La limpieza de datos terminó, pero falta desvincular algunos registros fiscales. Reinténtalo.",
+            details: markerCleanupErrors,
+          },
+          { status: 500 }
+        );
+      }
+
+      const { error: retryAuthError } = await admin.auth.admin.deleteUser(userId);
+      if (retryAuthError) {
+        console.error(
+          "[account/delete] reintento auth.admin.deleteUser:",
+          retryAuthError
+        );
+        return NextResponse.json(
+          {
+            error:
+              "Tus datos ya están limpios, pero no se pudo eliminar la cuenta de acceso. Reinténtalo.",
+          },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({ ok: true, resumed: true });
+    }
+
     // 3) Ids de los padres, necesarios para borrar las tablas hijas.
     const parentIds = {} as Record<ParentKey, string[]>;
     for (const table of PARENT_TABLES) {
       parentIds[table] = await collectIds(admin, table, "user_id", userId);
     }
 
-    // 4) Anonimizar lo que se conserva por obligación legal. Va primero: deja
-    //    las FKs a clients/projects/budgets a null y, si falla, no se ha
-    //    borrado nada todavía.
-    const { issuedIds, receivedIds } = await anonymizeRetainedRows(admin, userId, errors);
+    // 4) Anonimizar lo que se conserva por obligación legal y borrar sólo las
+    //    facturas emitidas que siguen siendo borradores. Va antes que el resto
+    //    para liberar sus FKs; cualquier fallo deja Auth intacto y es seguro de
+    //    reintentar.
+    const {
+      issuedIds,
+      receivedIds,
+      legacyReceivedInvoicePaths,
+      retainedReceivedInvoicePaths,
+    } = await anonymizeRetainedRows(admin, userId, errors);
     if (errors.length > 0) {
       console.error("[account/delete] errores anonimizando:", errors);
       return NextResponse.json(
         {
           error:
             "No se pudieron anonimizar los registros de conservación obligatoria. " +
-            "No se ha eliminado nada.",
+            "La cuenta sigue activa y puedes reintentar.",
           details: errors,
         },
         { status: 500 }
@@ -521,7 +854,23 @@ export async function POST(request: Request) {
       );
     }
 
-    await deleteStorageFiles(admin, userId);
+    await deleteStorageFiles(
+      admin,
+      userId,
+      errors,
+      legacyReceivedInvoicePaths,
+      retainedReceivedInvoicePaths
+    );
+    if (errors.length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "No se pudieron borrar todos los archivos privados. La cuenta sigue activa para poder reintentar.",
+          details: errors,
+        },
+        { status: 500 }
+      );
+    }
 
     // 7) Perfil y usuario de auth (requiere service role).
     const { error: profileError } = await admin.from("profiles").delete().eq("id", userId);
@@ -533,11 +882,53 @@ export async function POST(request: Request) {
       );
     }
 
+    // Persist a protected checkpoint before clearing deleted_by. If any later
+    // step fails, the next authenticated request takes the auth-only retry
+    // branch above and never runs Storage cleanup with an empty allow-list.
+    const { error: checkpointError } = await admin.auth.admin.updateUserById(
+      userId,
+      {
+        app_metadata: markAccountDeletionCleanupComplete(user.app_metadata),
+      }
+    );
+    if (checkpointError) {
+      console.error("[account/delete] checkpoint Auth:", checkpointError);
+      return NextResponse.json(
+        {
+          error:
+            "Tus datos se han limpiado, pero no se pudo preparar el borrado reintentable del acceso.",
+        },
+        { status: 500 }
+      );
+    }
+
+    // deleted_by todavía identifica al antiguo titular. Debe quedar limpio
+    // ANTES de borrar Auth. El checkpoint anterior hace este paso reintentable
+    // aunque una tabla falle temporalmente o Auth falle después.
+    const markerCleanupErrors = await clearFiscalRetryMarkers(admin, userId);
+    if (markerCleanupErrors.length > 0) {
+      console.error(
+        "[account/delete] no se pudieron limpiar marcadores fiscales:",
+        markerCleanupErrors
+      );
+      return NextResponse.json(
+        {
+          error:
+            "Tus datos se han limpiado, pero falta desvincular algunos registros fiscales. Reinténtalo.",
+          details: markerCleanupErrors,
+        },
+        { status: 500 }
+      );
+    }
+
     const { error: authError } = await admin.auth.admin.deleteUser(userId);
     if (authError) {
       console.error("[account/delete] auth.admin.deleteUser:", authError);
       return NextResponse.json(
-        { error: "Tus datos se han borrado, pero no se pudo eliminar la cuenta de acceso." },
+        {
+          error:
+            "Tus datos se han borrado, pero no se pudo eliminar la cuenta de acceso. Reinténtalo.",
+        },
         { status: 500 }
       );
     }

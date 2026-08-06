@@ -6,6 +6,7 @@ import { writeFileSync, readFileSync, unlinkSync, mkdirSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { randomUUID } from "crypto";
+import { downloadCompanyLogo } from "@/lib/company-logo-download";
 
 export async function POST(request: Request) {
   const cookieStore = await cookies();
@@ -117,20 +118,18 @@ export async function POST(request: Request) {
     const pdfPath = join(tmpDir, `budget-${id}.pdf`);
     const logoPath = join(tmpDir, `budget-logo-${id}`);
 
-    if (company.logo_url && /^https:\/\/[^\s]+$/i.test(company.logo_url)) {
+    if (company.logo_url) {
       try {
-        const logoResponse = await fetch(company.logo_url);
-        const contentType = logoResponse.headers.get("content-type") || "";
-        if (
-          logoResponse.ok &&
-          ["image/png", "image/jpeg", "image/webp"].some((type) =>
-            contentType.startsWith(type)
-          )
-        ) {
-          writeFileSync(logoPath, Buffer.from(await logoResponse.arrayBuffer()));
+        const logoBuffer = await downloadCompanyLogo({
+          rawUrl: company.logo_url,
+          supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          userId: user.id,
+        });
+        if (logoBuffer) {
+          writeFileSync(logoPath, logoBuffer);
           (company as typeof company & { logo_path?: string }).logo_path = logoPath;
         }
-      } catch (logoError) {
+      } catch {
         console.warn("[PDF] Company logo could not be downloaded");
       }
     }
