@@ -159,7 +159,7 @@ do $$
 declare
   v_missing text[];
 begin
-  select coalesce(array_agg(b.id), '{}') into v_missing
+  select coalesce(array_agg(expected.id), '{}') into v_missing
     from (values
       ('invoices'), ('company-branding'), ('project-docs'), ('received-invoice-documents')
     ) as expected(id)
