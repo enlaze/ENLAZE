@@ -245,3 +245,142 @@ html.dark ::selection {
     transform: translateX(-50%);
   }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Ajustes (panel de dos columnas) — tokens del rediseño.
+
+   Se declaran SOLO dentro de `[data-settings-surface]` para que la
+   paleta del rediseño no se filtre al resto del dashboard. El verde
+   de marca es el mismo #00c896 que ya define `--color-brand-green`.
+
+   El tema oscuro se activa igual que en el resto de la app: el
+   ThemeProvider pone `.dark` y `data-theme="dark"` en <html>.
+   ───────────────────────────────────────────────────────────── */
+[data-settings-surface] {
+  /* Sangrado: anula el padding del <main> del dashboard (px-6 py-10 /
+     md:px-12 md:py-14) para que el panel llegue a los bordes. */
+  margin: -2.5rem -1.5rem;
+  padding: 0 1.5rem;
+  background: var(--st-bg);
+  min-height: calc(100vh - 57px);
+
+  --st-bg: #f4f7f6;
+  --st-panel: #ffffff;
+  --st-panel-2: #fafbfb;
+  --st-field: #ffffff;
+  --st-field-alt: #f4f6f5;
+  --st-border: #e6eae9;
+  --st-border-strong: #d7dedc;
+  --st-text: #0d2a2c;
+  --st-text-2: #3d5658;
+  --st-muted: #7b8f8e;
+  --st-accent: #00c896;
+  --st-accent-ink: #00795c;
+  --st-accent-soft: #e9faf4;
+  --st-accent-ring: rgba(0, 200, 150, 0.18);
+  --st-accent-contrast: #04120e;
+  --st-danger: #d1444b;
+  --st-danger-soft: #fdf0f0;
+
+  color: var(--st-text);
+}
+
+html.dark [data-settings-surface],
+html[data-theme="dark"] [data-settings-surface] {
+  --st-bg: #080d0d;
+  --st-panel: #0f1716;
+  --st-panel-2: #0c1413;
+  --st-field: #121b1a;
+  --st-field-alt: #0f1817;
+  --st-border: #1d2a28;
+  --st-border-strong: #263634;
+  --st-text: #e9f2f0;
+  --st-text-2: #b3c5c2;
+  --st-muted: #7d938f;
+  --st-accent: #00c896;
+  --st-accent-ink: #5ff0c8;
+  --st-accent-soft: rgba(0, 200, 150, 0.1);
+  --st-accent-ring: rgba(0, 200, 150, 0.22);
+  --st-accent-contrast: #04120e;
+  --st-danger: #ff7a80;
+  --st-danger-soft: rgba(209, 68, 75, 0.12);
+}
+
+@media (min-width: 768px) {
+  [data-settings-surface] {
+    margin: -3.5rem -3rem;
+    padding: 0 3rem;
+  }
+}
+
+/* Los estilos del diseño son inline; foco y hover necesitan CSS real. */
+[data-settings-surface] input::placeholder {
+  color: var(--st-muted);
+}
+[data-settings-surface] input:focus,
+[data-settings-surface] select:focus,
+[data-settings-surface] textarea:focus {
+  border-color: var(--st-accent);
+  box-shadow: 0 0 0 3px var(--st-accent-ring);
+}
+[data-settings-surface] input[aria-invalid="true"]:focus {
+  border-color: var(--st-danger);
+  box-shadow: 0 0 0 3px rgba(209, 68, 75, 0.14);
+}
+[data-settings-surface] select {
+  appearance: none;
+  -webkit-appearance: none;
+}
+[data-settings-surface] [data-st-hover="subtle"]:hover:not(:disabled) {
+  border-color: var(--st-accent);
+  color: var(--st-accent-ink);
+}
+[data-settings-surface] [data-st-hover="brighten"]:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+[data-settings-surface] [data-st-hover="danger"]:hover:not(:disabled) {
+  background: var(--st-danger);
+  color: #fff;
+}
+[data-settings-surface] [data-subitem]:hover {
+  background: var(--st-field-alt);
+}
+[data-settings-surface] [data-subitem][data-active="true"]:hover {
+  background: var(--st-accent-soft);
+}
+
+@keyframes st-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Breakpoints del diseño: el shell colapsa antes que el grid de dos columnas. */
+@media (max-width: 900px) {
+  [data-settings-surface] [data-st-shell] {
+    flex-direction: column !important;
+  }
+  [data-settings-surface] [data-st-subnav] {
+    width: 100% !important;
+    position: static !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--st-border) !important;
+  }
+  [data-settings-surface] [data-st-content] {
+    padding: 28px 0 140px !important;
+  }
+}
+@media (max-width: 1100px) {
+  [data-settings-surface] [data-st-split] {
+    grid-template-columns: 1fr !important;
+    gap: 22px !important;
+  }
+}
+@media (max-width: 720px) {
+  [data-settings-surface] [data-st-grid2] {
+    grid-template-columns: 1fr !important;
+  }
+  [data-settings-surface] [data-st-split] {
+    padding: 26px 20px !important;
+  }
+}
