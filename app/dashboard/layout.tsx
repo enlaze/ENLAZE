@@ -325,24 +325,26 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
 
   const handleResendVerificationEmail = async () => {
     if (!user?.email) return;
-    try {
-      await fetch("/api/auth/send-verification-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: user.email }),
-      });
-      toast.success("Email de verificación reenviado", {
-        description: "Revisa tu bandeja de entrada.",
-      });
-    } catch (error) {
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: user.email,
+    });
+    if (error) {
       console.error("Error resending email:", error);
       toast.error("No se pudo reenviar el email", {
         description: "Inténtalo de nuevo en unos segundos.",
       });
+      return;
     }
+    toast.success("Email de verificación reenviado", {
+      description: "Revisa tu bandeja de entrada.",
+    });
   };
 
-  const emailVerified = user?.user_metadata?.email_verified === true;
+  // Supabase marca la confirmación nativa en email_confirmed_at. Con "Confirm
+  // email" activo un usuario logueado ya está confirmado, así que el banner solo
+  // aparece si esa opción está desactivada en el proyecto.
+  const emailVerified = Boolean(user?.email_confirmed_at);
 
   // Build nav items from canonical list, optionally filtered by sector visibility.
   // If the sector config returns an explicit list of modules, only those hrefs

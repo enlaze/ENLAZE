@@ -28,30 +28,9 @@ export default function RegisterPage() {
       setError(error.message);
       setLoading(false);
     } else {
-      // Send verification email
-      try {
-        const response = await fetch("/api/auth/send-verification-email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          analytics.userRegistered(email);
-          setSuccess(true);
-        } else {
-          setError(
-            data.message || "Cuenta creada pero no pudimos enviar el email de verificación. Intenta manualmente."
-          );
-        }
-      } catch (err) {
-        console.error("Failed to send verification email:", err);
-        setError(
-          "Cuenta creada pero hubo un error al enviar el email de verificación. Intenta manualmente."
-        );
-      }
+      // Supabase envía el email de confirmación ("Confirm signup") automáticamente.
+      analytics.userRegistered(email);
+      setSuccess(true);
       setLoading(false);
     }
   };
