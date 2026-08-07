@@ -90,6 +90,7 @@ interface EmpresaForm {
   facturae_enabled: boolean;
   cnae: string;
   logo_url: string;
+  iban: string;
   // profiles
   business_sector: string;
 }
@@ -114,6 +115,7 @@ const EMPTY_FORM: EmpresaForm = {
   facturae_enabled: false,
   cnae: "",
   logo_url: "",
+  iban: "",
   business_sector: "otro",
 };
 
@@ -224,6 +226,7 @@ export default function EmpresaPanel({
       facturae_enabled: fiscal?.facturae_enabled ?? false,
       cnae: fiscal?.cnae || "",
       logo_url: fiscal?.logo_url || profile?.logo_url || "",
+      iban: fiscal?.iban || "",
       business_sector: normalizeSectorId(profile?.business_sector),
     };
 
@@ -275,6 +278,7 @@ export default function EmpresaPanel({
       facturae_enabled: form.facturae_enabled,
       cnae: form.cnae.trim(),
       logo_url: form.logo_url || null,
+      iban: form.iban.trim().toUpperCase().replace(/\s+/g, " "),
       sector_key: coarseSectorKey(form.business_sector),
       updated_at: new Date().toISOString(),
     };
@@ -771,6 +775,17 @@ export default function EmpresaPanel({
                 onChange={(v) => patch({ invoice_series: v.toUpperCase() })}
                 placeholder="F"
                 invalid={!serieOk}
+              />
+            </Field>
+
+            <Field
+              label="IBAN de cobro"
+              hint="Se usa como valor por defecto al crear presupuestos y facturas. Puedes cambiarlo en cada uno si hace falta."
+            >
+              <TextInput
+                value={form.iban}
+                onChange={(v) => patch({ iban: v.toUpperCase() })}
+                placeholder="ES00 0000 0000 0000 0000 0000"
               />
             </Field>
 

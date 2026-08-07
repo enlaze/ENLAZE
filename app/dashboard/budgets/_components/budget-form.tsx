@@ -39,6 +39,22 @@ interface Partida {
   subtotal: number;
 }
 
+interface PaymentPhase {
+  percent: number;
+  concept: string;
+  moment: string;
+}
+
+const paymentMethodQuickOptions = ["Transferencia bancaria", "Bizum", "Efectivo", "Tarjeta", "A convenir"];
+
+function defaultPaymentSchedule(depositPercent: number): PaymentPhase[] {
+  const deposit = Math.max(0, Math.min(100, depositPercent));
+  return [
+    { percent: deposit, concept: "Anticipo", moment: "Al aceptar el presupuesto" },
+    { percent: Math.max(0, 100 - deposit), concept: "Resto", moment: "A la finalización" },
+  ];
+}
+
 interface ClientOption {
   id: string;
   name: string;
@@ -117,6 +133,18 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
   const [validUntil, setValidUntil] = useState("");
   const [ivaPercent, setIvaPercent] = useState(21);
   const [notes, setNotes] = useState("");
+  const [depositPercent, setDepositPercent] = useState(30);
+  const [paymentMethod, setPaymentMethod] = useState("Transferencia bancaria");
+  const [paymentIban, setPaymentIban] = useState("");
+  const [fiscalIban, setFiscalIban] = useState("");
+  const [discountType, setDiscountType] = useState<"percent" | "amount">("percent");
+  const [discountPercent, setDiscountPercent] = useState(0);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [paymentSchedule, setPaymentSchedule] = useState<PaymentPhase[]>(defaultPaymentSchedule(30));
+  const [warrantyText, setWarrantyText] = useState("");
+  const [executionDeadlineText, setExecutionDeadlineText] = useState("");
+  const [observations, setObservations] = useState("");
+  const [conditionsText, setConditionsText] = useState("");
   const [partidas, setPartidas] = useState<Partida[]>([emptyPartida()]);
 
   async function loadClients(uid: string) {
@@ -142,7 +170,17 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       setUserId(user.id);
-      await Promise.all([loadClients(user.id), loadProjects(user.id)]);
+      const [, , { data: fiscal }] = await Promise.all([
+        loadClients(user.id),
+        loadProjects(user.id),
+        supabase.from("fiscal_settings").select("iban").eq("user_id", user.id).maybeSingle(),
+      ]);
+      const settingsIban = fiscal?.iban || "";
+      if (settingsIban) setFiscalIban(settingsIban);
+
+      if (!editBudgetId && settingsIban) {
+        setPaymentIban(settingsIban);
+      }
 
       if (editBudgetId) {
         const [{ data: existingBudget }, { data: existingItems }] =
@@ -177,6 +215,27 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
         setValidUntil(existingBudget.valid_until?.slice(0, 10) || "");
         setIvaPercent(Number(existingBudget.iva_percent ?? 21));
         setNotes(existingBudget.notes || "");
+        const loadedDeposit = Number(existingBudget.deposit_percent ?? 30);
+        setDepositPercent(loadedDeposit);
+        setPaymentMethod(existingBudget.payment_method || "Transferencia bancaria");
+        setPaymentIban(existingBudget.payment_iban || settingsIban || "");
+        setDiscountType(existingBudget.discount_type === "amount" ? "amount" : "percent");
+        setDiscountPercent(Number(existingBudget.discount_percent ?? 0));
+        setDiscountAmount(Number(existingBudget.discount_amount ?? 0));
+        const loadedSchedule = Array.isArray(existingBudget.payment_schedule) ? existingBudget.payment_schedule : [];
+        setPaymentSchedule(
+          loadedSchedule.length > 0
+            ? loadedSchedule.map((phase: { percent?: number; concept?: string; moment?: string }) => ({
+                percent: Number(phase.percent ?? 0),
+                concept: phase.concept || "",
+                moment: phase.moment || "",
+              }))
+            : defaultPaymentSchedule(loadedDeposit)
+        );
+        setWarrantyText(existingBudget.warranty_text || "");
+        setExecutionDeadlineText(existingBudget.execution_deadline_text || "");
+        setObservations(existingBudget.observations || "");
+        setConditionsText(existingBudget.conditions_text || "");
         setPartidas(
           existingItems?.length
             ? existingItems.map((item) => ({
@@ -231,9 +290,30 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
     setPartidas(partidas.filter((_, i) => i !== index));
   }
 
+  function addPaymentPhase() {
+    setPaymentSchedule([...paymentSchedule, { percent: 0, concept: "", moment: "" }]);
+  }
+
+  function removePaymentPhase(index: number) {
+    setPaymentSchedule(paymentSchedule.filter((_, i) => i !== index));
+  }
+
+  function updatePaymentPhase(index: number, field: keyof PaymentPhase, value: string | number) {
+    const updated = [...paymentSchedule];
+    updated[index] = { ...updated[index], [field]: value };
+    setPaymentSchedule(updated);
+  }
+
+  const paymentPhasesTotal = paymentSchedule.reduce((sum, phase) => sum + (Number(phase.percent) || 0), 0);
+
   const subtotal = partidas.reduce((sum, p) => sum + p.subtotal, 0);
-  const ivaAmount = subtotal * (ivaPercent / 100);
-  const total = subtotal + ivaAmount;
+  const discountValue =
+    discountType === "amount"
+      ? Math.min(subtotal, Math.max(0, discountAmount))
+      : Math.round(subtotal * (Math.max(0, Math.min(100, discountPercent)) / 100) * 100) / 100;
+  const taxableBase = Math.max(0, subtotal - discountValue);
+  const ivaAmount = taxableBase * (ivaPercent / 100);
+  const total = taxableBase + ivaAmount;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -266,6 +346,17 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
             iva_percent: ivaPercent,
             notes,
             valid_until: validUntil || null,
+            deposit_percent: depositPercent,
+            payment_method: paymentMethod,
+            payment_iban: paymentIban,
+            discount_type: discountType,
+            discount_percent: discountPercent,
+            discount_amount: discountAmount,
+            payment_schedule: paymentSchedule,
+            warranty_text: warrantyText,
+            execution_deadline_text: executionDeadlineText,
+            observations,
+            conditions_text: conditionsText,
           },
           p_items: partidas,
         }
@@ -320,6 +411,17 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
         total,
         notes,
         valid_until: validUntil || null,
+        deposit_percent: depositPercent,
+        payment_method: paymentMethod,
+        payment_iban: paymentIban,
+        discount_type: discountType,
+        discount_percent: discountPercent,
+        discount_amount: discountValue,
+        payment_schedule: paymentSchedule,
+        warranty_text: warrantyText,
+        execution_deadline_text: executionDeadlineText,
+        observations,
+        conditions_text: conditionsText,
       })
       .select()
       .single();
@@ -410,10 +512,6 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
               <select value={ivaPercent} onChange={(e) => setIvaPercent(Number(e.target.value))} className={inputCls}>
                 {ivaOptions.map((v) => <option key={v} value={v}>{v}%</option>)}
               </select>
-            </div>
-            <div>
-              <label className={labelCls}>Válido hasta</label>
-              <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} className={inputCls} />
             </div>
           </div>
         </Card>
@@ -586,14 +684,210 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
           </div>
         </Card>
 
+        {/* Condiciones del presupuesto */}
+        <Card>
+          <h2 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-4">
+            Condiciones del presupuesto
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className={labelCls}>Validez del presupuesto</label>
+              <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Anticipo (%)</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="1"
+                value={depositPercent}
+                onChange={(e) => setDepositPercent(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
+                className={inputCls}
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className={labelCls}>Descuento</label>
+              <div className="flex gap-2">
+                <select
+                  value={discountType}
+                  onChange={(e) => setDiscountType(e.target.value === "amount" ? "amount" : "percent")}
+                  className={inputCls}
+                  style={{ maxWidth: 90 }}
+                >
+                  <option value="percent">%</option>
+                  <option value="amount">€</option>
+                </select>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={discountType === "percent" ? discountPercent : discountAmount}
+                  onChange={(e) => {
+                    const v = Math.max(0, parseFloat(e.target.value) || 0);
+                    if (discountType === "percent") setDiscountPercent(Math.min(100, v));
+                    else setDiscountAmount(v);
+                  }}
+                  placeholder={discountType === "percent" ? "0" : "0.00"}
+                  className={inputCls}
+                />
+              </div>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className={labelCls}>Forma de pago</label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {paymentMethodQuickOptions.map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setPaymentMethod(opt)}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition ${
+                      paymentMethod === opt
+                        ? "bg-brand-green text-navy-900 border-brand-green"
+                        : "bg-white text-navy-600 border-navy-200 hover:border-brand-green dark:bg-zinc-900 dark:text-zinc-300 dark:border-zinc-700"
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="text"
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                placeholder="Ej: 50% al aceptar, 50% a la finalización"
+                className={inputCls}
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className={labelCls}>IBAN</label>
+              <input
+                type="text"
+                value={paymentIban}
+                onChange={(e) => setPaymentIban(e.target.value)}
+                placeholder="ES00 0000 0000 0000 0000 0000"
+                className={inputCls}
+              />
+              {fiscalIban && paymentIban.trim() !== fiscalIban.trim() && (
+                <p className="text-xs text-navy-400 mt-1 dark:text-zinc-500">
+                  IBAN por defecto en Ajustes → Empresa: {fiscalIban}.{" "}
+                  <button type="button" onClick={() => setPaymentIban(fiscalIban)} className="text-brand-green hover:underline">
+                    Usar este
+                  </button>
+                </p>
+              )}
+            </div>
+
+            <div className="md:col-span-2">
+              <div className="flex items-center justify-between mb-2">
+                <label className={labelCls} style={{ marginBottom: 0 }}>Fases de pago</label>
+                <button type="button" onClick={addPaymentPhase} className="text-xs text-brand-green hover:underline font-medium">
+                  + Añadir fase
+                </button>
+              </div>
+              <div className="space-y-2">
+                {paymentSchedule.map((phase, i) => (
+                  <div key={i} className="grid grid-cols-1 md:grid-cols-[80px_1fr_1fr_auto] gap-2 items-center">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={phase.percent}
+                      onChange={(e) => updatePaymentPhase(i, "percent", Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
+                      placeholder="%"
+                      className={inputSmCls}
+                    />
+                    <input
+                      type="text"
+                      value={phase.concept}
+                      onChange={(e) => updatePaymentPhase(i, "concept", e.target.value)}
+                      placeholder="Concepto (ej: Anticipo)"
+                      className={inputSmCls}
+                    />
+                    <input
+                      type="text"
+                      value={phase.moment}
+                      onChange={(e) => updatePaymentPhase(i, "moment", e.target.value)}
+                      placeholder="Momento (ej: Al aceptar / al inicio / a la entrega)"
+                      className={inputSmCls}
+                    />
+                    {paymentSchedule.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removePaymentPhase(i)}
+                        className="text-red-600 hover:text-red-700 text-sm dark:text-red-400 dark:hover:text-red-300"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {paymentSchedule.length === 0 && (
+                  <p className="text-xs text-navy-400 dark:text-zinc-500">Sin fases definidas. Se usará el anticipo/resto por defecto.</p>
+                )}
+              </div>
+              {paymentSchedule.length > 0 && paymentPhasesTotal !== 100 && (
+                <p className="text-xs text-amber-600 mt-1 dark:text-amber-400">
+                  Las fases suman {paymentPhasesTotal}% (no es obligatorio que sumen 100%).
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className={labelCls}>Plazo de ejecución</label>
+              <textarea
+                value={executionDeadlineText}
+                onChange={(e) => setExecutionDeadlineText(e.target.value)}
+                rows={2}
+                placeholder="Ej: 15 días laborables desde el inicio de la obra"
+                className={`${inputCls} resize-none`}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Garantía</label>
+              <textarea
+                value={warrantyText}
+                onChange={(e) => setWarrantyText(e.target.value)}
+                rows={2}
+                placeholder="Ej: 2 años de garantía en mano de obra y materiales"
+                className={`${inputCls} resize-none`}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className={labelCls}>Condiciones</label>
+              <textarea
+                value={conditionsText}
+                onChange={(e) => setConditionsText(e.target.value)}
+                rows={3}
+                placeholder="Condiciones legales/comerciales del presupuesto..."
+                className={`${inputCls} resize-none`}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className={labelCls}>Observaciones</label>
+              <textarea
+                value={observations}
+                onChange={(e) => setObservations(e.target.value)}
+                rows={2}
+                placeholder="Observaciones adicionales para el cliente..."
+                className={`${inputCls} resize-none`}
+              />
+            </div>
+          </div>
+        </Card>
+
         {/* Notas */}
         <Card>
-          <h2 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-4">Notas</h2>
+          <h2 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-4">Notas internas</h2>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
-            placeholder="Condiciones, plazos de ejecución, garantías..."
+            placeholder="Notas adicionales (visibles en el presupuesto)..."
             className={`${inputCls} resize-none`}
           />
         </Card>
@@ -605,6 +899,18 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
               <span>Subtotal</span>
               <span className="text-navy-900 dark:text-white font-medium">{subtotal.toFixed(2)} €</span>
             </div>
+            {discountValue > 0 && (
+              <>
+                <div className="flex justify-between text-sm text-red-600 dark:text-red-400">
+                  <span>Descuento{discountType === "percent" ? ` (${discountPercent}%)` : ""}</span>
+                  <span className="font-medium">-{discountValue.toFixed(2)} €</span>
+                </div>
+                <div className="flex justify-between text-sm text-navy-600 dark:text-zinc-400">
+                  <span>Base imponible</span>
+                  <span className="text-navy-900 dark:text-white font-medium">{taxableBase.toFixed(2)} €</span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between text-sm text-navy-600 dark:text-zinc-400">
               <span>IVA ({ivaPercent}%)</span>
               <span className="text-navy-900 dark:text-white font-medium">{ivaAmount.toFixed(2)} €</span>

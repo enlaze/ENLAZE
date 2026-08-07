@@ -12,6 +12,7 @@ import type {
   BudgetInternalView,
   ClimaSystemSpec,
 } from "./budget-engine";
+import { CHAPTER_LABELS } from "./budget-engine";
 
 // ─── Shared Types (legacy) ──────────────────────────────────────────────────
 
@@ -19,6 +20,7 @@ export interface PDFBudget {
   budget_number: string;
   title: string;
   client_name?: string | null;
+  client_nif?: string | null;
   client_email?: string | null;
   client_phone?: string | null;
   client_address?: string | null;
@@ -33,6 +35,11 @@ export interface PDFBudget {
   notes?: string | null;
   company_name?: string | null;
   company_logo_url?: string | null;
+  company_nif?: string | null;
+  company_address?: string | null;
+  company_phone?: string | null;
+  company_email?: string | null;
+  company_web?: string | null;
   location?: string | null;
   geographic_profile?: string | null;
   geographic_adjustment?: string | null;
@@ -48,12 +55,25 @@ export interface PDFBudget {
     description?: string;
     depends_on?: string[];
   }>;
+  // Presupix format: editable per-budget fields
+  deposit_percent?: number | null;
+  payment_method?: string | null;
+  payment_iban?: string | null;
+  warranty_text?: string | null;
+  execution_deadline_text?: string | null;
+  observations?: string | null;
+  conditions_text?: string | null;
+  discount_type?: string | null;
+  discount_percent?: number | null;
+  discount_amount?: number | null;
+  payment_schedule?: Array<{ percent?: number; concept?: string; moment?: string }> | null;
 }
 
 export interface PDFBudgetItem {
   concept: string;
   description?: string | null;
   category: string;
+  chapter?: string | null;
   quantity: number;
   unit: string;
   unit_price: number;
@@ -167,7 +187,69 @@ function pageStyles(isInternal: boolean): string {
     .notes { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 13px; color: #92400e; }
     .confidence-bar { display: inline-block; height: 6px; border-radius: 3px; }
     .margin-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+    /* Presupix client format */
+    .px-section-row td { background: #f1f5f9; font-weight: 700; font-size: 13px; color: #0a1628; padding: 8px 6px; }
+    .px-subtotal-row td { background: #f8fafc; font-weight: 700; font-size: 13px; color: #0a1628; padding: 8px 6px; border-top: 1px solid #cbd5e1; }
+    .px-breakdown { float: right; min-width: 260px; margin-top: 8px; }
+    .px-breakdown-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 13px; color: #334155; }
+    .px-breakdown-total { font-size: 18px; font-weight: 800; color: #0a1628; border-top: 2px solid #0a1628; margin-top: 6px; padding-top: 6px; }
+    .px-block { clear: both; margin-top: 24px; }
+    .px-label { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .px-text { font-size: 13px; color: #1e293b; line-height: 1.5; }
+    .px-divider { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+    .px-payment-table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+    .px-payment-table td { padding: 6px 0; font-size: 13px; vertical-align: top; }
+    .px-payment-table .px-moment { font-size: 11px; color: #64748b; }
+    .px-payment-table .px-amount { text-align: right; font-weight: 700; color: #0a1628; }
+    .px-signatures { display: flex; justify-content: space-between; margin-top: 48px; }
+    .px-sign-block { width: 45%; }
+    .px-sign-line { border-top: 1px solid #94a3b8; margin-top: 40px; padding-top: 4px; font-size: 11px; color: #64748b; }
   `;
+}
+
+// ─── Presupix section grouping (flat item list per section) ────────────────
+
+interface PresupixSection {
+  label: string;
+  items: PDFBudgetItem[];
+  subtotal: number;
+}
+
+/**
+ * Groups budget items into sections for the Presupix-style item table.
+ * If every item shares the same chapter (or none set it), the whole budget
+ * renders as a single section labelled with the budget title — matching the
+ * reference "Presupix" sample. When multiple distinct chapters are present
+ * (typical of the AI wizard flow), one section per chapter is produced.
+ */
+function buildPresupixSections(budgetTitle: string, items: PDFBudgetItem[]): PresupixSection[] {
+  const distinctChapters = new Set(items.map(i => i.chapter).filter((c): c is string => !!c));
+
+  if (distinctChapters.size <= 1) {
+    const subtotal = items.reduce((s, i) => s + i.subtotal, 0);
+    return [{ label: budgetTitle, items, subtotal }];
+  }
+
+  const order = Array.from(distinctChapters);
+  const sections: PresupixSection[] = order.map(chapter => {
+    const chItems = items.filter(i => i.chapter === chapter);
+    return {
+      label: CHAPTER_LABELS[chapter] || chapter,
+      items: chItems,
+      subtotal: chItems.reduce((s, i) => s + i.subtotal, 0),
+    };
+  });
+
+  const unassigned = items.filter(i => !i.chapter);
+  if (unassigned.length > 0) {
+    sections.push({
+      label: "Otros",
+      items: unassigned,
+      subtotal: unassigned.reduce((s, i) => s + i.subtotal, 0),
+    });
+  }
+
+  return sections;
 }
 
 // ─── A. Client PDF (by chapters, no escandallo) ─────────────────────────────
@@ -520,11 +602,228 @@ export function generateInternalPDFHTML(
 </html>`;
 }
 
-// ─── C. Legacy Generator (backward compat) ──────────────────────────────────
+// ─── C. Presupix client format ──────────────────────────────────────────────
+
+function buildPresupixHeaderHTML(budget: PDFBudget): string {
+  const companyIdentity = budget.company_logo_url
+    ? `<img src="${budget.company_logo_url}" alt="${budget.company_name || "Empresa"}" style="display:block;max-width:170px;max-height:64px;object-fit:contain;margin-bottom:10px;" />`
+    : `<div style="font-size:22px;font-weight:800;color:#0a1628;margin-bottom:8px;">${budget.company_name || 'enl<span style="color:#00c896;">a</span>ze'}</div>`;
+
+  const companyLines = [
+    budget.company_name ? `<strong>${budget.company_name}</strong>` : "",
+    budget.company_nif ? `CIF: ${budget.company_nif}` : "",
+    budget.company_address || "",
+    budget.company_phone ? `Tel: ${budget.company_phone}` : "",
+    budget.company_email || "",
+    budget.company_web || "",
+  ].filter(Boolean).join("<br/>");
+
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
+      <div>
+        ${companyIdentity}
+        <div style="font-size:12px;color:#475569;line-height:1.6;">${companyLines}</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:26px;font-weight:800;color:#0a1628;letter-spacing:1px;margin-bottom:10px;">PRESUPUESTO</div>
+        <table style="margin-left:auto;font-size:13px;">
+          <tr><td style="color:#64748b;padding:2px 10px 2px 0;">N&ordm;</td><td style="font-weight:700;color:#0a1628;">${budget.budget_number}</td></tr>
+          <tr><td style="color:#64748b;padding:2px 10px 2px 0;">Fecha</td><td style="font-weight:700;color:#0a1628;">${new Date(budget.created_at).toLocaleDateString("es-ES")}</td></tr>
+          <tr><td style="color:#64748b;padding:2px 10px 2px 0;">Validez</td><td style="font-weight:700;color:#0a1628;">${budget.valid_until ? new Date(budget.valid_until).toLocaleDateString("es-ES") : "\u2014"}</td></tr>
+        </table>
+      </div>
+    </div>
+    <hr class="px-divider" />`;
+}
+
+function buildPresupixClientBlockHTML(budget: PDFBudget): string {
+  return `
+    <div style="margin-bottom:20px;">
+      <div class="px-label">Cliente</div>
+      <div style="font-size:14px;font-weight:700;color:#0a1628;margin-bottom:2px;">${budget.client_name || "Sin nombre"}</div>
+      <div class="px-text">
+        ${budget.client_nif ? `CIF/NIF: ${budget.client_nif}<br/>` : ""}
+        ${budget.client_address ? `${budget.client_address}<br/>` : ""}
+        ${budget.client_phone ? `Tel: ${budget.client_phone}<br/>` : ""}
+        ${budget.client_email || ""}
+      </div>
+    </div>`;
+}
+
+function renderPresupixClientHTML(budget: PDFBudget, items: PDFBudgetItem[]): string {
+  const sections = buildPresupixSections(budget.title, items);
+  const showSectionHeader = sections.length > 1 || sections[0]?.label !== budget.title;
+
+  let rowIdx = 0;
+  const rowsHTML = sections.map(section => {
+    const sectionHeaderHTML = `
+      <tr class="px-section-row"><td colspan="6">${section.label}</td></tr>`;
+
+    const itemRowsHTML = section.items.map(item => {
+      rowIdx++;
+      return `
+        <tr style="border-bottom:1px solid #e2e8f0;">
+          <td style="padding:8px 6px;font-size:12px;color:#64748b;vertical-align:top;">${rowIdx}</td>
+          <td style="padding:8px 6px;font-size:12px;vertical-align:top;"><strong>${item.concept}</strong>${item.description ? `<br/><span style="color:#64748b;font-size:11px;">${item.description}</span>` : ""}</td>
+          <td style="padding:8px 6px;font-size:12px;text-align:center;vertical-align:top;">${item.quantity}</td>
+          <td style="padding:8px 6px;font-size:12px;text-align:center;vertical-align:top;">${unitLabels[item.unit] || item.unit}</td>
+          <td style="padding:8px 6px;font-size:12px;text-align:right;vertical-align:top;">${fmt(item.unit_price)} &euro;</td>
+          <td style="padding:8px 6px;font-size:12px;text-align:right;font-weight:600;vertical-align:top;">${fmt(item.subtotal)} &euro;</td>
+        </tr>`;
+    }).join("");
+
+    const subtotalRowHTML = `
+      <tr class="px-subtotal-row"><td colspan="5" style="text-align:right;">Subtotal &middot; ${section.label}</td><td style="text-align:right;">${fmt(section.subtotal)} &euro;</td></tr>`;
+
+    return (showSectionHeader ? sectionHeaderHTML : "") + itemRowsHTML + subtotalRowHTML;
+  }).join("");
+
+  const depositPct = budget.deposit_percent ?? 30;
+  const depositAmount = Math.round(budget.total * (depositPct / 100) * 100) / 100;
+  const pendingAmount = Math.round((budget.total - depositAmount) * 100) / 100;
+
+  // Descuento: aplica sobre el subtotal (base imponible) antes del IVA.
+  const discountType = budget.discount_type === "amount" ? "amount" : "percent";
+  const discountPercent = Math.max(0, Math.min(100, budget.discount_percent ?? 0));
+  const discountAmountInput = Math.max(0, budget.discount_amount ?? 0);
+  const discountValue =
+    discountType === "amount"
+      ? Math.min(budget.subtotal, discountAmountInput)
+      : Math.round(budget.subtotal * (discountPercent / 100) * 100) / 100;
+  const taxableBase = Math.max(0, budget.subtotal - discountValue);
+
+  // Fases de pago: usa el calendario definido en el presupuesto, o cae al
+  // comportamiento clásico (anticipo/resto) para presupuestos antiguos.
+  const scheduleFromBudget =
+    Array.isArray(budget.payment_schedule) && budget.payment_schedule.length > 0
+      ? budget.payment_schedule
+      : null;
+  const scheduleForDisplay =
+    scheduleFromBudget ?? [
+      { percent: depositPct, concept: "Anticipo", moment: "Al aceptar &middot; Reserva de fecha e inicio de trabajos." },
+      { percent: Math.max(0, 100 - depositPct), concept: "Pago a la finalizaci&oacute;n (resto)", moment: "A la entrega de la obra &middot; Salvo acuerdo por fases." },
+    ];
+
+  const notasHTML = budget.notes ? `
+    <div class="px-block">
+      <div class="px-label">Notas</div>
+      <div class="px-text">${budget.notes}</div>
+    </div>` : "";
+
+  const cobroHTML = (budget.payment_method || budget.payment_iban) ? `
+    <div class="px-block">
+      <div class="px-label">M&eacute;todo de cobro</div>
+      <div class="px-text">
+        ${budget.payment_method ? `Forma de pago: <strong>${budget.payment_method}</strong><br/>` : ""}
+        ${budget.payment_iban ? `IBAN: <strong>${budget.payment_iban}</strong>` : ""}
+      </div>
+    </div>` : "";
+
+  const formaPagoRowsHTML = scheduleForDisplay
+    .map((phase) => {
+      const pct = Math.max(0, Math.min(100, Number(phase.percent) || 0));
+      const amount = Math.round(budget.total * (pct / 100) * 100) / 100;
+      const concept = phase.concept || "Pago";
+      const moment = phase.moment || "";
+      return `
+        <tr>
+          <td>${concept}${pct ? ` <strong>${pct}%</strong>` : ""}${moment ? `<br/><span class="px-moment">Momento: ${moment}</span>` : ""}</td>
+          <td class="px-amount">${fmt(amount)} &euro;</td>
+        </tr>`;
+    })
+    .join("");
+
+  const formaPagoHTML = `
+    <div class="px-block">
+      <div class="px-label">Forma de pago</div>
+      <table class="px-payment-table">
+        ${formaPagoRowsHTML}
+      </table>
+    </div>`;
+
+  const freeTextBlock = (label: string, text?: string | null) => text ? `
+    <div class="px-block">
+      <div class="px-label">${label}</div>
+      <div class="px-text">${text}</div>
+    </div>` : "";
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>${budget.budget_number}</title>
+  <style>${pageStyles(false)}</style>
+</head>
+<body>
+  ${buildPresupixHeaderHTML(budget)}
+  ${buildPresupixClientBlockHTML(budget)}
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:26px;text-align:left;">N&ordm;</th>
+        <th style="text-align:left;">Descripci&oacute;n</th>
+        <th style="width:60px;text-align:center;">Cantidad</th>
+        <th style="width:50px;text-align:center;">Ud</th>
+        <th style="width:80px;text-align:right;">Precio unit.</th>
+        <th style="width:90px;text-align:right;">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rowsHTML}
+    </tbody>
+  </table>
+
+  <div class="px-breakdown">
+    ${discountValue > 0 ? `
+    <div class="px-breakdown-row"><span>Subtotal</span><span>${fmt(budget.subtotal)} &euro;</span></div>
+    <div class="px-breakdown-row" style="color:#b91c1c;"><span>Descuento${discountType === "percent" ? ` (${discountPercent}%)` : ""}</span><span>-${fmt(discountValue)} &euro;</span></div>
+    <div class="px-breakdown-row"><span>Base imponible</span><span>${fmt(taxableBase)} &euro;</span></div>` : `
+    <div class="px-breakdown-row"><span>Base imponible</span><span>${fmt(budget.subtotal)} &euro;</span></div>`}
+    <div class="px-breakdown-row"><span>IVA (${budget.iva_percent}%)</span><span>${fmt(budget.iva_amount)} &euro;</span></div>
+    <div class="px-breakdown-row px-breakdown-total"><span>TOTAL</span><span>${fmt(budget.total)} &euro;</span></div>
+    ${!scheduleFromBudget ? `
+    <div class="px-breakdown-row" style="margin-top:6px;"><span>Anticipo (${depositPct}%)</span><span>${fmt(depositAmount)} &euro;</span></div>
+    <div class="px-breakdown-row"><span>Pendiente</span><span>${fmt(pendingAmount)} &euro;</span></div>` : ""}
+  </div>
+
+  ${notasHTML}
+  ${cobroHTML}
+  ${formaPagoHTML}
+
+  <div class="px-block">
+    <div class="px-breakdown-row px-breakdown-total" style="float:none;"><span>TOTAL</span><span>${fmt(budget.total)} &euro;</span></div>
+  </div>
+
+  ${freeTextBlock("Plazo de ejecuci&oacute;n", budget.execution_deadline_text)}
+  ${freeTextBlock("Garant&iacute;a", budget.warranty_text)}
+  ${freeTextBlock("Observaciones", budget.observations)}
+  ${freeTextBlock("Condiciones", budget.conditions_text)}
+
+  <div class="px-signatures">
+    <div class="px-sign-block">
+      <div class="px-sign-line">Firma del cliente<br/>Nombre y apellidos / Fecha</div>
+    </div>
+    <div class="px-sign-block">
+      <div class="px-sign-line">Firma del profesional<br/>Nombre y apellidos / Fecha</div>
+    </div>
+  </div>
+
+  ${buildFooterHTML(budget)}
+</body>
+</html>`;
+}
+
+// ─── D. Legacy Internal Generator ────────────────────────────────────────────
 
 /**
- * @deprecated Use generateClientPDFHTML or generateInternalPDFHTML instead.
- * Kept for backward compatibility with existing code paths.
+ * Client mode renders the "Presupix" format (see the reference sample this
+ * layout was built from): flat, numbered item list grouped under one or
+ * more section headers, subtotal per section, base imponible/IVA/TOTAL,
+ * anticipo/pendiente, notas, metodo de cobro + IBAN, forma de pago,
+ * plazo de ejecucion, garantia, observaciones, condiciones and dual
+ * signature blocks. Internal mode keeps the escandallo (cost/margin)
+ * breakdown used for the "PDF interno" export.
  */
 export function generateBudgetPDFHTML(
   budget: PDFBudget,
@@ -533,6 +832,9 @@ export function generateBudgetPDFHTML(
   serviceLabelsMap?: Record<string, string>,
   categoryLabelsMap?: Record<string, string>
 ): string {
+  if (mode === "client") {
+    return renderPresupixClientHTML(budget, items);
+  }
 
   const itemsHTML = items.map((item, i) => {
     let internalColumns = "";

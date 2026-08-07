@@ -85,6 +85,8 @@ function DraftRecoveryManager() {
 function WizardContent() {
   const { state, saveDraft, finalizeBudget } = useBudgetGenerate();
   const [finalizedId, setFinalizedId] = useState<string | null>(null);
+  const [exportingPDF, setExportingPDF] = useState<'client' | 'internal' | null>(null);
+  const supabase = createClient();
 
   const isConstruction = state.sector === "construccion";
 
@@ -107,48 +109,40 @@ function WizardContent() {
   };
 
   const handleExportPDF = async (mode: 'client' | 'internal') => {
-    // Reconstruir un objeto Budget y Items mínimos para el PDF desde el estado
-    const budgetMock: any = {
-      budget_number: `PRE-WIZARD-${new Date().getFullYear()}`, // Fallback si no queremos hacer fetch extra
-      title: "Presupuesto Generado",
-      service_type: state.sector,
-      status: "pendiente",
-      created_at: new Date().toISOString(),
-      subtotal: state.totals.directCost,
-      iva_percent: state.ivaPercent,
-      iva_amount: state.totals.directCost * (state.ivaPercent / 100),
-      total: state.totals.clientPrice * (1 + state.ivaPercent / 100),
-    };
+    // Usamos el presupuesto ya guardado en Supabase (no el estado en memoria del
+    // wizard) para que la salida sea idéntica a la del flujo clásico: mismos
+    // campos nuevos (anticipo, IBAN, garantía, plazo, observaciones, condiciones)
+    // y mismos datos de empresa.
+    if (!finalizedId) return;
+    setExportingPDF(mode);
+    try {
+      const [{ data: budget }, { data: items }, { data: profile }, { data: fiscal }] = await Promise.all([
+        supabase.from("budgets").select("*").eq("id", finalizedId).maybeSingle(),
+        supabase.from("budget_items").select("*").eq("budget_id", finalizedId).order("created_at", { ascending: true }),
+        supabase.from("profiles").select("business_name, full_name, logo_url").maybeSingle(),
+        supabase.from("fiscal_settings").select("*").maybeSingle(),
+      ]);
 
-    const marginMultiplier = 1 + (state.marginPercent / 100);
+      if (!budget) return;
 
-    const partidasMock: any[] = state.partidas.filter(p => p.status !== "opcional").map(p => ({
-      concept: p.concept,
-      description: p.description,
-      category: p.category,
-      quantity: p.quantity,
-      unit: p.unit,
-      unit_price: p.unit_price_client,
-      subtotal: p.subtotal_client,
-      subtotal_cost: p.subtotal_cost
-    }));
-
-    const materialsMock: any[] = state.materials.filter(m => m.included).map(m => ({
-      concept: m.name,
-      description: "Material sugerido",
-      category: "material",
-      quantity: m.quantity,
-      unit: m.unit,
-      unit_price: m.unit_price * marginMultiplier,
-      subtotal: m.subtotal * marginMultiplier,
-      subtotal_cost: m.unit_price * m.quantity // El coste base sin margen
-    }));
-
-    const itemsMock = [...partidasMock, ...materialsMock];
-
-    const html = generateBudgetPDFHTML(budgetMock, itemsMock, mode);
-    analytics.budgetExportedPDF(mode);
-    printPDF(html);
+      const html = generateBudgetPDFHTML(
+        {
+          ...budget,
+          company_name: profile?.business_name || profile?.full_name || "",
+          company_logo_url: profile?.logo_url || "",
+          company_nif: (fiscal as { nif?: string; cif?: string } | null)?.nif || (fiscal as { nif?: string; cif?: string } | null)?.cif || "",
+          company_address: (fiscal as { address?: string; fiscal_address?: string } | null)?.address || (fiscal as { address?: string; fiscal_address?: string } | null)?.fiscal_address || "",
+          company_phone: (fiscal as { phone?: string } | null)?.phone || "",
+          company_email: (fiscal as { email?: string } | null)?.email || "",
+        },
+        (items || []).map(i => ({ ...i, subtotal_cost: 0 })),
+        mode
+      );
+      analytics.budgetExportedPDF(mode);
+      printPDF(html);
+    } finally {
+      setExportingPDF(null);
+    }
   };
 
   if (finalizedId) {
@@ -165,11 +159,11 @@ function WizardContent() {
           <LinkButton href={`/dashboard/budgets/${finalizedId}`} className="bg-navy-900 hover:bg-navy-800 text-white dark:bg-zinc-800 dark:hover:bg-zinc-700">
             Abrir presupuesto clásico
           </LinkButton>
-          <Button variant="secondary" onClick={() => handleExportPDF('client')}>
-            Exportar PDF Cliente
+          <Button variant="secondary" onClick={() => handleExportPDF('client')} disabled={exportingPDF !== null}>
+            {exportingPDF === 'client' ? "Generando..." : "Exportar PDF Cliente"}
           </Button>
-          <Button variant="secondary" onClick={() => handleExportPDF('internal')} className="border-brand-green/50 text-brand-green hover:bg-brand-green/10">
-            Exportar PDF Interno
+          <Button variant="secondary" onClick={() => handleExportPDF('internal')} disabled={exportingPDF !== null} className="border-brand-green/50 text-brand-green hover:bg-brand-green/10">
+            {exportingPDF === 'internal' ? "Generando..." : "Exportar PDF Interno"}
           </Button>
         </div>
       </div>

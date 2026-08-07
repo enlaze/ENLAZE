@@ -1110,7 +1110,7 @@ export interface ChapterTechnicalBreakdown {
   includedTasks: TechnicalDetail[];
 }
 
-const CHAPTER_LABELS: Record<string, string> = {
+export const CHAPTER_LABELS: Record<string, string> = {
   protecciones: "Protecciones y forrados",
   demoliciones: "Demoliciones y retiradas",
   albanileria: "Albanileria y tabiqueria",
