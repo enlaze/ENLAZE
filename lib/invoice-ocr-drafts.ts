@@ -58,6 +58,29 @@ export function buildConfirmedInvoiceDocument(
   return { objectPath, storageUrl: retainedInvoiceStorageUrl(objectPath) };
 }
 
+/**
+ * Deterministic private destination for a received-invoice document found
+ * living in the legacy public `invoices` bucket. Kept under its own
+ * `legacy/` prefix, distinct from `confirmed/`, so migrated files can never
+ * collide with an OCR-promoted document for the same invoice id.
+ */
+export function buildLegacyReceivedInvoiceDocument(
+  userId: string,
+  invoiceId: string,
+  fileName: string
+): { objectPath: string; storageUrl: string } | null {
+  if (
+    !userId ||
+    !/^[0-9a-f-]{36}$/i.test(invoiceId) ||
+    !isSafeObjectSegment(fileName)
+  ) {
+    return null;
+  }
+
+  const objectPath = `${userId}/legacy/${invoiceId}/${fileName}`;
+  return { objectPath, storageUrl: retainedInvoiceStorageUrl(objectPath) };
+}
+
 export function isConfirmedInvoiceDocumentUrl(
   rawUrl: unknown,
   userId: string,

@@ -30,7 +30,9 @@ const roleLabels: Record<string, string> = {
 
 export default function PublicSignPage() {
   const params = useParams();
-  const signatureId = params.id as string;
+  // The route segment carries the random public token, not the signature
+  // UUID — a guessable id must not be able to authorize this page.
+  const token = params.id as string;
 
   const [info, setInfo] = useState<SignatureInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,7 +48,7 @@ export default function PublicSignPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/signatures/public?id=${signatureId}`);
+        const res = await fetch(`/api/signatures/public?token=${token}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         setInfo(data);
@@ -61,7 +63,7 @@ export default function PublicSignPage() {
       setLoading(false);
     }
     load();
-  }, [signatureId]);
+  }, [token]);
 
   async function handleSaveSignature(dataUrl: string) {
     setSignatureImage(dataUrl);
@@ -73,7 +75,7 @@ export default function PublicSignPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          signature_id: signatureId,
+          token,
           signature_image: dataUrl,
           user_agent: navigator.userAgent,
         }),
@@ -88,7 +90,7 @@ export default function PublicSignPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          signature_id: signatureId,
+          token,
           email: info?.signer_email,
         }),
       });
@@ -112,7 +114,7 @@ export default function PublicSignPage() {
       const res = await fetch("/api/signatures/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ signature_id: signatureId, code: otpCode }),
+        body: JSON.stringify({ token, code: otpCode }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -132,7 +134,7 @@ export default function PublicSignPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          signature_id: signatureId,
+          token,
           email: info?.signer_email,
         }),
       });

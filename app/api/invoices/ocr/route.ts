@@ -12,6 +12,11 @@ import {
   parseOwnedOcrDraftUrl,
   retainedInvoiceStorageUrl,
 } from "@/lib/invoice-ocr-drafts";
+import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
+
+// Vision OCR + image processing + Storage round-trips can run long; the
+// lease TTL below (180s) must stay comfortably above this.
+export const maxDuration = 60;
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const OCR_MODEL =
@@ -187,13 +192,36 @@ Responde SOLO con el JSON, sin texto adicional:
       ? `${userId}/drafts/${objectName}`
       : `${userId}/${objectName}`;
     const storageBucket = extractOnly ? RETAINED_INVOICE_BUCKET : "invoices";
-    const { data: uploadData, error: uploadError } = await supabaseService.storage
-      .from(storageBucket)
-      .upload(fileName, file, {
-        contentType: file.type,
-        cacheControl: "31536000",
-        upsert: false,
-      });
+
+    let uploadLeaseId: string;
+    try {
+      uploadLeaseId = await beginAccountWriteLease(supabaseService, userId, 180);
+    } catch (lockErr) {
+      return NextResponse.json(
+        {
+          error:
+            lockErr instanceof Error
+              ? lockErr.message
+              : "No se pudo iniciar la subida del documento.",
+        },
+        { status: 409 }
+      );
+    }
+    let uploadData: { path: string } | null = null;
+    let uploadError: { message: string } | null = null;
+    try {
+      const result = await supabaseService.storage
+        .from(storageBucket)
+        .upload(fileName, file, {
+          contentType: file.type,
+          cacheControl: "31536000",
+          upsert: false,
+        });
+      uploadData = result.data;
+      uploadError = result.error;
+    } finally {
+      await endAccountWriteLease(supabaseService, uploadLeaseId);
+    }
 
     let imageUrl = "";
     if (uploadError) {
@@ -424,83 +452,102 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 });
   }
 
-  if (invoice.document_url === confirmed.storageUrl) {
-    await supabaseService.storage
-      .from(RETAINED_INVOICE_BUCKET)
-      .remove([draft.objectPath]);
-    return NextResponse.json({ success: true, document_url: invoice.document_url });
-  }
-  if (invoice.document_url !== draftUrl) {
+  let promoteLeaseId: string;
+  try {
+    promoteLeaseId = await beginAccountWriteLease(supabaseService, user.id, 180);
+  } catch (lockErr) {
     return NextResponse.json(
-      { error: "El borrador no pertenece a esta factura" },
+      {
+        error:
+          lockErr instanceof Error
+            ? lockErr.message
+            : "No se pudo iniciar la conservación del documento.",
+      },
       { status: 409 }
     );
   }
 
-  let copiedByThisRequest = false;
-  const { error: copyError } = await supabaseService.storage
-    .from(RETAINED_INVOICE_BUCKET)
-    .copy(draft.objectPath, confirmed.objectPath);
-  if (copyError) {
-    // A retry may find the destination created by a previous request that
-    // failed after copying. Only continue after verifying that exact object.
-    if (!(await retainedObjectExists(confirmed.objectPath))) {
-      console.error("OCR draft copy error:", copyError);
+  try {
+    if (invoice.document_url === confirmed.storageUrl) {
+      await supabaseService.storage
+        .from(RETAINED_INVOICE_BUCKET)
+        .remove([draft.objectPath]);
+      return NextResponse.json({ success: true, document_url: invoice.document_url });
+    }
+    if (invoice.document_url !== draftUrl) {
       return NextResponse.json(
-        { error: "No se pudo conservar el documento de la factura" },
-        { status: 500 }
+        { error: "El borrador no pertenece a esta factura" },
+        { status: 409 }
       );
     }
-  } else {
-    copiedByThisRequest = true;
-  }
 
-  const { data: updatedInvoice, error: updateError } = await supabase
-    .from("received_invoices")
-    .update({ document_url: confirmed.storageUrl })
-    .eq("id", invoiceId)
-    .eq("user_id", user.id)
-    .eq("document_url", draftUrl)
-    .select("id, document_url")
-    .maybeSingle();
+    let copiedByThisRequest = false;
+    const { error: copyError } = await supabaseService.storage
+      .from(RETAINED_INVOICE_BUCKET)
+      .copy(draft.objectPath, confirmed.objectPath);
+    if (copyError) {
+      // A retry may find the destination created by a previous request that
+      // failed after copying. Only continue after verifying that exact object.
+      if (!(await retainedObjectExists(confirmed.objectPath))) {
+        console.error("OCR draft copy error:", copyError);
+        return NextResponse.json(
+          { error: "No se pudo conservar el documento de la factura" },
+          { status: 500 }
+        );
+      }
+    } else {
+      copiedByThisRequest = true;
+    }
 
-  if (updateError || !updatedInvoice) {
-    const { data: currentInvoice } = await supabase
+    const { data: updatedInvoice, error: updateError } = await supabase
       .from("received_invoices")
-      .select("document_url")
+      .update({ document_url: confirmed.storageUrl })
       .eq("id", invoiceId)
       .eq("user_id", user.id)
+      .eq("document_url", draftUrl)
+      .select("id, document_url")
       .maybeSingle();
-    const alreadyPromoted =
-      currentInvoice?.document_url === confirmed.storageUrl;
 
-    if (!alreadyPromoted) {
-      if (copiedByThisRequest) {
-        await supabaseService.storage
-          .from(RETAINED_INVOICE_BUCKET)
-          .remove([confirmed.objectPath]);
+    if (updateError || !updatedInvoice) {
+      const { data: currentInvoice } = await supabase
+        .from("received_invoices")
+        .select("document_url")
+        .eq("id", invoiceId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      const alreadyPromoted =
+        currentInvoice?.document_url === confirmed.storageUrl;
+
+      if (!alreadyPromoted) {
+        if (copiedByThisRequest) {
+          await supabaseService.storage
+            .from(RETAINED_INVOICE_BUCKET)
+            .remove([confirmed.objectPath]);
+        }
+        return NextResponse.json(
+          { error: "No se pudo asociar el documento conservado a la factura" },
+          { status: 500 }
+        );
       }
-      return NextResponse.json(
-        { error: "No se pudo asociar el documento conservado a la factura" },
-        { status: 500 }
-      );
     }
-  }
 
-  const { error: removeError } = await supabaseService.storage
-    .from(RETAINED_INVOICE_BUCKET)
-    .remove([draft.objectPath]);
-  if (removeError) {
-    // The confirmed copy is already attached. Leaving an unreferenced draft is
-    // safer than rolling back the fiscal document and can be cleaned later.
-    console.warn("OCR draft cleanup error:", removeError.message);
-  }
+    const { error: removeError } = await supabaseService.storage
+      .from(RETAINED_INVOICE_BUCKET)
+      .remove([draft.objectPath]);
+    if (removeError) {
+      // The confirmed copy is already attached. Leaving an unreferenced draft is
+      // safer than rolling back the fiscal document and can be cleaned later.
+      console.warn("OCR draft cleanup error:", removeError.message);
+    }
 
-  return NextResponse.json({
-    success: true,
-    document_url: confirmed.storageUrl,
-    draft_cleanup_pending: Boolean(removeError),
-  });
+    return NextResponse.json({
+      success: true,
+      document_url: confirmed.storageUrl,
+      draft_cleanup_pending: Boolean(removeError),
+    });
+  } finally {
+    await endAccountWriteLease(supabaseService, promoteLeaseId);
+  }
 }
 
 /** Delete an owned OCR draft only while no received invoice references it. */
@@ -558,9 +605,29 @@ export async function DELETE(request: Request) {
     );
   }
 
-  const { error: removeError } = await supabaseService.storage
-    .from(RETAINED_INVOICE_BUCKET)
-    .remove([draft.objectPath]);
+  let deleteLeaseId: string;
+  try {
+    deleteLeaseId = await beginAccountWriteLease(supabaseService, user.id, 180);
+  } catch (lockErr) {
+    return NextResponse.json(
+      {
+        error:
+          lockErr instanceof Error
+            ? lockErr.message
+            : "No se pudo eliminar el borrador OCR.",
+      },
+      { status: 409 }
+    );
+  }
+  let removeError: { message: string } | null = null;
+  try {
+    const result = await supabaseService.storage
+      .from(RETAINED_INVOICE_BUCKET)
+      .remove([draft.objectPath]);
+    removeError = result.error;
+  } finally {
+    await endAccountWriteLease(supabaseService, deleteLeaseId);
+  }
   if (removeError) {
     return NextResponse.json(
       { error: "No se pudo eliminar el borrador OCR" },

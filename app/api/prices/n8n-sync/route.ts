@@ -165,16 +165,16 @@ async function handleUserRequest(request: Request) {
     },
   };
 
-  const { data: created, error: createError } = await admin
-    .from("n8n_updates")
-    .insert({
-      sector: REQUEST_SECTOR,
-      update_type: REQUEST_TYPE,
-      data: requestData,
-      status: "processing",
-    })
-    .select("id,status,created_at,processed_at,data")
-    .single();
+  const { data: created, error: createError } = await admin.rpc(
+    "create_n8n_update_locked",
+    {
+      p_sector: REQUEST_SECTOR,
+      p_update_type: REQUEST_TYPE,
+      p_status: "processing",
+      p_requested_by: user.id,
+      p_data: requestData,
+    }
+  );
 
   if (createError || !created) {
     return NextResponse.json(
@@ -223,20 +223,20 @@ async function claimNextRequest() {
 
   for (const stale of candidates.filter((row) => isStaleRequest(row, now))) {
     const completedAt = new Date().toISOString();
-    await admin
-      .from("n8n_updates")
-      .update({
-        status: "failed",
-        processed_at: completedAt,
-        data: {
-          ...stale.data,
-          phase: "failed",
-          completed_at: completedAt,
-          error: "La ejecución de n8n superó el tiempo máximo permitido",
-        },
-      })
-      .eq("id", stale.id)
-      .eq("status", "processing");
+    // Devuelve null (fila omitida) si el propietario está bloqueado por
+    // borrado de cuenta; no debe abortar el resto del lote.
+    await admin.rpc("write_n8n_update_locked", {
+      p_id: stale.id,
+      p_expected_status: "processing",
+      p_status: "failed",
+      p_data: {
+        ...stale.data,
+        phase: "failed",
+        completed_at: completedAt,
+        error: "La ejecución de n8n superó el tiempo máximo permitido",
+      },
+      p_processed_at: completedAt,
+    });
   }
 
   const pending = candidates.find((row) => row.data?.phase === "pending");
@@ -260,18 +260,25 @@ async function claimNextRequest() {
     },
   };
 
-  const { data: claimed, error: claimError } = await admin
-    .from("n8n_updates")
-    .update({ data: updatedData })
-    .eq("id", pending.id)
-    .eq("status", "processing")
-    .select("id,status,created_at,processed_at,data")
-    .single();
+  const { data: claimed, error: claimError } = await admin.rpc(
+    "write_n8n_update_locked",
+    {
+      p_id: pending.id,
+      p_expected_status: "processing",
+      p_status: "processing",
+      p_data: updatedData,
+      p_processed_at: null,
+    }
+  );
 
   if (claimError || !claimed) {
     return NextResponse.json(
-      { error: `No se pudo reservar la solicitud: ${claimError?.message}` },
-      { status: 500 }
+      {
+        error: claimError
+          ? `No se pudo reservar la solicitud: ${claimError.message}`
+          : "La solicitud no se pudo reservar: su propietario está en proceso de borrado de cuenta.",
+      },
+      { status: claimError ? 500 : 409 }
     );
   }
 
@@ -349,24 +356,28 @@ async function updateRequestFromN8n(
       : {}),
   };
 
-  const { data: updated, error: updateError } = await admin
-    .from("n8n_updates")
-    .update({
-      status: nextStatus,
-      data: nextData,
-      ...(action === "complete" || action === "fail"
-        ? { processed_at: completedAt }
-        : {}),
-    })
-    .eq("id", requestId)
-    .select("id,status,created_at,processed_at,data")
-    .single();
+  const { data: updated, error: updateError } = await admin.rpc(
+    "write_n8n_update_locked",
+    {
+      p_id: requestId,
+      p_expected_status: null,
+      p_status: nextStatus,
+      p_data: nextData,
+      p_processed_at:
+        action === "complete" || action === "fail" ? completedAt : null,
+    }
+  );
 
-  if (updateError || !updated) {
+  if (updateError) {
     return NextResponse.json(
-      { error: `No se pudo actualizar la solicitud: ${updateError?.message}` },
+      { error: `No se pudo actualizar la solicitud: ${updateError.message}` },
       { status: 500 }
     );
+  }
+  if (!updated) {
+    // El propietario está en proceso de borrado de cuenta: se omite sin
+    // error, n8n no debe reintentar indefinidamente esta actualización.
+    return NextResponse.json({ ok: true, skipped: true });
   }
 
   return NextResponse.json({
@@ -452,23 +463,19 @@ export async function GET(request: Request) {
 
   if (isStaleRequest(ownRequest)) {
     const completedAt = new Date().toISOString();
-    const { data: failedRequest } = await admin
-      .from("n8n_updates")
-      .update({
-        status: "failed",
-        processed_at: completedAt,
-        data: {
-          ...ownRequest.data,
-          phase: "failed",
-          completed_at: completedAt,
-          error:
-            "La ejecución de n8n superó los 90 minutos y se detuvo para proteger la sincronización",
-        },
-      })
-      .eq("id", ownRequest.id)
-      .eq("status", "processing")
-      .select("id,status,created_at,processed_at,data")
-      .single();
+    const { data: failedRequest } = await admin.rpc("write_n8n_update_locked", {
+      p_id: ownRequest.id,
+      p_expected_status: "processing",
+      p_status: "failed",
+      p_data: {
+        ...ownRequest.data,
+        phase: "failed",
+        completed_at: completedAt,
+        error:
+          "La ejecución de n8n superó los 90 minutos y se detuvo para proteger la sincronización",
+      },
+      p_processed_at: completedAt,
+    });
 
     if (failedRequest) ownRequest = failedRequest as SyncRequestRow;
   }

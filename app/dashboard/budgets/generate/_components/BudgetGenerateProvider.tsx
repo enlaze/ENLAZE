@@ -257,7 +257,14 @@ async function verifyMaterialsAgainstTracker(
 
   const updatedMaterials = materials.map((material) => {
     const resolved = resolvedByMaterialId.get(material.id);
-    if (!resolved || !isTraceableCommercialPrice(resolved)) {
+    // Adoption of the resolved price is separate from the isRealData label:
+    // manual_locked, technical_bank, private_bc3 and URL-less private_tariff
+    // are real, authoritative sources the user set or imported — just not
+    // independently traceable commercial evidence — so their price should
+    // still be adopted instead of silently reverting to the old estimate.
+    const hasUsablePrice =
+      resolved && Number(resolved.selectedPrice) > 0 && resolved.sourceType !== "estimated";
+    if (!hasUsablePrice) {
       return {
         ...material,
         isRealData: false,
@@ -281,7 +288,7 @@ async function verifyMaterialsAgainstTracker(
       unit_price: resolved.selectedPrice,
       subtotal: resolved.selectedPrice * material.quantity,
       provider_id: providerId || "rastreador-enlaze",
-      isRealData: true,
+      isRealData: isTraceableCommercialPrice(resolved),
       sourceType: resolved.sourceType,
       sourceName: resolved.selectedSupplier || "Rastreador ENLAZE",
       matchedProductName: resolved.selectedProductName,
@@ -1568,7 +1575,11 @@ export function BudgetGenerateProvider({
 
           finalMaterials = finalMaterials.map((material) => {
             const resolved = resolvedByMaterialId.get(material.id);
-            if (!resolved || !isTraceableCommercialPrice(resolved)) {
+            // Adoption of the resolved price is separate from the
+            // isRealData label — see the equivalent gate above.
+            const hasUsablePrice =
+              resolved && Number(resolved.selectedPrice) > 0 && resolved.sourceType !== "estimated";
+            if (!hasUsablePrice) {
               return {
                 ...material,
                 isRealData: false,
@@ -1591,7 +1602,7 @@ export function BudgetGenerateProvider({
               unit_price: resolved.selectedPrice,
               subtotal: resolved.selectedPrice * material.quantity,
               provider_id: providerId || "rastreador-enlaze",
-              isRealData: true,
+              isRealData: isTraceableCommercialPrice(resolved),
               sourceType: resolved.sourceType,
               sourceName: resolved.selectedSupplier || "Rastreador ENLAZE",
               sourceUrl: resolved.sourceUrl || undefined,

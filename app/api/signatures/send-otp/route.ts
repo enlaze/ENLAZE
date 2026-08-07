@@ -1,15 +1,10 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
-import { sanitizeEmail, isValidUuid } from "@/lib/sanitize";
+import { getServiceRoleClient } from "@/lib/supabase-service-role";
 import { rateLimitAuth } from "@/lib/rate-limit";
 import { escapeHtml } from "@/lib/sanitize";
+import { hashSignatureToken } from "@/lib/signature-token";
 import crypto from "crypto";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -31,38 +26,53 @@ export async function POST(request: Request) {
       );
     }
 
+    const supabase = getServiceRoleClient();
+    if (!supabase) {
+      console.error("[signatures/send-otp] falta configuración de service role");
+      return NextResponse.json(
+        { error: "El servicio de firma no está disponible en este momento." },
+        { status: 503 }
+      );
+    }
+
     const body = await request.json();
-    const signature_id = body.signature_id;
-    const email = sanitizeEmail(body.email);
+    const token = typeof body.token === "string" ? body.token : "";
 
-    if (!signature_id || !isValidUuid(signature_id)) {
-      return NextResponse.json({ error: "signature_id invalido" }, { status: 400 });
-    }
-    if (!email) {
-      return NextResponse.json({ error: "Email invalido" }, { status: 400 });
+    if (!token) {
+      return NextResponse.json({ error: "Falta token" }, { status: 400 });
     }
 
-    // Verify signature exists
+    // Verify signature exists — the random token, not the signature id, is
+    // what authorizes this lookup. The email a browser could send is never
+    // trusted: signer_email always comes from the row the token resolves
+    // to, so the OTP can only ever go to the address on file.
     const { data: sig, error: sigErr } = await supabase
       .from("digital_signatures")
-      .select("id, signer_name, entity_type")
-      .eq("id", signature_id)
+      .select("id, signer_name, signer_email, entity_type, status")
+      .eq("public_token_hash", hashSignatureToken(token))
       .single();
 
     if (sigErr || !sig) {
       return NextResponse.json({ error: "Firma no encontrada" }, { status: 404 });
+    }
+    if (sig.status !== "pending") {
+      return NextResponse.json({ error: "Esta firma ya se ha completado" }, { status: 409 });
+    }
+    const email = sig.signer_email;
+    if (!email) {
+      return NextResponse.json({ error: "La firma no tiene email de firmante" }, { status: 400 });
     }
 
     // Generate OTP
     const code = generateOTP();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
 
-    // Save OTP
-    const { error: otpErr } = await supabase.from("signature_otps").insert({
-      signature_id,
-      code,
-      email,
-      expires_at: expiresAt.toISOString(),
+    // Save OTP atomically, checking the account-deletion lock server-side.
+    const { error: otpErr } = await supabase.rpc("create_signature_otp_locked", {
+      p_signature_id: sig.id,
+      p_code: code,
+      p_email: email,
+      p_expires_at: expiresAt.toISOString(),
     });
 
     if (otpErr) {

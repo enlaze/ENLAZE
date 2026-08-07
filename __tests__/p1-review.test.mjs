@@ -12,12 +12,17 @@ import { deleteStorageTree } from "../lib/storage-cleanup.ts";
 import {
   RETAINED_INVOICE_BUCKET,
   buildConfirmedInvoiceDocument,
+  buildLegacyReceivedInvoiceDocument,
   isConfirmedInvoiceDocumentUrl,
   parseConfirmedInvoiceDocumentUrl,
   parseOwnedOcrDraftUrl,
   parseRetainedReceivedInvoiceDocumentUrl,
   retainedInvoiceStorageUrl,
 } from "../lib/invoice-ocr-drafts.ts";
+import {
+  beginAccountWriteLease,
+  endAccountWriteLease,
+} from "../lib/account-write-lease.ts";
 import {
   ACCOUNT_DELETION_CLEANUP_COMPLETE,
   ACCOUNT_DELETION_PHASE_METADATA_KEY,
@@ -651,10 +656,15 @@ test("deleted_by cleanup is checkpointed, precedes Auth deletion, and is retryab
   const retryBranch = accountDeletion.slice(retryBranchStart, retryBranchEnd);
   assert.match(retryBranch, /clearFiscalRetryMarkers\(admin, userId\)/);
   assert.match(retryBranch, /admin\.auth\.admin\.deleteUser\(userId\)/);
-  assert.doesNotMatch(retryBranch, /deleteStorageFiles\(/);
+  // The write lock (hallazgo 2) closes most of the race window, but a write
+  // already in flight when the lock landed can still slip through. The
+  // retry branch now re-runs anonymizeRetainedRows and deleteStorageFiles
+  // too — both are designed to be safely repeated — instead of trusting the
+  // first pass caught everything and never touching Storage again.
+  assert.match(retryBranch, /deleteStorageFiles\(/);
 });
 
-test("checkpoint retry re-runs ownership cleanup before clearing markers or Auth", () => {
+test("checkpoint retry re-runs anonymization, ownership cleanup and Storage, in order, before clearing markers or Auth", () => {
   const accountDeletion = readFileSync("app/api/account/delete/route.ts", "utf8");
   const retryBranchStart = accountDeletion.indexOf(
     "if (isAccountDeletionCleanupComplete(user.app_metadata))"
@@ -665,10 +675,13 @@ test("checkpoint retry re-runs ownership cleanup before clearing markers or Auth
   );
   const retryBranch = accountDeletion.slice(retryBranchStart, retryBranchEnd);
 
-  // Re-collects parent ids and repeats every ownership-cleanup step from the
-  // main flow, so a row inserted after the first pass (e.g. by another
-  // authenticated tab) is still cleaned up instead of blocking deleteUser
-  // forever once the checkpoint is set.
+  // Re-runs anonymizeRetainedRows (idempotent by its own design — see its
+  // doc comment), re-collects parent ids and repeats every ownership
+  // cleanup step from the main flow, so a row inserted after the first pass
+  // (e.g. by another authenticated tab, or a write that landed the instant
+  // the write lock was inserted) is still cleaned up instead of blocking
+  // deleteUser forever once the checkpoint is set.
+  assert.match(retryBranch, /await anonymizeRetainedRows\(admin, userId, retryErrors\)/);
   assert.match(
     retryBranch,
     /retryParentIds\[table\] = await collectIds\(admin, table, "user_id", userId\)/
@@ -678,21 +691,24 @@ test("checkpoint retry re-runs ownership cleanup before clearing markers or Auth
     /for \(const \{ table, column, parent \} of CHILD_TABLES\)/
   );
   assert.match(retryBranch, /for \(const \{ table, column \} of OWNED_TABLES\)/);
-  assert.match(retryBranch, /deletePrivatePriceBank\(admin, userId, ownershipRetryErrors\)/);
-  assert.match(retryBranch, /clearAuthorReferences\(admin, userId, ownershipRetryErrors\)/);
+  assert.match(retryBranch, /deletePrivatePriceBank\(admin, userId, retryErrors\)/);
+  assert.match(retryBranch, /clearAuthorReferences\(admin, userId, retryErrors\)/);
+  assert.match(retryBranch, /deleteN8nUpdatesForUser\(admin, userId, retryErrors\)/);
+  assert.match(retryBranch, /deleteStorageFiles\(/);
 
-  // Ordering: ownership cleanup must run, and succeed, before fiscal markers
-  // or Auth are touched — otherwise a race could still slip through.
-  const ownershipCleanup = retryBranch.indexOf("deletePrivatePriceBank(admin, userId, ownershipRetryErrors)");
+  // Ordering, matching the main flow's FK-safe sequence: anonymize → owned
+  // tables/private price bank/author refs/n8n_updates → Storage → fiscal
+  // markers → Auth. Each phase must succeed before the next runs.
+  const anonymize = retryBranch.indexOf("await anonymizeRetainedRows(admin, userId, retryErrors)");
+  const ownershipCleanup = retryBranch.indexOf("deletePrivatePriceBank(admin, userId, retryErrors)");
+  const storageCleanup = retryBranch.indexOf("await deleteStorageFiles(");
   const markerCleanup = retryBranch.indexOf("clearFiscalRetryMarkers(admin, userId)");
   const authDelete = retryBranch.indexOf("admin.auth.admin.deleteUser(userId)");
-  assert.ok(ownershipCleanup >= 0);
-  assert.ok(markerCleanup > ownershipCleanup);
+  assert.ok(anonymize >= 0);
+  assert.ok(ownershipCleanup > anonymize);
+  assert.ok(storageCleanup > ownershipCleanup);
+  assert.ok(markerCleanup > storageCleanup);
   assert.ok(authDelete > markerCleanup);
-
-  // Still never touches Storage on this branch — the fiscal markers may
-  // already be gone, so re-enumerating Storage here would be unsafe.
-  assert.doesNotMatch(retryBranch, /deleteStorageFiles\(/);
 });
 
 test("OCR draft promotion and deletion preserve referenced fiscal documents", () => {
@@ -826,4 +842,424 @@ test("test:p1 runs with a Node 20-compatible TypeScript loader", () => {
     pkg.devDependencies.tsx,
     "tsx must be a devDependency so `--import tsx` resolves on a clean install"
   );
+});
+
+// ─── hallazgo 2 (write-lock / leases) ──────────────────────────────────────
+
+test("beginAccountWriteLease/endAccountWriteLease call the expected RPCs and release exactly once", async () => {
+  const calls = [];
+  const admin = {
+    rpc: async (fn, args) => {
+      calls.push([fn, args]);
+      if (fn === "begin_account_write_lease") return { data: "lease-123", error: null };
+      if (fn === "end_account_write_lease") return { data: null, error: null };
+      throw new Error(`unexpected rpc ${fn}`);
+    },
+  };
+
+  const leaseId = await beginAccountWriteLease(admin, "user-1", 180);
+  assert.equal(leaseId, "lease-123");
+  assert.deepEqual(calls[0], [
+    "begin_account_write_lease",
+    { p_user_id: "user-1", p_ttl_seconds: 180 },
+  ]);
+
+  await endAccountWriteLease(admin, leaseId);
+  assert.deepEqual(calls[1], ["end_account_write_lease", { p_lease_id: "lease-123" }]);
+});
+
+test("beginAccountWriteLease throws when the account is locked; endAccountWriteLease never throws", async () => {
+  const admin = {
+    rpc: async (fn) => {
+      if (fn === "begin_account_write_lease") {
+        return { data: null, error: { message: "La cuenta está en proceso de eliminación." } };
+      }
+      return { data: null, error: { message: "boom" } };
+    },
+  };
+
+  await assert.rejects(() => beginAccountWriteLease(admin, "user-1"), /proceso de eliminación/);
+  await assert.doesNotReject(() => endAccountWriteLease(admin, "lease-x"));
+});
+
+test("legacy received-invoice documents get a deterministic private destination", () => {
+  const invoiceId = "223e4567-e89b-12d3-a456-426614174000";
+  const built = buildLegacyReceivedInvoiceDocument(USER_ID, invoiceId, "factura.pdf");
+  assert.deepEqual(built, {
+    objectPath: `${USER_ID}/legacy/${invoiceId}/factura.pdf`,
+    storageUrl: retainedInvoiceStorageUrl(`${USER_ID}/legacy/${invoiceId}/factura.pdf`),
+  });
+  assert.equal(buildLegacyReceivedInvoiceDocument(USER_ID, "not-a-uuid", "factura.pdf"), null);
+});
+
+test("legacy public-bucket invoices are migrated (download+upload+compare-and-set), never deleted from the source before confirmation", () => {
+  const accountDeletion = readFileSync("app/api/account/delete/route.ts", "utf8");
+  assert.match(accountDeletion, /async function migrateLegacyReceivedInvoiceDocument\(/);
+  const fnBody = accountDeletion.slice(
+    accountDeletion.indexOf("async function migrateLegacyReceivedInvoiceDocument("),
+    accountDeletion.indexOf("async function anonymizeRetainedRows(")
+  );
+  assert.doesNotMatch(fnBody, /\.remove\(/);
+  assert.match(fnBody, /\.storage\s*\n?\s*\.from\("invoices"\)\s*\n?\s*\.download\(legacyObjectPath\)/);
+  assert.match(fnBody, /\.upload\(target\.objectPath, downloaded, \{ upsert: false \}\)/);
+  assert.match(
+    fnBody,
+    /\.update\(\{ document_url: target\.storageUrl \}\)[\s\S]*?\.eq\("id", invoiceId\)[\s\S]*?\.eq\("document_url", currentDocumentUrl\)/
+  );
+});
+
+test("account deletion locks the account via RPC before any destructive step, and aborts with 409 if leases are still active", () => {
+  const accountDeletion = readFileSync("app/api/account/delete/route.ts", "utf8");
+  const lockCall = accountDeletion.indexOf('admin.rpc("lock_account_for_deletion"');
+  const checkpointBranch = accountDeletion.indexOf(
+    "isAccountDeletionCleanupComplete(user.app_metadata)"
+  );
+  assert.ok(lockCall >= 0);
+  assert.ok(lockCall < checkpointBranch);
+  assert.match(accountDeletion, /lockResult\.activeLeases > 0/);
+  assert.match(accountDeletion, /status: 409/);
+  assert.doesNotMatch(accountDeletion, /getSession\(\)/);
+});
+
+test("n8n_updates rows for the deleting user are removed in both the main flow and the retry branch", () => {
+  const accountDeletion = readFileSync("app/api/account/delete/route.ts", "utf8");
+  assert.match(
+    accountDeletion,
+    /\.from\("n8n_updates"\)\s*\n?\s*\.delete\(\)\s*\n?\s*\.eq\("data->>requested_by", userId\)/
+  );
+  assert.equal(
+    (accountDeletion.match(/deleteN8nUpdatesForUser\(admin, userId, (errors|retryErrors)\)/g) || [])
+      .length,
+    2
+  );
+});
+
+test("agent_connections is aligned with idempotent ADD COLUMN IF NOT EXISTS", () => {
+  const sql = readFileSync("supabase/migrations/20260806_01_align_agent_connections.sql", "utf8");
+  for (const col of ["connected", "credentials_ref", "error_message", "last_sync_at", "config"]) {
+    assert.match(sql, new RegExp(`add column if not exists ${col}\\b`));
+  }
+});
+
+test("permissive price-bank service-role policies are dropped and recreated scoped to service_role", () => {
+  const sql = readFileSync(
+    "supabase/migrations/20260806_02_fix_price_bank_service_role_policies.sql",
+    "utf8"
+  );
+  const tables = [
+    "pb_providers",
+    "pb_price_sources",
+    "pb_products",
+    "pb_price_observations",
+    "pb_price_current",
+    "pb_sync_runs",
+  ];
+  for (const t of tables) {
+    assert.match(sql, new RegExp(`drop policy if exists "Service role full access" on public\\.${t};`));
+    assert.match(
+      sql,
+      new RegExp(`create policy "Service role full access" on public\\.${t}\\s*\\n\\s*for all to service_role`)
+    );
+  }
+});
+
+test("write-lock migration: universal trigger excludes extension-owned and internal tables, and verifies coverage", () => {
+  const sql = readFileSync(
+    "supabase/migrations/20260806_03_account_deletion_write_lock.sql",
+    "utf8"
+  );
+  assert.equal(
+    (sql.match(/c\.relname not in \('account_deletion_locks', 'account_write_leases'\)/g) || [])
+      .length,
+    2
+  );
+  assert.match(sql, /d\.deptype = 'e'/);
+  assert.match(sql, /tabla\(s\) mutable\(s\) sin trigger/);
+});
+
+test("write-lock migration: trigger returns explicit OLD/NEW per tg_op, no COALESCE(NEW, OLD), and is itself revoked from all roles", () => {
+  const sql = readFileSync(
+    "supabase/migrations/20260806_03_account_deletion_write_lock.sql",
+    "utf8"
+  );
+  const fn = sql.slice(
+    sql.indexOf("create or replace function public.reject_writes_during_account_deletion()"),
+    sql.indexOf('revoke all on function public.reject_writes_during_account_deletion()')
+  );
+  assert.match(fn, /if tg_op = 'DELETE' then return old; end if;/);
+  assert.doesNotMatch(fn, /coalesce\(new, old\)/i);
+  assert.match(
+    sql,
+    /revoke all on function public\.reject_writes_during_account_deletion\(\) from public, anon, authenticated;/
+  );
+});
+
+test("write-lock migration: Storage policies are RESTRICTIVE, idempotent (DROP POLICY IF EXISTS), and every user bucket is confirmed to exist", () => {
+  const sql = readFileSync(
+    "supabase/migrations/20260806_03_account_deletion_write_lock.sql",
+    "utf8"
+  );
+  for (const policy of [
+    "account_deletion_lock_blocks_storage_insert",
+    "account_deletion_lock_blocks_storage_update",
+    "account_deletion_lock_blocks_storage_delete",
+  ]) {
+    assert.match(sql, new RegExp(`drop policy if exists ${policy} on storage\\.objects;`));
+    assert.match(sql, new RegExp(`create policy ${policy}\\s*\\n\\s*on storage\\.objects as restrictive`));
+  }
+  for (const bucket of ["invoices", "company-branding", "project-docs", "received-invoice-documents"]) {
+    assert.match(sql, new RegExp(`'${bucket}'`));
+  }
+  assert.match(sql, /bucket\(s\) esperado\(s\) no encontrado\(s\)/);
+});
+
+test("write-lock migration: lease TTL is validated and bounded, default matches 180s", () => {
+  const sql = readFileSync(
+    "supabase/migrations/20260806_03_account_deletion_write_lock.sql",
+    "utf8"
+  );
+  assert.match(sql, /p_ttl_seconds is null or p_ttl_seconds <= 0 or p_ttl_seconds > 900/);
+  assert.match(sql, /p_ttl_seconds integer default 180/);
+});
+
+test("write-lock migration: n8n RPCs force requested_by server-side, re-check ownership after the advisory lock, and never write orphaned rows", () => {
+  const sql = readFileSync(
+    "supabase/migrations/20260806_03_account_deletion_write_lock.sql",
+    "utf8"
+  );
+  assert.match(sql, /jsonb_build_object\('requested_by', p_requested_by::text\)/);
+  const writeFn = sql.slice(
+    sql.indexOf("create or replace function public.write_n8n_update_locked"),
+    sql.indexOf("revoke all on function public.write_n8n_update_locked")
+  );
+  assert.match(writeFn, /if v_owner is null then\s*\n\s*return null;/);
+  assert.match(writeFn, /for update/i);
+  assert.match(writeFn, /v_owner_after_lock is null or v_owner_after_lock <> v_owner/);
+  assert.match(writeFn, /jsonb_build_object\('requested_by', v_owner::text\)/);
+});
+
+test("write-lock migration: mark_signature_signed_locked revokes the public token atomically with signing, and requires the OTP to match/be unused/unexpired/within attempts in one UPDATE", () => {
+  const sql = readFileSync(
+    "supabase/migrations/20260806_03_account_deletion_write_lock.sql",
+    "utf8"
+  );
+  const fn = sql.slice(
+    sql.indexOf("create or replace function public.mark_signature_signed_locked"),
+    sql.indexOf("create or replace function public.save_signature_image_locked")
+  );
+  assert.match(
+    fn,
+    /update public\.signature_otps[\s\S]*?where id = p_otp_id[\s\S]*?and signature_id = p_signature_id[\s\S]*?and used = false[\s\S]*?and expires_at >= v_now[\s\S]*?and attempts <= 5/
+  );
+  assert.match(fn, /public_token_hash = null/);
+  assert.match(fn, /where id = p_signature_id\s*\n\s*and status = 'pending'/);
+  assert.match(fn, /already_signed/);
+});
+
+test("write-lock migration: internal RPCs are revoked from public/anon/authenticated and granted only to service_role", () => {
+  const sql = readFileSync(
+    "supabase/migrations/20260806_03_account_deletion_write_lock.sql",
+    "utf8"
+  );
+  for (const fn of [
+    "begin_account_write_lease\\(uuid, integer\\)",
+    "end_account_write_lease\\(uuid\\)",
+    "lock_account_for_deletion\\(uuid\\)",
+    "create_n8n_update_locked\\(text, text, text, uuid, jsonb\\)",
+    "write_n8n_update_locked\\(uuid, text, text, jsonb, timestamptz\\)",
+  ]) {
+    assert.match(sql, new RegExp(`revoke all on function public\\.${fn} from public, anon, authenticated;`));
+    assert.match(sql, new RegExp(`grant execute on function public\\.${fn} to service_role;`));
+  }
+  assert.doesNotMatch(sql, /grant execute on function public\.begin_account_write_lease[^;]*to authenticated/);
+});
+
+test("write-lock migration: every advisory lock uses hashtextextended, not hashtext", () => {
+  const sql = readFileSync(
+    "supabase/migrations/20260806_03_account_deletion_write_lock.sql",
+    "utf8"
+  );
+  assert.ok((sql.match(/pg_advisory_xact_lock\(hashtextextended\(/g) || []).length >= 6);
+  assert.doesNotMatch(sql, /pg_advisory_xact_lock\(hashtext\(/);
+});
+
+test("reconcile_supplier_invoiced adjusts both suppliers atomically and checks ownership via auth.uid()", () => {
+  const sql = readFileSync(
+    "supabase/migrations/20260806_04_reconcile_supplier_invoiced.sql",
+    "utf8"
+  );
+  assert.match(sql, /create or replace function public\.reconcile_supplier_invoiced\(/);
+  assert.match(sql, /and user_id = auth\.uid\(\)/);
+  assert.match(sql, /greatest\(\s*\n?\s*0,/);
+  assert.match(
+    sql,
+    /grant execute on function public\.reconcile_supplier_invoiced\([^)]*\)\s*\n\s*to authenticated;/
+  );
+});
+
+test("OCR route protects every service_role Storage call with a write lease and sets maxDuration", () => {
+  const route = readFileSync("app/api/invoices/ocr/route.ts", "utf8");
+  assert.match(route, /export const maxDuration = 60;/);
+  assert.equal((route.match(/beginAccountWriteLease\(supabaseService,/g) || []).length, 3);
+  assert.equal((route.match(/endAccountWriteLease\(supabaseService,/g) || []).length, 3);
+  assert.match(route, /deleteLeaseId = await beginAccountWriteLease\(supabaseService, user\.id, 180\)/);
+});
+
+test("agent/ingest, agent/config and agent/news wrap their writes in a lease", () => {
+  for (const [file, ttl] of [
+    ["app/api/agent/ingest/route.ts", 180],
+    ["app/api/agent/config/route.ts", 90],
+    ["app/api/agent/news/route.ts", 90],
+  ]) {
+    const route = readFileSync(file, "utf8");
+    assert.match(route, /beginAccountWriteLease\(/);
+    assert.match(route, /endAccountWriteLease\(/);
+    assert.match(route, new RegExp(`, ${ttl}\\)`));
+  }
+});
+
+test("pb/webhook only acquires a lease for company-scoped payloads", () => {
+  const route = readFileSync("app/api/pb/webhook/route.ts", "utf8");
+  assert.match(
+    route,
+    /if \(companyId\) \{\s*\n\s*leaseId = await beginAccountWriteLease\(supabase, companyId, 180\);/
+  );
+  assert.match(route, /if \(leaseId\) await endAccountWriteLease\(supabase, leaseId\);/);
+});
+
+test("prices/import writes with the authenticated session client into a private, company-scoped provider, with no explicit any", () => {
+  const route = readFileSync("app/api/prices/import/route.ts", "utf8");
+  assert.doesNotMatch(route, /supabaseAdmin/);
+  assert.match(route, /\.eq\("company_id", user\.id\)/);
+  assert.match(route, /company_id: user\.id,/);
+  assert.doesNotMatch(route, /is\("company_id", null\)/);
+  assert.doesNotMatch(route, /:\s*any\b/);
+});
+
+test("weekly-report/send and process-alerts lease each user for 180s and release in finally", () => {
+  for (const file of [
+    "app/api/prices/weekly-report/send/route.ts",
+    "app/api/prices/process-alerts/route.ts",
+  ]) {
+    const route = readFileSync(file, "utf8");
+    assert.match(route, /export const maxDuration = 300;/);
+    assert.match(route, /beginAccountWriteLease\(supabase, userId, 180\)/);
+    assert.match(route, /\}\s*finally\s*\{\s*\n\s*await endAccountWriteLease\(supabase, leaseId\);/);
+  }
+});
+
+test("process-alerts groups notifications, alert records and price_alerts updates by user before writing", () => {
+  const route = readFileSync("app/api/prices/process-alerts/route.ts", "utf8");
+  assert.match(route, /const perUser = new Map</);
+  assert.match(route, /for \(const \[userId, bucket\] of perUser\)/);
+});
+
+test("signatures/create requires an authenticated session and ignores any client-supplied user_id", () => {
+  const route = readFileSync("app/api/signatures/create/route.ts", "utf8");
+  assert.match(route, /createSessionClient/);
+  assert.match(route, /supabase\.auth\.getUser\(\)/);
+  assert.match(route, /p_user_id: user\.id/);
+  assert.doesNotMatch(route, /const \{[^}]*\buser_id\b[^}]*\} = body/);
+});
+
+test("send-otp trusts only the signer_email resolved from the token, never the request body, and requires a pending signature", () => {
+  const route = readFileSync("app/api/signatures/send-otp/route.ts", "utf8");
+  assert.doesNotMatch(route, /body\.email/);
+  assert.doesNotMatch(route, /sanitizeEmail/);
+  assert.match(route, /select\("id, signer_name, signer_email, entity_type, status"\)/);
+  assert.match(route, /const email = sig\.signer_email;/);
+  assert.match(route, /sig\.status !== "pending"/);
+});
+
+test("verify-otp and public signature POST reject anything but a pending signature", () => {
+  const verify = readFileSync("app/api/signatures/verify-otp/route.ts", "utf8");
+  const pub = readFileSync("app/api/signatures/public/route.ts", "utf8");
+  assert.match(verify, /sig\.status !== "pending"/);
+  assert.match(pub, /sig\.status !== "pending"/);
+});
+
+test("auth/google/callback upserts the connection via the atomic RPC, not a direct insert/update", () => {
+  const route = readFileSync("app/api/auth/google/callback/route.ts", "utf8");
+  assert.match(route, /\.rpc\("upsert_agent_connection_locked"/);
+  assert.doesNotMatch(route, /\.from\("agent_connections"\)\s*\n?\s*\.update\(payload\)/);
+  assert.doesNotMatch(route, /\.from\("agent_connections"\)\s*\n?\s*\.insert\(payload\)/);
+});
+
+test("resolved prices are adopted whenever usable, independent of the isRealData traceability label", () => {
+  const provider = readFileSync(
+    "app/dashboard/budgets/generate/_components/BudgetGenerateProvider.tsx",
+    "utf8"
+  );
+  assert.equal((provider.match(/hasUsablePrice/g) || []).length, 4);
+  assert.equal(
+    (provider.match(/isRealData: isTraceableCommercialPrice\(resolved\)/g) || []).length,
+    2
+  );
+  assert.doesNotMatch(provider, /isRealData: true,\n\s*sourceType: resolved\.sourceType/);
+});
+
+test("Cancel, New invoice and Scan are disabled while saving", () => {
+  const page = readFileSync("app/dashboard/suppliers/invoices/page.tsx", "utf8");
+  assert.match(page, /onClick=\{handleNewInvoice\} disabled=\{saving\}/);
+  assert.match(page, /onClick=\{handleCancelForm\} disabled=\{saving\}/);
+  assert.equal((page.match(/disabled=\{scanning \|\| saving\}/g) || []).length, 2);
+});
+
+test("retry submit reconciles supplier balances atomically via RPC when supplier or total changes", () => {
+  const page = readFileSync("app/dashboard/suppliers/invoices/page.tsx", "utf8");
+  assert.match(page, /supabase\.rpc\("reconcile_supplier_invoiced", \{/);
+  assert.match(page, /oldSupplierId !== newSupplierId \|\| oldTotal !== total/);
+});
+
+// ─── service-role client: lazy, server-only, no module-level construction ──
+
+test("supabase-service-role helper is server-only, lazy, and disables session persistence/refresh", () => {
+  const helper = readFileSync("lib/supabase-service-role.ts", "utf8");
+  assert.match(helper, /^import "server-only";/m);
+  assert.match(helper, /persistSession: false, autoRefreshToken: false/);
+  // The env vars must only be read inside the exported function, not at
+  // module top-level (which is exactly what broke `next build`'s page-data
+  // collection whenever SUPABASE_SERVICE_ROLE_KEY is unset).
+  const fnStart = helper.indexOf("export function getServiceRoleClient()");
+  assert.ok(fnStart >= 0);
+  assert.ok(helper.indexOf("process.env.SUPABASE_SERVICE_ROLE_KEY") > fnStart);
+  assert.doesNotMatch(
+    helper.slice(0, fnStart),
+    /process\.env\.(SUPABASE_SERVICE_ROLE_KEY|NEXT_PUBLIC_SUPABASE_URL)/
+  );
+});
+
+test("no signature endpoint creates the service-role Supabase client at module load time", () => {
+  const files = [
+    "app/api/signatures/create/route.ts",
+    "app/api/signatures/public/route.ts",
+    "app/api/signatures/send-otp/route.ts",
+    "app/api/signatures/verify-otp/route.ts",
+  ];
+  for (const file of files) {
+    const route = readFileSync(file, "utf8");
+    assert.match(
+      route,
+      /import \{ getServiceRoleClient \} from "@\/lib\/supabase-service-role";/,
+      `${file} debe usar el helper perezoso`
+    );
+    // La referencia directa a la env var solo debe vivir en el helper, no
+    // en el propio endpoint — ni siquiera como `!` a nivel de módulo.
+    assert.doesNotMatch(
+      route,
+      /SUPABASE_SERVICE_ROLE_KEY/,
+      `${file} no debe referenciar la env var directamente`
+    );
+    // Sin cliente construido fuera de un handler exportado.
+    assert.doesNotMatch(
+      route,
+      /^const \w+ = createClient\(/m,
+      `${file} no debe crear el cliente a nivel de módulo`
+    );
+    // Cada handler debe comprobar el helper y responder 503 sin filtrar
+    // nombres ni valores de secretos.
+    assert.match(route, /if \(!supabase\w*\) \{/);
+    assert.match(route, /status: 503/);
+    assert.doesNotMatch(route, /SUPABASE_SERVICE_ROLE_KEY.*\$\{/); // nunca interpolado en una respuesta
+  }
 });

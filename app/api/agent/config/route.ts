@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getSectorConfig, normalizeBusinessSectorKey } from "@/lib/agent-prompts";
 import { getSectorIntel, resolveNewsQueries } from "@/lib/agent/sector-intel";
+import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
+
+export const maxDuration = 30;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey =
@@ -130,11 +133,21 @@ export async function GET(req: NextRequest) {
       supplier_types: intelProfile.supplier_types,
     };
 
-    // Update agent_status to running
-    await supabase
-      .from("profiles")
-      .update({ agent_status: "running" })
-      .eq("id", userId);
+    // Update agent_status to running. This is incidental bookkeeping, not
+    // the point of this GET, so a locked account (deletion in progress)
+    // just skips the update instead of failing the whole config response.
+    let statusLeaseId: string | null = null;
+    try {
+      statusLeaseId = await beginAccountWriteLease(supabase, userId, 90);
+      await supabase
+        .from("profiles")
+        .update({ agent_status: "running" })
+        .eq("id", userId);
+    } catch (lockErr) {
+      console.warn("[agent/config] no se pudo marcar agent_status:", lockErr);
+    } finally {
+      if (statusLeaseId) await endAccountWriteLease(supabase, statusLeaseId);
+    }
 
     return NextResponse.json({
       ok: true,

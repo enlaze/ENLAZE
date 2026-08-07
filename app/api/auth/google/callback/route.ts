@@ -155,36 +155,20 @@ export async function GET(req: NextRequest) {
       email: email
     };
 
-    const payload = {
-      user_id: userId,
-      module: module,
-      connected: true,
-      status: "connected",
-      credentials_ref: JSON.stringify(credentialsObj),
-      error_message: null,
-      updated_at: new Date().toISOString()
-    };
+    // Atomic RPC: checks the account-deletion lock and upserts in one call,
+    // closing the race window a separate check-then-write would leave open.
+    const { error: upsertError } = await supabase.rpc("upsert_agent_connection_locked", {
+      p_user_id: userId,
+      p_module: module,
+      p_connected: true,
+      p_status: "connected",
+      p_credentials_ref: JSON.stringify(credentialsObj),
+      p_error_message: null,
+    });
 
-    if (existingConnection) {
-      const { error: updateError } = await supabase
-        .from("agent_connections")
-        .update(payload)
-        .eq("user_id", userId)
-        .eq("module", module);
-        
-      if (updateError) {
-        console.error("[Google OAuth] Update error", updateError.code);
-        throw updateError;
-      }
-    } else {
-      const { error: insertError } = await supabase
-        .from("agent_connections")
-        .insert(payload);
-        
-      if (insertError) {
-        console.error("[Google OAuth] Insert error", insertError.code);
-        throw insertError;
-      }
+    if (upsertError) {
+      console.error("[Google OAuth] Upsert error", upsertError.code);
+      throw upsertError;
     }
 
     return NextResponse.redirect(new URL(`${safeReturnTo}/dashboard/settings/integrations?integration_success=${module}`));

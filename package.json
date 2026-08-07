@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:p1": "node --import tsx --test __tests__/p1-review.test.mjs",
+    "test:integration": "node --import tsx --test __tests__/account-deletion-lock.integration.test.mjs",
     "scrape:prices": "node scripts/scraper-precios.js",
     "scrape:suppliers": "node scripts/scraper-proveedores-oficiales.js"
   },
@@ -27,6 +28,7 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "resend": "^6.9.4",
+    "server-only": "^0.0.1",
     "sharp": "^0.34.5",
     "xlsx": "^0.18.5"
   },

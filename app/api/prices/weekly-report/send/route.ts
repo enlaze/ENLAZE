@@ -1,5 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
+
+export const maxDuration = 300;
 
 // POST /api/prices/weekly-report/send
 // Called by cron (every Monday) or manually to generate and email weekly reports to all users with alerts
@@ -101,6 +104,15 @@ export async function POST() {
     // 5. Send email to each user with active alerts
     let sent = 0;
     for (const userId of userIds) {
+      let leaseId: string;
+      try {
+        leaseId = await beginAccountWriteLease(supabase, userId, 180);
+      } catch {
+        // Cuenta en proceso de borrado: se omite por completo, ninguna
+        // lectura de email, envío ni escritura para este usuario.
+        continue;
+      }
+      try {
       const { data: userData } = await supabase.auth.admin.getUserById(userId);
       const email = userData?.user?.email;
       if (!email) continue;
@@ -210,6 +222,9 @@ export async function POST() {
         entity_type: "price_report",
         action_url: "/dashboard/prices",
       });
+      } finally {
+        await endAccountWriteLease(supabase, leaseId);
+      }
     }
 
     return NextResponse.json({ sent, totalChanges: changes.length });

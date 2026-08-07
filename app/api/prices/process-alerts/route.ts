@@ -1,5 +1,15 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
+
+interface AlertNotification {
+  user_id: string;
+  title: string;
+  body: string;
+  [key: string]: unknown;
+}
+
+export const maxDuration = 300;
 
 // This endpoint is called after price sync (from webhook or cron)
 // It checks all active alerts against current prices and creates notifications
@@ -121,32 +131,55 @@ export async function POST(request: Request) {
       }
     }
 
-    // 4. Insert notifications and alert records in batch
-    if (notifications.length > 0) {
-      await supabase.from("notifications").insert(notifications);
-    }
-    if (alertNotifRecords.length > 0) {
-      await supabase.from("price_alert_notifications").insert(alertNotifRecords);
-    }
-
-    // 5. Update alerts with last known price
-    for (const update of alertUpdates) {
-      await supabase
-        .from("price_alerts")
-        .update({
-          last_price: update.last_price,
-          last_notified_at: update.last_notified_at,
-          updated_at: update.updated_at,
-        })
-        .eq("id", update.id);
+    // 4-6. Group everything by user and process one user at a time, each
+    // under its own write lease — a locked account's alerts are skipped
+    // entirely instead of racing account deletion.
+    const perUser = new Map<
+      string,
+      { notifications: typeof notifications; alertNotifRecords: typeof alertNotifRecords; alertUpdates: typeof alertUpdates }
+    >();
+    for (let i = 0; i < notifications.length; i++) {
+      const n = notifications[i];
+      const bucket = perUser.get(n.user_id) ?? { notifications: [], alertNotifRecords: [], alertUpdates: [] };
+      bucket.notifications.push(n);
+      bucket.alertNotifRecords.push(alertNotifRecords[i]);
+      bucket.alertUpdates.push(alertUpdates[i]);
+      perUser.set(n.user_id, bucket);
     }
 
-    // 6. Send email notifications
-    if (triggered > 0) {
+    for (const [userId, bucket] of perUser) {
+      let leaseId: string;
       try {
-        await sendAlertEmails(supabase, notifications);
-      } catch (emailErr) {
-        console.error("[process-alerts] Email error:", emailErr);
+        leaseId = await beginAccountWriteLease(supabase, userId, 180);
+      } catch {
+        continue; // cuenta bloqueada: se omite por completo
+      }
+      try {
+        if (bucket.notifications.length > 0) {
+          await supabase.from("notifications").insert(bucket.notifications);
+        }
+        if (bucket.alertNotifRecords.length > 0) {
+          await supabase.from("price_alert_notifications").insert(bucket.alertNotifRecords);
+        }
+        for (const update of bucket.alertUpdates) {
+          await supabase
+            .from("price_alerts")
+            .update({
+              last_price: update.last_price,
+              last_notified_at: update.last_notified_at,
+              updated_at: update.updated_at,
+            })
+            .eq("id", update.id);
+        }
+        if (bucket.notifications.length > 0) {
+          try {
+            await sendAlertEmailsForUser(supabase, userId, bucket.notifications);
+          } catch (emailErr) {
+            console.error("[process-alerts] Email error:", emailErr);
+          }
+        }
+      } finally {
+        await endAccountWriteLease(supabase, leaseId);
       }
     }
 
@@ -160,29 +193,26 @@ export async function POST(request: Request) {
   }
 }
 
-async function sendAlertEmails(supabase: any, notifications: any[]) {
+async function sendAlertEmailsForUser(
+  supabase: SupabaseClient,
+  userId: string,
+  userNotifs: AlertNotification[]
+) {
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) {
     console.log("[process-alerts] No RESEND_API_KEY, skipping email");
     return;
   }
 
-  // Group notifications by user
-  const byUser: Record<string, any[]> = {};
-  for (const n of notifications) {
-    if (!byUser[n.user_id]) byUser[n.user_id] = [];
-    byUser[n.user_id].push(n);
-  }
-
-  for (const [userId, userNotifs] of Object.entries(byUser)) {
+  {
     // Get user email
     const { data: userData } = await supabase.auth.admin.getUserById(userId);
     const email = userData?.user?.email;
-    if (!email) continue;
+    if (!email) return;
 
     const alertsHtml = userNotifs
       .map(
-        (n: any) =>
+        (n: AlertNotification) =>
           `<tr>
             <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0;">${n.title}</td>
             <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; color: #64748b;">${n.body}</td>

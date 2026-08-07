@@ -7,6 +7,9 @@ import {
   type SectorIntelProfile,
 } from "@/lib/agent/sector-intel";
 import { normalizeBusinessSectorKey } from "@/lib/agent-prompts";
+import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
+
+export const maxDuration = 30;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey =
@@ -353,7 +356,20 @@ async function persistAgentNews(
     }));
 
   if (rows.length === 0) return 0;
-  const { error } = await supabase.from("agent_news").insert(rows);
+  let leaseId: string;
+  try {
+    leaseId = await beginAccountWriteLease(supabase, userId, 90);
+  } catch (lockErr) {
+    console.warn(`[agent/news] cuenta bloqueada, se omite la escritura: ${lockErr}`);
+    return 0;
+  }
+  let error: { message: string } | null = null;
+  try {
+    const result = await supabase.from("agent_news").insert(rows);
+    error = result.error;
+  } finally {
+    await endAccountWriteLease(supabase, leaseId);
+  }
   if (error) {
     console.warn(`[agent/news] persist error: ${error.message}`);
     return 0;

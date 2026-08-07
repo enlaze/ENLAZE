@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { rateLimitSensitive } from "@/lib/rate-limit";
 import {
   RETAINED_INVOICE_BUCKET,
+  buildLegacyReceivedInvoiceDocument,
   parseRetainedReceivedInvoiceDocumentUrl,
 } from "@/lib/invoice-ocr-drafts";
 import { deleteStorageTree } from "@/lib/storage-cleanup";
@@ -52,6 +53,15 @@ const CONFIRMATION_TOKEN = "ELIMINAR";
  * fila es imposible y este endpoint aborta (ver anonymizeRetainedRows).
  */
 const RETENTION_MIGRATION = "supabase/migrations/20260728_account_deletion_retention.sql";
+
+/**
+ * Migración que crea account_deletion_locks, account_write_leases y el
+ * trigger/policies que rechazan nuevas escrituras de un usuario mientras
+ * existe su lock. Sin ella este endpoint no tiene forma de cerrar la
+ * ventana de carrera entre el arranque del borrado y su finalización, así
+ * que aborta en vez de proceder sin esa protección (ver lockAccountForDeletion).
+ */
+const WRITE_LOCK_MIGRATION = "supabase/migrations/20260806_03_account_deletion_write_lock.sql";
 
 /** Bucket de Storage donde se suben ficheros bajo el prefijo `${userId}/`. */
 const STORAGE_BUCKETS = ["invoices", "company-branding", "project-docs"];
@@ -350,6 +360,82 @@ async function countRows(
  * revoked_at) y se elimina todo lo que identifica a la persona: el vínculo al
  * usuario y las huellas técnicas (ip_address, user_agent).
  */
+
+/**
+ * Copia un documento de factura recibida heredado del bucket público
+ * "invoices" al bucket privado RETAINED_INVOICE_BUCKET y repunta la fila a
+ * esa nueva ubicación. Reintentable en cada paso: el `upload` con
+ * `upsert: false` hace que una copia ya hecha en un intento anterior sea un
+ * no-op seguro, y el `document_url` original NUNCA se borra del bucket
+ * público hasta que el UPDATE de la fila confirma que ya apunta al
+ * documento privado. Un fallo en cualquier paso deja el objeto público
+ * intacto (se sigue excluyendo de la limpieza) en vez de perder el único
+ * documento fiscal disponible.
+ */
+async function migrateLegacyReceivedInvoiceDocument(
+  admin: SupabaseClient,
+  userId: string,
+  invoiceId: string,
+  legacyObjectPath: string,
+  currentDocumentUrl: string
+): Promise<{ migratedObjectPath: string } | null> {
+  const fileName = legacyObjectPath.split("/").pop() || "";
+  const target = buildLegacyReceivedInvoiceDocument(userId, invoiceId, fileName);
+  if (!target) {
+    console.warn(
+      `[account/delete] no se pudo construir la ruta privada para ${legacyObjectPath}`
+    );
+    return null;
+  }
+
+  const legacyDir = `${userId}/legacy/${invoiceId}`;
+  const { data: existingList } = await admin.storage
+    .from(RETAINED_INVOICE_BUCKET)
+    .list(legacyDir, { search: fileName });
+  const alreadyCopied = (existingList ?? []).some((entry) => entry.name === fileName);
+
+  if (!alreadyCopied) {
+    const { data: downloaded, error: downloadError } = await admin.storage
+      .from("invoices")
+      .download(legacyObjectPath);
+    if (downloadError || !downloaded) {
+      console.warn(
+        `[account/delete] no se pudo leer el documento heredado ${legacyObjectPath}:`,
+        downloadError?.message
+      );
+      return null;
+    }
+    const { error: uploadError } = await admin.storage
+      .from(RETAINED_INVOICE_BUCKET)
+      .upload(target.objectPath, downloaded, { upsert: false });
+    if (uploadError && !/already exists/i.test(uploadError.message)) {
+      console.warn(
+        "[account/delete] no se pudo copiar el documento heredado a almacenamiento privado:",
+        uploadError.message
+      );
+      return null;
+    }
+  }
+
+  // Compare-and-set sobre la URL original: seguro de reintentar (si ya
+  // apunta al destino privado, esto no encuentra ninguna fila y es un
+  // no-op) y no puede pisar una escritura concurrente de otra vía.
+  const { error: updateError } = await admin
+    .from("received_invoices")
+    .update({ document_url: target.storageUrl })
+    .eq("id", invoiceId)
+    .eq("document_url", currentDocumentUrl);
+  if (updateError) {
+    console.warn(
+      "[account/delete] no se pudo repuntar la factura al documento migrado:",
+      updateError.message
+    );
+    return null;
+  }
+
+  return { migratedObjectPath: target.objectPath };
+}
+
 async function anonymizeRetainedRows(
   admin: SupabaseClient,
   userId: string,
@@ -551,7 +637,22 @@ async function anonymizeRetainedRows(
       objectPath = storedValue;
     }
     if (objectPath.startsWith(`${userId}/`)) {
-      legacyReceivedInvoicePaths.add(objectPath);
+      // Migra el documento al bucket privado en vez de dejarlo accesible
+      // públicamente para siempre. Si la migración falla en cualquier paso,
+      // se conserva la exclusión del bucket público (no se pierde el
+      // documento) y se reintenta en la próxima llamada.
+      const migrated = await migrateLegacyReceivedInvoiceDocument(
+        admin,
+        userId,
+        invoiceId,
+        objectPath,
+        storedValue
+      );
+      if (migrated) {
+        retainedReceivedInvoicePaths.add(migrated.migratedObjectPath);
+      } else {
+        legacyReceivedInvoicePaths.add(objectPath);
+      }
     }
   }
 
@@ -672,6 +773,51 @@ async function deleteStorageFiles(
   }
 }
 
+/**
+ * Inserta el lock durable ANTES de cualquier limpieza destructiva. Nunca se
+ * borra: sigue existiendo como tombstone después de eliminar Auth (ver
+ * comentario de la tabla en WRITE_LOCK_MIGRATION). Devuelve cuántos leases
+ * de escritura siguen activos para este usuario — si hay alguno, el
+ * llamador no debe empezar a limpiar todavía (ver POST).
+ */
+async function lockAccountForDeletion(
+  admin: SupabaseClient,
+  userId: string
+): Promise<{ activeLeases: number } | { error: DeletionError }> {
+  const { data, error } = await admin.rpc("lock_account_for_deletion", {
+    p_user_id: userId,
+  });
+  if (error) {
+    if (MISSING_TABLE_CODES.has(error.code ?? "")) {
+      return {
+        error: {
+          table: "account_deletion_locks",
+          message:
+            `${error.message} — falta aplicar la migración ${WRITE_LOCK_MIGRATION}, ` +
+            "necesaria para bloquear escrituras durante el borrado.",
+        },
+      };
+    }
+    return { error: { table: "account_deletion_locks", message: error.message } };
+  }
+  return { activeLeases: typeof data === "number" ? data : 0 };
+}
+
+/** n8n_updates guarda al propietario en data->>'requested_by' (jsonb), no en una columna user_id. */
+async function deleteN8nUpdatesForUser(
+  admin: SupabaseClient,
+  userId: string,
+  errors: DeletionError[]
+) {
+  const { error } = await admin
+    .from("n8n_updates")
+    .delete()
+    .eq("data->>requested_by", userId);
+  if (error && !IGNORABLE_CODES.has(error.code ?? "")) {
+    errors.push({ table: "n8n_updates", message: error.message });
+  }
+}
+
 export async function POST(request: Request) {
   const rl = rateLimitSensitive(request);
   if (!rl.allowed) {
@@ -691,10 +837,6 @@ export async function POST(request: Request) {
   if (sessionError || !user) {
     return NextResponse.json({ error: "No hay sesión activa." }, { status: 401 });
   }
-
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
 
   // 2) Confirmación explícita, revalidada en servidor.
   let confirmation: unknown;
@@ -727,41 +869,111 @@ export async function POST(request: Request) {
   const userId = user.id;
   const errors: DeletionError[] = [];
 
+  // Fence new writes on every attempt, before any destructive step and
+  // before the checkpoint branch below (idempotent — a retry's lock insert
+  // is a no-op if the tombstone already exists). Unlike revoking the
+  // user's session, this doesn't touch Auth: it only blocks writes to
+  // their own rows/files via a DB trigger and Storage policies, so the
+  // user can always come back with their normal cookies to retry this same
+  // endpoint if a later step fails.
+  const lockResult = await lockAccountForDeletion(admin, userId);
+  if ("error" in lockResult) {
+    console.error("[account/delete] no se pudo bloquear la cuenta:", lockResult.error);
+    return NextResponse.json(
+      {
+        error: "No se pudo bloquear la cuenta antes de borrarla. No se ha eliminado nada.",
+        details: [lockResult.error],
+      },
+      { status: 500 }
+    );
+  }
+  if (lockResult.activeLeases > 0) {
+    return NextResponse.json(
+      {
+        error:
+          "Hay operaciones en curso sobre tu cuenta (por ejemplo, una subida de documento). " +
+          "Tu cuenta ya ha quedado bloqueada para nuevos cambios; reinténtalo en unos segundos.",
+      },
+      { status: 409 }
+    );
+  }
+
   try {
     // A previous attempt may have completed every destructive cleanup step
     // and then failed while clearing markers or deleting Auth. The protected
     // Auth checkpoint makes this branch durable: never enumerate or delete
     // Storage again, because the fiscal markers may already be gone.
     if (isAccountDeletionCleanupComplete(user.app_metadata)) {
-      // A write racing the first cleanup pass (e.g. another authenticated tab
-      // inserting a pb_providers row after deletePrivatePriceBank already ran)
-      // can leave an owned row whose Auth FK blocks deleteUser below. Every
-      // step here deletes by owner id and is a no-op once nothing is left, so
-      // repeating it on every retry is safe and closes that race instead of
-      // getting stuck forever once the checkpoint is set.
+      // The write lock (inserted unconditionally above) closes most of the
+      // race window. What can still slip through is a write already in
+      // flight the instant the lock landed. anonymizeRetainedRows, the
+      // ownership-cleanup steps, and deleteStorageFiles are all designed to
+      // be safely repeated, so replay them here in the same FK-safe order
+      // as the main flow instead of trusting the first pass caught
+      // everything.
+      const retryErrors: DeletionError[] = [];
+
+      const {
+        legacyReceivedInvoicePaths: retryLegacyPaths,
+        retainedReceivedInvoicePaths: retryRetainedPaths,
+      } = await anonymizeRetainedRows(admin, userId, retryErrors);
+      if (retryErrors.length > 0) {
+        console.error("[account/delete] reintento de anonimización:", retryErrors);
+        return NextResponse.json(
+          {
+            error:
+              "Tus datos ya están casi limpios, pero falló un reintento de anonimización. Reinténtalo.",
+            details: retryErrors,
+          },
+          { status: 500 }
+        );
+      }
+
       const retryParentIds = {} as Record<ParentKey, string[]>;
       for (const table of PARENT_TABLES) {
         retryParentIds[table] = await collectIds(admin, table, "user_id", userId);
       }
-      const ownershipRetryErrors: DeletionError[] = [];
       for (const { table, column, parent } of CHILD_TABLES) {
-        await deleteByIn(admin, table, column, retryParentIds[parent], ownershipRetryErrors);
+        await deleteByIn(admin, table, column, retryParentIds[parent], retryErrors);
       }
       for (const { table, column } of OWNED_TABLES) {
-        await deleteBy(admin, table, column, userId, ownershipRetryErrors);
+        await deleteBy(admin, table, column, userId, retryErrors);
       }
-      await deletePrivatePriceBank(admin, userId, ownershipRetryErrors);
-      await clearAuthorReferences(admin, userId, ownershipRetryErrors);
-      if (ownershipRetryErrors.length > 0) {
+      await deletePrivatePriceBank(admin, userId, retryErrors);
+      await clearAuthorReferences(admin, userId, retryErrors);
+      await deleteN8nUpdatesForUser(admin, userId, retryErrors);
+      if (retryErrors.length > 0) {
         console.error(
           "[account/delete] reintento de limpieza de propiedad:",
-          ownershipRetryErrors
+          retryErrors
         );
         return NextResponse.json(
           {
             error:
               "Tus datos ya están casi limpios, pero falló un reintento de limpieza. Reinténtalo.",
-            details: ownershipRetryErrors,
+            details: retryErrors,
+          },
+          { status: 500 }
+        );
+      }
+
+      await deleteStorageFiles(
+        admin,
+        userId,
+        retryErrors,
+        retryLegacyPaths,
+        retryRetainedPaths
+      );
+      if (retryErrors.length > 0) {
+        console.error(
+          "[account/delete] reintento de limpieza de Storage:",
+          retryErrors
+        );
+        return NextResponse.json(
+          {
+            error:
+              "Tus datos ya están casi limpios, pero falló un reintento de limpieza de Storage. Reinténtalo.",
+            details: retryErrors,
           },
           { status: 500 }
         );
@@ -839,6 +1051,7 @@ export async function POST(request: Request) {
     }
     await deletePrivatePriceBank(admin, userId, errors);
     await clearAuthorReferences(admin, userId, errors);
+    await deleteN8nUpdatesForUser(admin, userId, errors);
 
     // 6) Si algo falló, se aborta ANTES de tocar auth: es preferible una
     //    cuenta viva con datos a medio borrar (reintentable) que un usuario

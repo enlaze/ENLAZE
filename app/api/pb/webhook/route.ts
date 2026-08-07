@@ -24,12 +24,15 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import crypto from "crypto";
+import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
 
 // Use service role for webhook (no cookie auth)
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
+
+export const maxDuration = 60;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -176,19 +179,28 @@ async function processWebhook(
 
   const companyId = body.company_id ?? null;
 
-  // 1. Get or create provider
-  const providerId = await getOrCreateProvider(body.provider, companyId);
+  // Company-scoped payloads (a private provider/catalog) are protected by a
+  // lease for the duration of this webhook call; a null company_id targets
+  // shared/global provider data with no specific account to protect.
+  let leaseId: string | null = null;
+  if (companyId) {
+    leaseId = await beginAccountWriteLease(supabase, companyId, 180);
+  }
 
-  // 2. Get or create price source
-  const sourceId = await getOrCreateSource(body.source, providerId, companyId);
+  try {
+    // 1. Get or create provider
+    const providerId = await getOrCreateProvider(body.provider, companyId);
 
-  // 3. Create sync run for tracking
-  const syncRunId = await createSyncRun(sourceId, providerId, body.metadata);
+    // 2. Get or create price source
+    const sourceId = await getOrCreateSource(body.source, providerId, companyId);
 
-  // 4. Process items based on action
-  const now = new Date().toISOString();
+    // 3. Create sync run for tracking
+    const syncRunId = await createSyncRun(sourceId, providerId, body.metadata);
 
-  for (const item of body.items) {
+    // 4. Process items based on action
+    const now = new Date().toISOString();
+
+    for (const item of body.items) {
     if (!item.name) {
       errors.push({ item: "(sin nombre)", error: "Nombre vacío" });
       skipped++;
@@ -260,6 +272,9 @@ async function processWebhook(
     sync_run_id: syncRunId,
     duration_ms: Date.now() - startTime,
   };
+  } finally {
+    if (leaseId) await endAccountWriteLease(supabase, leaseId);
+  }
 }
 
 // ─── Provider management ──────────────────────────────────────────────────────

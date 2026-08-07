@@ -329,6 +329,12 @@ export default function ReceivedInvoicesPage() {
       // retrying OCR promotion below. Persist any corrections made to the
       // form in the meantime, or they are silently discarded once this
       // retry succeeds and the form closes.
+      const { data: previousInvoice } = await supabase
+        .from("received_invoices")
+        .select("supplier_id, total")
+        .eq("id", invoiceId)
+        .single();
+
       const { error } = await updateReceivedInvoice(supabase, invoiceId, {
         invoice_number: form.invoice_number,
         supplier_id: form.supplier_id || null,
@@ -352,6 +358,26 @@ export default function ReceivedInvoicesPage() {
         });
         setSaving(false);
         return;
+      }
+
+      // A retry can change the supplier or the amount after the original
+      // submit already incremented suppliers.total_invoiced. Reconcile both
+      // sides atomically instead of leaving the old supplier's balance
+      // stale — a plain re-read-then-update from the client would race a
+      // concurrent write on the same supplier.
+      const oldSupplierId = previousInvoice?.supplier_id ?? null;
+      const oldTotal = Number(previousInvoice?.total) || 0;
+      const newSupplierId = form.supplier_id || null;
+      if (oldSupplierId !== newSupplierId || oldTotal !== total) {
+        const { error: reconcileError } = await supabase.rpc("reconcile_supplier_invoiced", {
+          p_old_supplier_id: oldSupplierId,
+          p_old_amount: oldSupplierId ? oldTotal : 0,
+          p_new_supplier_id: newSupplierId,
+          p_new_amount: newSupplierId ? total : 0,
+        });
+        if (reconcileError) {
+          console.error("No se pudo reconciliar el saldo del proveedor:", reconcileError);
+        }
       }
     }
 
@@ -398,7 +424,7 @@ export default function ReceivedInvoicesPage() {
         countLabel={`factura${total !== 1 ? "s" : ""}`}
         actions={
           <div className="flex flex-wrap gap-2">
-            <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-medium transition ${scanning ? "pointer-events-none cursor-not-allowed bg-navy-100 text-navy-400 dark:text-zinc-500" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
+            <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-medium transition ${scanning || saving ? "pointer-events-none cursor-not-allowed bg-navy-100 text-navy-400 dark:text-zinc-500" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
               {scanning ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -410,11 +436,11 @@ export default function ReceivedInvoicesPage() {
                 accept="image/jpeg,image/png,image/webp"
                 capture="environment"
                 onChange={handleScan}
-                disabled={scanning}
+                disabled={scanning || saving}
                 className="hidden"
               />
             </label>
-            <Button onClick={handleNewInvoice}>
+            <Button onClick={handleNewInvoice} disabled={saving}>
               + Nueva factura
             </Button>
           </div>
@@ -567,7 +593,7 @@ export default function ReceivedInvoicesPage() {
                     ? "Reintentar conservación"
                     : "Registrar factura"}
               </Button>
-              <Button type="button" variant="secondary" onClick={handleCancelForm}>
+              <Button type="button" variant="secondary" onClick={handleCancelForm} disabled={saving}>
                 Cancelar
               </Button>
             </div>
@@ -589,7 +615,7 @@ export default function ReceivedInvoicesPage() {
                 accept="image/jpeg,image/png,image/webp"
                 capture="environment"
                 onChange={handleScan}
-                disabled={scanning}
+                disabled={scanning || saving}
                 className="hidden"
               />
             </label>
