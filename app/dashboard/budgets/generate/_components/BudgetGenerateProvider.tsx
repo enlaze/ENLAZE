@@ -37,6 +37,16 @@ import {
 } from "@/lib/geographic-costs";
 import { isTraceableCommercialPrice } from "@/lib/price-traceability";
 
+// The v2 price resolver (/api/prices/resolve, resolver_used: "v2") can
+// return several low-confidence "estimate" source types — market_estimate,
+// ai_estimate — in addition to v1's plain "estimated" literal. None of
+// them is an independently verified match, so every price-adoption gate in
+// this file must treat all of them the same, not just the one v1 literal.
+const ESTIMATE_SOURCE_TYPES = new Set(["estimated", "market_estimate", "ai_estimate"]);
+function isEstimateSourceType(sourceType: string | null | undefined): boolean {
+  return ESTIMATE_SOURCE_TYPES.has(String(sourceType || ""));
+}
+
 export interface Partida {
   id: string;
   concept: string;
@@ -263,7 +273,7 @@ async function verifyMaterialsAgainstTracker(
     // independently traceable commercial evidence — so their price should
     // still be adopted instead of silently reverting to the old estimate.
     const hasUsablePrice =
-      resolved && Number(resolved.selectedPrice) > 0 && resolved.sourceType !== "estimated";
+      resolved && Number(resolved.selectedPrice) > 0 && !isEstimateSourceType(resolved.sourceType);
     if (!hasUsablePrice) {
       return {
         ...material,
@@ -1578,7 +1588,7 @@ export function BudgetGenerateProvider({
             // Adoption of the resolved price is separate from the
             // isRealData label — see the equivalent gate above.
             const hasUsablePrice =
-              resolved && Number(resolved.selectedPrice) > 0 && resolved.sourceType !== "estimated";
+              resolved && Number(resolved.selectedPrice) > 0 && !isEstimateSourceType(resolved.sourceType);
             if (!hasUsablePrice) {
               return {
                 ...material,

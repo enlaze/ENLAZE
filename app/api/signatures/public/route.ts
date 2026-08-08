@@ -148,8 +148,15 @@ export async function POST(request: Request) {
     }
     const result = data as { ok: boolean; reason?: string };
     if (!result.ok) {
-      const status = result.reason === "account_locked" ? 409 : 404;
-      return NextResponse.json({ error: result.reason || "No se pudo guardar la firma" }, { status });
+      // La comprobación de status hecha arriba no es atómica con el UPDATE
+      // de la RPC: si la firma se completó justo entre medias (verificación
+      // de OTP en otra pestaña/dispositivo), la RPC devuelve 'not_pending'
+      // en vez de aplicar el guardado sobre una firma ya cerrada.
+      const isConflict = result.reason === "account_locked" || result.reason === "not_pending";
+      const status = isConflict ? 409 : 404;
+      const message =
+        result.reason === "not_pending" ? "Esta firma ya se ha completado" : result.reason || "No se pudo guardar la firma";
+      return NextResponse.json({ error: message }, { status });
     }
 
     return NextResponse.json({ success: true });

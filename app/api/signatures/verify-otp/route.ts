@@ -92,7 +92,7 @@ export async function POST(request: Request) {
     );
     if (!codeMatch) {
       return NextResponse.json(
-        { error: `Código incorrecto. Te quedan ${Math.max(0, 4 - attempt.otp.attempts)} intentos.` },
+        { error: `Código incorrecto. Te quedan ${Math.max(0, 5 - attempt.otp.attempts)} intentos.` },
         { status: 401 }
       );
     }

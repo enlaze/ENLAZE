@@ -106,7 +106,13 @@ export async function POST() {
     for (const userId of userIds) {
       let leaseId: string;
       try {
-        leaseId = await beginAccountWriteLease(supabase, userId, 180);
+        // maxDuration above is 300s for the WHOLE route (looping over every
+        // user with active alerts); the untimed Resend fetch for this user
+        // runs before the notification insert below, so a slow email must
+        // not be able to let this user's lease expire mid-request. The TTL
+        // has to safely exceed maxDuration with margin, not just be "long
+        // enough on average" — 180s left room for exactly that to happen.
+        leaseId = await beginAccountWriteLease(supabase, userId, 320);
       } catch {
         // Cuenta en proceso de borrado: se omite por completo, ninguna
         // lectura de email, envío ni escritura para este usuario.

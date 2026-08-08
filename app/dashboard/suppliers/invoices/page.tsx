@@ -17,7 +17,6 @@ import { prepareInvoiceImage } from "@/lib/invoice-image-client";
 import {
   getReceivedInvoices,
   createReceivedInvoice,
-  updateReceivedInvoice,
   getExpenseSummary,
   receivedInvoiceStatusLabels,
   paymentMethodLabels,
@@ -329,27 +328,31 @@ export default function ReceivedInvoicesPage() {
       // retrying OCR promotion below. Persist any corrections made to the
       // form in the meantime, or they are silently discarded once this
       // retry succeeds and the form closes.
-      const { data: previousInvoice } = await supabase
-        .from("received_invoices")
-        .select("supplier_id, total")
-        .eq("id", invoiceId)
-        .single();
-
-      const { error } = await updateReceivedInvoice(supabase, invoiceId, {
-        invoice_number: form.invoice_number,
-        supplier_id: form.supplier_id || null,
-        supplier_name: form.supplier_name,
-        supplier_nif: form.supplier_nif || null,
-        issue_date: form.issue_date,
-        due_date: form.due_date || null,
-        subtotal,
-        iva_percent: ivaPct,
-        iva_amount: ivaAmount,
-        irpf_percent: irpfPct,
-        irpf_amount: irpfAmount,
-        total,
-        payment_method: form.payment_method || null,
-        notes: form.notes || null,
+      //
+      // The invoice UPDATE and the suppliers.total_invoiced adjustment run
+      // as ONE atomic RPC instead of two separate client calls: the RPC
+      // re-reads the invoice's pre-edit supplier/total itself (under a row
+      // lock) at write time, so the delta is always computed from the true
+      // current DB state — a best-effort follow-up call that only logs on
+      // failure could leave the invoice corrected but the supplier balance
+      // stale, with no retry path (a later retry re-reads the already-
+      // corrected invoice and sees a zero delta).
+      const { error } = await supabase.rpc("update_received_invoice_and_reconcile", {
+        p_invoice_id: invoiceId,
+        p_invoice_number: form.invoice_number,
+        p_supplier_id: form.supplier_id || null,
+        p_supplier_name: form.supplier_name,
+        p_supplier_nif: form.supplier_nif || null,
+        p_issue_date: form.issue_date,
+        p_due_date: form.due_date || null,
+        p_subtotal: subtotal,
+        p_iva_percent: ivaPct,
+        p_iva_amount: ivaAmount,
+        p_irpf_percent: irpfPct,
+        p_irpf_amount: irpfAmount,
+        p_total: total,
+        p_payment_method: form.payment_method || null,
+        p_notes: form.notes || null,
       });
 
       if (error) {
@@ -358,26 +361,6 @@ export default function ReceivedInvoicesPage() {
         });
         setSaving(false);
         return;
-      }
-
-      // A retry can change the supplier or the amount after the original
-      // submit already incremented suppliers.total_invoiced. Reconcile both
-      // sides atomically instead of leaving the old supplier's balance
-      // stale — a plain re-read-then-update from the client would race a
-      // concurrent write on the same supplier.
-      const oldSupplierId = previousInvoice?.supplier_id ?? null;
-      const oldTotal = Number(previousInvoice?.total) || 0;
-      const newSupplierId = form.supplier_id || null;
-      if (oldSupplierId !== newSupplierId || oldTotal !== total) {
-        const { error: reconcileError } = await supabase.rpc("reconcile_supplier_invoiced", {
-          p_old_supplier_id: oldSupplierId,
-          p_old_amount: oldSupplierId ? oldTotal : 0,
-          p_new_supplier_id: newSupplierId,
-          p_new_amount: newSupplierId ? total : 0,
-        });
-        if (reconcileError) {
-          console.error("No se pudo reconciliar el saldo del proveedor:", reconcileError);
-        }
       }
     }
 

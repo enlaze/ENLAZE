@@ -110,6 +110,7 @@ export default function SignaturePanel({
 
   // Link copied
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copyingId, setCopyingId] = useState<string | null>(null);
 
   async function loadData() {
     const [sigRes, actRes] = await Promise.all([
@@ -219,12 +220,33 @@ export default function SignaturePanel({
     await loadData();
   }
 
-  function copySignLink(signatureId: string) {
-    const url = `${window.location.origin}/firmar/${signatureId}`;
-    navigator.clipboard.writeText(url);
-    setCopiedId(signatureId);
-    toast.success("Enlace de firma copiado");
-    setTimeout(() => setCopiedId(null), 3000);
+  async function copySignLink(signatureId: string) {
+    // The signature row id is guessable/enumerable and the public /firmar
+    // page correctly refuses to treat it as authorization — it only
+    // resolves signatures by hashing the high-entropy public_token, which
+    // is shown once at creation and never persisted for later retrieval.
+    // So a working "copy link" action has to mint a fresh token on demand
+    // rather than building the URL from signatureId.
+    setCopyingId(signatureId);
+    try {
+      const res = await fetch("/api/signatures/rotate-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signature_id: signatureId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "No se pudo generar el enlace de firma");
+
+      const url = `${window.location.origin}/firmar/${data.public_token}`;
+      await navigator.clipboard.writeText(url);
+      setCopiedId(signatureId);
+      toast.success("Enlace de firma copiado");
+      setTimeout(() => setCopiedId(null), 3000);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo copiar el enlace");
+    } finally {
+      setCopyingId(null);
+    }
   }
 
   /* ── Render ── */
@@ -468,9 +490,14 @@ export default function SignaturePanel({
                         {sig.status === "pending" && (
                           <button
                             onClick={() => copySignLink(sig.id)}
-                            className="text-xs text-brand-green hover:underline"
+                            disabled={copyingId === sig.id}
+                            className="text-xs text-brand-green hover:underline disabled:opacity-50"
                           >
-                            {copiedId === sig.id ? "Copiado" : "Copiar enlace"}
+                            {copiedId === sig.id
+                              ? "Copiado"
+                              : copyingId === sig.id
+                                ? "Generando…"
+                                : "Copiar enlace"}
                           </button>
                         )}
                         {sig.status === "signed" && sig.signature_image && (

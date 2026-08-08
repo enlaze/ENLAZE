@@ -784,7 +784,9 @@ test("OCR draft deletion requires this exact draft to have produced the confirme
 test("resubmitting a pending OCR-promotion retry persists form corrections", () => {
   const page = readFileSync("app/dashboard/suppliers/invoices/page.tsx", "utf8");
 
-  assert.match(
+  // The retry-persist path now goes through a single atomic RPC instead of
+  // the removed updateReceivedInvoice() + best-effort reconcile pair.
+  assert.doesNotMatch(
     page,
     /import \{[\s\S]*?updateReceivedInvoice[\s\S]*?\} from "@\/lib\/suppliers"/
   );
@@ -799,7 +801,7 @@ test("resubmitting a pending OCR-promotion retry persists form corrections", () 
   assert.ok(promoteCall > elseBranchStart);
 
   const elseBranch = page.slice(elseBranchStart, promoteCall);
-  assert.match(elseBranch, /updateReceivedInvoice\(supabase, invoiceId, \{/);
+  assert.match(elseBranch, /supabase\.rpc\("update_received_invoice_and_reconcile", \{/);
   assert.match(elseBranch, /if \(error\) \{/);
   // document_url is only ever written server-side (creation, then OCR
   // promotion) — this retry path must not overwrite it from client state.
@@ -1136,14 +1138,19 @@ test("prices/import writes with the authenticated session client into a private,
   assert.doesNotMatch(route, /:\s*any\b/);
 });
 
-test("weekly-report/send and process-alerts lease each user for 180s and release in finally", () => {
-  for (const file of [
-    "app/api/prices/weekly-report/send/route.ts",
-    "app/api/prices/process-alerts/route.ts",
-  ]) {
+test("weekly-report/send and process-alerts lease each user and release in finally", () => {
+  const ttlByFile = {
+    // Bumped above maxDuration (300s) with margin: the untimed Resend fetch
+    // for each user runs before the lease is released, so the TTL must
+    // safely outlast the whole route's time budget, not just be "usually
+    // enough".
+    "app/api/prices/weekly-report/send/route.ts": 320,
+    "app/api/prices/process-alerts/route.ts": 180,
+  };
+  for (const [file, ttl] of Object.entries(ttlByFile)) {
     const route = readFileSync(file, "utf8");
     assert.match(route, /export const maxDuration = 300;/);
-    assert.match(route, /beginAccountWriteLease\(supabase, userId, 180\)/);
+    assert.match(route, new RegExp(`beginAccountWriteLease\\(supabase, userId, ${ttl}\\)`));
     assert.match(route, /\}\s*finally\s*\{\s*\n\s*await endAccountWriteLease\(supabase, leaseId\);/);
   }
 });
@@ -1205,10 +1212,10 @@ test("Cancel, New invoice and Scan are disabled while saving", () => {
   assert.equal((page.match(/disabled=\{scanning \|\| saving\}/g) || []).length, 2);
 });
 
-test("retry submit reconciles supplier balances atomically via RPC when supplier or total changes", () => {
+test("retry submit updates the invoice and reconciles supplier balances in one atomic RPC", () => {
   const page = readFileSync("app/dashboard/suppliers/invoices/page.tsx", "utf8");
-  assert.match(page, /supabase\.rpc\("reconcile_supplier_invoiced", \{/);
-  assert.match(page, /oldSupplierId !== newSupplierId \|\| oldTotal !== total/);
+  assert.match(page, /supabase\.rpc\("update_received_invoice_and_reconcile", \{/);
+  assert.doesNotMatch(page, /\.rpc\("reconcile_supplier_invoiced"/);
 });
 
 // ─── service-role client: lazy, server-only, no module-level construction ──
