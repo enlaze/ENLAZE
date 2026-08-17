@@ -89,7 +89,7 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     endpoint: "pb-ingest",
-    evidence_version: "official-sources-v2.1",
+    evidence_version: "official-sources-v2.2",
     verified_providers: [
       "ManoMano",
       "Leroy Merlin",
@@ -320,57 +320,6 @@ export async function POST(request: Request) {
             .filter((product) => product.sku)
             .map((product) => [product.sku as string, product])
         );
-        const missingBySku = validProducts.filter(
-          (product) => !existingBySku.has(product.sku as string)
-        );
-        const incomingNameCounts = validProducts.reduce((counts, product) => {
-          const name = product.name.trim();
-          counts.set(name, (counts.get(name) || 0) + 1);
-          return counts;
-        }, new Map<string, number>());
-
-        if (missingBySku.length > 0) {
-          const nameChunks = chunkArray(
-            Array.from(
-              new Set(
-                missingBySku
-                  .filter(
-                    (product) =>
-                      incomingNameCounts.get(product.name.trim()) === 1
-                  )
-                  .map((product) => product.name.trim())
-              )
-            ),
-            10
-          );
-
-          for (const nameChunkGroup of chunkArray(nameChunks, 6)) {
-            const nameLookupResults = await Promise.all(
-              nameChunkGroup.map((nameChunk) =>
-                supabase
-                  .from("pb_products")
-                  .select("id, unit_price, sku, commercial_name")
-                  .eq("provider_id", providerId)
-                  .eq("sector", sector)
-                  .in("commercial_name", nameChunk)
-              )
-            );
-
-            for (const lookup of nameLookupResults) {
-              if (lookup.error) throw lookup.error;
-              existingProducts.push(
-                ...((lookup.data || []) as ExistingProduct[])
-              );
-            }
-          }
-        }
-
-        const existingByName = new Map(
-          existingProducts.map((product) => [
-            product.commercial_name,
-            product,
-          ])
-        );
         const changedRows: Array<Record<string, unknown>> = [];
         const unchangedRows: Array<Record<string, unknown>> = [];
         const newCandidates: IngestProduct[] = [];
@@ -383,12 +332,7 @@ export async function POST(request: Request) {
         const syncedAt = new Date().toISOString();
 
         for (const product of validProducts) {
-          const nameKey = product.name.trim();
-          const existing =
-            existingBySku.get(product.sku as string) ||
-            (incomingNameCounts.get(nameKey) === 1
-              ? existingByName.get(nameKey)
-              : undefined);
+          const existing = existingBySku.get(product.sku as string);
 
           if (!existing) {
             const skuKey = product.sku as string;
