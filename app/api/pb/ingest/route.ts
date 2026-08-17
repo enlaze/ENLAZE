@@ -494,7 +494,8 @@ export async function POST(request: Request) {
                 provider_id: providerId,
                 observed_price: product.price,
                 source:
-                  product.evidence_type === "official_bc3_catalog"
+                  product.evidence_type === "official_bc3_catalog" ||
+                  product.evidence_type === "official_pdf_catalog"
                     ? "provider_catalog"
                     : "n8n",
                 source_url: product.product_url,

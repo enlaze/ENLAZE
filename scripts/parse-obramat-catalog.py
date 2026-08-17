@@ -523,6 +523,8 @@ def main() -> None:
                     ],
                 }
             )
+            if len({price for price, _ in variants}) > 1:
+                continue
         selected_source_counts[str(selected["source_kind"])] += 1
         products.append(
             {

@@ -33,6 +33,10 @@ function sleep(milliseconds) {
 
 async function main() {
   const inputPath = path.resolve(String(getOption("input", "")));
+  const reportOption = getOption("report", "");
+  const reportPath = reportOption
+    ? path.resolve(String(reportOption))
+    : "";
   const apiUrl = String(getOption("api-url", DEFAULT_API_URL));
   const batchSize = Math.min(positiveInteger(getOption("batch-size", 300), 300), 500);
   const maxProducts = positiveInteger(
@@ -44,14 +48,41 @@ async function main() {
     throw new Error("Indica un archivo válido con --input");
   }
   if (!apiKey) throw new Error("Falta SYNC_API_KEY o AGENT_API_KEY");
-  const products = JSON.parse(fs.readFileSync(inputPath, "utf8")).slice(
-    0,
-    maxProducts
-  );
+  let products = JSON.parse(fs.readFileSync(inputPath, "utf8"));
   if (!Array.isArray(products) || products.length === 0) {
     throw new Error("El archivo no contiene precios");
   }
-  const summary = { total: products.length, inserted: 0, updated: 0, unchanged: 0, errors: 0 };
+  let excludedConflicts = 0;
+  if (reportPath) {
+    if (!fs.existsSync(reportPath)) {
+      throw new Error("El informe indicado con --report no existe");
+    }
+    const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+    const conflictingReferences = new Set(
+      (report.conflicts_sample || [])
+        .filter(
+          (conflict) =>
+            new Set((conflict.variants || []).map((variant) => variant.price))
+              .size > 1
+        )
+        .map((conflict) => String(conflict.reference))
+    );
+    const initialLength = products.length;
+    products = products.filter(
+      (product) =>
+        !conflictingReferences.has(String(product.manufacturer_reference))
+    );
+    excludedConflicts = initialLength - products.length;
+  }
+  products = products.slice(0, maxProducts);
+  const summary = {
+    total: products.length,
+    excluded_conflicts: excludedConflicts,
+    inserted: 0,
+    updated: 0,
+    unchanged: 0,
+    errors: 0,
+  };
   for (let offset = 0; offset < products.length; offset += batchSize) {
     const batch = products.slice(offset, offset + batchSize);
     const response = await fetch(apiUrl, {
