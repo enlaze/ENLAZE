@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * Contenedor de Ajustes: sub-navegación a la izquierda (con la tarjeta del
- * agente económico) y el panel activo a la derecha.
+ * Contenedor de Ajustes: barra de pestañas horizontal pegada bajo la cabecera
+ * del dashboard (con el medidor de perfil a la derecha) y el panel activo
+ * debajo.
  *
  * Las cuatro rutas antiguas siguen existiendo y montan este mismo shell con la
  * pestaña correspondiente, así que ningún enlace queda roto — incluido el
@@ -60,39 +61,38 @@ export default function SettingsShell({ initialTab = "empresa" }: { initialTab?:
   }, []);
 
   // El sangrado que anula el padding del <main> del dashboard vive en
-  // globals.css, bajo [data-settings-surface], porque cambia en `md`.
+  // globals.css, bajo [data-settings-surface], porque cambia en `md`. La barra
+  // de pestañas lo revierte con margin/padding negativos (también en CSS) para
+  // que su borde inferior llegue de lado a lado.
   return (
     <div data-settings-surface>
-      <div data-st-shell style={{ display: "flex", alignItems: "flex-start", gap: 0 }}>
-        {/* ── Sub-navegación ── */}
-        <aside
-          data-st-subnav
+      {/* ── Sub-navegación ── */}
+      <div
+        data-st-subnav
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 26,
+          borderBottom: "1px solid var(--st-border)",
+          background: "var(--st-bg)",
+          position: "sticky",
+          top: 57,
+          zIndex: 20,
+        }}
+      >
+        <div
+          data-subitems
           style={{
-            width: 272,
-            flex: "none",
-            padding: "34px 20px 40px",
             display: "flex",
-            flexDirection: "column",
+            alignItems: "center",
             gap: 4,
-            borderRight: "1px solid var(--st-border)",
-            position: "sticky",
-            top: 57,
-            alignSelf: "flex-start",
+            flex: 1,
+            minWidth: 0,
+            overflowX: "auto",
+            overflowY: "hidden",
+            scrollbarWidth: "none",
           }}
         >
-          <div style={{ padding: "0 12px 16px" }}>
-            <div
-              style={{
-                fontSize: 10.5,
-                fontWeight: 700,
-                letterSpacing: ".14em",
-                color: "var(--st-muted)",
-              }}
-            >
-              AJUSTES
-            </div>
-          </div>
-
           {TABS.map((t) => {
             const active = tab === t.id;
             return (
@@ -106,19 +106,21 @@ export default function SettingsShell({ initialTab = "empresa" }: { initialTab?:
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 11,
-                  width: "100%",
-                  textAlign: "left",
-                  padding: "11px 12px",
+                  gap: 9,
+                  flex: "none",
+                  whiteSpace: "nowrap",
+                  padding: "16px 14px",
                   border: "none",
-                  borderRadius: 11,
+                  borderBottom: `2px solid ${active ? "var(--st-accent)" : "transparent"}`,
+                  marginBottom: -1,
+                  background: "transparent",
                   cursor: "pointer",
                   fontFamily: "inherit",
                   fontSize: 14,
-                  transition: "background .16s",
+                  transition: "color .16s",
                   ...(active
-                    ? { fontWeight: 700, color: "var(--st-accent-ink)", background: "var(--st-accent-soft)" }
-                    : { fontWeight: 600, color: "var(--st-text-2)", background: "transparent" }),
+                    ? { fontWeight: 700, color: "var(--st-text)" }
+                    : { fontWeight: 600, color: "var(--st-muted)" }),
                 }}
               >
                 <span style={{ flex: "none", lineHeight: 0 }}>{t.icon}</span>
@@ -126,73 +128,63 @@ export default function SettingsShell({ initialTab = "empresa" }: { initialTab?:
               </button>
             );
           })}
+        </div>
 
-          {/* ── Tarjeta del agente económico ── */}
+        {/* ── Medidor de perfil (lo que alimenta al agente económico) ── */}
+        <div
+          data-st-progress
+          title="Cuanto más completos estén estos datos, más preciso será tu briefing diario"
+          style={{ flex: "none", display: "flex", alignItems: "center", gap: 11, padding: "9px 0" }}
+        >
           <div
             style={{
-              marginTop: 22,
-              padding: 14,
-              borderRadius: 12,
-              border: "1px solid var(--st-border)",
-              background: "var(--st-panel)",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: ".08em",
+              color: "var(--st-accent-ink)",
+            }}
+          >
+            <IcoSparkle size={12} />
+            PERFIL
+          </div>
+          <div
+            style={{
+              width: 88,
+              height: 5,
+              borderRadius: 3,
+              background: "var(--st-field-alt)",
+              overflow: "hidden",
             }}
           >
             <div
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 7,
-                fontSize: 11.5,
-                fontWeight: 700,
-                color: "var(--st-accent-ink)",
-                letterSpacing: ".02em",
+                width: `${completion ?? 0}%`,
+                height: "100%",
+                background: "var(--st-accent)",
+                transition: "width .3s ease",
               }}
-            >
-              <IcoSparkle />
-              AGENTE ECONÓMICO
-            </div>
-            <p style={{ margin: "8px 0 0", fontSize: 12.5, lineHeight: 1.55, color: "var(--st-muted)" }}>
-              Cuanto más completos estén estos datos, más preciso será tu briefing de cada mañana.
-            </p>
-            <div
-              style={{
-                marginTop: 11,
-                height: 5,
-                borderRadius: 3,
-                background: "var(--st-field-alt)",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  width: `${completion ?? 0}%`,
-                  height: "100%",
-                  background: "var(--st-accent)",
-                  transition: "width .3s ease",
-                }}
-              />
-            </div>
-            <div style={{ marginTop: 7, fontSize: 11.5, fontWeight: 600, color: "var(--st-text-2)" }}>
-              {completion === null ? "Calculando tu perfil…" : `Perfil completado al ${completion}%`}
-            </div>
+            />
           </div>
-        </aside>
-
-        {/* ── Panel activo ── */}
-        <main
-          data-st-content
-          style={{ flex: 1, minWidth: 0, padding: "44px 0 140px 56px", maxWidth: 1080 }}
-        >
-          {/* El panel de Empresa se mantiene montado: es el que calcula el % de
-              perfil y evita recargar sus datos cada vez que se vuelve a él. */}
-          <div style={{ display: tab === "empresa" ? "block" : "none" }}>
-            <EmpresaPanel onCompletionChange={setCompletion} />
-          </div>
-          {tab === "notificaciones" && <NotificacionesPanel />}
-          {tab === "integraciones" && <IntegracionesPanel />}
-          {tab === "cuenta" && <CuentaPanel />}
-        </main>
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--st-text-2)" }}>
+            {completion === null ? "—" : `${completion}%`}
+          </span>
+        </div>
       </div>
+
+      {/* ── Panel activo ── */}
+      <main data-st-content style={{ width: "100%", maxWidth: 1080, padding: "40px 0 140px" }}>
+        {/* El panel de Empresa se mantiene montado: es el que calcula el % de
+            perfil y evita recargar sus datos cada vez que se vuelve a él. */}
+        <div style={{ display: tab === "empresa" ? "block" : "none" }}>
+          <EmpresaPanel onCompletionChange={setCompletion} />
+        </div>
+        {tab === "notificaciones" && <NotificacionesPanel />}
+        {tab === "integraciones" && <IntegracionesPanel />}
+        {tab === "cuenta" && <CuentaPanel />}
+      </main>
     </div>
   );
 }

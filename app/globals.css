@@ -343,10 +343,24 @@ html[data-theme="dark"] [data-settings-surface] {
   color: #fff;
 }
 [data-settings-surface] [data-subitem]:hover {
-  background: var(--st-field-alt);
+  color: var(--st-text);
 }
-[data-settings-surface] [data-subitem][data-active="true"]:hover {
-  background: var(--st-accent-soft);
+
+/* La barra de pestañas revierte el padding lateral de la superficie para que
+   su borde inferior llegue de lado a lado. */
+[data-settings-surface] [data-st-subnav] {
+  margin-inline: -1.5rem;
+  padding-inline: 1.5rem;
+}
+@media (min-width: 768px) {
+  [data-settings-surface] [data-st-subnav] {
+    margin-inline: -3rem;
+    padding-inline: 3rem;
+  }
+}
+[data-settings-surface] [data-subitems]::-webkit-scrollbar {
+  display: none;
+  height: 0;
 }
 
 @keyframes st-spin {
@@ -355,19 +369,13 @@ html[data-theme="dark"] [data-settings-surface] {
   }
 }
 
-/* Breakpoints del diseño: el shell colapsa antes que el grid de dos columnas. */
+/* Breakpoints del diseño: el medidor de perfil cae antes que el grid. */
 @media (max-width: 900px) {
-  [data-settings-surface] [data-st-shell] {
-    flex-direction: column !important;
-  }
-  [data-settings-surface] [data-st-subnav] {
-    width: 100% !important;
-    position: static !important;
-    border-right: none !important;
-    border-bottom: 1px solid var(--st-border) !important;
+  [data-settings-surface] [data-st-progress] {
+    display: none !important;
   }
   [data-settings-surface] [data-st-content] {
-    padding: 28px 0 140px !important;
+    padding: 28px 0 120px !important;
   }
 }
 @media (max-width: 1100px) {
