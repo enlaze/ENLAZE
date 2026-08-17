@@ -37,6 +37,10 @@ async function main() {
   const reportPath = reportOption
     ? path.resolve(String(reportOption))
     : "";
+  const summaryOption = getOption("summary-output", "");
+  const summaryPath = summaryOption
+    ? path.resolve(String(summaryOption))
+    : "";
   const apiUrl = String(getOption("api-url", DEFAULT_API_URL));
   const batchSize = Math.min(positiveInteger(getOption("batch-size", 300), 300), 500);
   const maxProducts = positiveInteger(
@@ -118,6 +122,10 @@ async function main() {
       throw new Error(`La API rechazó ${result.errors} precios del lote`);
     }
     await sleep(250);
+  }
+  if (summaryPath) {
+    fs.mkdirSync(path.dirname(summaryPath), { recursive: true });
+    fs.writeFileSync(summaryPath, JSON.stringify(summary, null, 2));
   }
   console.log(JSON.stringify(summary));
 }

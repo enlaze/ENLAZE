@@ -13,6 +13,7 @@
     "test:integration": "node --import tsx --test __tests__/account-deletion-lock.integration.test.mjs",
     "scrape:prices": "node scripts/scraper-precios.js",
     "scrape:suppliers": "node scripts/scraper-proveedores-oficiales.js",
+    "obramat:catalog-check": "node scripts/check-obramat-catalog.js",
     "obramat:catalog-links": "node scripts/obramat-catalog-links.js",
     "obramat:catalog-import": "node scripts/import-obramat-catalog.js"
   },

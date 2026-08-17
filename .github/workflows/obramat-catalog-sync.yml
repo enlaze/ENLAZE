@@ -1,0 +1,157 @@
+name: Actualizar catálogo OBRAMAT
+
+on:
+  schedule:
+    - cron: "23 3 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Forzar una importación aunque el catálogo no haya cambiado"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: obramat-catalog-alicante
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Comprobar e importar OBRAMAT Alicante
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      PUBLICATION_URL: https://view.publitas.com/catalogo-2026/catalogo-2026-alicante
+      STORE_NAME: Alicante
+      SYNC_API_KEY: ${{ secrets.SYNC_API_KEY }}
+      FORCE_SYNC: ${{ inputs.force || false }}
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v6
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Recuperar el último estado comprobado
+        uses: actions/cache@v4
+        with:
+          path: .obramat-sync
+          key: obramat-catalog-state-${{ github.run_id }}
+          restore-keys: |
+            obramat-catalog-state-
+
+      - name: Inicializar el estado conocido
+        shell: bash
+        run: |
+          mkdir -p .obramat-sync tmp/obramat-sync
+          if [[ ! -f .obramat-sync/state.json ]]; then
+            cp .github/obramat-catalog-baseline.json .obramat-sync/state.json
+          fi
+
+      - name: Comprobar si cambió el catálogo oficial
+        id: catalog
+        run: >-
+          node scripts/check-obramat-catalog.js
+          --publication-url "$PUBLICATION_URL"
+          --state .obramat-sync/state.json
+          --result tmp/obramat-sync/catalog-check.json
+          --force "$FORCE_SYNC"
+
+      - name: Validar la clave de Enlaze
+        if: steps.catalog.outputs.changed == 'true'
+        shell: bash
+        run: |
+          if [[ -z "$SYNC_API_KEY" ]]; then
+            echo "Falta el secreto SYNC_API_KEY en GitHub Actions" >&2
+            exit 1
+          fi
+
+      - name: Preparar Python
+        if: steps.catalog.outputs.changed == 'true'
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Instalar el lector de PDF
+        if: steps.catalog.outputs.changed == 'true'
+        run: python -m pip install --disable-pip-version-check pdfplumber==0.11.9
+
+      - name: Recuperar Chrome para el catálogo
+        if: steps.catalog.outputs.changed == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/puppeteer
+          key: puppeteer-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Instalar dependencias del importador
+        if: steps.catalog.outputs.changed == 'true'
+        run: npm ci
+
+      - name: Descargar el nuevo PDF oficial
+        if: steps.catalog.outputs.changed == 'true'
+        shell: bash
+        run: >-
+          curl --fail --location --retry 3 --retry-delay 5
+          --output tmp/obramat-sync/catalog.pdf
+          "${{ steps.catalog.outputs.pdf_url }}"
+
+      - name: Recopilar enlaces oficiales de producto
+        if: steps.catalog.outputs.changed == 'true'
+        run: >-
+          node scripts/obramat-catalog-links.js
+          --publication-url "$PUBLICATION_URL"
+          --last-page "${{ steps.catalog.outputs.last_page }}"
+          --delay-ms 900
+          --output tmp/obramat-sync/product-links.json
+
+      - name: Extraer y validar todos los precios
+        if: steps.catalog.outputs.changed == 'true'
+        shell: bash
+        run: >-
+          python -u scripts/parse-obramat-catalog.py
+          --pdf tmp/obramat-sync/catalog.pdf
+          --links tmp/obramat-sync/product-links.json
+          --output tmp/obramat-sync/products.json
+          --report tmp/obramat-sync/report.json
+          --catalog-url "${{ steps.catalog.outputs.pdf_url }}"
+          --publication-url "$PUBLICATION_URL"
+          --store "$STORE_NAME"
+          --published-at "${{ steps.catalog.outputs.published_at }}"
+          --discover-all
+
+      - name: Enviar los cambios a Enlaze
+        if: steps.catalog.outputs.changed == 'true'
+        run: >-
+          node scripts/import-obramat-catalog.js
+          --input tmp/obramat-sync/products.json
+          --report tmp/obramat-sync/report.json
+          --summary-output tmp/obramat-sync/import-summary.json
+          --batch-size 300
+
+      - name: Guardar el estado tras una importación correcta
+        if: steps.catalog.outputs.changed == 'true' && success()
+        shell: bash
+        run: cp tmp/obramat-sync/catalog-check.json .obramat-sync/state.json
+
+      - name: Publicar el informe de la actualización
+        if: steps.catalog.outputs.changed == 'true' && success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: obramat-alicante-${{ github.run_id }}
+          path: |
+            tmp/obramat-sync/report.json
+            tmp/obramat-sync/import-summary.json
+            tmp/obramat-sync/catalog-check.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Registrar que no hubo cambios
+        if: steps.catalog.outputs.changed != 'true'
+        run: echo "El catálogo oficial de OBRAMAT Alicante no ha cambiado."
