@@ -89,7 +89,7 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     endpoint: "pb-ingest",
-    evidence_version: "official-sources-v2",
+    evidence_version: "official-sources-v2.1",
     verified_providers: [
       "ManoMano",
       "Leroy Merlin",
