@@ -77,8 +77,8 @@ if [ -z "$VERCEL_AUTOMATION_BYPASS_SECRET" ]; then
   exit 1
 fi
 
-echo "✓ Clave de Claude cargada      (empieza por ${ANTHROPIC_API_KEY:0:14}...)"
-echo "✓ Clave de ENLAZE cargada      (empieza por ${AGENT_API_KEY:0:8}...)"
+echo "✓ Clave de Claude cargada"
+echo "✓ Clave de ENLAZE cargada"
 echo "✓ Acceso privado de Vercel:    cargado desde el llavero"
 echo "✓ URL de ENLAZE:               $ENLAZE_BASE_URL"
 echo "✓ Scraper Puppeteer en n8n:    habilitado (solo acceso local)"
