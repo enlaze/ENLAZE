@@ -1,25 +1,32 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getServiceRoleClient } from "@/lib/supabase-service-role";
+import { hashSignatureToken } from "@/lib/signature-token";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-// GET: Fetch signature info for public signing page (no auth required)
+// GET: Fetch signature info for public signing page (no auth required —
+// the random public_token, not the guessable signature UUID, is what
+// authorizes this lookup).
 export async function GET(request: Request) {
   try {
-    const url = new URL(request.url);
-    const signatureId = url.searchParams.get("id");
+    const supabase = getServiceRoleClient();
+    if (!supabase) {
+      console.error("[signatures/public] falta configuración de service role");
+      return NextResponse.json(
+        { error: "El servicio de firma no está disponible en este momento." },
+        { status: 503 }
+      );
+    }
 
-    if (!signatureId) {
-      return NextResponse.json({ error: "Falta id" }, { status: 400 });
+    const url = new URL(request.url);
+    const token = url.searchParams.get("token");
+
+    if (!token) {
+      return NextResponse.json({ error: "Falta token" }, { status: 400 });
     }
 
     const { data: sig, error } = await supabase
       .from("digital_signatures")
       .select("id, entity_type, entity_id, signer_name, signer_email, signer_role, status, signed_at, signature_image")
-      .eq("id", signatureId)
+      .eq("public_token_hash", hashSignatureToken(token))
       .single();
 
     if (error || !sig) {
@@ -98,28 +105,58 @@ export async function GET(request: Request) {
   }
 }
 
-// POST: Save signature image from public page (no auth required)
+// POST: Save signature image from public page (no auth required — gated
+// by the same random token).
 export async function POST(request: Request) {
   try {
-    const { signature_id, signature_image, ip_address, user_agent } = await request.json();
+    const supabase = getServiceRoleClient();
+    if (!supabase) {
+      console.error("[signatures/public] falta configuración de service role");
+      return NextResponse.json(
+        { error: "El servicio de firma no está disponible en este momento." },
+        { status: 503 }
+      );
+    }
 
-    if (!signature_id || !signature_image) {
+    const { token, signature_image, ip_address, user_agent } = await request.json();
+
+    if (!token || !signature_image) {
       return NextResponse.json({ error: "Faltan datos" }, { status: 400 });
     }
 
-    // Update signature with the drawn image
-    const { error } = await supabase
+    const { data: sig } = await supabase
       .from("digital_signatures")
-      .update({
-        signature_image,
-        ip_address: ip_address || "",
-        user_agent: user_agent || "",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", signature_id);
+      .select("id, status")
+      .eq("public_token_hash", hashSignatureToken(token))
+      .maybeSingle();
+    if (!sig) {
+      return NextResponse.json({ error: "Firma no encontrada" }, { status: 404 });
+    }
+    if (sig.status !== "pending") {
+      return NextResponse.json({ error: "Esta firma ya se ha completado" }, { status: 409 });
+    }
+
+    const { data, error } = await supabase.rpc("save_signature_image_locked", {
+      p_signature_id: sig.id,
+      p_signature_image: signature_image,
+      p_ip_address: ip_address || "",
+      p_user_agent: user_agent || "",
+    });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    const result = data as { ok: boolean; reason?: string };
+    if (!result.ok) {
+      // La comprobación de status hecha arriba no es atómica con el UPDATE
+      // de la RPC: si la firma se completó justo entre medias (verificación
+      // de OTP en otra pestaña/dispositivo), la RPC devuelve 'not_pending'
+      // en vez de aplicar el guardado sobre una firma ya cerrada.
+      const isConflict = result.reason === "account_locked" || result.reason === "not_pending";
+      const status = isConflict ? 409 : 404;
+      const message =
+        result.reason === "not_pending" ? "Esta firma ya se ha completado" : result.reason || "No se pudo guardar la firma";
+      return NextResponse.json({ error: message }, { status });
     }
 
     return NextResponse.json({ success: true });

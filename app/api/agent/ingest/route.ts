@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+// A full payload can touch up to ~8 tables in sequence over separate
+// round-trips; the lease TTL below (180s) must stay comfortably above this.
+export const maxDuration = 60;
 
 /**
  * POST /api/agent/ingest
@@ -26,6 +31,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "user_id is required" }, { status: 400 });
     }
 
+    const leaseId = await beginAccountWriteLease(supabase, userId, 180);
+    try {
+      return await ingestPayload(supabase, userId, payload);
+    } finally {
+      await endAccountWriteLease(supabase, leaseId);
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    const status = message.includes("proceso de eliminación") ? 409 : 500;
+    return NextResponse.json({ error: message }, { status });
+  }
+}
+
+async function ingestPayload(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  userId: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  payload: any
+) {
     const results: Record<string, { inserted: number; errors: number }> = {};
 
     // 1. Daily summary
@@ -284,8 +309,4 @@ export async function POST(req: NextRequest) {
       user_id: userId,
       results,
     });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
 }

@@ -176,10 +176,93 @@ export async function getSnapshot(
     .eq("id", snapshotId)
     .single();
 
-  return data as SnapshotRow | null;
+  if (!data) return null;
+
+  return {
+    ...data,
+    items_data: normalizeSnapshotItems(data.items_data),
+  } as SnapshotRow;
 }
 
 // ─── Diff two snapshots ──────────────────────────────────────────────────────
+
+type SnapshotItemPayload = Partial<BudgetItemV2> & {
+  concept?: unknown;
+  category?: unknown;
+  unit_price?: unknown;
+  subtotal?: unknown;
+};
+
+function numericValue(value: unknown, fallback = 0): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+/**
+ * Normalize the compact budget_items row shape used by lifecycle snapshots
+ * before 2026-08-05 to the BudgetItemV2 contract used by snapshot APIs.
+ */
+export function normalizeSnapshotItems(items: unknown): BudgetItemV2[] {
+  if (!Array.isArray(items)) return [];
+
+  return items.flatMap((rawItem, index) => {
+    if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) {
+      return [];
+    }
+
+    const item = rawItem as SnapshotItemPayload;
+    const legacyName = typeof item.concept === "string" ? item.concept : "";
+    const name = typeof item.name === "string" && item.name.trim()
+      ? item.name
+      : legacyName;
+
+    if (!name.trim()) return [];
+
+    const legacyUnitPrice = numericValue(item.unit_price);
+    const legacySubtotal = numericValue(item.subtotal);
+    const unitCost = numericValue(item.unit_cost, legacyUnitPrice);
+    const unitPriceSale = numericValue(item.unit_price_sale, legacyUnitPrice);
+    const subtotalCost = numericValue(item.subtotal_cost, legacySubtotal);
+    const subtotalSale = numericValue(item.subtotal_sale, legacySubtotal);
+
+    return [{
+      id: typeof item.id === "string" ? item.id : `snapshot-item-${index}`,
+      chapter: (typeof item.chapter === "string"
+        ? item.chapter
+        : typeof item.category === "string" && item.category
+          ? item.category
+          : "otros") as BudgetItemV2["chapter"],
+      code: typeof item.code === "string" ? item.code : "",
+      name,
+      description: typeof item.description === "string" ? item.description : "",
+      unit: typeof item.unit === "string" && item.unit ? item.unit : "ud",
+      quantity: numericValue(item.quantity),
+      quantity_calculation: typeof item.quantity_calculation === "string"
+        ? item.quantity_calculation
+        : "",
+      trade: (typeof item.trade === "string" ? item.trade : "subcontrata") as BudgetItemV2["trade"],
+      estimated_hours: numericValue(item.estimated_hours),
+      priority: (typeof item.priority === "string" ? item.priority : "obligatoria") as BudgetItemV2["priority"],
+      dependencies: Array.isArray(item.dependencies) ? item.dependencies : [],
+      material_cost_per_unit: numericValue(item.material_cost_per_unit),
+      labor_cost_per_unit: numericValue(item.labor_cost_per_unit),
+      labor_hours_per_unit: numericValue(item.labor_hours_per_unit),
+      machinery_cost_per_unit: numericValue(item.machinery_cost_per_unit),
+      unit_cost: unitCost,
+      unit_price_sale: unitPriceSale,
+      subtotal_cost: subtotalCost,
+      subtotal_sale: subtotalSale,
+      margin_percent: numericValue(item.margin_percent),
+      confidence_score: numericValue(item.confidence_score),
+      price_source: (typeof item.price_source === "string" ? item.price_source : "estimated") as BudgetItemV2["price_source"],
+      price_source_detail: typeof item.price_source_detail === "string"
+        ? item.price_source_detail
+        : "Snapshot de partida editable",
+      supplier: typeof item.supplier === "string" ? item.supplier : null,
+      materials: Array.isArray(item.materials) ? item.materials : [],
+    }];
+  });
+}
 
 /**
  * Compare two snapshots and return a structured diff.
@@ -189,8 +272,8 @@ export function diffSnapshots(
   from: SnapshotRow,
   to: SnapshotRow
 ): SnapshotDiff {
-  const fromItems = from.items_data || [];
-  const toItems = to.items_data || [];
+  const fromItems = normalizeSnapshotItems(from.items_data);
+  const toItems = normalizeSnapshotItems(to.items_data);
 
   // Index by name (primary key for items)
   const fromMap = new Map<string, BudgetItemV2>();

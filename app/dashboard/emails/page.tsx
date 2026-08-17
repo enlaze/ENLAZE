@@ -76,8 +76,9 @@ export default function EmailsPage() {
   const [selectedClient, setSelectedClient] = useState("");
   const [subject, setSubject] = useState("");
   const [content, setContent] = useState("");
+  const [companyName, setCompanyName] = useState("tu empresa");
   const [sending, setSending] = useState(false);
-  const [result, setResult] = useState({ type: "", text: "" });
+  const [result, setResult] = useState({ type: "", text: "", code: "" });
 
   // --- Inbox (Gmail classified) state ---
   const [inbox, setInbox] = useState<InboxData | null>(null);
@@ -88,6 +89,17 @@ export default function EmailsPage() {
   const fetchClients = async () => {
     const { data } = await supabase.from("clients").select("id, name, email").order("name");
     if (data) setClients(data);
+  };
+
+  const fetchCompany = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase
+      .from("profiles")
+      .select("business_name, full_name")
+      .eq("id", user.id)
+      .maybeSingle();
+    setCompanyName(data?.business_name || data?.full_name || "tu empresa");
   };
 
   const fetchMessages = async () => {
@@ -107,12 +119,12 @@ export default function EmailsPage() {
     setInboxLoading(false);
   };
 
-  useEffect(() => { fetchClients(); fetchMessages(); fetchInbox(); }, []);
+  useEffect(() => { fetchClients(); fetchMessages(); fetchInbox(); fetchCompany(); }, []);
 
   const applyTemplate = (t: typeof templates[0]) => {
     const client = clients.find(c => c.id === selectedClient);
     const name = client?.name || "{nombre}";
-    setSubject(t.subject.replace("{empresa}", "Enlaze").replace("{nombre}", name));
+    setSubject(t.subject.replace("{empresa}", companyName).replace("{nombre}", name));
     setContent(t.body.replace(/{nombre}/g, name));
   };
 
@@ -120,7 +132,7 @@ export default function EmailsPage() {
     e.preventDefault();
     if (!selectedClient || !subject || !content) return;
     setSending(true);
-    setResult({ type: "", text: "" });
+    setResult({ type: "", text: "", code: "" });
     const client = clients.find(c => c.id === selectedClient);
     const { data: { user } } = await supabase.auth.getUser();
     const res = await fetch("/api/send-email", {
@@ -132,14 +144,20 @@ export default function EmailsPage() {
     const status = json.success ? "sent" : "failed";
     await supabase.from("messages").insert({ user_id: user?.id, client_id: selectedClient, channel: "email", content: subject + " | " + content, status, sent_at: json.success ? new Date().toISOString() : null });
     if (json.success) {
-      setResult({ type: "success", text: "Email enviado correctamente a " + client?.email });
+      setResult({ type: "success", text: "Email enviado correctamente desde tu Gmail a " + client?.email, code: "" });
       setContent(""); setSubject(""); setSelectedClient("");
     } else {
-      setResult({ type: "error", text: json.error || "Error al enviar. Verifica tu API key de Resend." });
+      setResult({
+        type: "error",
+        text: json.error || "No se pudo enviar el email.",
+        code: json.code || "",
+      });
     }
     setSending(false);
     await fetchMessages();
-    setTimeout(() => setResult({ type: "", text: "" }), 5000);
+    if (json.success) {
+      setTimeout(() => setResult({ type: "", text: "", code: "" }), 5000);
+    }
   };
 
   const clientsWithEmail = clients.filter(c => c.email);
@@ -296,7 +314,22 @@ export default function EmailsPage() {
                 <FormField label="Mensaje" required>
                   <Textarea value={content} onChange={e => setContent(e.target.value)} required rows={5} placeholder="Escribe tu mensaje..." />
                 </FormField>
-                {result.text && <p className={`text-sm font-medium ${result.type === "success" ? "text-brand-green" : "text-red-600"}`}>{result.text}</p>}
+                {result.text && (
+                  <div className="space-y-2">
+                    <p className={`text-sm font-medium ${result.type === "success" ? "text-brand-green" : "text-red-600"}`}>
+                      {result.text}
+                    </p>
+                    {(result.code === "gmail_not_connected" ||
+                      result.code === "gmail_reconnect_required") && (
+                      <Link
+                        href="/dashboard/settings/integrations"
+                        className="inline-flex text-sm font-semibold text-blue-600 hover:underline"
+                      >
+                        Ir a Integraciones →
+                      </Link>
+                    )}
+                  </div>
+                )}
                 <Button type="submit" disabled={sending} className="w-full">
                   {sending ? "Enviando..." : "Enviar email"}
                 </Button>

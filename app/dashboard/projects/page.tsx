@@ -202,18 +202,23 @@ export default function ProjectsPage() {
 
   async function handleDelete(id: string) {
     const ok = await confirm({
-      title: "Eliminar obra",
-      description: "¿Eliminar esta obra?",
+      title: "Mover obra a la papelera",
+      description: "La obra y sus datos relacionados se conservarán y podrás recuperarlos desde Papelera.",
       variant: "danger",
-      confirmLabel: "Eliminar",
+      confirmLabel: "Mover a la papelera",
     });
     if (!ok) return;
     try {
-      await supabase.from("projects").delete().eq("id", id);
+      const { data, error } = await supabase.rpc("move_to_trash", {
+        p_entity_type: "project",
+        p_entity_id: id,
+      });
+      if (error) throw error;
+      if (!data) throw new Error("No se encontró la obra");
       await loadProjects();
-      toast.success("Obra eliminada");
+      toast.success("Obra movida a la papelera");
     } catch (error) {
-      toast.error("Error al eliminar la obra");
+      toast.error("No se pudo mover la obra a la papelera");
     }
   }
 

@@ -1,5 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
+
+export const maxDuration = 300;
 
 // POST /api/prices/weekly-report/send
 // Called by cron (every Monday) or manually to generate and email weekly reports to all users with alerts
@@ -101,6 +104,21 @@ export async function POST() {
     // 5. Send email to each user with active alerts
     let sent = 0;
     for (const userId of userIds) {
+      let leaseId: string;
+      try {
+        // maxDuration above is 300s for the WHOLE route (looping over every
+        // user with active alerts); the untimed Resend fetch for this user
+        // runs before the notification insert below, so a slow email must
+        // not be able to let this user's lease expire mid-request. The TTL
+        // has to safely exceed maxDuration with margin, not just be "long
+        // enough on average" — 180s left room for exactly that to happen.
+        leaseId = await beginAccountWriteLease(supabase, userId, 320);
+      } catch {
+        // Cuenta en proceso de borrado: se omite por completo, ninguna
+        // lectura de email, envío ni escritura para este usuario.
+        continue;
+      }
+      try {
       const { data: userData } = await supabase.auth.admin.getUserById(userId);
       const email = userData?.user?.email;
       if (!email) continue;
@@ -210,6 +228,9 @@ export async function POST() {
         entity_type: "price_report",
         action_url: "/dashboard/prices",
       });
+      } finally {
+        await endAccountWriteLease(supabase, leaseId);
+      }
     }
 
     return NextResponse.json({ sent, totalChanges: changes.length });

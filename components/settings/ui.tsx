@@ -137,6 +137,12 @@ export const IcoMonitor = (p: IconProps) => (
   </svg>
 );
 
+export const IcoMessage = (p: IconProps) => (
+  <svg {...svgProps(p)}>
+    <path d="M4 5.5A2.5 2.5 0 016.5 3h11A2.5 2.5 0 0120 5.5v8A2.5 2.5 0 0117.5 16H9l-4.5 4v-4H6.5A2.5 2.5 0 014 13.5z" />
+  </svg>
+);
+
 /* ── Estilos compartidos ──────────────────────────────────────────────── */
 
 export const CARD: CSSProperties = {

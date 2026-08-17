@@ -7,6 +7,22 @@ import { Card } from "@/components/ui/card";
 import type { PDFBudget } from "@/lib/pdf-generator";
 import { resolveMarketPrices, type PriceRequest, type QualityTier } from "@/lib/price-resolver";
 
+const SECTOR_REFERENCE_PROVIDERS = [
+  { name: "Leroy Merlin", specialty: "Materiales, equipamiento y reforma" },
+  { name: "OBRAMAT", specialty: "Construcción y reforma profesional" },
+  { name: "Porcelanosa", specialty: "Cerámica, superficies y baños" },
+  { name: "Roca", specialty: "Baño, sanitarios y grifería" },
+  { name: "Eurocasa", specialty: "Distribución de materiales" },
+];
+
+function normalizeProviderName(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
 /** Build the budget metadata object for PDF generation */
 function buildBudgetMeta(state: BudgetState): PDFBudget {
   const subtotal = state.clientView?.subtotal
@@ -21,6 +37,17 @@ function buildBudgetMeta(state: BudgetState): PDFBudget {
     iva_percent: state.ivaPercent,
     iva_amount: subtotal * (state.ivaPercent / 100),
     total: subtotal * (1 + state.ivaPercent / 100),
+    location: state.sectorData.ubicacion || null,
+    geographic_profile: state.partidas.find((partida) => partida.geographic_profile)?.geographic_profile || "Media nacional",
+    geographic_adjustment: state.partidas.some((partida) => partida.geographic_factor && partida.geographic_factor !== 1)
+      ? "El coeficiente local se aplica únicamente a mano de obra, logística, maquinaria y residuos. Los productos conservan el precio comprobado por el rastreador."
+      : "Base nacional sin incremento geográfico. Los productos conservan el precio comprobado por el rastreador.",
+    technical_document_names: state.sectorData.technical_document_names || [],
+    execution_weeks_min: state.realisticTimeline?.execution_weeks_min || null,
+    execution_weeks_max: state.realisticTimeline?.execution_weeks_max || null,
+    total_weeks_min: state.realisticTimeline?.total_weeks_min || null,
+    total_weeks_max: state.realisticTimeline?.total_weeks_max || null,
+    execution_phases: state.realisticTimeline?.phase_breakdown || [],
   };
 }
 
@@ -59,7 +86,14 @@ export function ProvidersStep() {
   const [priceRefreshResult, setPriceRefreshResult] = useState<{
     ok: boolean;
     message: string;
-    summary?: { fromWebSearch: number; fromCache: number; estimated: number; total: number };
+    summary?: {
+      fromWebSearch: number;
+      fromCache: number;
+      fromN8n?: number;
+      estimated: number;
+      total: number;
+      tracker_products_available?: number;
+    };
   } | null>(null);
 
   const handleRefreshMarketPrices = useCallback(async () => {
@@ -69,8 +103,8 @@ export function ProvidersStep() {
 
     try {
       // Build PriceRequest list from current materials
-      const qualityTier: QualityTier = (state as any).qualityTier || "media";
-      const location: string = (state as any).location || (state as any).city || "";
+      const qualityTier: QualityTier = state.sectorData.calidad || "media";
+      const location: string = state.sectorData.ubicacion || "";
 
       const priceRequests: PriceRequest[] = materials
         .filter(m => m.included)
@@ -107,13 +141,17 @@ export function ProvidersStep() {
               subtotal: rp.selectedPrice * mat.quantity,
               sourceType: rp.sourceType,
               isRealData: rp.sourceType !== "estimated",
+              sourceName: rp.selectedSupplier || "Rastreador ENLAZE",
+              sourceUrl: rp.sourceUrl || undefined,
+              priceCheckedAt: rp.capturedAt || undefined,
+              confidenceScore: rp.confidenceScore,
             });
           }
         }
 
         setPriceRefreshResult({
           ok: true,
-          message: `Precios actualizados: ${result.summary.fromWebSearch} web, ${result.summary.fromCache} cache, ${result.summary.estimated} estimados`,
+          message: `Verificación completada: ${result.summary.fromN8n || 0} del rastreador, ${result.summary.fromWebSearch} web y ${result.summary.estimated} estimados`,
           summary: result.summary,
         });
       } else {
@@ -142,12 +180,14 @@ export function ProvidersStep() {
       return { label: "PROVEEDOR", className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800" };
     }
     // Original logic
-    if (sourceType === "n8n_sync") return { label: "REAL", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800" };
+    if (["n8n_sync", "n8n_market", "provider_updated", "preferred_supplier", "private_tariff", "negotiated"].includes(sourceType || "")) {
+      return { label: "RASTREADOR", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800" };
+    }
     if (sourceType === "default") return { label: "BASE", className: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700" };
     if (sourceType === "market_reference") return { label: "REFERENCIA", className: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800" };
-    if (sourceType === "fallback" || sourceType === "unknown") return { label: "ESTIMADO", className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800" };
+    if (sourceType === "fallback" || sourceType === "unknown" || sourceType === "estimated") return { label: "POR VALIDAR", className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800" };
     if (isRealData) return { label: "REAL", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800" };
-    return { label: "SIN FUENTE", className: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400 border-gray-200 dark:border-gray-700" };
+    return { label: "REFERENCIA", className: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700" };
   };
 
   // Provider coverage stats for UI banner
@@ -160,9 +200,9 @@ export function ProvidersStep() {
       <Card>
         <div className="mb-6 flex justify-between items-start">
           <div>
-            <h2 className="text-xl font-bold text-navy-900 dark:text-white">Selecciona el proveedor</h2>
+            <h2 className="text-xl font-bold text-navy-900 dark:text-white">Proveedores y cobertura de la cesta</h2>
             <p className="text-sm text-navy-600 dark:text-zinc-400">
-              Escoge un proveedor principal para recalcular automáticamente los costes y márgenes de los materiales.
+              Compara fuentes trazables. ENLAZE solo identifica como verificado un importe vinculado a un producto real.
             </p>
           </div>
           <button 
@@ -177,11 +217,11 @@ export function ProvidersStep() {
           <div className="mb-8 bg-navy-50 dark:bg-zinc-800/50 rounded-xl p-5 border border-navy-200 dark:border-zinc-700 animate-in fade-in slide-in-from-top-4">
             <h3 className="font-bold text-navy-900 dark:text-white mb-4 flex items-center gap-2">
               <svg className="w-5 h-5 text-brand-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-              Comparativa de Proveedores
+              Comparativa de cobertura
             </h3>
             {providerOptions.length <= 1 ? (
               <p className="text-sm text-navy-600 dark:text-zinc-400">
-                No hay suficientes proveedores reales para comparar. Se usará el proveedor actual.
+                Todavía no hay dos cestas verificadas completas para comparar. La base técnica se mantiene identificada hasta encontrar equivalencias reales.
               </p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -218,6 +258,41 @@ export function ProvidersStep() {
           </div>
         )}
 
+        <div className="mb-8">
+          <div className="mb-3">
+            <h3 className="text-sm font-bold text-navy-900 dark:text-white">Proveedores y marcas de referencia del sector</h3>
+            <p className="text-xs text-navy-500 dark:text-zinc-400">
+              Directorio sectorial. La vinculación de precio se muestra únicamente cuando el rastreador dispone de una referencia comprobable.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            {SECTOR_REFERENCE_PROVIDERS.map((reference) => {
+              const linkedProvider = providerOptions.find((provider) => {
+                const providerName = normalizeProviderName(provider.name);
+                const referenceName = normalizeProviderName(reference.name);
+                return provider.isRealData && (providerName.includes(referenceName) || referenceName.includes(providerName));
+              });
+              return (
+                <div
+                  key={reference.name}
+                  className="rounded-xl border border-navy-100 dark:border-zinc-800 bg-navy-50/60 dark:bg-zinc-800/40 p-3"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-8 w-8 rounded-lg bg-white dark:bg-zinc-900 border border-navy-100 dark:border-zinc-700 flex items-center justify-center font-black text-xs text-navy-800 dark:text-white">
+                      {reference.name.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="font-bold text-sm text-navy-900 dark:text-white">{reference.name}</div>
+                  </div>
+                  <p className="text-[11px] leading-4 text-navy-500 dark:text-zinc-400 min-h-8">{reference.specialty}</p>
+                  <div className={`mt-2 text-[10px] font-bold uppercase tracking-wider ${linkedProvider ? "text-brand-green" : "text-navy-500 dark:text-zinc-400"}`}>
+                    {linkedProvider ? `${linkedProvider.materialsCount || 0} precios vinculados` : "Referencia sectorial"}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         {providerOptions.length === 0 && (
           <div className="text-center py-10 bg-navy-50 dark:bg-zinc-900/50 rounded-xl border border-dashed border-navy-200 dark:border-zinc-700 mb-8">
             <Store className="h-8 w-8 text-[#00c896] mb-2 mx-auto" />
@@ -227,6 +302,9 @@ export function ProvidersStep() {
             </p>
           </div>
         )}
+        <div className="mb-3">
+          <h3 className="text-sm font-bold text-navy-900 dark:text-white">Fuentes disponibles para esta cesta</h3>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           {providerOptions.map(provider => {
             const isSelected = selectedProviderId === provider.id;
@@ -266,7 +344,9 @@ export function ProvidersStep() {
                 )}
                 <div className="flex justify-between items-end">
                   <div>
-                    <div className="text-[10px] text-navy-400 dark:text-zinc-500 uppercase tracking-wider">Cesta estimada</div>
+                    <div className="text-[10px] text-navy-400 dark:text-zinc-500 uppercase tracking-wider">
+                      {provider.isRealData ? "Cesta con precio verificado" : "Base técnica de trabajo"}
+                    </div>
                     {provider.estimatedPrice > 0 ? (
                       <span className="text-sm font-bold text-navy-900 dark:text-white">{provider.estimatedPrice.toFixed(2)} €</span>
                     ) : (
@@ -365,6 +445,25 @@ export function ProvidersStep() {
                             {getBadgeProps(m.sourceType, m.isRealData, m).label}
                           </span>
                         </div>
+                        <div className="mt-1 text-[10px] text-navy-400 dark:text-zinc-500 flex flex-wrap gap-x-3 gap-y-1">
+                          <span>{m.sourceName || "Sin proveedor verificado"}</span>
+                          {m.matchedProductName && (
+                            <span className="basis-full text-navy-500 dark:text-zinc-400">
+                              Coincidencia: {m.matchedProductName}
+                            </span>
+                          )}
+                          {m.priceCheckedAt && (
+                            <span>Comprobado: {new Date(m.priceCheckedAt).toLocaleDateString("es-ES")}</span>
+                          )}
+                          {typeof m.confidenceScore === "number" && (
+                            <span>Fiabilidad: {Math.round(m.confidenceScore * 100)}%</span>
+                          )}
+                          {m.sourceUrl && (
+                            <a href={m.sourceUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                              Ver fuente
+                            </a>
+                          )}
+                        </div>
                       </td>
                       <td className="p-3">
                         <input
@@ -445,6 +544,11 @@ export function ProvidersStep() {
                   <span className="px-2 py-0.5 rounded bg-white dark:bg-zinc-800 border border-current/10">
                     Total: {priceRefreshResult.summary.total}
                   </span>
+                  {(priceRefreshResult.summary.fromN8n || 0) > 0 && (
+                    <span className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400">
+                      Rastreador: {priceRefreshResult.summary.fromN8n}
+                    </span>
+                  )}
                   {priceRefreshResult.summary.fromWebSearch > 0 && (
                     <span className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400">
                       Web: {priceRefreshResult.summary.fromWebSearch}

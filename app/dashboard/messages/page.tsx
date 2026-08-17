@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
 import EmptyState from "@/components/ui/empty-state";
 import InfoFlipCard from "@/components/ui/InfoFlipCard";
+import Link from "next/link";
 
 type Client = { id: string; name: string; phone: string };
 type Message = { id: string; client_id: string; content: string; status: string; created_at: string; clients: { name: string; phone: string } };
@@ -20,6 +21,8 @@ export default function MessagesPage() {
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
   const [success, setSuccess] = useState("");
+  const [error, setError] = useState("");
+  const [whatsAppConnected, setWhatsAppConnected] = useState<boolean | null>(null);
   const supabase = createClient();
 
   const fetchClients = async () => {
@@ -32,9 +35,20 @@ export default function MessagesPage() {
     if (data) setMessages(data as Message[]);
   };
 
+  const fetchWhatsAppStatus = async () => {
+    const response = await fetch("/api/integrations/whatsapp").catch(() => null);
+    if (!response) {
+      setWhatsAppConnected(false);
+      return;
+    }
+    const data = await response.json().catch(() => null);
+    setWhatsAppConnected(Boolean(data?.connected));
+  };
+
   useEffect(() => {
     fetchClients();
     fetchMessages();
+    fetchWhatsAppStatus();
   }, []);
 
   const handleSend = async (e: React.FormEvent) => {
@@ -42,18 +56,31 @@ export default function MessagesPage() {
     if (!selectedClient || !content) return;
     setSending(true);
     setSuccess("");
+    setError("");
     const { data: { user } } = await supabase.auth.getUser();
+    const client = clients.find((item) => item.id === selectedClient);
+    const response = await fetch("/api/whatsapp/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to: client?.phone, message: content }),
+    });
+    const result = await response.json().catch(() => null);
     await supabase.from("messages").insert({
       user_id: user?.id,
       client_id: selectedClient,
       channel: "whatsapp",
       content,
-      status: "pending",
+      status: response.ok ? "sent" : "failed",
+      sent_at: response.ok ? new Date().toISOString() : null,
     });
-    setContent("");
-    setSelectedClient("");
+    if (response.ok) {
+      setContent("");
+      setSelectedClient("");
+      setSuccess("Mensaje enviado desde tu WhatsApp Business.");
+    } else {
+      setError(result?.error || "No se pudo enviar el mensaje.");
+    }
     setSending(false);
-    setSuccess("Mensaje guardado. Se enviará cuando conectes la API de WhatsApp Business.");
     await fetchMessages();
     setTimeout(() => setSuccess(""), 5000);
   };
@@ -100,14 +127,29 @@ export default function MessagesPage() {
                 <Textarea value={content} onChange={e => setContent(e.target.value)} required rows={4} placeholder="Escribe tu mensaje..." />
               </FormField>
               {success && <p className="text-sm text-brand-green font-medium">{success}</p>}
+              {error && <p className="text-sm text-red-600 font-medium">{error}</p>}
               <Button type="submit" disabled={sending} className="w-full">
                 {sending ? "Enviando..." : "Enviar mensaje"}
               </Button>
             </form>
 
             <div className="mt-6 rounded-xl bg-navy-50/60 dark:bg-zinc-900/50 border border-navy-100 dark:border-zinc-800 p-4">
-              <p className="text-xs font-semibold text-navy-700 dark:text-zinc-200 mb-1">Conectar WhatsApp Business API</p>
-              <p className="text-xs text-navy-500 dark:text-zinc-400">Para enviar mensajes reales necesitas una cuenta de Meta Business verificada. Los mensajes se guardarán como pendientes hasta que conectes la API.</p>
+              <p className="text-xs font-semibold text-navy-700 dark:text-zinc-200 mb-1">
+                {whatsAppConnected ? "WhatsApp Business conectado" : "Conectar WhatsApp Business"}
+              </p>
+              <p className="text-xs text-navy-500 dark:text-zinc-400">
+                {whatsAppConnected
+                  ? "Los mensajes se enviarán desde el número verificado de tu empresa."
+                  : "Para enviar mensajes reales necesitas conectar tu cuenta de Meta Business."}
+              </p>
+              {!whatsAppConnected && (
+                <Link
+                  href="/dashboard/settings/integrations"
+                  className="mt-2 inline-block text-xs font-semibold text-brand-green hover:underline"
+                >
+                  Ir a Integraciones
+                </Link>
+              )}
             </div>
           </Card>
         </div>

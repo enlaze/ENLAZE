@@ -6,6 +6,8 @@ import { Card } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase-browser";
 import { useSector } from "@/lib/sector-context";
 import { useToast } from "@/components/ui/toast";
+import { FileText, Ruler, UploadCloud } from "lucide-react";
+import { getGeographicCostProfile } from "@/lib/geographic-costs";
 
 interface ClientOption {
   id: string;
@@ -16,6 +18,15 @@ interface ProjectOption {
   id: string;
   name: string;
   client_id: string | null;
+}
+
+interface TechnicalDocumentOption {
+  id: string;
+  name: string;
+  doc_type: string;
+  mime_type: string;
+  file_url: string;
+  created_at: string;
 }
 
 const inputCls =
@@ -71,6 +82,9 @@ export function ScopeStep() {
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [isSavingProject, setIsSavingProject] = useState(false);
+  const [technicalDocuments, setTechnicalDocuments] = useState<TechnicalDocumentOption[]>([]);
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
+  const [uploadingDocument, setUploadingDocument] = useState(false);
 
   // Read scope data from sectorData
   const scopeData = state.sectorData || {};
@@ -83,6 +97,9 @@ export function ScopeStep() {
   const incluyeVentanas: boolean = scopeData.incluye_ventanas ?? false;
   const incluyeClimatizacion: boolean = scopeData.incluye_climatizacion ?? false;
   const ubicacion: string = scopeData.ubicacion || "";
+  const selectedTechnicalDocumentIds: string[] = scopeData.technical_document_ids || [];
+  const selectedTechnicalDocumentNames: string[] = scopeData.technical_document_names || [];
+  const geographicProfile = getGeographicCostProfile(ubicacion);
 
   useEffect(() => {
     async function loadData() {
@@ -100,6 +117,34 @@ export function ScopeStep() {
     }
     loadData();
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadTechnicalDocuments() {
+      if (!state.projectId) {
+        setTechnicalDocuments([]);
+        return;
+      }
+
+      setLoadingDocuments(true);
+      const { data } = await supabase
+        .from("project_documents")
+        .select("id, name, doc_type, mime_type, file_url, created_at")
+        .eq("project_id", state.projectId)
+        .order("created_at", { ascending: false });
+
+      if (active) {
+        setTechnicalDocuments((data as TechnicalDocumentOption[]) || []);
+        setLoadingDocuments(false);
+      }
+    }
+
+    loadTechnicalDocuments();
+    return () => {
+      active = false;
+    };
+  }, [state.projectId]);
 
   // Filter projects by selected client if any
   const visibleProjects = state.clientId
@@ -144,6 +189,8 @@ export function ScopeStep() {
 
       setProjects(prev => [...prev, data]);
       updateState({ projectId: data.id });
+      updateSectorData("technical_document_ids", []);
+      updateSectorData("technical_document_names", []);
       setIsCreatingProject(false);
       setNewProjectName("");
     } catch (e: any) {
@@ -166,6 +213,92 @@ export function ScopeStep() {
       ? selectedActuaciones.filter(v => v !== value)
       : [...selectedActuaciones, value];
     updateSectorData("actuaciones", next);
+  };
+
+  const toggleTechnicalDocument = (document: TechnicalDocumentOption) => {
+    const selected = selectedTechnicalDocumentIds.includes(document.id);
+    const nextIds = selected
+      ? selectedTechnicalDocumentIds.filter((id) => id !== document.id)
+      : [...selectedTechnicalDocumentIds, document.id];
+    const nextNames = selected
+      ? selectedTechnicalDocumentNames.filter((name) => name !== document.name)
+      : Array.from(new Set([...selectedTechnicalDocumentNames, document.name]));
+
+    updateSectorData("technical_document_ids", nextIds);
+    updateSectorData("technical_document_names", nextNames);
+  };
+
+  const handleTechnicalDocumentUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !state.projectId) return;
+
+    const allowedTypes = [
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Formato no compatible", {
+        description: "Sube un PDF, JPG, PNG o WebP.",
+      });
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error("El archivo supera 20 MB");
+      return;
+    }
+
+    setUploadingDocument(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No hay sesión activa");
+
+      const extension = file.name.split(".").pop()?.toLowerCase() || "bin";
+      const objectPath = `${user.id}/projects/${state.projectId}/technical/${Date.now()}-${crypto.randomUUID()}.${extension}`;
+      const { error: uploadError } = await supabase.storage
+        .from("project-docs")
+        .upload(objectPath, file, { contentType: file.type, upsert: false });
+
+      if (uploadError) throw uploadError;
+
+      const { data: created, error: insertError } = await supabase
+        .from("project_documents")
+        .insert({
+          project_id: state.projectId,
+          user_id: user.id,
+          doc_type: "proyecto_ejecucion",
+          name: file.name.replace(/\.[^.]+$/, ""),
+          description: "Proyecto de ejecución o mediciones para presupuesto técnico",
+          file_url: objectPath,
+          file_size: file.size,
+          mime_type: file.type,
+          tags: ["presupuesto_ia", "arquitecto", "mediciones"],
+          analysis_status: "pending",
+        })
+        .select("id, name, doc_type, mime_type, file_url, created_at")
+        .single();
+
+      if (insertError) throw insertError;
+
+      const document = created as TechnicalDocumentOption;
+      setTechnicalDocuments((previous) => [document, ...previous]);
+      updateSectorData("technical_document_ids", [
+        ...selectedTechnicalDocumentIds,
+        document.id,
+      ]);
+      updateSectorData("technical_document_names", Array.from(new Set([
+        ...selectedTechnicalDocumentNames,
+        document.name,
+      ])));
+      toast.success("Documento añadido al análisis");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo subir el documento";
+      toast.error("No se pudo añadir el documento", { description: message });
+    } finally {
+      setUploadingDocument(false);
+    }
   };
 
   const isConstruction = state.sector === "construccion";
@@ -215,8 +348,12 @@ export function ScopeStep() {
                       if (e.target.value === "NEW") {
                         setIsCreatingProject(true);
                         updateState({ projectId: "" });
+                        updateSectorData("technical_document_ids", []);
+                        updateSectorData("technical_document_names", []);
                       } else {
                         updateState({ projectId: e.target.value });
+                        updateSectorData("technical_document_ids", []);
+                        updateSectorData("technical_document_names", []);
                       }
                     }}
                     className={inputCls}
@@ -315,6 +452,94 @@ export function ScopeStep() {
         </div>
       </Card>
 
+      {isConstruction && (
+        <Card>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <Ruler className="h-5 w-5 text-brand-green" />
+                <h2 className="text-lg font-bold text-navy-900 dark:text-white">
+                  Proyecto del arquitecto y mediciones
+                </h2>
+              </div>
+              <p className="mt-1 max-w-2xl text-sm text-navy-500 dark:text-zinc-400">
+                Añade el proyecto de ejecución, planos o mediciones. La IA tomará
+                sus superficies y cantidades como fuente principal antes de crear
+                las partidas.
+              </p>
+            </div>
+
+            <label
+              className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition ${
+                state.projectId && !uploadingDocument
+                  ? "cursor-pointer bg-brand-green text-navy-900 hover:bg-brand-green/90"
+                  : "cursor-not-allowed bg-navy-100 text-navy-400 dark:bg-zinc-800 dark:text-zinc-500"
+              }`}
+            >
+              <UploadCloud className="h-4 w-4" />
+              {uploadingDocument ? "Subiendo..." : "Añadir documento"}
+              <input
+                type="file"
+                accept="application/pdf,image/jpeg,image/png,image/webp"
+                className="hidden"
+                disabled={!state.projectId || uploadingDocument}
+                onChange={handleTechnicalDocumentUpload}
+              />
+            </label>
+          </div>
+
+          {!state.projectId ? (
+            <div className="mt-5 rounded-xl border border-dashed border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/10 dark:text-amber-300">
+              Selecciona o crea una obra para guardar sus planos y mediciones.
+            </div>
+          ) : loadingDocuments ? (
+            <div className="mt-5 h-20 animate-pulse rounded-xl bg-navy-50 dark:bg-zinc-800" />
+          ) : technicalDocuments.length === 0 ? (
+            <div className="mt-5 rounded-xl border border-dashed border-navy-200 bg-navy-50 p-4 text-sm text-navy-500 dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-400">
+              Todavía no hay documentos. Puedes continuar introduciendo las
+              medidas manualmente o añadir ahora el PDF del arquitecto.
+            </div>
+          ) : (
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {technicalDocuments.map((document) => {
+                const selected = selectedTechnicalDocumentIds.includes(document.id);
+                return (
+                  <button
+                    key={document.id}
+                    type="button"
+                    onClick={() => toggleTechnicalDocument(document)}
+                    className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${
+                      selected
+                        ? "border-brand-green bg-brand-green/5"
+                        : "border-navy-200 bg-white hover:border-brand-green/40 dark:border-zinc-700 dark:bg-zinc-900"
+                    }`}
+                  >
+                    <div className={`rounded-lg p-2 ${selected ? "bg-brand-green/15" : "bg-navy-50 dark:bg-zinc-800"}`}>
+                      <FileText className={`h-5 w-5 ${selected ? "text-brand-green" : "text-navy-500 dark:text-zinc-400"}`} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-navy-900 dark:text-white">
+                        {document.name}
+                      </p>
+                      <p className="text-xs text-navy-500 dark:text-zinc-400">
+                        {selected ? "Se utilizará para calcular el presupuesto" : "Pulsa para incluirlo en el análisis"}
+                      </p>
+                    </div>
+                    <span className={`h-5 w-5 rounded-full border text-center text-xs leading-[18px] ${
+                      selected
+                        ? "border-brand-green bg-brand-green text-navy-900"
+                        : "border-navy-300 dark:border-zinc-600"
+                    }`}>
+                      {selected ? "✓" : ""}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Selector visual de estancias y calidades - V1 */}
       {isConstruction && (
         <Card>
@@ -334,7 +559,8 @@ export function ScopeStep() {
               className={inputCls}
             />
             <p className="text-[11px] text-navy-400 dark:text-zinc-500 mt-1">
-              Los precios se ajustan según la zona geográfica y normativas locales (CTE, BOE, ordenanzas municipales).
+              {geographicProfile.label}: {geographicProfile.explanation} Los precios de
+              producto procedentes del rastreador no se modifican.
             </p>
           </div>
 

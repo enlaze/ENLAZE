@@ -1,16 +1,11 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { sanitizeText, sanitizeEmail, isValidUuid } from "@/lib/sanitize";
+import { createClient as createSessionClient } from "@/lib/supabase-server";
+import { getServiceRoleClient } from "@/lib/supabase-service-role";
+import { sanitizeText, sanitizeEmail } from "@/lib/sanitize";
 import { rateLimitSensitive, getClientIp } from "@/lib/rate-limit";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
 
 export async function POST(request: Request) {
   try {
-    // Rate limit: 10 signature creations per minute
     const rl = rateLimitSensitive(request);
     if (!rl.allowed) {
       return NextResponse.json(
@@ -19,63 +14,66 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = await request.json();
-    const {
-      user_id,
-      entity_type,
-      entity_id,
-      signer_name,
-      signer_email,
-      signer_phone,
-      signer_nif,
-      signer_role,
-      signature_image,
-    } = body;
-
-    // Validate required fields
-    if (!user_id || !isValidUuid(user_id)) {
-      return NextResponse.json({ error: "user_id invalido" }, { status: 400 });
+    const supabaseService = getServiceRoleClient();
+    if (!supabaseService) {
+      console.error("[signatures/create] falta configuración de service role");
+      return NextResponse.json(
+        { error: "El servicio de firma no está disponible en este momento." },
+        { status: 503 }
+      );
     }
+
+    // La identidad sale SIEMPRE de la sesión, nunca del body: un UUID
+    // enviado por el cliente no puede autorizar crear una firma en nombre
+    // de otra persona.
+    const supabase = await createSessionClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { entity_type, entity_id, signer_name, signer_email, signer_phone, signer_nif, signer_role } = body;
+
     if (!entity_type || !entity_id) {
       return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 });
     }
 
-    // Validate entity_type against allowed values
     const allowedTypes = ["budget", "certification", "work_report", "project_act"];
     if (!allowedTypes.includes(entity_type)) {
       return NextResponse.json({ error: "Tipo de entidad no valido" }, { status: 400 });
     }
 
-    // Sanitize inputs
     const safeName = sanitizeText(signer_name || "", 200);
     if (!safeName) {
       return NextResponse.json({ error: "Nombre del firmante requerido" }, { status: 400 });
     }
 
-    const { data, error } = await supabase
-      .from("digital_signatures")
-      .insert({
-        user_id,
-        entity_type: sanitizeText(entity_type, 50),
-        entity_id,
-        signer_name: safeName,
-        signer_email: sanitizeEmail(signer_email || "") || "",
-        signer_phone: sanitizeText(signer_phone || "", 20),
-        signer_nif: sanitizeText(signer_nif || "", 20),
-        signer_role: sanitizeText(signer_role || "cliente", 50),
-        signature_image: signature_image || "",
-        ip_address: getClientIp(request),
-        user_agent: sanitizeText(request.headers.get("user-agent") || "", 500),
-        status: "pending",
-      })
-      .select("id")
-      .single();
+    const { data, error } = await supabaseService.rpc("create_digital_signature_locked", {
+      p_user_id: user.id,
+      p_entity_type: sanitizeText(entity_type, 50),
+      p_entity_id: entity_id,
+      p_signer_name: safeName,
+      p_signer_email: sanitizeEmail(signer_email || "") || "",
+      p_signer_phone: sanitizeText(signer_phone || "", 20),
+      p_signer_nif: sanitizeText(signer_nif || "", 20),
+      p_signer_role: sanitizeText(signer_role || "cliente", 50),
+      p_ip_address: getClientIp(request),
+      p_user_agent: sanitizeText(request.headers.get("user-agent") || "", 500),
+    });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+    const result = data as { ok: boolean; signature?: { id: string }; public_token?: string };
+    if (!result.ok || !result.signature || !result.public_token) {
+      return NextResponse.json({ error: "No se pudo crear la firma" }, { status: 500 });
+    }
 
-    return NextResponse.json({ id: data.id });
+    // public_token se devuelve UNA sola vez en claro; solo se guarda su hash.
+    return NextResponse.json({ id: result.signature.id, public_token: result.public_token });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Error interno" },

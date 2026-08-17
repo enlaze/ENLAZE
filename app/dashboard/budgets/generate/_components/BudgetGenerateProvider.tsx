@@ -23,7 +23,6 @@ import {
 } from "@/lib/budget-engine";
 import {
   resolveMarketPrices,
-  type PriceRequest,
   type QualityTier,
   type ResolvedPrice,
 } from "@/lib/price-resolver";
@@ -32,6 +31,21 @@ import {
   type ProviderAdjustmentMeta,
 } from "@/lib/provider-materials";
 import { analytics } from "@/lib/analytics";
+import {
+  getGeographicCostProfile,
+  getGeographicFactorForCategory,
+} from "@/lib/geographic-costs";
+import { isTraceableCommercialPrice } from "@/lib/price-traceability";
+
+// The v2 price resolver (/api/prices/resolve, resolver_used: "v2") can
+// return several low-confidence "estimate" source types — market_estimate,
+// ai_estimate — in addition to v1's plain "estimated" literal. None of
+// them is an independently verified match, so every price-adoption gate in
+// this file must treat all of them the same, not just the one v1 literal.
+const ESTIMATE_SOURCE_TYPES = new Set(["estimated", "market_estimate", "ai_estimate"]);
+function isEstimateSourceType(sourceType: string | null | undefined): boolean {
+  return ESTIMATE_SOURCE_TYPES.has(String(sourceType || ""));
+}
 
 export interface Partida {
   id: string;
@@ -46,6 +60,11 @@ export interface Partida {
   unit_price_client: number;
   subtotal_client: number;
   status?: "incluida" | "estimada" | "opcional";
+  base_unit_price?: number;
+  geographic_factor?: number;
+  geographic_profile?: string;
+  price_source?: "base_nacional" | "geographic_adjustment";
+  estimated_hours?: number;
 }
 
 export interface ProviderOption {
@@ -73,6 +92,13 @@ export interface Material {
   provider_id?: string;
   isRealData?: boolean;
   sourceType?: string;
+  sourceName?: string;
+  matchedProductName?: string;
+  sourceUrl?: string;
+  priceCheckedAt?: string;
+  confidenceScore?: number;
+  /** Budget chapter this material is consumed by */
+  linkedChapter?: string;
   /** True when the selected provider does not carry this material */
   missing_in_selected_provider?: boolean;
   /** Human-readable reason when material falls back to base price */
@@ -166,6 +192,189 @@ const FALLBACK_PROVIDERS: ProviderOption[] = [
   { id: "referencia-mercado", name: "Referencia mercado", description: "Precios de referencia del mercado español", estimatedPrice: 0, deliveryTime: "Variable", stockLevel: "A consultar", rating: 4.0, isRecommended: false, materialsCount: 0, isRealData: false },
 ];
 
+function inferMaterialChapter(name: string) {
+  const normalized = name.toLowerCase();
+  const chapterKeywords: Array<[string, string[]]> = [
+    ["fontaneria", ["tuber", "sifon", "llave", "desague", "multicapa", "pvc"]],
+    ["electricidad", ["cable", "enchufe", "interruptor", "cuadro", "magnetoterm", "diferencial"]],
+    ["revestimientos", ["azulej", "alicat", "adhesivo", "cemento cola", "junta"]],
+    ["pavimentos", ["pavimento", "porcelan", "tarima", "suelo", "rodapie"]],
+    ["pintura", ["pintura", "imprimacion", "masilla"]],
+    ["sanitarios", ["inodoro", "lavabo", "grifer", "ducha", "mampara"]],
+    ["carpinteria_interior", ["puerta interior", "premarco"]],
+    ["carpinteria_exterior", ["ventana", "persiana", "aluminio", "carpinteria exterior"]],
+    ["impermeabilizacion", ["impermeabil", "lamina", "sellador", "silicona"]],
+    ["residuos", ["contenedor", "escombro", "vertedero"]],
+    ["albanileria", ["mortero", "cemento", "ladrillo", "yeso", "pladur", "placa"]],
+  ];
+  return chapterKeywords.find(([, keywords]) =>
+    keywords.some((keyword) => normalized.includes(keyword))
+  )?.[0] || "otros";
+}
+
+async function verifyMaterialsAgainstTracker(
+  materials: Material[],
+  location: string,
+  qualityTier: QualityTier,
+  trackerFallbackCount = 0,
+): Promise<{
+  materials: Material[];
+  verification: BudgetState["priceVerification"];
+  warning?: string;
+}> {
+  const includedMaterials = materials.filter((material) => material.included);
+  const baseVerification: BudgetState["priceVerification"] = {
+    status: includedMaterials.length > 0 ? "partial" : "complete",
+    total: includedMaterials.length,
+    verified: 0,
+    estimated: includedMaterials.length,
+    trackerProductsAvailable: trackerFallbackCount,
+    lastVerifiedAt: null,
+    location,
+  };
+
+  if (includedMaterials.length === 0) {
+    return { materials, verification: baseVerification };
+  }
+
+  const priceResult = await resolveMarketPrices({
+    materials: includedMaterials.map((material) => ({
+      materialName: material.name,
+      category: "material",
+      unit: material.unit,
+      quantity: material.quantity,
+      qualityTier,
+      location,
+    })),
+    location,
+  });
+
+  if (!priceResult.ok) {
+    return {
+      materials,
+      verification: { ...baseVerification, status: "error" },
+      warning:
+        priceResult.error ||
+        "No se pudo consultar el rastreador; los materiales siguen marcados como estimados.",
+    };
+  }
+
+  const resolvedByMaterialId = new Map<string, ResolvedPrice>();
+  includedMaterials.forEach((material, index) => {
+    const resolved = priceResult.resolved[index];
+    if (resolved) resolvedByMaterialId.set(material.id, resolved);
+  });
+
+  const updatedMaterials = materials.map((material) => {
+    const resolved = resolvedByMaterialId.get(material.id);
+    // Adoption of the resolved price is separate from the isRealData label:
+    // manual_locked, technical_bank, private_bc3 and URL-less private_tariff
+    // are real, authoritative sources the user set or imported — just not
+    // independently traceable commercial evidence — so their price should
+    // still be adopted instead of silently reverting to the old estimate.
+    const hasUsablePrice =
+      resolved && Number(resolved.selectedPrice) > 0 && !isEstimateSourceType(resolved.sourceType);
+    if (!hasUsablePrice) {
+      return {
+        ...material,
+        isRealData: false,
+        sourceType: "estimated",
+        sourceName: "Estimación pendiente de coincidencia exacta",
+        matchedProductName: resolved?.selectedProductName,
+        sourceUrl: resolved?.sourceUrl || undefined,
+        confidenceScore: resolved?.confidenceScore ?? material.confidenceScore ?? 0.2,
+      };
+    }
+
+    const providerId = (resolved.selectedSupplier || "rastreador-enlaze")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+
+    return {
+      ...material,
+      unit_price: resolved.selectedPrice,
+      subtotal: resolved.selectedPrice * material.quantity,
+      provider_id: providerId || "rastreador-enlaze",
+      isRealData: isTraceableCommercialPrice(resolved),
+      sourceType: resolved.sourceType,
+      sourceName: resolved.selectedSupplier || "Rastreador ENLAZE",
+      matchedProductName: resolved.selectedProductName,
+      sourceUrl: resolved.sourceUrl || undefined,
+      priceCheckedAt: resolved.capturedAt || undefined,
+      confidenceScore: resolved.confidenceScore,
+    };
+  });
+
+  const verified = updatedMaterials.filter(
+    (material) => material.included && material.isRealData
+  ).length;
+  const total = updatedMaterials.filter((material) => material.included).length;
+
+  return {
+    materials: updatedMaterials,
+    verification: {
+      status: verified === total ? "complete" : "partial",
+      total,
+      verified,
+      estimated: total - verified,
+      trackerProductsAvailable:
+        priceResult.summary.tracker_products_available || trackerFallbackCount,
+      lastVerifiedAt: new Date().toISOString(),
+      location,
+    },
+  };
+}
+
+function buildTrackerProviderOptions(materials: Material[]): ProviderOption[] {
+  const providers = new Map<
+    string,
+    { name: string; count: number; total: number; isReal: boolean; sourceType: string }
+  >();
+
+  materials.filter((material) => material.included).forEach((material) => {
+    const id = material.isRealData
+      ? material.provider_id || "rastreador-enlaze"
+      : "referencia-tecnica-enlaze";
+    const current = providers.get(id) || {
+      name: material.isRealData
+        ? material.sourceName || "Rastreador ENLAZE"
+        : "Referencia técnica ENLAZE",
+      count: 0,
+      total: 0,
+      isReal: false,
+      sourceType: material.sourceType || "estimated",
+    };
+    current.count += 1;
+    current.total += material.subtotal;
+    current.isReal = current.isReal || Boolean(material.isRealData);
+    if (material.isRealData) current.sourceType = material.sourceType || "n8n_market";
+    providers.set(id, current);
+  });
+
+  const options = Array.from(providers.entries()).map(([id, provider]) => ({
+    id,
+    name: provider.name,
+    description: provider.isReal
+      ? "Precio comprobado por el rastreador"
+      : "Base técnica de trabajo pendiente de equivalencia comercial",
+    estimatedPrice: Math.round(provider.total * 100) / 100,
+    deliveryTime: "Consultar",
+    stockLevel: "A consultar" as const,
+    rating: provider.isReal ? 4.5 : 4,
+    isRecommended: false,
+    materialsCount: provider.count,
+    isRealData: provider.isReal,
+    sourceType: provider.sourceType,
+  }));
+  options.sort((a, b) => Number(b.isRealData) - Number(a.isRealData) || (b.materialsCount || 0) - (a.materialsCount || 0));
+  const recommended = options.find((option) => option.isRealData);
+  if (recommended) recommended.isRecommended = true;
+  return options;
+}
+
 export interface BudgetState {
   draftId: string | null;
   lastSavedAt: string | null;
@@ -227,14 +436,25 @@ export interface BudgetState {
     data_sources?: {
       price_items_count: number;
       n8n_items_count: number;
+      tracker_products_count?: number;
       default_items_count: number;
       sector_price_count: number;
       sector_regulation_count: number;
       real_suppliers: string[];
       using_fallback: boolean;
       fallback_reason: string;
+      documents_used?: Array<{ id: string; name: string }>;
     };
   } | null;
+  priceVerification: {
+    status: "idle" | "checking" | "complete" | "partial" | "error";
+    total: number;
+    verified: number;
+    estimated: number;
+    trackerProductsAvailable: number;
+    lastVerifiedAt: string | null;
+    location: string;
+  };
   /** When true, materials came from AI and should NOT be overwritten by the provider useEffect */
   materialsFromAI: boolean;
   /** When true, the scope/description changed since last AI analysis */
@@ -302,34 +522,7 @@ export function BudgetGenerateProvider({
     validationError: null,
 
     sectorData: {},
-    partidas: [
-      {
-        id: "example-1",
-        concept: "Demolición y desescombro",
-        description: "Demolición de tabiquería interior, levantado de suelos y retirada a vertedero autorizado.",
-        quantity: 1,
-        unit: "global",
-        category: "mano_obra",
-        unit_price: 1200,
-        subtotal_cost: 1200,
-        unit_price_client: 1440,
-        subtotal_client: 1440,
-        status: "incluida"
-      },
-      {
-        id: "example-2",
-        concept: "Alicatado de baño principal",
-        description: "Suministro y colocación de azulejo porcelánico 60x60cm, material de agarre y lechada.",
-        quantity: 24,
-        unit: "m2",
-        category: "material",
-        unit_price: 35,
-        subtotal_cost: 840,
-        unit_price_client: 42,
-        subtotal_client: 1008,
-        status: "incluida"
-      }
-    ],
+    partidas: [],
     selectedProviderId: null,
     providerOptions: [],
     materials: [],
@@ -347,6 +540,15 @@ export function BudgetGenerateProvider({
     analysisError: null,
     lastAnalysisHash: null,
     aiInsights: null,
+    priceVerification: {
+      status: "idle",
+      total: 0,
+      verified: 0,
+      estimated: 0,
+      trackerProductsAvailable: 0,
+      lastVerifiedAt: null,
+      location: "",
+    },
     materialsFromAI: false,
     analysisDirty: false,
     isUndervalued: false,
@@ -531,6 +733,67 @@ export function BudgetGenerateProvider({
       totals: { directCost, materialsCost, clientPrice, profit }
     }));
   }, [state.partidas, state.materials, state.marginPercent]);
+
+  // Keep both PDFs in sync with manual edits and refreshed tracker prices.
+  useEffect(() => {
+    if (state.sector !== "construccion" || state.partidas.length === 0) return;
+
+    const scope: BudgetScope = {
+      superficie_m2: state.sectorData.superficie_m2 || state.aiInsights?.detected_area_m2 || 80,
+      num_banos: state.sectorData.num_banos || 1,
+      incluye_cocina: state.sectorData.incluye_cocina ?? true,
+      incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
+      incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,
+      estancias: state.sectorData.estancias || [],
+      actuaciones: state.sectorData.actuaciones || [],
+      calidad: state.sectorData.calidad || "media",
+      ubicacion: state.sectorData.ubicacion || "",
+    };
+    const items: EnginePartida[] = state.partidas.map((partida) => ({
+      ...partida,
+      chapter: partida.chapter || "otros",
+      status: partida.status || "incluida",
+    }));
+    const engineMaterials = buildScopeMaterials(scope);
+    const materials: EngineMaterial[] = state.materials.map((material, index) => ({
+      id: material.id,
+      name: material.name,
+      quantity: material.quantity,
+      unit: material.unit,
+      unit_price: material.unit_price,
+      subtotal: material.subtotal,
+      included: material.included,
+      provider_id: material.provider_id || "sin-proveedor-verificado",
+      linked_chapter:
+        material.linkedChapter ||
+        engineMaterials[index]?.linked_chapter ||
+        inferMaterialChapter(material.name),
+      isRealData: material.isRealData || false,
+      sourceType: material.sourceType || "estimated",
+    }));
+    const evidence = state.materials.map((material) => ({
+      materialName: material.name,
+      normalizedName: material.name.toLowerCase(),
+      selectedPrice: material.unit_price,
+      qualityTier: scope.calidad,
+      sourceType: material.sourceType || "estimated",
+      selectedSupplier: material.sourceName || material.provider_id || "Sin proveedor verificado",
+      confidenceScore: material.confidenceScore || (material.isRealData ? 0.8 : 0.2),
+    }));
+
+    setState((previous) => ({
+      ...previous,
+      clientView: buildClientView(scope, items, previous.ivaPercent),
+      internalView: buildInternalView(scope, items, materials, previous.ivaPercent, evidence),
+    }));
+  }, [
+    state.partidas,
+    state.materials,
+    state.ivaPercent,
+    state.sector,
+    state.sectorData,
+    state.aiInsights?.detected_area_m2,
+  ]);
 
   const SCOPE_FIELDS = new Set(["description", "serviceType", "startDate"]);
 
@@ -898,7 +1161,15 @@ export function BudgetGenerateProvider({
   };
 
   const loadDraft = (savedState: BudgetState) => {
-    setState(savedState);
+    setState(prev => ({
+      ...prev,
+      ...savedState,
+      sectorData: { ...prev.sectorData, ...(savedState.sectorData || {}) },
+      priceVerification: {
+        ...prev.priceVerification,
+        ...(savedState.priceVerification || {}),
+      },
+    }));
   };
 
   // Debounced Autosave (1.5s)
@@ -958,6 +1229,8 @@ export function BudgetGenerateProvider({
       ck: state.sectorData.incluye_cocina,
       cv: state.sectorData.incluye_ventanas,
       cc: state.sectorData.incluye_climatizacion,
+      u: state.sectorData.ubicacion,
+      docs: state.sectorData.technical_document_ids || [],
     });
     const currentHash = `${state.sector}-${state.serviceType}-${state.description}-${scopeStr}`.trim();
     if (!forceRegenerate && state.lastAnalysisHash === currentHash && !state.analysisError) {
@@ -970,6 +1243,14 @@ export function BudgetGenerateProvider({
       isAnalyzing: true,
       analysisError: null,
       analysisDirty: false,
+      priceVerification: {
+        ...prev.priceVerification,
+        status: "checking",
+        total: 0,
+        verified: 0,
+        estimated: 0,
+        location: prev.sectorData.ubicacion || "",
+      },
       ...(forceRegenerate ? { materialsFromAI: false } : {}),
     }));
 
@@ -981,6 +1262,8 @@ export function BudgetGenerateProvider({
           sector: state.sector,
           description: state.description,
           service_type: state.serviceType,
+          project_id: state.projectId,
+          technical_document_ids: state.sectorData.technical_document_ids || [],
           scope: {
             ubicacion: state.sectorData.ubicacion || "",
             estancias: state.sectorData.estancias || [],
@@ -1014,11 +1297,13 @@ export function BudgetGenerateProvider({
           quantity: qty,
           unit: item.unit || "ud",
           category: item.category || "mano_obra",
+          chapter: item.chapter || "Otros",
           unit_price: cost,
           subtotal_cost: qty * cost,
           unit_price_client: cost * marginMultiplier,
           subtotal_client: qty * cost * marginMultiplier,
           status: "incluida" as const,
+          estimated_hours: Number(item.estimated_hours) || undefined,
         };
       });
 
@@ -1029,14 +1314,14 @@ export function BudgetGenerateProvider({
         const provId = rawSupplier.toLowerCase().replace(/[^a-z0-9]/g, '-') || "generic";
         const cost = item.unit_cost || item.unit_price || 0;
         const qty = item.quantity || 1;
-        const isReal = item.source !== "fallback";
+        const isReal = false;
 
         let sourceType = item.source_type;
         if (!sourceType) {
           if (rawSupplier === "Banco ENLAZE base") sourceType = "default";
           else if (rawSupplier === "Referencia mercado") sourceType = "market_reference";
           else if (rawSupplier === "Leroy Merlin" || rawSupplier === "OBRAMAT") sourceType = "n8n_sync";
-          else sourceType = "unknown";
+          else sourceType = "estimated";
         }
 
         // Aggregate provider stats
@@ -1056,6 +1341,8 @@ export function BudgetGenerateProvider({
           provider_id: provId,
           isRealData: isReal,
           sourceType,
+          sourceName: "Estimación provisional de IA",
+          confidenceScore: 0.2,
         };
       });
 
@@ -1122,8 +1409,23 @@ export function BudgetGenerateProvider({
           calculateItemCostBreakdown(item, engineScope, state.marginPercent)
         );
 
-        // C) Build scope-driven materials (replaces AI materials or fallback)
-        const engineMats = buildScopeMaterials(engineScope);
+        // C) Keep the technical material requirements extracted from the
+        // project/documents. Use the deterministic engine list only as fallback.
+        const engineMats: EngineMaterial[] = newMaterials.length >= 5
+          ? newMaterials.map((material) => ({
+              id: material.id,
+              name: material.name,
+              quantity: material.quantity,
+              unit: material.unit,
+              unit_price: material.unit_price,
+              subtotal: material.subtotal,
+              included: material.included,
+              provider_id: material.provider_id || "pendiente-rastreador",
+              linked_chapter: inferMaterialChapter(material.name),
+              isRealData: false,
+              sourceType: "estimated",
+            }))
+          : buildScopeMaterials(engineScope);
 
         // D) Market adjustment (idempotent)
         const adjustResult = adjustToMarket(
@@ -1152,6 +1454,7 @@ export function BudgetGenerateProvider({
           unit_price_client: ep.unit_price_client,
           subtotal_client: ep.subtotal_client,
           status: ep.status,
+          estimated_hours: ep.estimated_hours,
         }));
 
         // Convert engine materials to Material format
@@ -1166,6 +1469,7 @@ export function BudgetGenerateProvider({
           provider_id: em.provider_id,
           isRealData: em.isRealData,
           sourceType: em.sourceType,
+          linkedChapter: em.linked_chapter,
         }));
 
         // Market range
@@ -1195,11 +1499,13 @@ export function BudgetGenerateProvider({
           unit_price: ep.unit_price, subtotal_cost: ep.subtotal_cost,
           unit_price_client: ep.unit_price_client, subtotal_client: ep.subtotal_client,
           status: ep.status,
+          estimated_hours: ep.estimated_hours,
         }));
         finalMaterials = buildScopeMaterials(fallbackScope).map(em => ({
           id: em.id, name: em.name, quantity: em.quantity, unit: em.unit,
           unit_price: em.unit_price, subtotal: em.subtotal, included: em.included,
           provider_id: em.provider_id, isRealData: em.isRealData, sourceType: em.sourceType,
+          linkedChapter: em.linked_chapter,
         }));
       }
 
@@ -1219,7 +1525,125 @@ export function BudgetGenerateProvider({
           id: em.id, name: em.name, quantity: em.quantity, unit: em.unit,
           unit_price: em.unit_price, subtotal: em.subtotal, included: em.included,
           provider_id: em.provider_id, isRealData: em.isRealData, sourceType: em.sourceType,
+          linkedChapter: em.linked_chapter,
         }));
+      }
+
+      // Apply a deterministic and visible geographic coefficient only to
+      // labour/logistics. Tracked product prices are never altered by location.
+      const geographicProfile = getGeographicCostProfile(engineScope.ubicacion);
+      finalPartidas = finalPartidas.map((partida) => {
+        const baseUnitPrice = partida.base_unit_price ?? partida.unit_price;
+        const factor = getGeographicFactorForCategory(partida.category, geographicProfile);
+        const adjustedUnitPrice = Math.round(baseUnitPrice * factor * 100) / 100;
+        return {
+          ...partida,
+          base_unit_price: baseUnitPrice,
+          geographic_factor: factor,
+          geographic_profile: geographicProfile.label,
+          price_source: factor === 1 ? "base_nacional" : "geographic_adjustment",
+          unit_price: adjustedUnitPrice,
+          subtotal_cost: adjustedUnitPrice * partida.quantity,
+          unit_price_client: adjustedUnitPrice * marginMultiplier,
+          subtotal_client: adjustedUnitPrice * partida.quantity * marginMultiplier,
+        };
+      });
+
+      let priceVerification: BudgetState["priceVerification"] = {
+        status: finalMaterials.length > 0 ? "partial" : "complete",
+        total: finalMaterials.filter((material) => material.included).length,
+        verified: 0,
+        estimated: finalMaterials.filter((material) => material.included).length,
+        trackerProductsAvailable: data.data_sources?.tracker_products_count || 0,
+        lastVerifiedAt: null,
+        location: engineScope.ubicacion,
+      };
+
+      // Resolve every material before totals and PDFs are built. This avoids
+      // showing one amount on screen while the background request later changes it.
+      if (finalMaterials.some((material) => material.included)) {
+        const qualityTier: QualityTier = (engineScope.calidad as QualityTier) || "media";
+        const includedMaterials = finalMaterials.filter((material) => material.included);
+        const priceResult = await resolveMarketPrices({
+          materials: includedMaterials.map((material) => ({
+            materialName: material.name,
+            category: "material",
+            unit: material.unit,
+            quantity: material.quantity,
+            qualityTier,
+            location: engineScope.ubicacion,
+          })),
+          location: engineScope.ubicacion,
+        });
+
+        if (priceResult.ok) {
+          const resolvedByMaterialId = new Map<string, ResolvedPrice>();
+          includedMaterials.forEach((material, index) => {
+            const resolved = priceResult.resolved[index];
+            if (resolved) resolvedByMaterialId.set(material.id, resolved);
+          });
+
+          finalMaterials = finalMaterials.map((material) => {
+            const resolved = resolvedByMaterialId.get(material.id);
+            // Adoption of the resolved price is separate from the
+            // isRealData label — see the equivalent gate above.
+            const hasUsablePrice =
+              resolved && Number(resolved.selectedPrice) > 0 && !isEstimateSourceType(resolved.sourceType);
+            if (!hasUsablePrice) {
+              return {
+                ...material,
+                isRealData: false,
+                sourceType: "estimated",
+                sourceName: "Estimación pendiente de coincidencia exacta",
+                matchedProductName: resolved?.selectedProductName,
+                sourceUrl: resolved?.sourceUrl || undefined,
+                confidenceScore: resolved?.confidenceScore ?? material.confidenceScore ?? 0.2,
+              };
+            }
+
+            const providerId = (resolved.selectedSupplier || "rastreador-enlaze")
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .replace(/[^a-z0-9]+/g, "-")
+              .replace(/^-|-$/g, "");
+            return {
+              ...material,
+              unit_price: resolved.selectedPrice,
+              subtotal: resolved.selectedPrice * material.quantity,
+              provider_id: providerId || "rastreador-enlaze",
+              isRealData: isTraceableCommercialPrice(resolved),
+              sourceType: resolved.sourceType,
+              sourceName: resolved.selectedSupplier || "Rastreador ENLAZE",
+              sourceUrl: resolved.sourceUrl || undefined,
+              priceCheckedAt: resolved.capturedAt || undefined,
+              confidenceScore: resolved.confidenceScore,
+            };
+          });
+
+          const verified = finalMaterials.filter((material) => material.included && material.isRealData).length;
+          const total = finalMaterials.filter((material) => material.included).length;
+          priceVerification = {
+            status: verified === total ? "complete" : "partial",
+            total,
+            verified,
+            estimated: total - verified,
+            trackerProductsAvailable:
+              priceResult.summary.tracker_products_available ||
+              data.data_sources?.tracker_products_count ||
+              0,
+            lastVerifiedAt: new Date().toISOString(),
+            location: engineScope.ubicacion,
+          };
+        } else {
+          priceVerification = {
+            ...priceVerification,
+            status: "error",
+          };
+          priceWarnings.push(
+            priceResult.error || "No se pudo consultar el rastreador; los materiales siguen marcados como estimados."
+          );
+        }
       }
 
       // --- Timeline via engine ---
@@ -1278,39 +1702,9 @@ export function BudgetGenerateProvider({
         }
       }
 
-      // Build providers from final materials
-      const finalProvMap = new Map<string, { name: string; count: number; total: number; isReal: boolean; sourceType: string }>();
-      finalMaterials.forEach(m => {
-        const pid = m.provider_id || "referencia-mercado";
-        const existing = finalProvMap.get(pid) || { name: pid, count: 0, total: 0, isReal: m.isRealData || false, sourceType: m.sourceType || "market_reference" };
-        existing.count += 1;
-        existing.total += m.subtotal;
-        finalProvMap.set(pid, existing);
-      });
-      let finalProviders: ProviderOption[] = [];
-      if (finalProvMap.size > 0) {
-        const provNameMap: Record<string, string> = {
-          "leroy-merlin": "Leroy Merlin",
-          "obramat": "Obramat",
-          "saltoki": "Saltoki",
-          "referencia-mercado": "Referencia mercado",
-        };
-        finalProviders = Array.from(finalProvMap.entries()).map(([id, info]) => ({
-          id,
-          name: provNameMap[id] || info.name,
-          description: info.isReal ? "Proveedor sugerido por IA" : "Referencia de mercado",
-          estimatedPrice: Math.round(info.total * 100) / 100,
-          deliveryTime: "Consultar",
-          stockLevel: "A consultar" as const,
-          rating: 4.5,
-          isRecommended: false,
-          materialsCount: info.count,
-          isRealData: info.isReal,
-          sourceType: info.sourceType,
-        }));
-        finalProviders.sort((a, b) => (b.materialsCount || 0) - (a.materialsCount || 0));
-        if (finalProviders.length > 0) finalProviders[0].isRecommended = true;
-      }
+      // Provider cards must be rebuilt from the exact resolved products, not
+      // from provisional provider names suggested by the language model.
+      const finalProviders = buildTrackerProviderOptions(finalMaterials);
 
       // ─── Build dual views for PDFs ───
       let computedClientView: BudgetClientView | null = null;
@@ -1344,7 +1738,7 @@ export function BudgetGenerateProvider({
           subtotal: m.subtotal,
           included: m.included,
           provider_id: m.provider_id || "referencia-mercado",
-          linked_chapter: "", // Will be matched by engine
+          linked_chapter: m.linkedChapter || inferMaterialChapter(m.name),
           isRealData: m.isRealData || false,
           sourceType: m.sourceType || "market_reference",
         }));
@@ -1353,67 +1747,35 @@ export function BudgetGenerateProvider({
         const engineMats = buildScopeMaterials(viewScope);
         const linkedMaterials = viewMaterials.map((m, idx) => ({
           ...m,
-          linked_chapter: engineMats[idx]?.linked_chapter || "",
+          linked_chapter:
+            m.linked_chapter ||
+            engineMats[idx]?.linked_chapter ||
+            inferMaterialChapter(m.name),
         }));
 
         computedClientView = buildClientView(viewScope, viewItems, state.ivaPercent);
-        computedInternalView = buildInternalView(viewScope, viewItems, linkedMaterials, state.ivaPercent);
-
-        // ─── Trigger server-side market price resolution (async, non-blocking) ───
-        // Runs in background; updates materials with real prices if found.
-        // Does NOT block the UI — initial render uses engine estimates.
-        const qualityTier: QualityTier = (viewScope.calidad as QualityTier) || "media";
-        const location = viewScope.ubicacion || "";
-        const priceRequests: PriceRequest[] = linkedMaterials
-          .filter(m => m.included)
-          .map(m => ({
-            materialName: m.name,
-            category: m.linked_chapter || "material",
-            unit: m.unit,
-            quantity: m.quantity,
-            qualityTier,
-            location,
-          }));
-
-        if (priceRequests.length > 0) {
-          // Fire-and-forget: resolve market prices in background
-          resolveMarketPrices({ materials: priceRequests, location })
-            .then(result => {
-              if (!result.ok || result.resolved.length === 0) return;
-              // Update materials with resolved prices (only if better source)
-              setState(prev => {
-                const updatedMaterials = prev.materials.map(m => {
-                  const rp = result.resolved.find(r =>
-                    m.name.toLowerCase().includes(r.normalizedName) ||
-                    r.normalizedName.includes(
-                      m.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-                    )
-                  );
-                  if (rp && rp.selectedPrice > 0 && rp.sourceType !== "estimated") {
-                    return {
-                      ...m,
-                      unit_price: rp.selectedPrice,
-                      subtotal: rp.selectedPrice * m.quantity,
-                      sourceType: rp.sourceType,
-                      isRealData: true,
-                    };
-                  }
-                  return m;
-                });
-                return { ...prev, materials: updatedMaterials };
-              });
-            })
-            .catch(err => {
-              console.warn("[BudgetProvider] Background price resolution failed:", err);
-              // Non-fatal — keep engine estimates
-            });
-        }
+        computedInternalView = buildInternalView(
+          viewScope,
+          viewItems,
+          linkedMaterials,
+          state.ivaPercent,
+          finalMaterials.map((material) => ({
+            materialName: material.name,
+            normalizedName: material.name.toLowerCase(),
+            selectedPrice: material.unit_price,
+            qualityTier: viewScope.calidad,
+            sourceType: material.sourceType || "estimated",
+            selectedSupplier: material.sourceName || material.provider_id || "Sin proveedor verificado",
+            confidenceScore: material.confidenceScore || (material.isRealData ? 0.8 : 0.2),
+          }))
+        );
       }
 
       setState(prev => ({
         ...prev,
         isAnalyzing: false,
         lastAnalysisHash: currentHash,
+        priceVerification,
         materialsFromAI: finalMaterials.length > 0,
         partidas: finalPartidas.length > 0 ? finalPartidas : prev.partidas,
         materials: finalMaterials.length > 0 ? finalMaterials : prev.materials,
@@ -1448,7 +1810,11 @@ export function BudgetGenerateProvider({
       setState(prev => ({
         ...prev,
         isAnalyzing: false,
-        analysisError: error.message
+        analysisError: error.message,
+        priceVerification: {
+          ...prev.priceVerification,
+          status: "error",
+        },
       }));
       return false;
     }
@@ -1490,7 +1856,14 @@ export function BudgetGenerateProvider({
               id: em.id, name: em.name, quantity: em.quantity, unit: em.unit,
               unit_price: em.unit_price, subtotal: em.subtotal, included: em.included,
               provider_id: em.provider_id, isRealData: em.isRealData, sourceType: em.sourceType,
+              linkedChapter: em.linked_chapter,
             }));
+            const verifiedFallback = await verifyMaterialsAgainstTracker(
+              fallbackMaterialsList,
+              fbScope.ubicacion,
+              fbScope.calidad as QualityTier,
+            );
+            const fallbackProviderOptions = buildTrackerProviderOptions(verifiedFallback.materials);
             setState(prev => ({
               ...prev,
               currentStep: prev.currentStep + 1,
@@ -1502,9 +1875,12 @@ export function BudgetGenerateProvider({
                 unit_price_client: ep.unit_price_client, subtotal_client: ep.subtotal_client,
                 status: ep.status,
               })),
-              materials: fallbackMaterialsList,
+              materials: verifiedFallback.materials,
               // Snapshot base inmutable para enriquecimiento por proveedor
-              baseAIMaterials: fallbackMaterialsList.map(m => ({ ...m })),
+              baseAIMaterials: verifiedFallback.materials.map(m => ({ ...m })),
+              providerOptions: fallbackProviderOptions,
+              selectedProviderId: fallbackProviderOptions[0]?.id || null,
+              priceVerification: verifiedFallback.verification,
               materialsFromAI: true,
             }));
             saveDraft(false);
@@ -1547,6 +1923,25 @@ export function BudgetGenerateProvider({
                 };
                 const gMM = 1 + (state.marginPercent / 100);
                 const gItems = normalizeBudgetItemsToScope(gScope, [], gMM);
+                const gMaterials = buildScopeMaterials(gScope).map((material) => ({
+                  id: material.id,
+                  name: material.name,
+                  quantity: material.quantity,
+                  unit: material.unit,
+                  unit_price: material.unit_price,
+                  subtotal: material.subtotal,
+                  included: material.included,
+                  provider_id: material.provider_id,
+                  isRealData: material.isRealData,
+                  sourceType: material.sourceType,
+                  linkedChapter: material.linked_chapter,
+                }));
+                const verifiedFallback = await verifyMaterialsAgainstTracker(
+                  gMaterials,
+                  gScope.ubicacion,
+                  gScope.calidad as QualityTier,
+                );
+                const fallbackProviderOptions = buildTrackerProviderOptions(verifiedFallback.materials);
                 setState(prev => ({
                   ...prev,
                   partidas: gItems.map(ep => ({
@@ -1556,6 +1951,12 @@ export function BudgetGenerateProvider({
                     unit_price_client: ep.unit_price_client, subtotal_client: ep.subtotal_client,
                     status: ep.status,
                   })),
+                  materials: verifiedFallback.materials,
+                  baseAIMaterials: verifiedFallback.materials.map((material) => ({ ...material })),
+                  providerOptions: fallbackProviderOptions,
+                  selectedProviderId: fallbackProviderOptions[0]?.id || null,
+                  priceVerification: verifiedFallback.verification,
+                  materialsFromAI: true,
                 }));
               }
            }

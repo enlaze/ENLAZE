@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import {
+  createOAuthState,
+  type GoogleIntegrationModule,
+} from "@/lib/oauth-state";
 
 const RAW_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_ID = RAW_GOOGLE_CLIENT_ID ? RAW_GOOGLE_CLIENT_ID.replace(/^["']|["']$/g, '').trim() : undefined;
@@ -13,12 +17,8 @@ export async function GET(req: NextRequest) {
   const isLocal = host.includes("localhost") || host.includes("127.0.0.1");
   const APP_BASE_URL = isLocal ? "http://localhost:3000" : "https://enlaze.vercel.app";
   const GOOGLE_REDIRECT_URI = `${APP_BASE_URL}/api/auth/google/callback`;
-
-  console.log(`[Google OAuth Init] host received: ${host}`);
-  console.log(`[Google OAuth Init] origin received: ${req.nextUrl.origin}`);
-  console.log(`[Google OAuth Init] isLocal calculated: ${isLocal}`);
-  console.log(`[Google OAuth Init] APP_BASE_URL final: ${APP_BASE_URL}`);
-  console.log(`[Google OAuth Init] GOOGLE_REDIRECT_URI final: ${GOOGLE_REDIRECT_URI}`);
+  const forwardedProto = req.headers.get("x-forwarded-proto");
+  const requestOrigin = `${forwardedProto || (isLocal ? "http" : "https")}://${host}`;
 
   const cookieStore = await cookies();
   const supabase = createServerClient(
@@ -45,10 +45,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Missing GOOGLE_CLIENT_ID" }, { status: 500 });
   }
 
-  const moduleToConnect = req.nextUrl.searchParams.get("module") || "gmail";
-  console.log(`\n[Google OAuth Init] Starting OAuth flow for module: ${moduleToConnect}`);
-  console.log(`[Google OAuth Init] GOOGLE_CLIENT_ID present: yes (length: ${GOOGLE_CLIENT_ID.length})`);
-  console.log(`[Google OAuth Init] Client ID starts with: ${GOOGLE_CLIENT_ID.substring(0, 15)}...`);
+  const moduleToConnect = (req.nextUrl.searchParams.get("module") ||
+    "gmail") as GoogleIntegrationModule;
   
   // Scopes based on module
   let scopes = ["https://www.googleapis.com/auth/userinfo.email"];
@@ -76,9 +74,22 @@ export async function GET(req: NextRequest) {
   }
 
   // Pass state to prevent CSRF and remember the module + origin
-  const returnTo = req.nextUrl.origin;
-  const stateObj = { userId: user.id, module: moduleToConnect, returnTo };
-  const stateString = Buffer.from(JSON.stringify(stateObj)).toString("base64");
+  let stateString: string;
+  try {
+    stateString = createOAuthState({
+      userId: user.id,
+      module: moduleToConnect,
+      returnTo: requestOrigin,
+    });
+  } catch (error) {
+    console.error("[Google OAuth Init] Unable to create signed state", error);
+    return NextResponse.redirect(
+      new URL(
+        "/dashboard/settings/integrations?integration_error=server_configuration",
+        req.url
+      )
+    );
+  }
 
   const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   authUrl.searchParams.append("client_id", GOOGLE_CLIENT_ID);
@@ -89,9 +100,5 @@ export async function GET(req: NextRequest) {
   authUrl.searchParams.append("prompt", "consent"); // Force consent to ensure refresh_token is returned
   authUrl.searchParams.append("state", stateString);
 
-  const finalUrl = authUrl.toString();
-  console.log(`[Google OAuth Init] Scopes used: ${scopes.join(" ")}`);
-  console.log(`[Google OAuth Init] Final Auth URL constructed: ${finalUrl}`);
-
-  return NextResponse.redirect(finalUrl);
+  return NextResponse.redirect(authUrl);
 }

@@ -6,7 +6,11 @@
     "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:p1": "node --import tsx --test __tests__/p1-review.test.mjs",
+    "test:integration": "node --import tsx --test __tests__/account-deletion-lock.integration.test.mjs",
+    "scrape:prices": "node scripts/scraper-precios.js",
+    "scrape:suppliers": "node scripts/scraper-proveedores-oficiales.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
@@ -19,9 +23,12 @@
     "next": "16.2.1",
     "ogl": "^1.0.11",
     "posthog-js": "^1.403.0",
+    "puppeteer": "^25.4.0",
+    "puppeteer-core": "^24.43.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "resend": "^6.9.4",
+    "server-only": "^0.0.1",
     "sharp": "^0.34.5",
     "xlsx": "^0.18.5"
   },
@@ -33,6 +40,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",
+    "tsx": "^4.23.7",
     "typescript": "^5"
   }
 }

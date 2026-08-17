@@ -23,6 +23,7 @@ interface ProjectDocument {
   mime_type: string;
   tags: string[];
   created_at: string;
+  download_url?: string;
 }
 
 const DOC_TYPES = [
@@ -87,7 +88,20 @@ export default function DocumentsPanel({
       .eq("project_id", projectId)
       .order("created_at", { ascending: false });
 
-    setDocuments((data as ProjectDocument[]) || []);
+    const rows = (data as ProjectDocument[]) || [];
+    const hydrated = await Promise.all(rows.map(async (document) => {
+      if (/^https?:\/\//i.test(document.file_url)) {
+        return { ...document, download_url: document.file_url };
+      }
+      const { data: signed } = await supabase.storage
+        .from("project-docs")
+        .createSignedUrl(document.file_url, 3600);
+      return {
+        ...document,
+        download_url: signed?.signedUrl || document.file_url,
+      };
+    }));
+    setDocuments(hydrated);
     setLoading(false);
   }
 
@@ -134,22 +148,18 @@ export default function DocumentsPanel({
 
     for (const file of selectedFiles) {
       const ext = file.name.split(".").pop() || "bin";
-      const path = `projects/${projectId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+      const path = `${userId}/projects/${projectId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from("project-docs")
         .upload(path, file, { contentType: file.type });
 
       if (uploadError) {
-        // If bucket doesn't exist, save URL as placeholder
-        console.warn("Storage upload failed, saving reference:", uploadError.message);
+        toast.error("No se pudo subir el documento", { description: uploadError.message });
+        setUploading(false);
+        return;
       }
 
-      const { data: urlData } = supabase.storage
-        .from("project-docs")
-        .getPublicUrl(path);
-
-      const fileUrl = urlData?.publicUrl || path;
       const docName = selectedFiles.length > 1
         ? file.name.replace(/\.[^.]+$/, "")
         : uploadForm.name.trim();
@@ -160,7 +170,7 @@ export default function DocumentsPanel({
         doc_type: uploadForm.doc_type,
         name: docName,
         description: uploadForm.description,
-        file_url: fileUrl,
+        file_url: path,
         file_size: file.size,
         mime_type: file.type,
         tags: [],
@@ -184,7 +194,31 @@ export default function DocumentsPanel({
       confirmLabel: "Eliminar",
     });
     if (!ok) return;
-    await supabase.from("project_documents").delete().eq("id", id);
+    const document = documents.find((candidate) => candidate.id === id);
+    if (!document) return;
+
+    if (!/^https?:\/\//i.test(document.file_url)) {
+      const { error: storageError } = await supabase.storage
+        .from("project-docs")
+        .remove([document.file_url]);
+      if (storageError) {
+        toast.error("No se pudo eliminar el archivo", {
+          description: storageError.message,
+        });
+        return;
+      }
+    }
+
+    const { error: rowError } = await supabase
+      .from("project_documents")
+      .delete()
+      .eq("id", id);
+    if (rowError) {
+      toast.error("El archivo se eliminó, pero no se pudo borrar su registro", {
+        description: rowError.message,
+      });
+      return;
+    }
     await loadData();
     toast.success("Documento eliminado");
   }
@@ -354,7 +388,7 @@ export default function DocumentsPanel({
                 {isImage && (
                   <div className="h-40 bg-navy-50 dark:bg-zinc-800 flex items-center justify-center overflow-hidden">
                     <img
-                      src={doc.file_url}
+                      src={doc.download_url || doc.file_url}
                       alt={doc.name}
                       className="w-full h-full object-cover"
                       onError={(e) => {
@@ -394,7 +428,7 @@ export default function DocumentsPanel({
                     </span>
                     <div className="flex items-center gap-2">
                       <a
-                        href={doc.file_url}
+                        href={doc.download_url || doc.file_url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-xs text-brand-green hover:underline"

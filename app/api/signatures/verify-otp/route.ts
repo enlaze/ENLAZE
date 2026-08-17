@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { isValidUuid, sanitizeText } from "@/lib/sanitize";
+import { getServiceRoleClient } from "@/lib/supabase-service-role";
+import { sanitizeText } from "@/lib/sanitize";
 import { rateLimitAuth } from "@/lib/rate-limit";
+import { hashSignatureToken } from "@/lib/signature-token";
 import crypto from "crypto";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+const REASON_MESSAGES: Record<string, { status: number; error: string }> = {
+  not_found: { status: 404, error: "No hay código OTP pendiente" },
+  account_locked: { status: 409, error: "La cuenta está en proceso de eliminación." },
+  already_used: { status: 410, error: "El código ya se ha utilizado. Solicita uno nuevo." },
+  expired: { status: 410, error: "El código ha expirado. Solicita uno nuevo." },
+  too_many_attempts: { status: 429, error: "Demasiados intentos. Solicita un nuevo código." },
+};
 
 export async function POST(request: Request) {
   try {
@@ -20,22 +24,43 @@ export async function POST(request: Request) {
       );
     }
 
+    const supabase = getServiceRoleClient();
+    if (!supabase) {
+      console.error("[signatures/verify-otp] falta configuración de service role");
+      return NextResponse.json(
+        { error: "El servicio de firma no está disponible en este momento." },
+        { status: 503 }
+      );
+    }
+
     const body = await request.json();
-    const signature_id = body.signature_id;
+    const token = typeof body.token === "string" ? body.token : "";
     const code = sanitizeText(body.code || "", 6);
 
-    if (!signature_id || !isValidUuid(signature_id)) {
-      return NextResponse.json({ error: "signature_id invalido" }, { status: 400 });
+    if (!token) {
+      return NextResponse.json({ error: "Falta token" }, { status: 400 });
     }
     if (!code || code.length !== 6 || !/^\d{6}$/.test(code)) {
       return NextResponse.json({ error: "Código invalido" }, { status: 400 });
     }
 
+    const { data: sig, error: sigErr } = await supabase
+      .from("digital_signatures")
+      .select("id, status")
+      .eq("public_token_hash", hashSignatureToken(token))
+      .single();
+    if (sigErr || !sig) {
+      return NextResponse.json({ error: "Firma no encontrada" }, { status: 404 });
+    }
+    if (sig.status !== "pending") {
+      return NextResponse.json({ error: "Esta firma ya se ha completado" }, { status: 409 });
+    }
+
     // Find the latest unused OTP for this signature
     const { data: otp, error: otpErr } = await supabase
       .from("signature_otps")
-      .select("*")
-      .eq("signature_id", signature_id)
+      .select("id")
+      .eq("signature_id", sig.id)
       .eq("used", false)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -45,54 +70,50 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No hay código OTP pendiente" }, { status: 404 });
     }
 
-    // Check expiry
-    if (new Date(otp.expires_at) < new Date()) {
-      return NextResponse.json({ error: "El código ha expirado. Solicita uno nuevo." }, { status: 410 });
+    // Atomically re-validates not-used/not-expired/attempts and increments
+    // attempts, checking the account-deletion lock server-side.
+    const { data: attemptResult, error: attemptErr } = await supabase.rpc(
+      "record_signature_otp_attempt_locked",
+      { p_otp_id: otp.id }
+    );
+    if (attemptErr) {
+      return NextResponse.json({ error: attemptErr.message }, { status: 500 });
     }
-
-    // Check max attempts
-    if (otp.attempts >= 5) {
-      return NextResponse.json({ error: "Demasiados intentos. Solicita un nuevo código." }, { status: 429 });
+    const attempt = attemptResult as { ok: boolean; reason?: string; otp?: { code: string; attempts: number } };
+    if (!attempt.ok || !attempt.otp) {
+      const mapped = REASON_MESSAGES[attempt.reason || ""] || { status: 400, error: "No se pudo verificar el código" };
+      return NextResponse.json({ error: mapped.error }, { status: mapped.status });
     }
-
-    // Increment attempts
-    await supabase
-      .from("signature_otps")
-      .update({ attempts: otp.attempts + 1 })
-      .eq("id", otp.id);
 
     // Verify code using timing-safe comparison to prevent timing attacks
     const codeMatch = crypto.timingSafeEqual(
-      Buffer.from(otp.code),
-      Buffer.from(code.trim().padEnd(otp.code.length))
+      Buffer.from(attempt.otp.code),
+      Buffer.from(code.trim().padEnd(attempt.otp.code.length))
     );
     if (!codeMatch) {
       return NextResponse.json(
-        { error: `Código incorrecto. Te quedan ${4 - otp.attempts} intentos.` },
+        { error: `Código incorrecto. Te quedan ${Math.max(0, 5 - attempt.otp.attempts)} intentos.` },
         { status: 401 }
       );
     }
 
-    // Mark OTP as used
-    await supabase
-      .from("signature_otps")
-      .update({ used: true, used_at: new Date().toISOString() })
-      .eq("id", otp.id);
+    // Only marks digital_signatures as signed if a conditioned UPDATE on
+    // signature_otps confirms, in the same statement, that the OTP belongs
+    // to this signature, is unused, unexpired and within the attempt limit.
+    const { data: signResult, error: signErr } = await supabase.rpc(
+      "mark_signature_signed_locked",
+      { p_otp_id: otp.id, p_signature_id: sig.id }
+    );
+    if (signErr) {
+      return NextResponse.json({ error: signErr.message }, { status: 500 });
+    }
+    const signed = signResult as { ok: boolean; reason?: string; signed_at?: string };
+    if (!signed.ok) {
+      const mapped = REASON_MESSAGES[signed.reason || ""] || { status: 400, error: "No se pudo verificar el código" };
+      return NextResponse.json({ error: mapped.error }, { status: mapped.status });
+    }
 
-    // Mark signature as verified and signed
-    const now = new Date().toISOString();
-    await supabase
-      .from("digital_signatures")
-      .update({
-        otp_verified: true,
-        otp_verified_at: now,
-        status: "signed",
-        signed_at: now,
-        updated_at: now,
-      })
-      .eq("id", signature_id);
-
-    return NextResponse.json({ success: true, signed_at: now });
+    return NextResponse.json({ success: true, signed_at: signed.signed_at });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Error interno" },

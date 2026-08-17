@@ -1,21 +1,35 @@
 #!/usr/bin/env python3
 """
-Professional Budget PDF Generator for ENLAZE
-Generates A4 PDF with:
-- Cover page with company + client info
-- One page per partida/estancia grouping
-- Company NIF, signature blocks on each page
-- Totals summary page with dual signatures
+Presupix-format Budget PDF Generator for ENLAZE
+
+Mirrors the "cliente" HTML layout produced by lib/pdf-generator.ts
+(renderPresupixClientHTML) as a single continuous A4 document:
+  - Header (company data + PRESUPUESTO title/N.o/Fecha/Validez) on page 1
+  - CLIENTE block
+  - Item table (Nº | Descripción | Cantidad | Ud | Precio unit. | Total),
+    grouped into one section per chapter (or a single section named after
+    the budget title when there is only one chapter)
+  - Subtotal / Descuento / Base imponible / IVA / TOTAL breakdown box
+    (Descuento row only shown when the budget has a discount applied)
+  - Notas, Método de cobro, Forma de pago (payment_schedule if defined,
+    otherwise the classic anticipo + resto fallback)
+  - TOTAL repetido
+  - Plazo de ejecución / Garantía / Observaciones / Condiciones
+  - Firmas (empresa + cliente)
+
+Uses a two-pass render (dry run to count pages, then the real render) so the
+footer can show "Página X de N" correctly, same technique as before.
 """
 
 import json
 import sys
+import io
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm, cm
-from reportlab.lib.colors import HexColor, black, white, Color
+from reportlab.lib.units import mm
+from reportlab.lib.colors import HexColor, white
 from reportlab.pdfgen import canvas
-from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 from reportlab.platypus import Table, TableStyle
+from reportlab.lib.utils import ImageReader
 from datetime import datetime
 
 # ── Colors ──────────────────────────────────────────────────────────────────
@@ -26,97 +40,128 @@ NAVY_500 = HexColor("#475569")
 NAVY_200 = HexColor("#cbd5e1")
 GRAY_50 = HexColor("#f8fafc")
 GRAY_100 = HexColor("#f1f5f9")
+DISCOUNT_RED = HexColor("#b91c1c")
 WHITE = white
 
 W, H = A4  # 210mm x 297mm
 
+LEFT_X = 15 * mm
+RIGHT_X = W - 15 * mm
+CONTENT_W = W - 30 * mm
+BOTTOM_MARGIN = 25 * mm
 
-# Global page counter — set by generate_pdf, read by draw_footer
-_page_counter = [0, 0]  # [current_page, total_pages]
+HEADER_ROW = ["Nº", "Descripción", "Cantidad", "Ud", "Precio unit.", "Total"]
+COL_WIDTHS = [10 * mm, 77 * mm, 20 * mm, 15 * mm, 26 * mm, 32 * mm]
+
+UNIT_LABELS = {"ud": "ud", "m2": "m²", "ml": "ml", "h": "h", "kg": "kg", "global": "global"}
+
+CHAPTER_FALLBACK_LABELS = {
+    "fontaneria": "Fontanería",
+    "electricidad": "Electricidad",
+    "albanileria": "Albañilería",
+    "pintura": "Pintura",
+    "carpinteria": "Carpintería",
+    "climatizacion": "Climatización",
+    "reforma": "Reforma integral",
+    "multiservicios": "Multiservicios",
+    "material": "Material",
+    "mano_obra": "Mano de obra",
+    "maquinaria": "Maquinaria",
+    "otros": "Otros",
+    "general": "General",
+}
+
 
 def safe(d, key, default=""):
     """Get value from dict, returning default if key is missing or value is None."""
     v = d.get(key, default)
     return v if v is not None else default
 
-def fmt(n):
-    """Format number as currency string."""
+
+def fmt_num(n):
+    """Format a number as '1.234,56' (Spanish thousands/decimal separators)."""
     if n is None:
         n = 0
-    return f"{n:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " EUR"
+    return f"{n:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-def draw_header(c, budget, company, page_num=0, total_pages=0):
-    """Draw consistent header on every page."""
-    # Top bar
-    c.setFillColor(NAVY_900)
-    c.rect(0, H - 28*mm, W, 28*mm, fill=1, stroke=0)
 
-    # Logo
-    c.setFillColor(WHITE)
-    c.setFont("Helvetica-Bold", 22)
-    c.drawString(15*mm, H - 20*mm, "enlaze")
-    c.setFillColor(BRAND_GREEN)
-    c.drawString(15*mm + c.stringWidth("enl", "Helvetica-Bold", 22), H - 20*mm, "a")
-    c.setFillColor(WHITE)
-    c.drawString(15*mm + c.stringWidth("enla", "Helvetica-Bold", 22), H - 20*mm, "ze")
+def fmt(n):
+    """Format a number as currency, e.g. '1.234,56 €'."""
+    return fmt_num(n) + " €"
 
-    # Budget number + date
-    c.setFont("Helvetica", 9)
-    c.setFillColor(HexColor("#94a3b8"))
-    c.drawRightString(W - 15*mm, H - 13*mm, f"{safe(budget, 'budget_number', '')}")
-    c.drawRightString(W - 15*mm, H - 19*mm, f"Fecha: {safe(budget, 'date', '')}")
-    if safe(budget, 'valid_until'):
-        c.drawRightString(W - 15*mm, H - 25*mm, f"Valido hasta: {budget['valid_until']}")
 
-    # Company info line below header
-    c.setFillColor(GRAY_100)
-    c.rect(0, H - 38*mm, W, 10*mm, fill=1, stroke=0)
-    c.setFont("Helvetica-Bold", 8)
-    c.setFillColor(NAVY_700)
-    company_line = safe(company, 'name', '')
-    if safe(company, 'nif'):
-        company_line += f"  |  NIF: {company['nif']}"
-    if safe(company, 'address'):
-        company_line += f"  |  {company['address']}"
-    if safe(company, 'phone'):
-        company_line += f"  |  Tel: {company['phone']}"
-    if safe(company, 'email'):
-        company_line += f"  |  {company['email']}"
-    c.drawString(15*mm, H - 35*mm, company_line)
+def unit_label(u):
+    return UNIT_LABELS.get(u, u or "ud")
 
-def draw_footer(c, company):
-    """Draw footer with company info and page number."""
-    c.setStrokeColor(NAVY_200)
-    c.setLineWidth(0.5)
-    c.line(15*mm, 18*mm, W - 15*mm, 18*mm)
 
-    c.setFont("Helvetica", 7)
-    c.setFillColor(NAVY_500)
-    c.drawString(15*mm, 13*mm, f"Presupuesto generado con Enlaze | enlaze.es")
-    c.drawRightString(W - 15*mm, 13*mm, "Este presupuesto tiene validez contractual una vez aceptado por ambas partes.")
+def wrap_text(c, text, font, size, max_width):
+    words = text.split()
+    lines = []
+    line = ""
+    for w in words:
+        test = (line + " " + w).strip()
+        if not line or c.stringWidth(test, font, size) <= max_width:
+            line = test
+        else:
+            lines.append(line)
+            line = w
+    if line:
+        lines.append(line)
+    return lines or [""]
 
-    # Page number (skip cover page)
-    cur, total = _page_counter
-    if cur > 0:
-        c.drawRightString(W - 15*mm, 8*mm, f"Pagina {cur} de {total}")
+
+def wrap_multiline(c, text, font, size, max_width):
+    lines = []
+    for para in str(text).split("\n"):
+        if para.strip() == "":
+            lines.append("")
+            continue
+        lines.extend(wrap_text(c, para, font, size, max_width))
+    return lines
+
+
+def draw_company_logo(c, company, x, y, max_w, max_h):
+    """Draw the uploaded company logo while preserving its aspect ratio."""
+    logo_path = safe(company, "logo_path")
+    if not logo_path:
+        return False
+    try:
+        image = ImageReader(logo_path)
+        width, height = image.getSize()
+        if not width or not height:
+            return False
+        scale = min(max_w / width, max_h / height)
+        draw_w = width * scale
+        draw_h = height * scale
+        c.drawImage(
+            image,
+            x,
+            y + (max_h - draw_h) / 2,
+            width=draw_w,
+            height=draw_h,
+            preserveAspectRatio=True,
+            mask="auto",
+        )
+        return True
+    except Exception:
+        return False
+
 
 def draw_signature_blocks(c, y, company, client_name):
     """Draw dual signature blocks (company + client)."""
-    block_w = 75*mm
-    left_x = 15*mm
-    right_x = W - 15*mm - block_w
+    block_w = 75 * mm
+    left_x = LEFT_X
+    right_x = RIGHT_X - block_w
 
-    # Company signature
     c.setFont("Helvetica-Bold", 9)
     c.setFillColor(NAVY_900)
-    c.drawString(left_x, y, "Por la empresa:")
+    c.drawString(left_x, y, "Firma del profesional:")
     c.setFont("Helvetica", 8)
     c.setFillColor(NAVY_500)
-    c.drawString(left_x, y - 14, safe(company, 'name', ''))
-    if safe(company, 'nif'):
+    c.drawString(left_x, y - 14, safe(company, "name", ""))
+    if safe(company, "nif"):
         c.drawString(left_x, y - 26, f"NIF: {company['nif']}")
 
-    # Signature line
     c.setStrokeColor(NAVY_200)
     c.setLineWidth(0.5)
     c.line(left_x, y - 55, left_x + block_w, y - 55)
@@ -124,10 +169,9 @@ def draw_signature_blocks(c, y, company, client_name):
     c.setFillColor(NAVY_500)
     c.drawString(left_x, y - 63, "Firma y sello")
 
-    # Client signature
     c.setFont("Helvetica-Bold", 9)
     c.setFillColor(NAVY_900)
-    c.drawString(right_x, y, "Por el cliente:")
+    c.drawString(right_x, y, "Firma del cliente:")
     c.setFont("Helvetica", 8)
     c.setFillColor(NAVY_500)
     c.drawString(right_x, y - 14, client_name or "")
@@ -137,538 +181,523 @@ def draw_signature_blocks(c, y, company, client_name):
     c.setFillColor(NAVY_500)
     c.drawString(right_x, y - 63, "Firma del cliente")
 
-    # Date line
     c.setFont("Helvetica", 8)
     c.setFillColor(NAVY_500)
-    date_y = y - 80
-    c.drawString(left_x, date_y, f"En _________________, a ______ de _________________ de {datetime.now().year}")
+    c.drawString(left_x, y - 80, f"En _________________, a ______ de _________________ de {datetime.now().year}")
 
 
-def draw_cover_page(c, budget, company, items):
-    """Page 1: Cover with company info, client info, and summary."""
-    # Full green accent bar on left
-    c.setFillColor(BRAND_GREEN)
-    c.rect(0, 0, 6*mm, H, fill=1, stroke=0)
-
-    # Large title area
-    c.setFillColor(NAVY_900)
-    c.rect(6*mm, H - 90*mm, W - 6*mm, 90*mm, fill=1, stroke=0)
-
-    # Logo big
-    c.setFillColor(WHITE)
-    c.setFont("Helvetica-Bold", 36)
-    c.drawString(25*mm, H - 40*mm, "enlaze")
-    c.setFillColor(BRAND_GREEN)
-    logo_x = 25*mm + c.stringWidth("enl", "Helvetica-Bold", 36)
-    c.drawString(logo_x, H - 40*mm, "a")
-    c.setFillColor(WHITE)
-    c.drawString(logo_x + c.stringWidth("a", "Helvetica-Bold", 36), H - 40*mm, "ze")
-
-    # Title
-    c.setFont("Helvetica-Bold", 24)
-    c.setFillColor(WHITE)
-    c.drawString(25*mm, H - 60*mm, "PRESUPUESTO")
-
-    # Budget number
-    c.setFont("Helvetica", 14)
-    c.setFillColor(BRAND_GREEN)
-    c.drawString(25*mm, H - 72*mm, safe(budget, 'budget_number', ''))
-
-    # Title of the budget
-    c.setFont("Helvetica", 12)
-    c.setFillColor(HexColor("#94a3b8"))
-    title = safe(budget, 'title', '')
-    if len(title) > 60:
-        title = title[:57] + "..."
-    c.drawString(25*mm, H - 82*mm, title)
-
-    y = H - 105*mm
-
-    # Company info block — placed on the LEFT half
-    left_x = 25*mm
-    right_x = W / 2 + 5*mm
-    block_top = y + 40
-
-    c.setFillColor(BRAND_GREEN)
-    c.rect(left_x, y - 15, 4, 55, fill=1, stroke=0)
-
-    c.setFont("Helvetica-Bold", 9)
-    c.setFillColor(BRAND_GREEN)
-    c.drawString(left_x + 7, block_top, "DATOS DE LA EMPRESA")
-
-    c.setFont("Helvetica-Bold", 11)
-    c.setFillColor(NAVY_900)
-    c.drawString(left_x + 7, block_top - 16, safe(company, 'name', 'Sin nombre de empresa'))
-
-    info_y = block_top - 30
-    c.setFont("Helvetica", 9)
-    c.setFillColor(NAVY_500)
-    if safe(company, 'nif'):
-        c.drawString(left_x + 7, info_y, f"NIF/CIF: {company['nif']}")
-        info_y -= 12
-    if safe(company, 'address'):
-        addr = company['address']
-        if len(addr) > 40:
-            addr = addr[:37] + "..."
-        c.drawString(left_x + 7, info_y, addr)
-        info_y -= 12
-    if safe(company, 'phone'):
-        c.drawString(left_x + 7, info_y, f"Tel: {company['phone']}")
-        info_y -= 12
-    if safe(company, 'email'):
-        c.drawString(left_x + 7, info_y, company['email'])
-
-    # Client info block — placed on the RIGHT half (same vertical level)
-    c.setFillColor(NAVY_700)
-    c.rect(right_x, y - 15, 4, 55, fill=1, stroke=0)
-
-    c.setFont("Helvetica-Bold", 9)
-    c.setFillColor(NAVY_700)
-    c.drawString(right_x + 7, block_top, "DATOS DEL CLIENTE")
-
-    c.setFont("Helvetica-Bold", 11)
-    c.setFillColor(NAVY_900)
-    c.drawString(right_x + 7, block_top - 16, safe(budget, 'client_name', 'Sin cliente'))
-
-    info_y = block_top - 30
-    c.setFont("Helvetica", 9)
-    c.setFillColor(NAVY_500)
-    if safe(budget, 'client_email'):
-        c.drawString(right_x + 7, info_y, f"Email: {budget['client_email']}")
-        info_y -= 12
-    if safe(budget, 'client_phone'):
-        c.drawString(right_x + 7, info_y, f"Tel: {budget['client_phone']}")
-        info_y -= 12
-    if safe(budget, 'client_address'):
-        addr = budget['client_address']
-        if len(addr) > 35:
-            addr = addr[:32] + "..."
-        c.drawString(right_x + 7, info_y, f"Dir: {addr}")
-
-    y = y - 35
-
-    # Summary box
-    c.setFillColor(GRAY_50)
-    c.roundRect(25*mm, y - 60, W - 50*mm, 55, 6, fill=1, stroke=0)
-
-    c.setStrokeColor(BRAND_GREEN)
-    c.setLineWidth(2)
-    c.line(25*mm, y - 5, 25*mm + W - 50*mm, y - 5)
-
-    c.setFont("Helvetica-Bold", 10)
-    c.setFillColor(NAVY_900)
-    c.drawString(30*mm, y - 18, "RESUMEN")
-
-    subtotal = float(budget.get('subtotal') or 0)
-    iva_pct = float(budget.get('iva_percent') or 21)
-    iva_amount = float(budget.get('iva_amount') or 0)
-    total = float(budget.get('total') or 0)
-
-    c.setFont("Helvetica", 10)
-    c.setFillColor(NAVY_500)
-    c.drawString(30*mm, y - 32, "Subtotal")
-    c.drawRightString(W - 30*mm, y - 32, fmt(subtotal))
-
-    c.drawString(30*mm, y - 44, f"IVA ({iva_pct}%)")
-    c.drawRightString(W - 30*mm, y - 44, fmt(iva_amount))
-
-    c.setFont("Helvetica-Bold", 14)
-    c.setFillColor(BRAND_GREEN)
-    c.drawString(30*mm, y - 58, "TOTAL")
-    c.drawRightString(W - 30*mm, y - 58, fmt(total))
-
-    # Date info
-    y = y - 80
-    c.setFont("Helvetica", 9)
-    c.setFillColor(NAVY_500)
-    c.drawString(25*mm, y, f"Fecha de emision: {safe(budget, 'date', '')}")
-    if safe(budget, 'valid_until'):
-        c.drawString(25*mm, y - 14, f"Valido hasta: {budget['valid_until']}")
-
-    c.drawString(25*mm, y - 28, f"Numero de partidas: {len(items)}")
-
-    # Footer on cover
+def draw_footer_line(c, company, page_num, total_pages):
+    c.setStrokeColor(NAVY_200)
+    c.setLineWidth(0.5)
+    c.line(LEFT_X, 15 * mm, RIGHT_X, 15 * mm)
     c.setFont("Helvetica", 7)
     c.setFillColor(NAVY_500)
-    c.drawCentredString(W / 2, 10*mm, "Presupuesto generado con Enlaze | enlaze.es")
+    c.drawString(LEFT_X, 10 * mm, f"{safe(company, 'name', '')} · Presupuesto generado con Enlaze")
+    if total_pages:
+        c.drawRightString(RIGHT_X, 10 * mm, f"Página {page_num} de {total_pages}")
 
 
-def _build_table_style(num_rows, is_subtotal_row=True):
-    """Build a consistent table style for partida tables."""
-    last_body = -2 if is_subtotal_row else -1
-    style_cmds = [
-        # Header
-        ('BACKGROUND', (0, 0), (-1, 0), NAVY_900),
-        ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 8),
-        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-        ('ALIGN', (2, 0), (2, -1), 'CENTER'),
-        ('ALIGN', (3, 0), (3, -1), 'CENTER'),
-        ('ALIGN', (4, 0), (-1, -1), 'RIGHT'),
-        # Body
-        ('FONTNAME', (0, 1), (-1, last_body), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, last_body), 8),
-        ('TEXTCOLOR', (0, 1), (-1, last_body), NAVY_700),
-        ('ROWBACKGROUNDS', (0, 1), (-1, last_body), [WHITE, GRAY_50]),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        # Grid
-        ('GRID', (0, 0), (-1, -1), 0.5, NAVY_200),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ('LEFTPADDING', (0, 0), (-1, -1), 4),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
-    ]
-    if is_subtotal_row:
-        style_cmds += [
-            ('BACKGROUND', (0, -1), (-1, -1), GRAY_100),
-            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, -1), (-1, -1), 9),
-            ('TEXTCOLOR', (0, -1), (-1, -1), NAVY_900),
-        ]
-    return TableStyle(style_cmds)
+def build_sections(budget, items):
+    """Group items into Presupix sections, mirroring buildPresupixSections()
+    in lib/pdf-generator.ts: a single section named after the budget title
+    when there's zero or one distinct chapter, otherwise one section per
+    chapter (+ 'Otros' for items without a chapter)."""
+    chapters = {}
+    order = []
+    for item in items:
+        ch = safe(item, "chapter")
+        if ch:
+            if ch not in chapters:
+                chapters[ch] = []
+                order.append(ch)
+            chapters[ch].append(item)
 
+    if len(order) <= 1:
+        return [{"label": safe(budget, "title", "Presupuesto"), "items": items}]
 
-COL_WIDTHS = [10*mm, 72*mm, 15*mm, 18*mm, 25*mm, 28*mm]
-HEADER_ROW = ["#", "Concepto", "Ud.", "Cant.", "Precio Ud.", "Importe"]
-# Usable area: below page header (48mm from top) to above footer/signatures (40mm from bottom)
-TOP_Y = H - 48*mm
-BOTTOM_Y = 40*mm
-# Space needed for chapter title block
-TITLE_BLOCK_H = 25
-# Space needed for signature blocks
-SIGNATURE_H = 95
+    sections = []
+    for ch in order:
+        label = CHAPTER_FALLBACK_LABELS.get(ch, ch.replace("_", " ").strip().capitalize())
+        sections.append({"label": label, "items": chapters[ch]})
+
+    unassigned = [i for i in items if not safe(i, "chapter")]
+    if unassigned:
+        sections.append({"label": "Otros", "items": unassigned})
+
+    return sections
 
 
 def _format_item_row(idx, item):
-    """Format a single item into a table row."""
-    concept = safe(item, 'concept', '')
-    if len(concept) > 45:
-        concept = concept[:42] + "..."
-    desc = safe(item, 'description', '')
+    concept = safe(item, "concept", "")
+    if len(concept) > 48:
+        concept = concept[:45] + "..."
+    desc = safe(item, "description", "")
     if desc:
-        if len(desc) > 55:
-            desc = desc[:52] + "..."
+        if len(desc) > 60:
+            desc = desc[:57] + "..."
         concept = concept + "\n" + desc
-    return [
-        str(idx),
-        concept,
-        safe(item, 'unit', 'ud'),
-        f"{float(item.get('quantity') or 0):.2f}",
-        f"{float(item.get('unit_price') or 0):.2f}",
-        f"{float(item.get('subtotal') or 0):.2f}",
+    qty = float(item.get("quantity") or 0)
+    price = float(item.get("unit_price") or 0)
+    subtotal = float(item.get("subtotal") or 0)
+    return [str(idx), concept, f"{qty:.2f}", unit_label(safe(item, "unit", "ud")), fmt(price), fmt(subtotal)]
+
+
+def _entry_to_row(entry):
+    kind = entry[0]
+    if kind == "section":
+        return [entry[1], "", "", "", "", ""]
+    if kind == "subtotal":
+        return [f"Subtotal · {entry[1]}", "", "", "", "", fmt(entry[2])]
+    return entry[1]  # 'item' -> already a formatted row
+
+
+def _style_for_chunk(rows_meta):
+    cmds = [
+        ("BACKGROUND", (0, 0), (-1, 0), NAVY_900),
+        ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 8),
+        ("ALIGN", (0, 0), (0, -1), "CENTER"),
+        ("ALIGN", (2, 0), (3, -1), "CENTER"),
+        ("ALIGN", (4, 0), (-1, -1), "RIGHT"),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("GRID", (0, 0), (-1, -1), 0.5, NAVY_200),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
     ]
-
-
-def draw_partida_pages(c, budget, company, chapter_name, chapter_items, chapter_idx, total_chapters):
-    """Draw chapter pages, splitting across multiple pages if needed. Returns number of pages used."""
-    ch_subtotal = sum(float(i.get('subtotal') or 0) for i in chapter_items)
-    pages_used = 0
-
-    # Build all item rows
-    all_rows = []
-    for idx, item in enumerate(chapter_items, 1):
-        all_rows.append(_format_item_row(idx, item))
-
-    # Split rows into page-sized chunks
-    row_idx = 0
-    is_first_page = True
-
-    while row_idx < len(all_rows):
-        global _page_counter
-        if pages_used > 0:
-            # Increment page counter for continuation pages
-            _page_counter = [_page_counter[0] + 1, _page_counter[1]]
-        draw_header(c, budget, company)
-        draw_footer(c, company)
-
-        y = TOP_Y
-
-        # Chapter header (on every page of this chapter)
-        c.setFillColor(BRAND_GREEN)
-        c.rect(15*mm, y - 2, 4, 18, fill=1, stroke=0)
-
-        c.setFont("Helvetica-Bold", 14)
-        c.setFillColor(NAVY_900)
-        if is_first_page:
-            c.drawString(22*mm, y + 6, f"{chapter_idx}. {chapter_name}")
+    for i, meta in enumerate(rows_meta, start=1):  # row 0 is HEADER_ROW
+        kind = meta[0]
+        if kind == "section":
+            cmds += [
+                ("SPAN", (0, i), (-1, i)),
+                ("BACKGROUND", (0, i), (-1, i), GRAY_100),
+                ("FONTNAME", (0, i), (-1, i), "Helvetica-Bold"),
+                ("FONTSIZE", (0, i), (-1, i), 9),
+                ("TEXTCOLOR", (0, i), (-1, i), NAVY_900),
+                ("ALIGN", (0, i), (-1, i), "LEFT"),
+            ]
+        elif kind == "subtotal":
+            cmds += [
+                ("SPAN", (0, i), (4, i)),
+                ("BACKGROUND", (0, i), (-1, i), GRAY_100),
+                ("FONTNAME", (0, i), (-1, i), "Helvetica-Bold"),
+                ("FONTSIZE", (0, i), (-1, i), 8.5),
+                ("TEXTCOLOR", (0, i), (-1, i), NAVY_900),
+                ("ALIGN", (0, i), (4, i), "RIGHT"),
+            ]
         else:
-            c.drawString(22*mm, y + 6, f"{chapter_idx}. {chapter_name} (cont.)")
-
-        c.setFont("Helvetica", 9)
-        c.setFillColor(NAVY_500)
-        c.drawString(22*mm, y - 8, f"Partida {chapter_idx} de {total_chapters}")
-
-        y -= TITLE_BLOCK_H
-
-        # Calculate available space for this page
-        available_h = y - BOTTOM_Y
-
-        # Determine how many rows fit on this page
-        # Build table incrementally to measure
-        rows_this_page = []
-        remaining = len(all_rows) - row_idx
-        is_last_chunk = False
-
-        for i in range(remaining):
-            test_rows = [HEADER_ROW] + rows_this_page + [all_rows[row_idx + i]]
-            # Check if this is the last row — if so, add subtotal
-            is_potentially_last = (row_idx + i + 1 >= len(all_rows))
-            if is_potentially_last:
-                test_rows.append(["", f"Subtotal {chapter_name}", "", "", "", f"{ch_subtotal:.2f}"])
-
-            t = Table(test_rows, colWidths=COL_WIDTHS)
-            t.setStyle(_build_table_style(len(test_rows), is_subtotal_row=is_potentially_last))
-            tw, th = t.wrap(W - 30*mm, available_h)
-
-            # Reserve space for signatures on the last chunk
-            min_bottom = SIGNATURE_H if is_potentially_last else 10
-            if th > available_h - min_bottom and len(rows_this_page) > 0:
-                # This row doesn't fit, stop here
-                break
-            rows_this_page.append(all_rows[row_idx + i])
-            if is_potentially_last:
-                is_last_chunk = True
-
-        if len(rows_this_page) == 0:
-            # Single row too tall — force it anyway
-            rows_this_page.append(all_rows[row_idx])
-            is_last_chunk = (row_idx + 1 >= len(all_rows))
-
-        # Build final table for this page
-        table_data = [HEADER_ROW] + rows_this_page
-        if is_last_chunk:
-            table_data.append(["", f"Subtotal {chapter_name}", "", "", "", f"{ch_subtotal:.2f}"])
-
-        t = Table(table_data, colWidths=COL_WIDTHS)
-        t.setStyle(_build_table_style(len(table_data), is_subtotal_row=is_last_chunk))
-        tw, th = t.wrap(W - 30*mm, available_h)
-        t.drawOn(c, 15*mm, y - th)
-
-        # Signature blocks on the last page of this chapter
-        if is_last_chunk:
-            sig_y = y - th - 15
-            if sig_y > BOTTOM_Y + SIGNATURE_H:
-                draw_signature_blocks(c, BOTTOM_Y + SIGNATURE_H - 10, company, safe(budget, 'client_name', ''))
-
-        row_idx += len(rows_this_page)
-        pages_used += 1
-        is_first_page = False
-
-        if row_idx < len(all_rows):
-            c.showPage()
-
-    return pages_used
+            cmds += [
+                ("FONTNAME", (0, i), (-1, i), "Helvetica"),
+                ("FONTSIZE", (0, i), (-1, i), 8),
+                ("TEXTCOLOR", (0, i), (-1, i), NAVY_700),
+            ]
+    return TableStyle(cmds)
 
 
-def draw_totals_page(c, budget, company, items, page_num, total_pages):
-    """Final summary page with totals and signatures."""
-    draw_header(c, budget, company, page_num, total_pages)
-    draw_footer(c, company)
+class DocBuilder:
+    """Flows Presupix-format content across as many A4 pages as needed."""
 
-    y = H - 50*mm
+    def __init__(self, canvas_obj, budget, company, items, total_pages=0):
+        self.c = canvas_obj
+        self.budget = budget
+        self.company = company
+        self.items = items
+        self.page_num = 0
+        self.total_pages = total_pages
+        self.y = 0
 
-    # Title
-    c.setFont("Helvetica-Bold", 16)
-    c.setFillColor(NAVY_900)
-    c.drawString(15*mm, y, "RESUMEN GENERAL DEL PRESUPUESTO")
-    y -= 8
-    c.setStrokeColor(BRAND_GREEN)
-    c.setLineWidth(2)
-    c.line(15*mm, y, 100*mm, y)
-    y -= 20
+    # ── page management ──────────────────────────────────────────────────
+    def new_page(self, first=False):
+        if self.page_num > 0:
+            self.draw_footer()
+            self.c.showPage()
+        self.page_num += 1
+        if first:
+            self.y = self.draw_full_header()
+        else:
+            self.y = self.draw_compact_header()
 
-    # Group by chapter and show subtotals
-    chapters = {}
-    for item in items:
-        ch = safe(item, 'chapter') or safe(item, 'category', 'General') or 'General'
-        if ch not in chapters:
-            chapters[ch] = []
-        chapters[ch].append(item)
+    def ensure_space(self, needed):
+        if self.y - needed < BOTTOM_MARGIN:
+            self.new_page()
 
-    table_data = [["Partida", "Importe"]]
-    for ch_name, ch_items in chapters.items():
-        ch_total = sum(float(i.get('subtotal') or 0) for i in ch_items)
-        table_data.append([ch_name, f"{ch_total:.2f} EUR"])
+    def draw_footer(self):
+        draw_footer_line(self.c, self.company, self.page_num, self.total_pages)
 
-    col_widths = [120*mm, 40*mm]
-    t = Table(table_data, colWidths=col_widths)
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), NAVY_900),
-        ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 9),
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 9),
-        ('TEXTCOLOR', (0, 1), (-1, -1), NAVY_700),
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-        ('GRID', (0, 0), (-1, -1), 0.5, NAVY_200),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [WHITE, GRAY_50]),
-        ('TOPPADDING', (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-        ('LEFTPADDING', (0, 0), (-1, -1), 6),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-    ]))
+    # ── header / client block ────────────────────────────────────────────
+    def draw_full_header(self):
+        c, budget, company = self.c, self.budget, self.company
+        top = H - 15 * mm
 
-    tw, th = t.wrap(W - 30*mm, 200)
-    t.drawOn(c, 15*mm, y - th)
-    y = y - th - 15
-
-    # Totals box
-    subtotal = float(budget.get('subtotal') or 0)
-    iva_pct = float(budget.get('iva_percent') or 21)
-    iva_amount = float(budget.get('iva_amount') or 0)
-    total = float(budget.get('total') or 0)
-
-    box_x = W - 15*mm - 80*mm
-    box_w = 80*mm
-
-    c.setFillColor(GRAY_50)
-    c.roundRect(box_x, y - 65, box_w, 60, 4, fill=1, stroke=0)
-    c.setStrokeColor(BRAND_GREEN)
-    c.setLineWidth(1.5)
-    c.line(box_x, y - 5, box_x + box_w, y - 5)
-
-    c.setFont("Helvetica", 10)
-    c.setFillColor(NAVY_500)
-    c.drawString(box_x + 5, y - 20, "Subtotal")
-    c.drawRightString(box_x + box_w - 5, y - 20, fmt(subtotal))
-
-    c.drawString(box_x + 5, y - 35, f"IVA ({iva_pct}%)")
-    c.drawRightString(box_x + box_w - 5, y - 35, fmt(iva_amount))
-
-    c.setStrokeColor(NAVY_200)
-    c.setLineWidth(0.5)
-    c.line(box_x + 5, y - 42, box_x + box_w - 5, y - 42)
-
-    c.setFont("Helvetica-Bold", 14)
-    c.setFillColor(BRAND_GREEN)
-    c.drawString(box_x + 5, y - 58, "TOTAL")
-    c.drawRightString(box_x + box_w - 5, y - 58, fmt(total))
-
-    y = y - 85
-
-    # Notes
-    notes = safe(budget, 'notes', '')
-    if notes:
-        c.setFont("Helvetica-Bold", 10)
-        c.setFillColor(NAVY_900)
-        c.drawString(15*mm, y, "NOTAS Y CONDICIONES")
-        y -= 5
-        c.setStrokeColor(BRAND_GREEN)
-        c.setLineWidth(1)
-        c.line(15*mm, y, 70*mm, y)
-        y -= 12
+        logo_drawn = draw_company_logo(c, company, LEFT_X, top - 22 * mm, 50 * mm, 20 * mm)
+        if not logo_drawn:
+            c.setFont("Helvetica-Bold", 15)
+            c.setFillColor(NAVY_900)
+            c.drawString(LEFT_X, top - 6 * mm, safe(company, "name", "Mi Empresa")[:40])
+            info_y = top - 13 * mm
+        else:
+            info_y = top - 25 * mm
 
         c.setFont("Helvetica", 8)
         c.setFillColor(NAVY_500)
-        # Simple word wrap
-        words = notes.split()
-        line = ""
-        max_width = W - 30*mm
-        for word in words:
-            test = line + " " + word if line else word
-            if c.stringWidth(test, "Helvetica", 8) < max_width:
-                line = test
-            else:
-                c.drawString(15*mm, y, line)
-                y -= 11
-                line = word
-                if y < 100:
-                    break
-        if line:
-            c.drawString(15*mm, y, line)
-            y -= 11
+        info_lines = []
+        if safe(company, "nif"):
+            info_lines.append(f"NIF/CIF: {company['nif']}")
+        if safe(company, "address"):
+            info_lines.append(company["address"])
+        phone_email = " · ".join(
+            filter(None, [f"Tel: {company['phone']}" if safe(company, "phone") else "", safe(company, "email")])
+        )
+        if phone_email:
+            info_lines.append(phone_email)
+        for line in info_lines:
+            c.drawString(LEFT_X, info_y, line[:95])
+            info_y -= 4.2 * mm
 
-    # Signature blocks
-    sig_y = min(y - 10, 50*mm + 65)
-    if sig_y > 40*mm:
-        draw_signature_blocks(c, sig_y, company, safe(budget, 'client_name', ''))
+        c.setFont("Helvetica-Bold", 20)
+        c.setFillColor(NAVY_900)
+        c.drawRightString(RIGHT_X, top - 6 * mm, "PRESUPUESTO")
+
+        c.setFont("Helvetica", 9)
+        c.setFillColor(NAVY_500)
+        meta_y = top - 14 * mm
+        c.drawRightString(RIGHT_X, meta_y, f"N.º: {safe(budget, 'budget_number', '')}")
+        meta_y -= 4.5 * mm
+        c.drawRightString(RIGHT_X, meta_y, f"Fecha: {safe(budget, 'date', '')}")
+        if safe(budget, "valid_until"):
+            meta_y -= 4.5 * mm
+            c.drawRightString(RIGHT_X, meta_y, f"Validez: {budget['valid_until']}")
+
+        header_bottom = min(info_y, meta_y) - 4 * mm
+        c.setStrokeColor(NAVY_200)
+        c.setLineWidth(0.75)
+        c.line(LEFT_X, header_bottom, RIGHT_X, header_bottom)
+
+        return self.draw_client_block(header_bottom - 10 * mm)
+
+    def draw_client_block(self, y):
+        c, budget = self.c, self.budget
+        c.setFont("Helvetica-Bold", 8)
+        c.setFillColor(BRAND_GREEN)
+        c.drawString(LEFT_X, y, "CLIENTE")
+        y -= 5 * mm
+        c.setFont("Helvetica-Bold", 10)
+        c.setFillColor(NAVY_900)
+        c.drawString(LEFT_X, y, safe(budget, "client_name", "Sin cliente")[:60])
+        y -= 4.5 * mm
+        c.setFont("Helvetica", 8)
+        c.setFillColor(NAVY_500)
+        parts = []
+        if safe(budget, "client_nif"):
+            parts.append(f"NIF: {budget['client_nif']}")
+        if safe(budget, "client_address"):
+            parts.append(budget["client_address"])
+        if parts:
+            c.drawString(LEFT_X, y, " · ".join(parts)[:110])
+            y -= 4.2 * mm
+        contact = " · ".join(filter(None, [safe(budget, "client_phone"), safe(budget, "client_email")]))
+        if contact:
+            c.drawString(LEFT_X, y, contact[:110])
+            y -= 4.2 * mm
+        return y - 5 * mm
+
+    def draw_compact_header(self):
+        c, budget, company = self.c, self.budget, self.company
+        top = H - 15 * mm
+        c.setFont("Helvetica-Bold", 11)
+        c.setFillColor(NAVY_900)
+        c.drawString(LEFT_X, top - 4 * mm, safe(company, "name", "")[:50])
+        c.setFont("Helvetica", 8)
+        c.setFillColor(NAVY_500)
+        title = safe(budget, "title", "")
+        if len(title) > 40:
+            title = title[:37] + "..."
+        c.drawRightString(RIGHT_X, top - 4 * mm, f"{safe(budget, 'budget_number', '')} · {title}")
+        y = top - 9 * mm
+        c.setStrokeColor(NAVY_200)
+        c.setLineWidth(0.5)
+        c.line(LEFT_X, y, RIGHT_X, y)
+        return y - 8 * mm
+
+    # ── item table ────────────────────────────────────────────────────────
+    def draw_items(self):
+        sections = build_sections(self.budget, self.items)
+        show_section_header = len(sections) > 1
+
+        flat_rows = []
+        for section in sections:
+            if show_section_header:
+                flat_rows.append(("section", section["label"]))
+            for idx, item in enumerate(section["items"], 1):
+                flat_rows.append(("item", _format_item_row(idx, item)))
+            subtotal = sum(float(i.get("subtotal") or 0) for i in section["items"])
+            flat_rows.append(("subtotal", section["label"], subtotal))
+
+        row_idx = 0
+        while row_idx < len(flat_rows):
+            available_h = self.y - BOTTOM_MARGIN
+            rows_this_page = []
+            i = 0
+            while row_idx + i < len(flat_rows):
+                candidate = flat_rows[row_idx + i]
+                test_meta = rows_this_page + [candidate]
+                test_table = [HEADER_ROW] + [_entry_to_row(e) for e in test_meta]
+                t = Table(test_table, colWidths=COL_WIDTHS)
+                t.setStyle(_style_for_chunk(test_meta))
+                _, th = t.wrap(CONTENT_W, available_h)
+                if th > available_h and len(rows_this_page) > 0:
+                    break
+                rows_this_page.append(candidate)
+                i += 1
+                if th > available_h:
+                    # Forced a single oversized row onto the page; stop here.
+                    break
+
+            if not rows_this_page:
+                rows_this_page = [flat_rows[row_idx]]
+                i = 1
+
+            table_data = [HEADER_ROW] + [_entry_to_row(e) for e in rows_this_page]
+            t = Table(table_data, colWidths=COL_WIDTHS)
+            t.setStyle(_style_for_chunk(rows_this_page))
+            _, th = t.wrap(CONTENT_W, available_h)
+            t.drawOn(self.c, LEFT_X, self.y - th)
+            self.y -= th + 4 * mm
+
+            row_idx += i
+            if row_idx < len(flat_rows):
+                self.new_page()
+
+    # ── breakdown / notas / cobro / forma de pago / total / firmas ─────────
+    def draw_breakdown(self):
+        c, budget = self.c, self.budget
+        subtotal = float(budget.get("subtotal") or 0)
+        iva_pct = float(budget.get("iva_percent") or 21)
+        iva_amount = float(budget.get("iva_amount") or 0)
+        total = float(budget.get("total") or 0)
+        deposit_pct = float(budget.get("deposit_percent") or 30)
+        deposit_amount = round(total * deposit_pct / 100, 2)
+        pending_amount = round(total - deposit_amount, 2)
+
+        # Descuento: aplica sobre el subtotal (base imponible) antes del IVA.
+        discount_type = budget.get("discount_type") or "percent"
+        discount_pct = float(budget.get("discount_percent") or 0)
+        discount_amount_input = float(budget.get("discount_amount") or 0)
+        if discount_type == "amount":
+            discount_value = min(subtotal, max(0.0, discount_amount_input))
+        else:
+            discount_pct = max(0.0, min(100.0, discount_pct))
+            discount_value = round(subtotal * discount_pct / 100, 2)
+        taxable_base = max(0.0, subtotal - discount_value)
+        has_discount = discount_value > 0
+
+        # Fases de pago: usa el calendario del presupuesto, o cae al
+        # comportamiento clásico (anticipo/resto) para presupuestos antiguos.
+        payment_schedule = budget.get("payment_schedule") or []
+        has_schedule = isinstance(payment_schedule, list) and len(payment_schedule) > 0
+
+        box_w = 85 * mm
+        box_x = RIGHT_X - box_w
+        box_h = 44 * mm + (14 * mm if has_discount else 0)
+        self.ensure_space(box_h + 14 * mm)
+        y = self.y
+
+        c.setFillColor(GRAY_50)
+        c.roundRect(box_x, y - box_h - 4 * mm, box_w, box_h, 4, fill=1, stroke=0)
+        c.setStrokeColor(BRAND_GREEN)
+        c.setLineWidth(1.5)
+        c.line(box_x, y - 4 * mm, box_x + box_w, y - 4 * mm)
+
+        ty = y - 12 * mm
+        c.setFont("Helvetica", 9)
+        if has_discount:
+            c.setFillColor(NAVY_500)
+            c.drawString(box_x + 5, ty, "Subtotal")
+            c.drawRightString(box_x + box_w - 5, ty, fmt(subtotal))
+            ty -= 7 * mm
+            c.setFillColor(DISCOUNT_RED)
+            discount_label = "Descuento" + (f" ({discount_pct:.0f}%)" if discount_type != "amount" else "")
+            c.drawString(box_x + 5, ty, discount_label)
+            c.drawRightString(box_x + box_w - 5, ty, f"-{fmt(discount_value)}")
+            ty -= 7 * mm
+            c.setFillColor(NAVY_500)
+            c.drawString(box_x + 5, ty, "Base imponible")
+            c.drawRightString(box_x + box_w - 5, ty, fmt(taxable_base))
+        else:
+            c.setFillColor(NAVY_500)
+            c.drawString(box_x + 5, ty, "Base imponible")
+            c.drawRightString(box_x + box_w - 5, ty, fmt(subtotal))
+        ty -= 7 * mm
+        c.setFillColor(NAVY_500)
+        c.drawString(box_x + 5, ty, f"IVA ({iva_pct:.0f}%)")
+        c.drawRightString(box_x + box_w - 5, ty, fmt(iva_amount))
+        ty -= 8 * mm
+        c.setFont("Helvetica-Bold", 12)
+        c.setFillColor(BRAND_GREEN)
+        c.drawString(box_x + 5, ty, "TOTAL")
+        c.drawRightString(box_x + box_w - 5, ty, fmt(total))
+        if not has_schedule:
+            ty -= 8 * mm
+            c.setFont("Helvetica", 8)
+            c.setFillColor(NAVY_500)
+            c.drawString(box_x + 5, ty, f"Anticipo ({deposit_pct:.0f}%)")
+            c.drawRightString(box_x + box_w - 5, ty, fmt(deposit_amount))
+            ty -= 6 * mm
+            c.drawString(box_x + 5, ty, "Pendiente")
+            c.drawRightString(box_x + box_w - 5, ty, fmt(pending_amount))
+
+        self.y = y - box_h - 4 * mm - 10 * mm
+        return deposit_pct, deposit_amount, pending_amount
+
+    def draw_text_block(self, label, text):
+        if not text:
+            return
+        c = self.c
+        lines = wrap_multiline(c, text, "Helvetica", 8.5, CONTENT_W)
+        needed = 10 * mm + len(lines) * 4.2 * mm + 4 * mm
+        self.ensure_space(needed)
+        y = self.y
+        c.setFont("Helvetica-Bold", 8)
+        c.setFillColor(BRAND_GREEN)
+        c.drawString(LEFT_X, y, label.upper())
+        y -= 5.5 * mm
+        c.setFont("Helvetica", 8.5)
+        c.setFillColor(NAVY_700)
+        for line in lines:
+            c.drawString(LEFT_X, y, line)
+            y -= 4.2 * mm
+        self.y = y - 4 * mm
+
+    def draw_cobro(self):
+        budget = self.budget
+        parts = []
+        if safe(budget, "payment_method"):
+            parts.append(f"Forma de pago: {budget['payment_method']}")
+        if safe(budget, "payment_iban"):
+            parts.append(f"IBAN: {budget['payment_iban']}")
+        if not parts:
+            return
+        self.draw_text_block("Método de cobro", "\n".join(parts))
+
+    def draw_forma_pago(self, deposit_pct, deposit_amount, pending_amount):
+        budget = self.budget
+        total = float(budget.get("total") or 0)
+        payment_schedule = budget.get("payment_schedule") or []
+
+        if isinstance(payment_schedule, list) and len(payment_schedule) > 0:
+            rows = []
+            for phase in payment_schedule:
+                pct = max(0.0, min(100.0, float(phase.get("percent") or 0)))
+                amount = round(total * pct / 100, 2)
+                concept = phase.get("concept") or "Pago"
+                moment = phase.get("moment") or ""
+                title = f"{concept} {pct:.0f}%" if pct else concept
+                rows.append((title, f"Momento: {moment}" if moment else "", amount))
+        else:
+            rows = [
+                (f"Anticipo {deposit_pct:.0f}%", "Momento: Al aceptar · Reserva de fecha e inicio de trabajos.", deposit_amount),
+                ("Pago a la finalización (resto)", "Momento: A la entrega de la obra · Salvo acuerdo por fases.", pending_amount),
+            ]
+
+        self.ensure_space(10 * mm + len(rows) * 11.5 * mm)
+        c = self.c
+        y = self.y
+        c.setFont("Helvetica-Bold", 8)
+        c.setFillColor(BRAND_GREEN)
+        c.drawString(LEFT_X, y, "FORMA DE PAGO")
+        y -= 7 * mm
+
+        for title, moment, amount in rows:
+            c.setFont("Helvetica-Bold", 9)
+            c.setFillColor(NAVY_900)
+            c.drawString(LEFT_X, y, title)
+            c.drawRightString(RIGHT_X, y, fmt(amount))
+            y -= 4.5 * mm
+            if moment:
+                c.setFont("Helvetica", 7.5)
+                c.setFillColor(NAVY_500)
+                c.drawString(LEFT_X, y, moment)
+            y -= 7 * mm
+
+        self.y = y - 2 * mm
+
+    def draw_total_repeat(self):
+        self.ensure_space(16 * mm)
+        c = self.c
+        total = float(self.budget.get("total") or 0)
+        y = self.y
+        c.setStrokeColor(NAVY_200)
+        c.setLineWidth(0.5)
+        c.line(LEFT_X, y, RIGHT_X, y)
+        y -= 8 * mm
+        c.setFont("Helvetica-Bold", 12)
+        c.setFillColor(NAVY_900)
+        c.drawString(LEFT_X, y, "TOTAL PRESUPUESTO")
+        c.setFillColor(BRAND_GREEN)
+        c.drawRightString(RIGHT_X, y, fmt(total))
+        self.y = y - 8 * mm
+
+    def draw_signatures(self):
+        self.ensure_space(95 * mm)
+        draw_signature_blocks(self.c, self.y, self.company, safe(self.budget, "client_name", ""))
+        self.y -= 95 * mm
+
+
+def render_document(canvas_obj, budget, company, items, total_pages):
+    b = DocBuilder(canvas_obj, budget, company, items, total_pages)
+    b.new_page(first=True)
+    b.draw_items()
+    deposit_pct, deposit_amount, pending_amount = b.draw_breakdown()
+    b.draw_text_block("Notas", safe(budget, "notes", ""))
+    b.draw_cobro()
+    b.draw_forma_pago(deposit_pct, deposit_amount, pending_amount)
+    b.draw_total_repeat()
+    b.draw_text_block("Plazo de ejecución", safe(budget, "execution_deadline_text", ""))
+    b.draw_text_block("Garantía", safe(budget, "warranty_text", ""))
+    b.draw_text_block("Observaciones", safe(budget, "observations", ""))
+    b.draw_text_block("Condiciones", safe(budget, "conditions_text", ""))
+    b.draw_signatures()
+    b.draw_footer()
+    canvas_obj.showPage()
+    return b.page_num
 
 
 def generate_pdf(data, output_path):
     """Main entry point."""
-    budget = data.get('budget', {})
-    items = data.get('items', [])
-    company = data.get('company', {})
+    budget = data.get("budget", {})
+    items = data.get("items", [])
+    company = data.get("company", {})
 
-    # Format dates
-    if safe(budget, 'created_at'):
+    if safe(budget, "created_at"):
         try:
-            dt = datetime.fromisoformat(budget['created_at'].replace('Z', '+00:00'))
-            budget['date'] = dt.strftime('%d/%m/%Y')
-        except:
-            budget['date'] = safe(budget, 'created_at', '')[:10]
+            dt = datetime.fromisoformat(budget["created_at"].replace("Z", "+00:00"))
+            budget["date"] = dt.strftime("%d/%m/%Y")
+        except Exception:
+            budget["date"] = safe(budget, "created_at", "")[:10]
     else:
-        budget['date'] = datetime.now().strftime('%d/%m/%Y')
+        budget["date"] = datetime.now().strftime("%d/%m/%Y")
 
-    if safe(budget, 'valid_until'):
+    if safe(budget, "valid_until"):
         try:
-            dt = datetime.fromisoformat(budget['valid_until'].replace('Z', '+00:00'))
-            budget['valid_until'] = dt.strftime('%d/%m/%Y')
-        except:
+            dt = datetime.fromisoformat(budget["valid_until"].replace("Z", "+00:00"))
+            budget["valid_until"] = dt.strftime("%d/%m/%Y")
+        except Exception:
             pass
 
-    # Group items by chapter/category
-    chapters = {}
-    for item in items:
-        ch = safe(item, 'chapter') or safe(item, 'category', 'General') or 'General'
-        # Map category codes to readable names
-        ch_labels = {
-            'material': 'Material',
-            'mano_obra': 'Mano de obra',
-            'maquinaria': 'Maquinaria',
-            'otros': 'Otros',
-        }
-        ch_display = ch_labels.get(ch, ch.replace('_', ' ').title())
-        if ch_display not in chapters:
-            chapters[ch_display] = []
-        chapters[ch_display].append(item)
-
-    if not chapters:
-        chapters = {'General': items}
-
-    global _page_counter
-
-    # --- Pass 1: count pages by doing a dry run into a temp buffer ---
-    import io
+    # --- Pass 1: dry run into an in-memory buffer to count total pages ---
     buf = io.BytesIO()
     tmp_c = canvas.Canvas(buf, pagesize=A4)
-    page_count = 1  # cover
-    draw_cover_page(tmp_c, budget, company, items)
-    tmp_c.showPage()
-    for ch_idx, (ch_name, ch_items) in enumerate(chapters.items(), 1):
-        _page_counter = [0, 0]
-        pages = draw_partida_pages(tmp_c, budget, company, ch_name, ch_items, ch_idx, len(chapters))
-        page_count += pages
-        tmp_c.showPage()
-    page_count += 1  # totals page
+    total_pages = render_document(tmp_c, dict(budget), company, items, total_pages=0)
     del tmp_c, buf
 
-    # --- Pass 2: generate the actual PDF with correct page numbers ---
+    # --- Pass 2: real render with the correct page count in the footer ---
     c = canvas.Canvas(output_path, pagesize=A4)
     c.setTitle(f"Presupuesto {safe(budget, 'budget_number', '')}")
-    c.setAuthor(safe(company, 'name', 'Enlaze'))
-    c.setSubject(safe(budget, 'title', 'Presupuesto'))
-
-    # Page 1: Cover (page_counter = 0 so no page number shown)
-    _page_counter = [0, page_count]
-    draw_cover_page(c, budget, company, items)
-    c.showPage()
-
-    # Pages 2..N: One or more pages per chapter
-    current_page = 1
-    for ch_idx, (ch_name, ch_items) in enumerate(chapters.items(), 1):
-        _page_counter = [current_page + 1, page_count]
-        pages = draw_partida_pages(c, budget, company, ch_name, ch_items, ch_idx, len(chapters))
-        current_page += pages
-        c.showPage()
-
-    # Last page: Totals + Signatures
-    _page_counter = [page_count, page_count]
-    draw_totals_page(c, budget, company, items, page_count, page_count)
-    c.showPage()
-
+    c.setAuthor(safe(company, "name", "Enlaze"))
+    c.setSubject(safe(budget, "title", "Presupuesto"))
+    render_document(c, budget, company, items, total_pages=total_pages)
     c.save()
 
 
@@ -677,7 +706,7 @@ if __name__ == "__main__":
         print("Usage: generate-budget-pdf.py <input.json> <output.pdf>", file=sys.stderr)
         sys.exit(1)
 
-    with open(sys.argv[1], 'r') as f:
+    with open(sys.argv[1], "r") as f:
         data = json.load(f)
 
     generate_pdf(data, sys.argv[2])

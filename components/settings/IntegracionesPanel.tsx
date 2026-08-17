@@ -21,11 +21,13 @@ import {
   HINT,
   IcoCalendar,
   IcoMail,
+  IcoMessage,
   IcoSheet,
   IcoWarning,
   PanelHeader,
   PrimaryButton,
   SelectInput,
+  TextInput,
 } from "@/components/settings/ui";
 
 interface Integration {
@@ -60,6 +62,13 @@ const MODULES = [
     description:
       "Vincula hojas de cálculo para que el agente tenga control de stock, escandallos o ventas en tiempo real.",
   },
+  {
+    id: "whatsapp",
+    name: "WhatsApp Business",
+    icon: <IcoMessage size={19} />,
+    description:
+      "Envía mensajes reales a tus clientes desde el número de WhatsApp Business de tu empresa.",
+  },
 ];
 
 /** `credentials_ref` / `config` pueden llegar como objeto o como string JSON. */
@@ -89,6 +98,15 @@ export default function IntegracionesPanel() {
   const [showSheetSelector, setShowSheetSelector] = useState(false);
   const [selectedSheetId, setSelectedSheetId] = useState("");
   const [savingSheet, setSavingSheet] = useState(false);
+
+  // Formulario de conexión de WhatsApp Business (Meta Cloud API)
+  const [showWhatsAppForm, setShowWhatsAppForm] = useState(false);
+  const [savingWhatsApp, setSavingWhatsApp] = useState(false);
+  const [whatsAppForm, setWhatsAppForm] = useState({
+    access_token: "",
+    phone_number_id: "",
+    whatsapp_business_account_id: "",
+  });
 
   const loadIntegrations = useCallback(async () => {
     setLoading(true);
@@ -135,6 +153,10 @@ export default function IntegracionesPanel() {
   };
 
   const handleConnect = (module: string) => {
+    if (module === "whatsapp") {
+      setShowWhatsAppForm(true);
+      return;
+    }
     window.location.assign(`/api/auth/google?module=${module}`);
   };
 
@@ -146,6 +168,19 @@ export default function IntegracionesPanel() {
       confirmLabel: "Desconectar",
     });
     if (!ok) return;
+
+    if (module === "whatsapp") {
+      const response = await fetch("/api/integrations/whatsapp", { method: "DELETE" });
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        toast.error("No se pudo desconectar", { description: data?.error || "Error de WhatsApp" });
+        return;
+      }
+      toast.success("WhatsApp desconectado");
+      setShowWhatsAppForm(false);
+      loadIntegrations();
+      return;
+    }
 
     const {
       data: { user },
@@ -165,6 +200,26 @@ export default function IntegracionesPanel() {
 
     toast.success(`${name} desconectado`);
     loadIntegrations();
+  }
+
+  async function handleSaveWhatsApp() {
+    setSavingWhatsApp(true);
+    const response = await fetch("/api/integrations/whatsapp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(whatsAppForm),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      toast.error("No se pudo conectar WhatsApp", { description: data?.error || "Revisa los datos de Meta." });
+      setSavingWhatsApp(false);
+      return;
+    }
+    toast.success("WhatsApp Business conectado");
+    setWhatsAppForm({ access_token: "", phone_number_id: "", whatsapp_business_account_id: "" });
+    setShowWhatsAppForm(false);
+    await loadIntegrations();
+    setSavingWhatsApp(false);
   }
 
   async function handleFetchSheets() {
@@ -344,6 +399,66 @@ export default function IntegracionesPanel() {
                     Conectado como{" "}
                     <strong style={{ color: "var(--st-text-2)" }}>{metadata.email}</strong>
                   </p>
+                )}
+
+                {connected && mod.id === "whatsapp" && (
+                  <p style={{ margin: "10px 0 0", ...HINT }}>
+                    Número conectado:{" "}
+                    <strong style={{ color: "var(--st-text-2)" }}>
+                      {typeof metadata.display_phone_number === "string" && metadata.display_phone_number
+                        ? metadata.display_phone_number
+                        : "verificado por Meta"}
+                    </strong>
+                  </p>
+                )}
+
+                {/* Formulario de conexión de WhatsApp Business */}
+                {mod.id === "whatsapp" && showWhatsAppForm && !connected && (
+                  <div
+                    style={{
+                      marginTop: 16,
+                      padding: 14,
+                      borderRadius: 12,
+                      border: "1px solid var(--st-border)",
+                      background: "var(--st-panel-2)",
+                    }}
+                  >
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--st-text)" }}>
+                      Datos de WhatsApp Cloud API
+                    </div>
+                    <p style={{ margin: "6px 0 12px", ...HINT }}>
+                      Crea un token permanente en Meta Business y copia el identificador del número. El token se
+                      guarda cifrado.
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      <TextInput
+                        type="password"
+                        value={whatsAppForm.access_token}
+                        onChange={(value) => setWhatsAppForm({ ...whatsAppForm, access_token: value })}
+                        placeholder="Token permanente de Meta"
+                      />
+                      <TextInput
+                        inputMode="numeric"
+                        value={whatsAppForm.phone_number_id}
+                        onChange={(value) => setWhatsAppForm({ ...whatsAppForm, phone_number_id: value })}
+                        placeholder="ID del número de teléfono"
+                      />
+                      <TextInput
+                        inputMode="numeric"
+                        value={whatsAppForm.whatsapp_business_account_id}
+                        onChange={(value) =>
+                          setWhatsAppForm({ ...whatsAppForm, whatsapp_business_account_id: value })
+                        }
+                        placeholder="ID de la cuenta de WhatsApp Business (opcional)"
+                      />
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <PrimaryButton onClick={() => void handleSaveWhatsApp()} disabled={savingWhatsApp}>
+                          {savingWhatsApp ? "Verificando…" : "Verificar y conectar"}
+                        </PrimaryButton>
+                        <GhostButton onClick={() => setShowWhatsAppForm(false)}>Cancelar</GhostButton>
+                      </div>
+                    </div>
+                  </div>
                 )}
 
                 {/* Hoja activa de Google Sheets */}

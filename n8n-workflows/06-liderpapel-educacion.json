@@ -1,0 +1,164 @@
+{
+  "name": "ENLAZE - Liderpapel (Educación)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 6,
+              "triggerAtMinute": 50
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Cada día 06:50",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://www.liderpapel.com/cuadernos-y-libretas/",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "redirect": {
+            "redirect": {
+              "followRedirects": true
+            }
+          }
+        },
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "es-ES,es;q=0.9"
+            }
+          ]
+        }
+      },
+      "id": "http-request-1",
+      "name": "GET Liderpapel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "sourceData": "binary",
+        "dataPropertyName": "data",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "name",
+              "cssSelector": ".product-name a, .product-title a, .product-miniature .product-title a",
+              "returnValue": "text"
+            },
+            {
+              "key": "price",
+              "cssSelector": ".price-box .price, .product-price, span.price",
+              "returnValue": "text"
+            },
+            {
+              "key": "brand",
+              "cssSelector": ".product-brand, .manufacturer-name",
+              "returnValue": "text"
+            },
+            {
+              "key": "sku",
+              "cssSelector": "[data-id-product], .product-reference span",
+              "returnValue": "text"
+            }
+          ]
+        },
+        "options": {
+          "returnArray": true
+        }
+      },
+      "id": "html-extract",
+      "name": "Extraer productos",
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [710, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const products = [];\n\nfor (const item of $input.all()) {\n  const d = item.json;\n  const rawPrice = String(d.price || \"\");\n  const price = parseFloat(\n    rawPrice.replace(/[^\\d,\\.]/g, \"\").replace(\",\", \".\")\n  );\n\n  if (!d.name || isNaN(price) || price <= 0) continue;\n\n  products.push({\n    name: String(d.name).trim().substring(0, 200),\n    price: Math.round(price * 100) / 100,\n    unit: \"ud\",\n    category: \"material_didactico\",\n    subcategory: \"cuadernos\",\n    brand: String(d.brand || \"Liderpapel\").trim(),\n    sku: String(d.sku || \"\").trim(),\n  });\n}\n\nif (products.length === 0) {\n  throw new Error(\"No se extrajeron productos - revisar selectores CSS\");\n}\n\nreturn [{\n  json: {\n    provider_name: \"Liderpapel\",\n    sector: \"educacion\",\n    source_url: \"https://www.liderpapel.com/cuadernos-y-libretas/\",\n    products: products\n  }\n}];"
+      },
+      "id": "code-transform",
+      "name": "Transformar datos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [940, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.ENLAZE_API_URL || 'https://tu-dominio.vercel.app'}}/api/pb/ingest",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.ENLAZE_SYNC_API_KEY || 'TU_SYNC_API_KEY'}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-enlaze",
+      "name": "Enviar a ENLAZE",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1170, 300],
+      "retryOnFail": true,
+      "maxTries": 2
+    }
+  ],
+  "connections": {
+    "Cada día 06:50": {
+      "main": [[{ "node": "GET Liderpapel", "type": "main", "index": 0 }]]
+    },
+    "GET Liderpapel": {
+      "main": [[{ "node": "Extraer productos", "type": "main", "index": 0 }]]
+    },
+    "Extraer productos": {
+      "main": [[{ "node": "Transformar datos", "type": "main", "index": 0 }]]
+    },
+    "Transformar datos": {
+      "main": [[{ "node": "Enviar a ENLAZE", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "tags": [
+    { "name": "ENLAZE" },
+    { "name": "educacion" },
+    { "name": "precios" }
+  ]
+}

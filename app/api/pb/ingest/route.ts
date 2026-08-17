@@ -48,6 +48,15 @@ interface IngestProduct {
   brand?: string;
   sku?: string;
   description?: string;
+  product_url?: string;
+  raw_price?: string;
+  currency?: string;
+  seller?: string;
+  price_basis?: string;
+  price_includes_vat?: boolean;
+  price_scope?: string;
+  observed_at?: string;
+  evidence_type?: string;
 }
 
 interface IngestBody {
@@ -55,6 +64,102 @@ interface IngestBody {
   sector: string;
   source_url?: string;
   products: IngestProduct[];
+}
+
+const MANOMANO_ORIGIN = "https://www.manomano.es";
+const VERIFIED_PROVIDER_SOURCES: Record<
+  string,
+  { origin: string; skuPattern: RegExp; website: string }
+> = {
+  manomano: {
+    origin: MANOMANO_ORIGIN,
+    skuPattern: /^MM-\d+$/,
+    website: MANOMANO_ORIGIN,
+  },
+  "leroy merlin": {
+    origin: "https://www.leroymerlin.es",
+    skuPattern: /^LM-\d+$/,
+    website: "https://www.leroymerlin.es",
+  },
+  obramat: {
+    origin: "https://www.obramat.es",
+    skuPattern: /^OB-\d+$/,
+    website: "https://www.obramat.es",
+  },
+};
+
+function parseSpanishPriceLabel(value: unknown) {
+  const label = String(value || "").replace(/\u00a0/g, " ").trim();
+  if (
+    !/^(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d{1,2})?\s*€$/.test(label)
+  ) {
+    return Number.NaN;
+  }
+
+  const numericValue = label.replace(/\s*€$/, "");
+  if (numericValue.includes(",")) {
+    return Number.parseFloat(
+      numericValue.replace(/\./g, "").replace(",", ".")
+    );
+  }
+  if (/^\d{1,3}(?:\.\d{3})+$/.test(numericValue)) {
+    return Number.parseFloat(numericValue.replace(/\./g, ""));
+  }
+  return Number.parseFloat(numericValue);
+}
+
+function normalizeProviderName(value: string) {
+  return value.trim().toLocaleLowerCase("es");
+}
+
+function getVerifiedProviderSource(providerName: string) {
+  return VERIFIED_PROVIDER_SOURCES[normalizeProviderName(providerName)];
+}
+
+function hasReliableProviderEvidence(
+  providerName: string,
+  product: IngestProduct
+) {
+  const source = getVerifiedProviderSource(providerName);
+  if (!source) return false;
+  const evidencePrice = parseSpanishPriceLabel(product.raw_price);
+  let productUrl: URL;
+  try {
+    productUrl = new URL(product.product_url || "");
+  } catch {
+    return false;
+  }
+
+  return (
+    typeof product.sku === "string" &&
+    source.skuPattern.test(product.sku) &&
+    typeof product.product_url === "string" &&
+    productUrl.origin === source.origin &&
+    Number.isFinite(evidencePrice) &&
+    Math.abs(evidencePrice - product.price) < 0.005 &&
+    (!product.currency || product.currency === "EUR")
+  );
+}
+
+function chunkArray<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return error.message;
+  }
+  return "Error procesando el lote de precios";
 }
 
 export async function POST(request: Request) {
@@ -168,12 +273,15 @@ export async function POST(request: Request) {
     .eq("sector", sector)
     .single();
 
+  const verifiedProviderSource = getVerifiedProviderSource(provider_name);
+
   if (!provider) {
     const { data: newProvider, error: provErr } = await supabase
       .from("pb_providers")
       .insert({
         name: provider_name,
         legal_name: provider_name,
+        website: verifiedProviderSource?.website || null,
         country: "ES",
         is_active: true,
         sector,
@@ -197,39 +305,423 @@ export async function POST(request: Request) {
   let updated = 0;
   let errors = 0;
   const details: Array<{ name: string; action: string; error?: string }> = [];
+  const isManoMano = normalizeProviderName(provider_name) === "manomano";
+  const isVerifiedProvider = Boolean(verifiedProviderSource);
 
-  for (const p of products) {
-    try {
-      if (!p.name || typeof p.price !== "number" || p.price < 0) {
+  if (isVerifiedProvider) {
+    const validProducts: IngestProduct[] = [];
+
+    for (const p of products) {
+      if (
+        !p.name ||
+        typeof p.price !== "number" ||
+        !Number.isFinite(p.price) ||
+        p.price <= 0
+      ) {
         errors++;
         details.push({
           name: p.name || "??",
           action: "error",
-          error: "name y price (>=0) son obligatorios",
+          error: "name y price (>0 y finito) son obligatorios",
         });
         continue;
       }
 
-      // Buscar producto existente por nombre + proveedor + sector
-      const { data: existing } = await supabase
-        .from("pb_products")
-        .select("id, unit_price")
-        .eq("commercial_name", p.name.trim())
-        .eq("provider_id", providerId)
-        .eq("sector", sector)
-        .single();
+      if (!hasReliableProviderEvidence(provider_name, p)) {
+        errors++;
+        details.push({
+          name: p.name,
+          action: "error",
+          error:
+            "Precio rechazado: faltan referencia, URL oficial o etiqueta exacta en euros",
+        });
+        continue;
+      }
+
+      validProducts.push(p);
+    }
+
+    if (validProducts.length > 0) {
+      try {
+        type ExistingProduct = {
+          id: string;
+          unit_price: number | string;
+          sku: string | null;
+          commercial_name: string;
+        };
+
+        const existingProducts: ExistingProduct[] = [];
+        const skuChunks = chunkArray(
+          Array.from(
+            new Set(validProducts.map((product) => product.sku as string))
+          ),
+          100
+        );
+
+        const skuLookupResults = await Promise.all(
+          skuChunks.map((skuChunk) =>
+            supabase
+              .from("pb_products")
+              .select("id, unit_price, sku, commercial_name")
+              .eq("provider_id", providerId)
+              .eq("sector", sector)
+              .in("sku", skuChunk)
+          )
+        );
+
+        for (const lookup of skuLookupResults) {
+          if (lookup.error) throw lookup.error;
+          existingProducts.push(
+            ...((lookup.data || []) as ExistingProduct[])
+          );
+        }
+
+        const existingBySku = new Map(
+          existingProducts
+            .filter((product) => product.sku)
+            .map((product) => [product.sku as string, product])
+        );
+        const missingBySku = validProducts.filter(
+          (product) => !existingBySku.has(product.sku as string)
+        );
+
+        if (missingBySku.length > 0) {
+          const nameChunks = chunkArray(
+            Array.from(
+              new Set(
+                missingBySku.map((product) => product.name.trim())
+              )
+            ),
+            10
+          );
+
+          for (const nameChunkGroup of chunkArray(nameChunks, 6)) {
+            const nameLookupResults = await Promise.all(
+              nameChunkGroup.map((nameChunk) =>
+                supabase
+                  .from("pb_products")
+                  .select("id, unit_price, sku, commercial_name")
+                  .eq("provider_id", providerId)
+                  .eq("sector", sector)
+                  .in("commercial_name", nameChunk)
+              )
+            );
+
+            for (const lookup of nameLookupResults) {
+              if (lookup.error) throw lookup.error;
+              existingProducts.push(
+                ...((lookup.data || []) as ExistingProduct[])
+              );
+            }
+          }
+        }
+
+        const existingByName = new Map(
+          existingProducts.map((product) => [
+            product.commercial_name,
+            product,
+          ])
+        );
+        const changedRows: Array<Record<string, unknown>> = [];
+        const unchangedRows: Array<Record<string, unknown>> = [];
+        const newCandidates: IngestProduct[] = [];
+        const observationProducts: Array<{
+          product: IngestProduct;
+          productId: string;
+        }> = [];
+        const claimedExistingIds = new Set<string>();
+        const claimedNewNames = new Set<string>();
+        const syncedAt = new Date().toISOString();
+
+        for (const product of validProducts) {
+          const existing =
+            existingBySku.get(product.sku as string) ||
+            existingByName.get(product.name.trim());
+
+          if (!existing) {
+            const nameKey = product.name.trim();
+            if (claimedNewNames.has(nameKey)) {
+              details.push({
+                name: product.name,
+                action: "unchanged",
+              });
+              continue;
+            }
+            claimedNewNames.add(nameKey);
+            newCandidates.push(product);
+            continue;
+          }
+
+          if (claimedExistingIds.has(existing.id)) {
+            details.push({
+              name: product.name,
+              action: "unchanged",
+            });
+            continue;
+          }
+          claimedExistingIds.add(existing.id);
+
+          const oldPrice = Number(existing.unit_price);
+          const newPrice = Number(product.price);
+          const commonUpdate = {
+            id: existing.id,
+            provider_id: providerId,
+            commercial_name: existing.commercial_name,
+            sector,
+            unit_price: newPrice,
+            sku: product.sku,
+            source_url: product.product_url,
+            last_synced_at: syncedAt,
+          };
+
+          if (Math.abs(oldPrice - newPrice) > 0.001) {
+            changedRows.push({
+              ...commonUpdate,
+              price_trend: newPrice > oldPrice ? "up" : "down",
+              is_active: true,
+              is_available: true,
+            });
+            updated++;
+            details.push({ name: product.name, action: "updated" });
+          } else {
+            unchangedRows.push(commonUpdate);
+            details.push({ name: product.name, action: "unchanged" });
+          }
+
+          observationProducts.push({
+            product,
+            productId: existing.id,
+          });
+        }
+
+        const changedPromise =
+          changedRows.length > 0
+            ? supabase
+                .from("pb_products")
+                .upsert(changedRows, { onConflict: "id" })
+            : Promise.resolve({ error: null });
+        const unchangedPromise =
+          unchangedRows.length > 0
+            ? supabase
+                .from("pb_products")
+                .upsert(unchangedRows, { onConflict: "id" })
+            : Promise.resolve({ error: null });
+        const insertPromise =
+          newCandidates.length > 0
+            ? supabase
+                .from("pb_products")
+                .insert(
+                  newCandidates.map((product) => ({
+                    commercial_name: product.name.trim(),
+                    unit_price: product.price,
+                    sale_unit: product.unit || "ud",
+                    category: product.category || "material",
+                    subcategory: product.subcategory || "",
+                    brand: product.brand || null,
+                    sku: product.sku,
+                    description: product.description || "",
+                    provider_id: providerId,
+                    sector,
+                    product_type: product.category || "material",
+                    is_active: true,
+                    is_available: true,
+                    last_synced_at: syncedAt,
+                    source_url: product.product_url,
+                    price_trend: "stable",
+                  }))
+                )
+                .select("id, sku, commercial_name")
+            : Promise.resolve({
+                data: [] as Array<{
+                  id: string;
+                  sku: string | null;
+                  commercial_name: string;
+                }>,
+                error: null,
+              });
+
+        const [changedResult, unchangedResult, insertResult] =
+          await Promise.all([
+            changedPromise,
+            unchangedPromise,
+            insertPromise,
+          ]);
+
+        if (changedResult.error) throw changedResult.error;
+        if (unchangedResult.error) throw unchangedResult.error;
+        if (insertResult.error) throw insertResult.error;
+
+        const insertedProducts = (insertResult.data || []) as Array<{
+          id: string;
+          sku: string | null;
+          commercial_name: string;
+        }>;
+        const insertedBySku = new Map(
+          insertedProducts
+            .filter((product) => product.sku)
+            .map((product) => [product.sku as string, product])
+        );
+        const insertedByName = new Map(
+          insertedProducts.map((product) => [
+            product.commercial_name,
+            product,
+          ])
+        );
+
+        for (const product of newCandidates) {
+          const insertedProduct =
+            insertedBySku.get(product.sku as string) ||
+            insertedByName.get(product.name.trim());
+
+          if (!insertedProduct) {
+            throw new Error(
+              `No se pudo confirmar el alta de ${product.name}`
+            );
+          }
+
+          inserted++;
+          details.push({ name: product.name, action: "inserted" });
+          observationProducts.push({
+            product,
+            productId: insertedProduct.id,
+          });
+        }
+
+        if (observationProducts.length > 0) {
+          const { error: observationError } = await supabase
+            .from("pb_price_observations")
+            .insert(
+              observationProducts.map(({ product, productId }) => ({
+                product_id: productId,
+                provider_id: providerId,
+                observed_price: product.price,
+                source: "n8n",
+                source_url: product.product_url,
+                metadata: {
+                  sku: product.sku,
+                  brand: product.brand,
+                  raw_price: product.raw_price,
+                  product_url: product.product_url,
+                  currency: product.currency || "EUR",
+                  seller: product.seller,
+                  price_basis: product.price_basis,
+                  price_includes_vat: product.price_includes_vat,
+                  price_scope: product.price_scope,
+                  observed_at: product.observed_at,
+                  evidence_type: product.evidence_type,
+                  verification: "official_sku_url_raw_price",
+                },
+              }))
+            );
+          if (observationError) throw observationError;
+        }
+      } catch (err) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: getErrorMessage(err),
+          },
+          { status: 500 }
+        );
+      }
+    }
+  } else {
+    for (const p of products) {
+    try {
+      if (
+        !p.name ||
+        typeof p.price !== "number" ||
+        !Number.isFinite(p.price) ||
+        p.price <= 0
+      ) {
+        errors++;
+        details.push({
+          name: p.name || "??",
+          action: "error",
+          error: "name y price (>0 y finito) son obligatorios",
+        });
+        continue;
+      }
+
+      if (isManoMano && !hasReliableProviderEvidence(provider_name, p)) {
+        errors++;
+        details.push({
+          name: p.name,
+          action: "error",
+          error:
+            "Precio rechazado: faltan SKU, URL de producto o etiqueta exacta en euros",
+        });
+        continue;
+      }
+
+      const productSourceUrl = p.product_url || source_url || null;
+      const observationMetadata = {
+        sku: p.sku,
+        brand: p.brand,
+        raw_price: p.raw_price,
+        product_url: p.product_url,
+        currency: p.currency,
+        seller: p.seller,
+        price_basis: p.price_basis,
+        price_includes_vat: p.price_includes_vat,
+        price_scope: p.price_scope,
+        observed_at: p.observed_at,
+        evidence_type: p.evidence_type,
+        verification: isManoMano
+          ? "sku_url_raw_price"
+          : "provider_payload",
+      };
+
+      // ManoMano se identifica primero por SKU estable. El nombre solo se usa
+      // como compatibilidad con productos históricos que aún no tenían SKU.
+      let existing: { id: string; unit_price: number | string } | null = null;
+      if (p.sku) {
+        const { data: skuMatches, error: skuLookupError } = await supabase
+          .from("pb_products")
+          .select("id, unit_price")
+          .eq("sku", p.sku)
+          .eq("provider_id", providerId)
+          .eq("sector", sector)
+          .limit(1);
+        if (skuLookupError) throw skuLookupError;
+        existing = skuMatches?.[0] || null;
+      }
+
+      if (!existing) {
+        const { data: nameMatches, error: nameLookupError } = await supabase
+          .from("pb_products")
+          .select("id, unit_price")
+          .eq("commercial_name", p.name.trim())
+          .eq("provider_id", providerId)
+          .eq("sector", sector)
+          .limit(1);
+        if (nameLookupError) throw nameLookupError;
+        existing = nameMatches?.[0] || null;
+      }
 
       if (existing) {
         // Actualizar precio si cambió
         const oldPrice = Number(existing.unit_price);
         const newPrice = Number(p.price);
 
+        const { error: observationError } = await supabase
+          .from("pb_price_observations")
+          .insert({
+            product_id: existing.id,
+            provider_id: providerId,
+            observed_price: newPrice,
+            source: "n8n",
+            source_url: productSourceUrl,
+            metadata: observationMetadata,
+          });
+        if (observationError) throw observationError;
+
         if (Math.abs(oldPrice - newPrice) > 0.001) {
           // Calcular tendencia
           const trend =
             newPrice > oldPrice ? "up" : newPrice < oldPrice ? "down" : "stable";
 
-          await supabase
+          const { error: updateError } = await supabase
             .from("pb_products")
             .update({
               unit_price: newPrice,
@@ -240,34 +732,30 @@ export async function POST(request: Request) {
               category: p.category || undefined,
               subcategory: p.subcategory || undefined,
               last_synced_at: new Date().toISOString(),
-              source_url: source_url || undefined,
+              source_url: productSourceUrl || undefined,
               price_trend: trend,
               is_active: true,
               is_available: true,
             })
             .eq("id", existing.id);
+          if (updateError) throw updateError;
 
           updated++;
           details.push({ name: p.name, action: "updated" });
         } else {
           // Precio igual, solo actualizar timestamp
-          await supabase
+          const { error: timestampError } = await supabase
             .from("pb_products")
-            .update({ last_synced_at: new Date().toISOString() })
+            .update({
+              last_synced_at: new Date().toISOString(),
+              sku: p.sku || undefined,
+              source_url: productSourceUrl || undefined,
+            })
             .eq("id", existing.id);
+          if (timestampError) throw timestampError;
 
           details.push({ name: p.name, action: "unchanged" });
         }
-
-        // Registrar observación de precio (historial)
-        await supabase.from("pb_price_observations").insert({
-          product_id: existing.id,
-          provider_id: providerId,
-          observed_price: p.price,
-          source: "n8n",
-          source_url: source_url || null,
-          metadata: { sku: p.sku, brand: p.brand },
-        });
       } else {
         // Producto nuevo → insertar
         const { data: newProduct, error: insertErr } = await supabase
@@ -287,7 +775,7 @@ export async function POST(request: Request) {
             is_active: true,
             is_available: true,
             last_synced_at: new Date().toISOString(),
-            source_url: source_url || null,
+            source_url: productSourceUrl,
             price_trend: "stable",
           })
           .select("id")
@@ -305,14 +793,17 @@ export async function POST(request: Request) {
 
         // Registrar primera observación
         if (newProduct) {
-          await supabase.from("pb_price_observations").insert({
+          const { error: observationError } = await supabase
+            .from("pb_price_observations")
+            .insert({
             product_id: newProduct.id,
             provider_id: providerId,
             observed_price: p.price,
             source: "n8n",
-            source_url: source_url || null,
-            metadata: { sku: p.sku, brand: p.brand },
-          });
+              source_url: productSourceUrl,
+              metadata: observationMetadata,
+            });
+          if (observationError) throw observationError;
         }
 
         inserted++;
@@ -326,6 +817,7 @@ export async function POST(request: Request) {
         error: err instanceof Error ? err.message : "Error desconocido",
       });
     }
+  }
   }
 
   // ── 5. Registrar en price_sync_logs ────────────────────────────────

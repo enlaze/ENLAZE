@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
 import Loading from "@/components/ui/loading";
 import Breadcrumbs from "@/components/ui/breadcrumbs";
+import Link from "next/link";
 
 interface BudgetItem {
   id: string;
@@ -36,6 +37,7 @@ interface Budget {
   client_email: string;
   client_phone: string;
   client_address: string;
+  client_nif?: string;
   service_type: string;
   status: string;
   subtotal: number;
@@ -53,6 +55,18 @@ interface Budget {
   rejected_at: string | null;
   accepted_by_name: string | null;
   accepted_ip: string | null;
+  // Formato Presupix
+  deposit_percent?: number;
+  payment_method?: string;
+  payment_iban?: string;
+  warranty_text?: string;
+  execution_deadline_text?: string;
+  observations?: string;
+  conditions_text?: string;
+  discount_type?: string;
+  discount_percent?: number;
+  discount_amount?: number;
+  payment_schedule?: Array<{ percent?: number; concept?: string; moment?: string }>;
 }
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
@@ -108,6 +122,14 @@ export default function BudgetDetailPage() {
   const toast = useToast();
   const [budget, setBudget] = useState<Budget | null>(null);
   const [items, setItems] = useState<BudgetItem[]>([]);
+  const [branding, setBranding] = useState({
+    name: "",
+    logoUrl: "",
+    nif: "",
+    address: "",
+    phone: "",
+    email: "",
+  });
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
 
@@ -128,14 +150,32 @@ export default function BudgetDetailPage() {
         return;
       }
 
-      const { data: bi } = await supabase
-        .from("budget_items")
-        .select("*")
-        .eq("budget_id", params.id)
-        .order("created_at", { ascending: true });
+      const [{ data: bi }, { data: profile }, { data: fiscal }] = await Promise.all([
+        supabase
+          .from("budget_items")
+          .select("*")
+          .eq("budget_id", params.id)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("profiles")
+          .select("business_name, full_name, logo_url")
+          .maybeSingle(),
+        supabase
+          .from("fiscal_settings")
+          .select("*")
+          .maybeSingle(),
+      ]);
 
       setBudget(b);
       setItems(bi || []);
+      setBranding({
+        name: profile?.business_name || profile?.full_name || "",
+        logoUrl: profile?.logo_url || "",
+        nif: (fiscal as { nif?: string; cif?: string } | null)?.nif || (fiscal as { nif?: string; cif?: string } | null)?.cif || "",
+        address: (fiscal as { address?: string; fiscal_address?: string } | null)?.address || (fiscal as { address?: string; fiscal_address?: string } | null)?.fiscal_address || "",
+        phone: (fiscal as { phone?: string } | null)?.phone || "",
+        email: (fiscal as { email?: string } | null)?.email || "",
+      });
     } catch {
       router.push("/dashboard/budgets");
     } finally {
@@ -200,20 +240,24 @@ export default function BudgetDetailPage() {
   async function deleteBudget() {
     if (!budget) return;
     const ok = await confirm({
-      title: "Eliminar presupuesto",
-      description: "¿Estás seguro de eliminar este presupuesto? Esta acción no se puede deshacer.",
+      title: "Mover presupuesto a la papelera",
+      description: "El presupuesto y todas sus partidas se conservarán y podrás recuperarlos desde Papelera.",
       variant: "danger",
-      confirmLabel: "Eliminar",
+      confirmLabel: "Mover a la papelera",
     });
     if (!ok) return;
 
     try {
-      await supabase.from("budget_items").delete().eq("budget_id", budget.id);
-      await supabase.from("budgets").delete().eq("id", budget.id);
-      toast.success("Presupuesto eliminado");
+      const { data, error } = await supabase.rpc("move_to_trash", {
+        p_entity_type: "budget",
+        p_entity_id: budget.id,
+      });
+      if (error) throw error;
+      if (!data) throw new Error("No se encontró el presupuesto");
+      toast.success("Presupuesto movido a la papelera");
       router.push("/dashboard/budgets");
     } catch (error) {
-      toast.error("Error al eliminar el presupuesto");
+      toast.error("No se pudo mover el presupuesto a la papelera");
     }
   }
 
@@ -240,6 +284,17 @@ export default function BudgetDetailPage() {
         total: budget.total,
         notes: budget.notes,
         valid_until: budget.valid_until,
+        deposit_percent: budget.deposit_percent,
+        payment_method: budget.payment_method,
+        payment_iban: budget.payment_iban,
+        warranty_text: budget.warranty_text,
+        execution_deadline_text: budget.execution_deadline_text,
+        observations: budget.observations,
+        conditions_text: budget.conditions_text,
+        discount_type: budget.discount_type,
+        discount_percent: budget.discount_percent,
+        discount_amount: budget.discount_amount,
+        payment_schedule: budget.payment_schedule,
       })
       .select()
       .single();
@@ -278,6 +333,12 @@ export default function BudgetDetailPage() {
     const html = generateBudgetPDFHTML(
       {
         ...budget,
+        company_name: branding.name,
+        company_logo_url: branding.logoUrl,
+        company_nif: branding.nif,
+        company_address: branding.address,
+        company_phone: branding.phone,
+        company_email: branding.email,
         client_name: budget.client_name,
         client_email: budget.client_email,
         client_phone: budget.client_phone,
@@ -376,6 +437,12 @@ export default function BudgetDetailPage() {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <Link
+            href={`/dashboard/budgets/${budget.id}/edit`}
+            className="inline-flex items-center justify-center rounded-lg border border-navy-200 bg-white px-4 py-2 text-sm font-medium text-navy-700 transition hover:bg-navy-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            Editar
+          </Link>
           <Button variant="secondary" onClick={generatePDF}>Imprimir</Button>
           <Button onClick={downloadPDF} disabled={downloadingPDF}>
             {downloadingPDF ? "Generando..." : "Descargar PDF"}
@@ -542,6 +609,16 @@ export default function BudgetDetailPage() {
               {budget.subtotal.toFixed(2)} €
             </span>
           </div>
+          {!!budget.discount_amount && budget.discount_amount > 0 && (
+            <div className="mb-2 flex justify-between text-sm">
+              <span className="text-red-600 dark:text-red-400">
+                Descuento{budget.discount_type !== "amount" ? ` (${budget.discount_percent}%)` : ""}
+              </span>
+              <span className="text-red-600 dark:text-red-400 tabular-nums">
+                -{budget.discount_amount.toFixed(2)} €
+              </span>
+            </div>
+          )}
           <div className="mb-3 flex justify-between text-sm">
             <span className="text-navy-500 dark:text-zinc-400">IVA ({budget.iva_percent}%)</span>
             <span className="text-navy-900 dark:text-white tabular-nums">

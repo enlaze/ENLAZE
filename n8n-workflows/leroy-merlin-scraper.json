@@ -84,7 +84,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Agrupa items en formato webhook ENLAZE\nconst items = $input.all().map(i => i.json);\n\nreturn [{\n  json: {\n    action: 'upsert_products',\n    source: {\n      name: 'n8n-leroy-merlin-scraper',\n      type: 'n8n_webhook',\n      url: 'https://www.leroymerlin.es'\n    },\n    provider: {\n      name: 'Leroy Merlin',\n      website: 'https://www.leroymerlin.es',\n      region: 'ES'\n    },\n    items: items,\n    metadata: {\n      scraped_at: new Date().toISOString(),\n      workflow_id: 'leroy-merlin-scraper',\n      n8n_execution_id: $execution.id\n    }\n  }\n}];"
+        "jsCode": "// Agrupa items en formato /api/pb/ingest de ENLAZE\nconst items = $input.all().map(i => i.json).filter(i => i.name && i.price > 0);\n\nconst products = items.map(i => ({\n  name: i.name,\n  price: i.price,\n  unit: i.unit || 'ud',\n  category: i.category || 'material',\n  subcategory: i.subcategory || '',\n  brand: i.brand || '',\n  sku: i.sku || '',\n  description: ''\n}));\n\nif (products.length === 0) {\n  throw new Error('No hay productos válidos para enviar');\n}\n\nreturn [{\n  json: {\n    provider_name: 'Leroy Merlin',\n    sector: 'construccion',\n    source_url: 'https://www.leroymerlin.es',\n    products: products\n  }\n}];"
       },
       "id": "format-webhook",
       "name": "Formato Webhook",
@@ -95,12 +95,22 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.ENLAZE_WEBHOOK_URL || 'https://tu-app.vercel.app/api/pb/webhook'}}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "url": "={{$env.ENLAZE_API_URL || 'https://tu-app.vercel.app'}}/api/pb/ingest",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json) }}",
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.ENLAZE_SYNC_API_KEY || 'TU_SYNC_API_KEY'}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "options": { "timeout": 30000 }
       },
       "id": "send-webhook",
@@ -108,12 +118,6 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [1740, 300],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "CONFIGURAR",
-          "name": "ENLAZE Webhook Auth"
-        }
-      },
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 10000

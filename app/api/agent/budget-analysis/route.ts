@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
@@ -43,8 +44,26 @@ export async function POST(request: Request) {
   }
 
   try {
+    // The shared market tracker is written with the service role. Reading it
+    // through the user's cookie client can legitimately return zero because of
+    // RLS, even while the price-tracker screen contains thousands of rows.
+    const trackerDb = process.env.SUPABASE_SERVICE_ROLE_KEY
+      ? createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY,
+          { auth: { persistSession: false, autoRefreshToken: false } }
+        )
+      : supabase;
+
     const body = await request.json();
-    const { sector, description, service_type, scope } = body;
+    const {
+      sector,
+      description,
+      service_type,
+      scope,
+      project_id,
+      technical_document_ids,
+    } = body;
 
     if (!description || description.trim().length < 5) {
       return NextResponse.json({ error: "Descripcion insuficiente" }, { status: 400 });
@@ -52,6 +71,64 @@ export async function POST(request: Request) {
 
     const activeSector = normalizeSector(sector || "construccion");
     const sectorConfig = getSectorConfig(activeSector);
+
+    const selectedTechnicalDocumentIds = Array.isArray(technical_document_ids)
+      ? technical_document_ids.filter((id): id is string => typeof id === "string" && id.length > 0)
+      : [];
+
+    const [
+      { count: sharedTrackerProductsCount, error: trackerCountError },
+      { count: privateTrackerProductsCount },
+      { data: technicalDocumentsData },
+    ] = await Promise.all([
+      trackerDb
+        .from("pb_products")
+        .select("id, pb_providers!inner(company_id)", { count: "exact", head: true })
+        .eq("sector", activeSector)
+        .eq("is_active", true)
+        .eq("is_available", true)
+        .is("pb_providers.company_id", null)
+        .gt("unit_price", 0),
+      supabase
+        .from("price_items")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("sector", activeSector)
+        .eq("is_active", true)
+        .gt("unit_price", 0),
+      selectedTechnicalDocumentIds.length > 0 && project_id
+        ? supabase
+            .from("project_documents")
+            .select("id, name, description, file_url, mime_type, doc_type, extracted_measurements")
+            .eq("user_id", user.id)
+            .eq("project_id", project_id)
+            .in("id", selectedTechnicalDocumentIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+    if (trackerCountError) {
+      console.error("[budget-analysis] Tracker count failed:", trackerCountError.message);
+    }
+    // Some legacy n8n workflows wrote the tracked catalogue to price_items.
+    // Prefer the shared V2 count, but retain that catalogue as a safe fallback.
+    const trackerProductsCount =
+      (sharedTrackerProductsCount ?? 0) > 0
+        ? sharedTrackerProductsCount ?? 0
+        : privateTrackerProductsCount ?? 0;
+
+    const technicalDocuments = await Promise.all((technicalDocumentsData || []).map(async (document: any) => {
+      const publicMarker = "/storage/v1/object/public/project-docs/";
+      const storedValue = String(document.file_url || "");
+      const storedPath = storedValue.includes(publicMarker)
+        ? decodeURIComponent(storedValue.split(publicMarker)[1] || "")
+        : storedValue;
+      if (!storedPath || (/^https?:\/\//i.test(storedPath) && !storedValue.includes(publicMarker))) {
+        return { ...document, analysis_url: storedPath };
+      }
+      const { data: signed } = await supabase.storage
+        .from("project-docs")
+        .createSignedUrl(storedPath, 600);
+      return { ...document, analysis_url: signed?.signedUrl || "" };
+    }));
 
     // 1. Fetch user's own price_items (private)
     const { data: priceItemsData } = await supabase
@@ -114,15 +191,32 @@ export async function POST(request: Request) {
       newsContext = "NOTICIAS Y ACTUALIZACIONES DEL SECTOR (agente n8n):\n" + news.slice(0, 5).map(n => `- ${n.title}: ${n.description}`).join("\n");
     }
 
+    const trackerContext = `
+RASTREADOR DE PRECIOS ENLAZE:
+- Hay ${trackerProductsCount ?? 0} productos activos, disponibles y con precio comprobado en el rastreador para este sector.
+- Tu funcion es definir las NECESIDADES TECNICAS, cantidades, unidades y capitulos.
+- Los importes de materiales que propongas son solo provisionales. Tras tu analisis, ENLAZE resolvera de forma determinista cada material contra el rastreador y guardara proveedor, fuente, fecha y fiabilidad.
+- No afirmes que un material tiene precio real si no se aporta una coincidencia concreta en el contexto.`;
+
+    const technicalDocumentsContext = technicalDocuments.length > 0
+      ? `DOCUMENTACION TECNICA SELECCIONADA:
+${technicalDocuments.map((doc: any) => {
+  const extracted = doc.extracted_measurements
+    ? ` | Mediciones extraidas: ${JSON.stringify(doc.extracted_measurements).slice(0, 1500)}`
+    : "";
+  return `- ${doc.name}${doc.description ? `: ${doc.description}` : ""}${extracted}`;
+}).join("\n")}
+
+REGLA: las mediciones, unidades, calidades y especificaciones de estos documentos tienen prioridad sobre cualquier estimacion generica. Si falta un dato, indicalo en missing_questions; no lo inventes.`
+      : "No se ha seleccionado documentacion tecnica del arquitecto.";
+
     // Location-based pricing context
     let locationContext = "";
     if (ubicacion) {
       locationContext = `\nUBICACION DE LA OBRA: ${ubicacion}
 INSTRUCCIONES POR ZONA GEOGRAFICA:
-- Ajusta los precios segun la ciudad/provincia indicada. Los costes varian significativamente entre zonas:
-  * Madrid, Barcelona, Baleares, Pais Vasco: +15-25% sobre media nacional
-  * Valencia, Malaga, Sevilla: precio medio nacional
-  * Interior peninsular, zonas rurales: -10-15% sobre media nacional
+- Calcula la mano de obra y los servicios con una base nacional coherente. ENLAZE aplicara despues un coeficiente geografico visible y auditable.
+- NO multipliques el precio de los productos del rastreador por la ubicacion: el producto conserva su precio comprobado.
 - Considera las normativas urbanisticas locales y ordenanzas municipales de "${ubicacion}"
 - Incluye en regulatory_notes cualquier normativa especifica de la zona (CTE, DB-HE, ordenanzas locales)
 - Los costes de mano de obra y transporte dependen de la ubicacion`;
@@ -205,6 +299,8 @@ ${regContext || "Sin normativas sincronizadas por n8n todavia."}
 ${marketPriceContext || "Sin precios de mercado sincronizados por n8n todavia."}
 ${newsContext || ""}
 ${locationContext}
+${trackerContext}
+${technicalDocumentsContext}
 
 ${priceContext}
 
@@ -234,7 +330,8 @@ DEVUELVE UNICAMENTE UN JSON CON LA SIGUIENTE ESTRUCTURA EXACTA:
       "unit_cost": 35.0,
       "margin_pct": 20,
       "category": "mano_obra",
-      "chapter": "Demoliciones"
+      "chapter": "Demoliciones",
+      "estimated_hours": 16
     }
   ],
   "suggested_materials": [
@@ -244,7 +341,7 @@ DEVUELVE UNICAMENTE UN JSON CON LA SIGUIENTE ESTRUCTURA EXACTA:
       "unit": "sacos",
       "unit_cost": 12.50,
       "supplier_name": "Leroy Merlin",
-      "source": "retail_provider"
+      "source": "provisional_pending_tracker"
     }
   ],
   "provider_options": [
@@ -267,7 +364,8 @@ DEVUELVE UNICAMENTE UN JSON CON LA SIGUIENTE ESTRUCTURA EXACTA:
     {
       "title": "Fase 1: Demoliciones",
       "duration_days": 5,
-      "description": "Demolicion y retirada de escombros"
+      "description": "Demolicion y retirada de escombros",
+      "depends_on": []
     }
   ],
   "estimated_timeline": {
@@ -294,7 +392,61 @@ REGLAS:
 5. Para construccion: MINIMO 20 suggested_items y MINIMO 15 suggested_materials en una reforma integral.
 6. Incluye SIEMPRE estimated_timeline y calendar_phases.
 7. Incluye SIEMPRE estimated_price_range con el rango de mercado para el tipo de trabajo.
-8. Los precios deben ser REALISTAS para el mercado espanol actual (2024-2026).`;
+8. Incluye estimated_hours en cada partida y depends_on en cada fase para poder planificar la ejecucion.
+9. Los precios de suggested_materials son provisionales hasta que el rastreador confirme una coincidencia.
+10. Los precios deben ser REALISTAS para el mercado espanol actual (2024-2026).`;
+
+    const userPrompt = scope
+      ? `DATOS ESTRUCTURADOS DEL PROYECTO (FUENTE PRINCIPAL — usa estos datos para dimensionar partidas, cantidades y precios):
+- Tipo de obra: ${service_type || "general"}
+- Superficie: ${scope.superficie_m2 || "no indicada"} m2
+- Ubicacion: ${scope.ubicacion || "no indicada (usar base nacional)"}
+- Estancias afectadas: ${(scope.estancias || []).join(", ") || "no seleccionadas"}
+- Actuaciones previstas: ${(scope.actuaciones || []).join(", ") || "no seleccionadas"}
+- Nivel de calidad: ${scope.calidad || "media"}
+- N. banos: ${scope.num_banos || 1}
+- Incluye cocina: ${scope.incluye_cocina ? "si" : "no"}
+- Incluye cambio ventanas: ${scope.incluye_ventanas ? "si" : "no"}
+- Incluye climatizacion: ${scope.incluye_climatizacion ? "si" : "no"}
+
+DESCRIPCION COMPLEMENTARIA del usuario:
+"${description}"
+
+INSTRUCCIONES:
+1. Genera partidas para CADA actuacion seleccionada, dimensionadas segun la superficie y estancias.
+2. Si el usuario marca "cocina", genera capitulo de cocina. Si marca "ventanas", genera carpinteria exterior. Etc.
+3. La cantidad de cada partida debe calcularse a partir de los m2, banos, estancias y documentos tecnicos indicados.
+4. Para construccion necesito MINIMO 20 partidas y 15 materiales. Los precios de producto son provisionales hasta la verificacion del rastreador.
+5. La duracion debe ser realista para el alcance descrito y debe incluir dependencias entre fases.`
+      : `Analiza esta peticion de presupuesto y genera la estructura JSON completa:
+
+Descripcion:
+"${description}"
+
+Tipo: ${service_type || "general"}
+
+Para construccion necesito MINIMO 20 partidas y 15 materiales. Los precios de producto son provisionales hasta la verificacion del rastreador.`;
+
+    const messageContent: any[] = [];
+    for (const doc of technicalDocuments as any[]) {
+      const analysisUrl = doc.analysis_url || doc.file_url;
+      if (!analysisUrl) continue;
+      const mimeType = String(doc.mime_type || "").toLowerCase();
+      if (mimeType === "application/pdf" || String(doc.file_url).toLowerCase().endsWith(".pdf")) {
+        messageContent.push({
+          type: "document",
+          source: { type: "url", url: analysisUrl },
+          title: doc.name,
+          context: "Proyecto de ejecucion, planos o mediciones aportados por el usuario. Extrae solo datos visibles y no inventes medidas.",
+        });
+      } else if (mimeType.startsWith("image/")) {
+        messageContent.push({
+          type: "image",
+          source: { type: "url", url: analysisUrl },
+        });
+      }
+    }
+    messageContent.push({ type: "text", text: userPrompt });
 
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
@@ -303,8 +455,7 @@ REGLAS:
       messages: [
         {
           role: "user",
-          content: scope ? `DATOS ESTRUCTURADOS DEL PROYECTO (FUENTE PRINCIPAL — usa estos datos para dimensionar partidas, cantidades y precios):\n- Tipo de obra: ${service_type || "general"}\n- Superficie: ${scope.superficie_m2 || "no indicada"} m2\n- Ubicacion: ${scope.ubicacion || "no indicada (usar precios medios de Espana)"}\n- Estancias afectadas: ${(scope.estancias || []).join(", ") || "no seleccionadas"}\n- Actuaciones previstas: ${(scope.actuaciones || []).join(", ") || "no seleccionadas"}\n- Nivel de calidad: ${scope.calidad || "media"}\n- N. banos: ${scope.num_banos || 1}\n- Incluye cocina: ${scope.incluye_cocina ? "si" : "no"}\n- Incluye cambio ventanas: ${scope.incluye_ventanas ? "si" : "no"}\n- Incluye climatizacion: ${scope.incluye_climatizacion ? "si" : "no"}\n\nDESCRIPCION COMPLEMENTARIA del usuario:\n"${description}"\n\nINSTRUCCIONES:\n1. Genera partidas para CADA actuacion seleccionada, dimensionadas segun la superficie y estancias.\n2. Si el usuario marca "cocina", genera capitulo de cocina. Si marca "ventanas", genera carpinteria exterior. Etc.\n3. La cantidad de cada partida debe calcularse a partir de los m2, banos y estancias indicadas.\n4. Para construccion necesito MINIMO 20 partidas y 15 materiales con precios realistas del mercado espanol ajustados a la ubicacion y calidad.\n5. La duracion debe ser realista para el alcance descrito.`
-          : `Analiza esta peticion de presupuesto y genera la estructura JSON completa:\n\nDescripcion:\n"${description}"\n\nTipo: ${service_type || "general"}\n\nPara construccion necesito MINIMO 20 partidas y 15 materiales con precios realistas del mercado espanol.`
+          content: messageContent,
         }
       ]
     });
@@ -354,12 +505,16 @@ REGLAS:
     result.data_sources = {
       price_items_count: priceItems.length,
       n8n_items_count: n8nItemsCount,
+      tracker_products_count: trackerProductsCount ?? 0,
       default_items_count: defaultItemsCount,
       sector_price_count: refPrices.length,
       sector_regulation_count: regulations.length,
       real_suppliers: realSuppliers,
-      using_fallback: n8nItemsCount < 10,
-      fallback_reason: n8nItemsCount < 10 ? `Catalogo real insuficiente: solo ${n8nItemsCount} precios n8n sincronizados` : ""
+      documents_used: technicalDocuments.map((doc: any) => ({ id: doc.id, name: doc.name })),
+      using_fallback: (trackerProductsCount ?? 0) === 0,
+      fallback_reason: (trackerProductsCount ?? 0) === 0
+        ? "No hay productos activos con precio en el rastreador"
+        : "",
     };
 
     // Log summary for debugging

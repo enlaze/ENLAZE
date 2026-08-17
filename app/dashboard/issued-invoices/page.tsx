@@ -157,18 +157,23 @@ export default function IssuedInvoicesPage() {
 
   async function handleDelete(id: string) {
     const ok = await confirm({
-      title: "Eliminar factura emitida",
-      description: "¿Eliminar esta factura emitida?",
+      title: "Mover factura emitida a la papelera",
+      description: "La factura se conservará y podrás recuperarla desde Papelera.",
       variant: "danger",
-      confirmLabel: "Eliminar",
+      confirmLabel: "Mover a la papelera",
     });
     if (!ok) return;
     try {
-      await supabase.from("issued_invoices").delete().eq("id", id);
+      const { data, error } = await supabase.rpc("move_to_trash", {
+        p_entity_type: "issued_invoice",
+        p_entity_id: id,
+      });
+      if (error) throw error;
+      if (!data) throw new Error("No se encontró la factura");
       setInvoices((prev) => prev.filter((i) => i.id !== id));
-      toast.success("Factura emitida eliminada");
+      toast.success("Factura emitida movida a la papelera");
     } catch (error) {
-      toast.error("Error al eliminar la factura emitida");
+      toast.error("No se pudo mover la factura a la papelera");
     }
   }
 

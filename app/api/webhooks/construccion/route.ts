@@ -1,20 +1,38 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
-// Service role client for PB V2 tables (RLS bypass)
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  serviceRoleKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
+
+function throwIfSupabaseError(
+  error: { message: string } | null,
+  context: string
+) {
+  if (error) {
+    throw new Error(`${context}: ${error.message}`);
+  }
+}
+
+async function markUpdate(
+  updateId: string,
+  status: "completed" | "failed"
+) {
+  const { error } = await supabaseAdmin
+    .from("n8n_updates")
+    .update({ status, processed_at: new Date().toISOString() })
+    .eq("id", updateId);
+
+  throwIfSupabaseError(error, `No se pudo marcar la actualización como ${status}`);
+}
 
 // POST /api/webhooks/construccion - Endpoint exclusivo para n8n de construccion
 // n8n puede enviar actualizaciones de precios, normativas, etc.
 export async function POST(request: Request) {
+  let updateId: string | null = null;
+
   try {
     const authHeader = request.headers.get("authorization") || "";
     const token = authHeader.replace(/^Bearer\s+/i, "").trim();
@@ -25,6 +43,13 @@ export async function POST(request: Request) {
 
     if (!token || !validTokens.includes(token)) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    if (!serviceRoleKey) {
+      return NextResponse.json(
+        { error: "SUPABASE_SERVICE_ROLE_KEY no está configurada" },
+        { status: 503 }
+      );
     }
 
     const body = await request.json();
@@ -46,30 +71,75 @@ export async function POST(request: Request) {
 
     const { action, sector, data } = normalizedBody;
 
+    if (!["update_prices", "update_regulations", "update_news"].includes(action)) {
+      return NextResponse.json(
+        { error: "Accion no reconocida: " + action },
+        { status: 400 }
+      );
+    }
+
+    if (action === "update_prices" && !Array.isArray(data?.prices)) {
+      return NextResponse.json(
+        { error: "data.prices debe ser un array" },
+        { status: 400 }
+      );
+    }
+
+    if (action === "update_regulations" && !Array.isArray(data?.regulations)) {
+      return NextResponse.json(
+        { error: "data.regulations debe ser un array" },
+        { status: 400 }
+      );
+    }
+
+    if (action === "update_news" && !data?.news) {
+      return NextResponse.json(
+        { error: "data.news requerido" },
+        { status: 400 }
+      );
+    }
+
     // Log de la actualizacion
-    await supabase.from("n8n_updates").insert({
-      sector,
-      update_type: action,
-      data: normalizedBody,
-      status: "processing",
-    });
+    const { data: updateLog, error: updateLogError } = await supabaseAdmin
+      .from("n8n_updates")
+      .insert({
+        sector,
+        update_type: action,
+        data: normalizedBody,
+        status: "processing",
+      })
+      .select("id")
+      .single();
+
+    throwIfSupabaseError(updateLogError, "No se pudo crear el registro de n8n");
+    updateId = updateLog?.id || null;
+
+    if (!updateId) {
+      throw new Error("Supabase no devolvió el ID del registro de n8n");
+    }
 
     switch (action) {
       case "update_prices": {
-        // n8n envia precios actualizados del mercado
-        if (!data?.prices || !Array.isArray(data.prices)) {
-          return NextResponse.json({ error: "data.prices debe ser un array" }, { status: 400 });
-        }
-
         for (const price of data.prices) {
+          if (
+            !price ||
+            typeof price.title !== "string" ||
+            !price.title.trim() ||
+            !Number.isFinite(Number(price.value))
+          ) {
+            throw new Error("Cada precio necesita title y value numérico");
+          }
+
           // Buscar si ya existe
-          const { data: existing } = await supabase
+          const { data: existing, error: existingError } = await supabaseAdmin
             .from("sector_data")
             .select("id")
             .eq("sector", sector)
             .eq("data_type", "price")
             .eq("title", price.title)
-            .single();
+            .maybeSingle();
+
+          throwIfSupabaseError(existingError, `No se pudo consultar el precio ${price.title}`);
 
           const rawSource = [price.source, price.source_url, price.description, price.title, price.name].join(" ").toLowerCase();
           let supplierName = "Banco ENLAZE base";
@@ -107,10 +177,10 @@ export async function POST(request: Request) {
           }
 
           if (existing) {
-            await supabase
+            const { error } = await supabaseAdmin
               .from("sector_data")
               .update({
-                value: price.value,
+                value: Number(price.value),
                 unit: price.unit || "ud",
                 category: price.category || "",
                 subcategory: price.subcategory || "",
@@ -124,61 +194,71 @@ export async function POST(request: Request) {
                 },
               })
               .eq("id", existing.id);
+
+            throwIfSupabaseError(error, `No se pudo actualizar el precio ${price.title}`);
           } else {
-            await supabase.from("sector_data").insert({
-              sector,
-              data_type: "price",
-              title: price.title,
-              description: price.description || "",
-              value: price.value,
-              unit: price.unit || "ud",
-              category: price.category || "",
-              subcategory: price.subcategory || "",
-              source: price.source || "n8n",
-              metadata: {
-                ...(price.metadata || {}),
-                supplier_name: supplierName,
-                source_type: sourceType,
-              },
-            });
+            const { error } = await supabaseAdmin
+              .from("sector_data")
+              .insert({
+                sector,
+                data_type: "price",
+                title: price.title,
+                description: price.description || "",
+                value: Number(price.value),
+                unit: price.unit || "ud",
+                category: price.category || "",
+                subcategory: price.subcategory || "",
+                source: price.source || "n8n",
+                metadata: {
+                  ...(price.metadata || {}),
+                  supplier_name: supplierName,
+                  source_type: sourceType,
+                },
+              });
+
+            throwIfSupabaseError(error, `No se pudo insertar el precio ${price.title}`);
           }
         }
 
-        // ── Bridge: also insert into Price Bank V2 tables ──
-        await bridgeToPriceBank(data.prices, data.source_group);
+        // Los índices INE y el PVPC son señales de mercado, no productos.
+        const productPrices = data.prices.filter(
+          (price: { category?: string }) =>
+            !["energia", "indice_mercado"].includes(price.category || "")
+        );
+        if (productPrices.length > 0) {
+          await bridgeToPriceBank(productPrices, data.source_group);
+        }
 
         // ── Process price alerts (in-app + email notifications) ──
         await triggerAlertProcessing();
 
-        // Marcar update como completado
-        await supabase
-          .from("n8n_updates")
-          .update({ status: "completed", processed_at: new Date().toISOString() })
-          .eq("sector", sector)
-          .eq("status", "processing");
+        await markUpdate(updateId, "completed");
 
         return NextResponse.json({
           success: true,
           message: data.prices.length + " precios actualizados para sector " + sector,
+          update_id: updateId,
         });
       }
 
       case "update_regulations": {
-        if (!data?.regulations || !Array.isArray(data.regulations)) {
-          return NextResponse.json({ error: "data.regulations debe ser un array" }, { status: 400 });
-        }
-
         for (const reg of data.regulations) {
-          const { data: existing } = await supabase
+          if (!reg || typeof reg.title !== "string" || !reg.title.trim()) {
+            throw new Error("Cada normativa necesita title");
+          }
+
+          const { data: existing, error: existingError } = await supabaseAdmin
             .from("sector_data")
             .select("id")
             .eq("sector", sector)
             .eq("data_type", "regulation")
             .eq("title", reg.title)
-            .single();
+            .maybeSingle();
+
+          throwIfSupabaseError(existingError, `No se pudo consultar la normativa ${reg.title}`);
 
           if (existing) {
-            await supabase
+            const { error } = await supabaseAdmin
               .from("sector_data")
               .update({
                 description: reg.description || "",
@@ -187,50 +267,89 @@ export async function POST(request: Request) {
                 metadata: reg.metadata || {},
               })
               .eq("id", existing.id);
+
+            throwIfSupabaseError(error, `No se pudo actualizar la normativa ${reg.title}`);
           } else {
-            await supabase.from("sector_data").insert({
-              sector,
-              data_type: "regulation",
-              title: reg.title,
-              description: reg.description || "",
-              source: reg.source || "n8n",
-              metadata: reg.metadata || {},
-            });
+            const { error } = await supabaseAdmin
+              .from("sector_data")
+              .insert({
+                sector,
+                data_type: "regulation",
+                title: reg.title,
+                description: reg.description || "",
+                source: reg.source || "n8n",
+                metadata: reg.metadata || {},
+              });
+
+            throwIfSupabaseError(error, `No se pudo insertar la normativa ${reg.title}`);
           }
         }
 
-        await supabase
-          .from("n8n_updates")
-          .update({ status: "completed", processed_at: new Date().toISOString() })
-          .eq("sector", sector)
-          .eq("status", "processing");
+        await markUpdate(updateId, "completed");
 
         return NextResponse.json({
           success: true,
           message: data.regulations.length + " normativas actualizadas para sector " + sector,
+          update_id: updateId,
         });
       }
 
       case "update_news": {
-        if (!data?.news) {
-          return NextResponse.json({ error: "data.news requerido" }, { status: 400 });
-        }
-
         // Support both single news object and array
         const newsItems = Array.isArray(data.news) ? data.news : [data.news];
 
         for (const newsItem of newsItems) {
-          await supabase.from("sector_data").insert({
-            sector,
-            data_type: "news",
-            title: newsItem.title || "Actualizacion",
+          if (
+            !newsItem ||
+            typeof newsItem.title !== "string" ||
+            !newsItem.title.trim()
+          ) {
+            throw new Error("Cada noticia necesita title");
+          }
+
+          const { data: existing, error: existingError } = await supabaseAdmin
+            .from("sector_data")
+            .select("id")
+            .eq("sector", sector)
+            .eq("data_type", "news")
+            .eq("title", newsItem.title)
+            .maybeSingle();
+
+          throwIfSupabaseError(existingError, `No se pudo consultar la noticia ${newsItem.title}`);
+
+          const newsData = {
             description: newsItem.content || newsItem.description || "",
             source: newsItem.source || "n8n",
             metadata: newsItem.metadata || {},
-          });
+            last_updated: new Date().toISOString(),
+          };
+
+          if (existing) {
+            const { error } = await supabaseAdmin
+              .from("sector_data")
+              .update(newsData)
+              .eq("id", existing.id);
+
+            throwIfSupabaseError(error, `No se pudo actualizar la noticia ${newsItem.title}`);
+          } else {
+            const { error } = await supabaseAdmin.from("sector_data").insert({
+              sector,
+              data_type: "news",
+              title: newsItem.title,
+              ...newsData,
+            });
+
+            throwIfSupabaseError(error, `No se pudo insertar la noticia ${newsItem.title}`);
+          }
         }
 
-        return NextResponse.json({ success: true, message: newsItems.length + " noticias anadidas para sector " + sector });
+        await markUpdate(updateId, "completed");
+
+        return NextResponse.json({
+          success: true,
+          message: newsItems.length + " noticias actualizadas para sector " + sector,
+          update_id: updateId,
+        });
       }
 
       default:
@@ -239,6 +358,18 @@ export async function POST(request: Request) {
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("Webhook error:", message);
+
+    if (updateId) {
+      try {
+        await markUpdate(updateId, "failed");
+      } catch (logError) {
+        console.error(
+          "No se pudo marcar la actualización como fallida:",
+          logError instanceof Error ? logError.message : logError
+        );
+      }
+    }
+
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -66,37 +66,28 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    // Get or create provider (admin client for public provider)
-    const supabaseAdmin = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) { return cookieStore.get(name)?.value; },
-          set() {},
-          remove() {},
-        },
-      }
-    );
-
-    const { data: existingProv } = await supabaseAdmin
+    // Providers imported by CSV are private to this account, not shared —
+    // written with the authenticated session client (already resolved
+    // above via getUser()), never with service_role.
+    const { data: existingProv } = await supabase
       .from("pb_providers")
       .select("id")
       .eq("name", providerName)
-      .is("company_id", null)
+      .eq("company_id", user.id)
       .limit(1);
 
     let providerId: string;
     if (existingProv && existingProv.length > 0) {
       providerId = existingProv[0].id;
     } else {
-      const { data: newProv, error: provErr } = await supabaseAdmin
+      const { data: newProv, error: provErr } = await supabase
         .from("pb_providers")
         .insert({
           name: providerName,
           legal_name: providerName,
           country: "ES",
           is_active: true,
+          company_id: user.id,
         })
         .select("id")
         .single();
@@ -127,7 +118,7 @@ export async function POST(request: Request) {
       const marca = cols[colIdx.marca]?.trim() || null;
       const desc = cols[colIdx.descripcion]?.trim() || "";
 
-      const { error: insErr } = await supabaseAdmin.from("pb_products").insert({
+      const { error: insErr } = await supabase.from("pb_products").insert({
         provider_id: providerId,
         commercial_name: nombre,
         description: desc,
@@ -159,9 +150,10 @@ export async function POST(request: Request) {
       errors: errors.slice(0, 10),
       provider: providerName,
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("[prices/import] Error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    const message = err instanceof Error ? err.message : "Error al importar precios";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 

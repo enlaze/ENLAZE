@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { syncUserPrices } from "@/lib/services/price-sync";
+import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
 
 // Usamos el Service Role Key para operaciones de webhook que necesitan saltarse RLS
 const supabase = createClient(
@@ -111,8 +112,21 @@ const { action, sector, data } = normalizedBody;
           if (activeUsers && activeUsers.length > 0) {
             const marketPrices = data.prices;
             
-            // Ejecutar la sincronización para cada usuario
+            // Ejecutar la sincronización para cada usuario. Cada iteración
+            // toma su propio lease de escritura: sin él, este cliente
+            // service-role (exento del trigger por completo) podía volver a
+            // crear filas price_sync_logs/price_items de un usuario justo
+            // después de que la limpieza de borrado de cuenta las hubiera
+            // eliminado. Si la cuenta está bloqueada para borrado, el lease
+            // falla y ese usuario simplemente se omite del broadcast en
+            // lugar de abortar la difusión completa.
             for (const user of activeUsers) {
+              let leaseId: string;
+              try {
+                leaseId = await beginAccountWriteLease(supabase, user.id, 180);
+              } catch {
+                continue;
+              }
               try {
                 const results = await syncUserPrices(supabase, user.id, sector, marketPrices, "n8n_workflow");
                 usersProcessed++;
@@ -120,6 +134,8 @@ const { action, sector, data } = normalizedBody;
                 totalUpdated += results.updated;
               } catch (userErr) {
                 console.error(`Error sync user ${user.id}:`, userErr);
+              } finally {
+                await endAccountWriteLease(supabase, leaseId);
               }
             }
           }

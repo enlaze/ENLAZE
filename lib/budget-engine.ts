@@ -89,6 +89,11 @@ export interface EnginePartida {
   status: "incluida" | "estimada" | "opcional";
   cost_breakdown?: CostBreakdown;
   market_adjustment?: MarketAdjustmentMeta;
+  base_unit_price?: number;
+  geographic_factor?: number;
+  geographic_profile?: string;
+  price_source?: string;
+  estimated_hours?: number;
 }
 
 export interface EngineMaterial {
@@ -1105,7 +1110,7 @@ export interface ChapterTechnicalBreakdown {
   includedTasks: TechnicalDetail[];
 }
 
-const CHAPTER_LABELS: Record<string, string> = {
+export const CHAPTER_LABELS: Record<string, string> = {
   protecciones: "Protecciones y forrados",
   demoliciones: "Demoliciones y retiradas",
   albanileria: "Albanileria y tabiqueria",
@@ -1467,6 +1472,20 @@ export interface InternalMaterialLine {
   confidenceScore: number;
 }
 
+export interface InternalItemLine {
+  concept: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  baseUnitPrice: number;
+  geographicFactor: number;
+  unitCost: number;
+  subtotalCost: number;
+  clientPrice: number;
+  margin: number;
+  estimatedHours: number | null;
+}
+
 export interface InternalViewChapter {
   chapter: string;
   chapterLabel: string;
@@ -1481,6 +1500,7 @@ export interface InternalViewChapter {
   margin: number;
   marginPct: number;
   // Details
+  items: InternalItemLine[];
   materials: InternalMaterialLine[];
   sourceTypes: string[];
   avgConfidence: number;
@@ -1615,6 +1635,20 @@ export function buildInternalView(
       };
     });
 
+    const itemLines: InternalItemLine[] = group.map((item) => ({
+      concept: item.concept,
+      description: item.description,
+      quantity: item.quantity,
+      unit: item.unit,
+      baseUnitPrice: item.base_unit_price ?? item.unit_price,
+      geographicFactor: item.geographic_factor ?? 1,
+      unitCost: item.unit_price,
+      subtotalCost: item.subtotal_cost,
+      clientPrice: item.subtotal_client,
+      margin: item.subtotal_client - item.subtotal_cost,
+      estimatedHours: item.estimated_hours ?? null,
+    }));
+
     const avgConf = confidenceCount > 0 ? Math.round(confidenceSum / confidenceCount) : 50;
 
     internalChapters.push({
@@ -1628,6 +1662,7 @@ export function buildInternalView(
       clientPrice: Math.round(clientPrice * 100) / 100,
       margin: Math.round(margin * 100) / 100,
       marginPct: Math.round(marginPct * 10) / 10,
+      items: itemLines,
       materials: materialLines,
       sourceTypes: Array.from(sourceTypes),
       avgConfidence: avgConf,

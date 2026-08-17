@@ -6,6 +6,7 @@ import { writeFileSync, readFileSync, unlinkSync, mkdirSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { randomUUID } from "crypto";
+import { downloadCompanyLogo } from "@/lib/company-logo-download";
 
 export async function POST(request: Request) {
   const cookieStore = await cookies();
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
     // Load company info from profile
     const { data: profile } = await supabase
       .from("profiles")
-      .select("full_name, business_name")
+      .select("full_name, business_name, logo_url")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -72,6 +73,7 @@ export async function POST(request: Request) {
 
     const company = {
       name: profile?.business_name || profile?.full_name || "Mi Empresa",
+      logo_url: profile?.logo_url || "",
       nif: (fiscal as any)?.nif || (fiscal as any)?.cif || "",
       address: (fiscal as any)?.address || (fiscal as any)?.fiscal_address || "",
       phone: (fiscal as any)?.phone || "",
@@ -86,6 +88,7 @@ export async function POST(request: Request) {
         client_email: budget.client_email,
         client_phone: budget.client_phone,
         client_address: budget.client_address,
+        client_nif: budget.client_nif || "",
         service_type: budget.service_type,
         status: budget.status,
         created_at: budget.created_at,
@@ -95,6 +98,17 @@ export async function POST(request: Request) {
         iva_amount: Number(budget.iva_amount) || 0,
         total: Number(budget.total) || 0,
         notes: budget.notes || "",
+        deposit_percent: Number(budget.deposit_percent) || 30,
+        payment_method: budget.payment_method || "Transferencia bancaria",
+        payment_iban: budget.payment_iban || "",
+        discount_type: budget.discount_type || "percent",
+        discount_percent: Number(budget.discount_percent) || 0,
+        discount_amount: Number(budget.discount_amount) || 0,
+        payment_schedule: Array.isArray(budget.payment_schedule) ? budget.payment_schedule : [],
+        warranty_text: budget.warranty_text || "",
+        execution_deadline_text: budget.execution_deadline_text || "",
+        observations: budget.observations || "",
+        conditions_text: budget.conditions_text || "",
       },
       items: (items || []).map((i: any) => ({
         concept: i.concept,
@@ -114,6 +128,23 @@ export async function POST(request: Request) {
     const id = randomUUID();
     const jsonPath = join(tmpDir, `budget-${id}.json`);
     const pdfPath = join(tmpDir, `budget-${id}.pdf`);
+    const logoPath = join(tmpDir, `budget-logo-${id}`);
+
+    if (company.logo_url) {
+      try {
+        const logoBuffer = await downloadCompanyLogo({
+          rawUrl: company.logo_url,
+          supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          userId: user.id,
+        });
+        if (logoBuffer) {
+          writeFileSync(logoPath, logoBuffer);
+          (company as typeof company & { logo_path?: string }).logo_path = logoPath;
+        }
+      } catch {
+        console.warn("[PDF] Company logo could not be downloaded");
+      }
+    }
 
     writeFileSync(jsonPath, JSON.stringify(pdfData, null, 2));
 
@@ -154,6 +185,7 @@ export async function POST(request: Request) {
     // Cleanup
     try { unlinkSync(jsonPath); } catch {}
     try { unlinkSync(pdfPath); } catch {}
+    try { unlinkSync(logoPath); } catch {}
 
     return new NextResponse(pdfBuffer, {
       status: 200,

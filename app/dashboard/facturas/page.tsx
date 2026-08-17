@@ -11,6 +11,7 @@ import EmptyState from "@/components/ui/empty-state";
 import Loading from "@/components/ui/loading";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
+import { prepareInvoiceImage } from "@/lib/invoice-image-client";
 
 interface Invoice {
   id: string;
@@ -175,36 +176,6 @@ export default function FacturasPage() {
     resetForm(); loadInvoices();
   }
 
-  async function compressImageForUpload(file: File): Promise<File> {
-    if (file.size <= 1_500_000 && file.type === "image/jpeg") return file;
-    const objectUrl = URL.createObjectURL(file);
-    try {
-      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const image = new Image();
-        image.onload = () => resolve(image);
-        image.onerror = () => reject(new Error("No se pudo cargar la imagen"));
-        image.src = objectUrl;
-      });
-      const maxSide = 1400;
-      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
-      const width = Math.max(1, Math.round(img.width * scale));
-      const height = Math.max(1, Math.round(img.height * scale));
-      const canvas = document.createElement("canvas");
-      canvas.width = width; canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("No se pudo preparar la imagen");
-      ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, width, height);
-      ctx.drawImage(img, 0, 0, width, height);
-      const toBlob = (quality: number) => new Promise<Blob | null>((resolve) => { canvas.toBlob(resolve, "image/jpeg", quality); });
-      let blob = await toBlob(0.72);
-      if (!blob) throw new Error("No se pudo comprimir la imagen");
-      if (blob.size > 2_500_000) blob = await toBlob(0.6);
-      if (!blob) throw new Error("No se pudo comprimir la imagen");
-      const baseName = file.name.replace(/\.[^.]+$/, "");
-      return new File([blob], `${baseName}.jpg`, { type: "image/jpeg" });
-    } finally { URL.revokeObjectURL(objectUrl); }
-  }
-
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !userId) return;
@@ -214,15 +185,18 @@ export default function FacturasPage() {
     }
     setUploading(true); setUploadProgress("Preparando imagen...");
     try {
-      const optimizedFile = await compressImageForUpload(file);
+      const optimizedFile = await prepareInvoiceImage(file);
       setUploadProgress("Analizando factura con IA...");
       const formData = new FormData();
       formData.append("file", optimizedFile);
       formData.append("userId", userId);
       formData.append("clientId", selectedClientId);
       const res = await fetch("/api/invoices/ocr", { method: "POST", body: formData });
-      const result = await res.json();
-      if (result.success) {
+      const responseType = res.headers.get("content-type") || "";
+      const result = responseType.includes("application/json")
+        ? await res.json()
+        : { error: `El servidor devolvió un error ${res.status}` };
+      if (res.ok && result.success) {
         setUploadProgress("Factura procesada correctamente");
         await loadInvoices();
         setTimeout(() => { setUploading(false); setUploadProgress(""); }, 2000);
@@ -239,19 +213,24 @@ export default function FacturasPage() {
 
   async function deleteInvoice(id: string) {
     const ok = await confirm({
-      title: "Eliminar factura",
-      description: "¿Eliminar esta factura?",
+      title: "Mover factura a la papelera",
+      description: "La factura se conservará y podrás recuperarla desde Papelera.",
       variant: "danger",
-      confirmLabel: "Eliminar",
+      confirmLabel: "Mover a la papelera",
     });
     if (!ok) return;
     try {
-      await supabase.from("invoices").delete().eq("id", id);
+      const { data, error } = await supabase.rpc("move_to_trash", {
+        p_entity_type: "invoice",
+        p_entity_id: id,
+      });
+      if (error) throw error;
+      if (!data) throw new Error("No se encontró la factura");
       if (selectedInvoice?.id === id) setSelectedInvoice(null);
       await loadInvoices();
-      toast.success("Factura eliminada");
+      toast.success("Factura movida a la papelera");
     } catch (error) {
-      toast.error("Error al eliminar la factura");
+      toast.error("No se pudo mover la factura a la papelera");
     }
   }
 

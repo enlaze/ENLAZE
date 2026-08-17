@@ -20,6 +20,9 @@ interface SignatureFlowProps {
 }
 
 export default function SignatureFlow({
+  // Kept for prop compatibility with SignaturePanel.tsx: /api/signatures/create
+  // now derives the owner from the authenticated session, not this prop.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   userId,
   entityType,
   entityId,
@@ -33,6 +36,10 @@ export default function SignatureFlow({
 
   const [step, setStep] = useState<Step>("info");
   const [signatureId, setSignatureId] = useState<string | null>(null);
+  // Random one-time token returned by /api/signatures/create — authorizes
+  // the remaining unauthenticated-shaped calls below, not the (guessable)
+  // signatureId itself.
+  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Info form
@@ -73,7 +80,6 @@ export default function SignatureFlow({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          user_id: userId,
           entity_type: entityType,
           entity_id: entityId,
           signer_name: signerName.trim(),
@@ -86,6 +92,7 @@ export default function SignatureFlow({
       if (!res.ok) throw new Error(data.error);
 
       setSignatureId(data.id);
+      setToken(data.public_token);
       setStep("draw");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error al crear firma");
@@ -95,7 +102,7 @@ export default function SignatureFlow({
 
   /* ── Step 2: Save drawn signature ── */
   async function handleSignatureSave(dataUrl: string) {
-    if (!signatureId) return;
+    if (!signatureId || !token) return;
     setSignatureImage(dataUrl);
     setLoading(true);
 
@@ -104,7 +111,7 @@ export default function SignatureFlow({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          signature_id: signatureId,
+          token,
           signature_image: dataUrl,
           user_agent: navigator.userAgent,
         }),
@@ -123,13 +130,13 @@ export default function SignatureFlow({
 
   /* ── Step 3: Send OTP ── */
   async function sendOtp() {
-    if (!signatureId) return;
+    if (!signatureId || !token) return;
     try {
       const res = await fetch("/api/signatures/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          signature_id: signatureId,
+          token,
           email: signerEmail,
         }),
       });
@@ -146,7 +153,7 @@ export default function SignatureFlow({
 
   /* ── Step 3: Verify OTP ── */
   async function handleVerifyOtp() {
-    if (!signatureId || !otpCode.trim()) {
+    if (!signatureId || !token || !otpCode.trim()) {
       toast.error("Introduce el código de 6 dígitos.");
       return;
     }
@@ -157,7 +164,7 @@ export default function SignatureFlow({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          signature_id: signatureId,
+          token,
           code: otpCode.trim(),
         }),
       });

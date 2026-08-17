@@ -47,6 +47,7 @@ export interface PriceAlternative {
 export interface ResolvedPrice {
   materialName: string;
   normalizedName: string;
+  selectedProductName?: string;
   category: string;
   unit: string;
   quantity: number;
@@ -597,6 +598,10 @@ export interface ResolveMarketPricesResult {
     estimated: number;
     webSearchesPerformed: number;
     webSearchesSuccessful: number;
+    tracker_products_available?: number;
+    tracker_candidates?: number;
+    avg_confidence?: number;
+    by_source?: Record<string, number>;
   };
   cachedUntil: string;
   error?: string;
