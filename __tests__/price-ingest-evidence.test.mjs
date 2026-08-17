@@ -57,6 +57,76 @@ test("keeps accepting verified direct-seller product pages", () => {
   );
 });
 
+const validObramatCatalogProduct = {
+  price: 10.5,
+  sku: "OB-25091202",
+  product_url:
+    "https://www.obramat.es/productos/mortero-adhesivo-y-regularizador-satepro-therm-25-kg-gris-25091202.html",
+  raw_price: "10,50 €",
+  currency: "EUR",
+  seller: "OBRAMAT",
+  price_includes_vat: true,
+  vat_rate: 21,
+  evidence_type: "official_pdf_catalog",
+  manufacturer_reference: "25091202",
+  catalog_sha256: "b".repeat(64),
+  catalog_published_at: "2026-03-14T12:27:00.000Z",
+  catalog_url:
+    "https://view.publitas.com/105196/2909135/pdfs/6d8b4a54-a24c-4e95-8692-3cf3ac5bf358.pdf",
+  catalog_store: "Alicante",
+  catalog_page: 20,
+};
+
+test("accepts an OBRAMAT product backed by its official store catalogue", () => {
+  assert.equal(
+    hasReliableProviderEvidence("OBRAMAT", validObramatCatalogProduct),
+    true
+  );
+});
+
+test("accepts the exact official catalogue page when no product link is embedded", () => {
+  assert.equal(
+    hasReliableProviderEvidence("OBRAMAT", {
+      ...validObramatCatalogProduct,
+      product_url:
+        "https://view.publitas.com/catalogo-2026/catalogo-2026-alicante/page/20",
+    }),
+    true
+  );
+});
+
+test("rejects an OBRAMAT catalogue source that points to another page", () => {
+  assert.equal(
+    hasReliableProviderEvidence("OBRAMAT", {
+      ...validObramatCatalogProduct,
+      product_url:
+        "https://view.publitas.com/catalogo-2026/catalogo-2026-alicante/page/21",
+    }),
+    false
+  );
+});
+
+test("rejects an OBRAMAT catalogue row with a mismatched product URL", () => {
+  assert.equal(
+    hasReliableProviderEvidence("OBRAMAT", {
+      ...validObramatCatalogProduct,
+      product_url:
+        "https://www.obramat.es/productos/otro-producto-25091299.html",
+    }),
+    false
+  );
+});
+
+test("rejects an OBRAMAT catalogue row without its store scope", () => {
+  assert.equal(
+    hasReliableProviderEvidence("OBRAMAT", {
+      ...validObramatCatalogProduct,
+      catalog_store: "",
+    }),
+    false
+  );
+});
+
 const validIkeaProduct = {
   price: 7.99,
   sku: "IKEA-605.800.77",

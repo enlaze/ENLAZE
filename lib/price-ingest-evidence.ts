@@ -11,6 +11,9 @@ export interface ReliablePriceEvidenceProduct {
   manufacturer_reference?: string;
   catalog_sha256?: string;
   catalog_published_at?: string;
+  catalog_url?: string;
+  catalog_store?: string;
+  catalog_page?: number;
 }
 
 type ProductPageSource = {
@@ -105,7 +108,16 @@ export function getVerifiedProviderSource(providerName: string) {
   return VERIFIED_PROVIDER_SOURCES[normalizeProviderName(providerName)];
 }
 
-export function getEvidenceVerificationLabel(providerName: string) {
+export function getEvidenceVerificationLabel(
+  providerName: string,
+  product?: ReliablePriceEvidenceProduct
+) {
+  if (
+    normalizeProviderName(providerName) === "obramat" &&
+    product?.evidence_type === "official_pdf_catalog"
+  ) {
+    return "official_catalog_sku_source_url_raw_price_sha256";
+  }
   return getVerifiedProviderSource(providerName)?.evidenceMode ===
     "official_catalog"
     ? "official_catalog_sku_raw_price_sha256"
@@ -142,6 +154,47 @@ export function hasReliableProviderEvidence(
   }
 
   if (source.evidenceMode === "product_page") {
+    if (
+      normalizeProviderName(providerName) === "obramat" &&
+      product.evidence_type === "official_pdf_catalog"
+    ) {
+      const expectedReference = product.sku.replace(/^OB-/, "");
+      const publishedAt = Date.parse(product.catalog_published_at || "");
+      let catalogUrl: URL;
+      try {
+        catalogUrl = new URL(product.catalog_url || "");
+      } catch {
+        return false;
+      }
+      const catalogPageMatch = evidenceUrl.pathname.match(
+        /^\/catalogo-2026\/catalogo-2026-[a-z0-9-]+\/page\/(\d+)\/?$/i
+      );
+      const hasOfficialProductPage =
+        evidenceUrl.origin === source.origin &&
+        evidenceUrl.pathname.endsWith(`-${expectedReference}.html`);
+      const hasOfficialCatalogPage =
+        evidenceUrl.origin === "https://view.publitas.com" &&
+        Boolean(catalogPageMatch) &&
+        Number(catalogPageMatch?.[1]) === Number(product.catalog_page);
+
+      return (
+        (hasOfficialProductPage || hasOfficialCatalogPage) &&
+        catalogUrl.origin === "https://view.publitas.com" &&
+        /^\/105196\/\d+\/pdfs\/[a-f0-9-]+\.pdf$/i.test(
+          catalogUrl.pathname
+        ) &&
+        product.seller?.toLocaleLowerCase("es") === "obramat" &&
+        product.price_includes_vat === true &&
+        product.vat_rate === 21 &&
+        product.manufacturer_reference === expectedReference &&
+        /^[a-f0-9]{64}$/i.test(product.catalog_sha256 || "") &&
+        Number.isFinite(publishedAt) &&
+        Boolean(product.catalog_store?.trim()) &&
+        Number.isInteger(product.catalog_page) &&
+        Number(product.catalog_page) > 0
+      );
+    }
+
     const expectedReference = source.skuPrefix
       ? product.sku.slice(source.skuPrefix.length)
       : null;

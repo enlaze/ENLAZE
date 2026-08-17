@@ -89,7 +89,7 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     endpoint: "pb-ingest",
-    evidence_version: "official-sources-v2.2",
+    evidence_version: "official-sources-v2.3",
     verified_providers: [
       "ManoMano",
       "Leroy Merlin",
@@ -514,7 +514,13 @@ export async function POST(request: Request) {
                   manufacturer_reference: product.manufacturer_reference,
                   catalog_sha256: product.catalog_sha256,
                   catalog_published_at: product.catalog_published_at,
-                  verification: getEvidenceVerificationLabel(provider_name),
+                  catalog_url: product.catalog_url,
+                  catalog_store: product.catalog_store,
+                  catalog_page: product.catalog_page,
+                  verification: getEvidenceVerificationLabel(
+                    provider_name,
+                    product
+                  ),
                 },
               }))
             );
