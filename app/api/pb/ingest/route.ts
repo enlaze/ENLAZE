@@ -323,12 +323,22 @@ export async function POST(request: Request) {
         const missingBySku = validProducts.filter(
           (product) => !existingBySku.has(product.sku as string)
         );
+        const incomingNameCounts = validProducts.reduce((counts, product) => {
+          const name = product.name.trim();
+          counts.set(name, (counts.get(name) || 0) + 1);
+          return counts;
+        }, new Map<string, number>());
 
         if (missingBySku.length > 0) {
           const nameChunks = chunkArray(
             Array.from(
               new Set(
-                missingBySku.map((product) => product.name.trim())
+                missingBySku
+                  .filter(
+                    (product) =>
+                      incomingNameCounts.get(product.name.trim()) === 1
+                  )
+                  .map((product) => product.name.trim())
               )
             ),
             10
@@ -369,24 +379,27 @@ export async function POST(request: Request) {
           productId: string;
         }> = [];
         const claimedExistingIds = new Set<string>();
-        const claimedNewNames = new Set<string>();
+        const claimedNewSkus = new Set<string>();
         const syncedAt = new Date().toISOString();
 
         for (const product of validProducts) {
+          const nameKey = product.name.trim();
           const existing =
             existingBySku.get(product.sku as string) ||
-            existingByName.get(product.name.trim());
+            (incomingNameCounts.get(nameKey) === 1
+              ? existingByName.get(nameKey)
+              : undefined);
 
           if (!existing) {
-            const nameKey = product.name.trim();
-            if (claimedNewNames.has(nameKey)) {
+            const skuKey = product.sku as string;
+            if (claimedNewSkus.has(skuKey)) {
               details.push({
                 name: product.name,
                 action: "unchanged",
               });
               continue;
             }
-            claimedNewNames.add(nameKey);
+            claimedNewSkus.add(skuKey);
             newCandidates.push(product);
             continue;
           }
