@@ -56,3 +56,38 @@ test("keeps accepting verified direct-seller product pages", () => {
     true
   );
 });
+
+const validIkeaProduct = {
+  price: 7.99,
+  sku: "IKEA-605.800.77",
+  product_url:
+    "https://www.ikea.com/es/es/p/zebrasav-lampara-techo-marron-papel-pintado-60580077/",
+  raw_price: "7,99 €",
+  currency: "EUR",
+  seller: "IKEA",
+  price_includes_vat: true,
+  vat_rate: 21,
+  evidence_type: "official_product_page",
+  manufacturer_reference: "605.800.77",
+};
+
+test("accepts an IKEA Spain product with official JSON-LD evidence", () => {
+  assert.equal(hasReliableProviderEvidence("IKEA", validIkeaProduct), true);
+});
+
+test("rejects IKEA evidence from a non-product path or mismatched seller", () => {
+  assert.equal(
+    hasReliableProviderEvidence("IKEA", {
+      ...validIkeaProduct,
+      product_url: "https://www.ikea.com/es/es/cat/productos-products/",
+    }),
+    false
+  );
+  assert.equal(
+    hasReliableProviderEvidence("IKEA", {
+      ...validIkeaProduct,
+      seller: "Marketplace",
+    }),
+    false
+  );
+});

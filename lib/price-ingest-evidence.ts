@@ -18,6 +18,12 @@ type ProductPageSource = {
   origin: string;
   skuPattern: RegExp;
   website: string;
+  pathPattern?: RegExp;
+  evidenceType?: string;
+  seller?: string;
+  priceIncludesVat?: boolean;
+  vatRate?: number;
+  skuPrefix?: string;
 };
 
 type OfficialCatalogSource = {
@@ -50,6 +56,18 @@ const VERIFIED_PROVIDER_SOURCES: Record<string, VerifiedProviderSource> = {
     origin: "https://www.obramat.es",
     skuPattern: /^OB-\d+$/,
     website: "https://www.obramat.es",
+  },
+  ikea: {
+    evidenceMode: "product_page",
+    origin: "https://www.ikea.com",
+    pathPattern: /^\/es\/es\/p\/.+\/$/,
+    skuPattern: /^IKEA-\d{3}\.\d{3}\.\d{2}$/,
+    skuPrefix: "IKEA-",
+    evidenceType: "official_product_page",
+    seller: "IKEA",
+    priceIncludesVat: true,
+    vatRate: 21,
+    website: "https://www.ikea.com/es/es/",
   },
   roca: {
     evidenceMode: "official_catalog",
@@ -124,7 +142,21 @@ export function hasReliableProviderEvidence(
   }
 
   if (source.evidenceMode === "product_page") {
-    return evidenceUrl.origin === source.origin;
+    const expectedReference = source.skuPrefix
+      ? product.sku.slice(source.skuPrefix.length)
+      : null;
+    return (
+      evidenceUrl.origin === source.origin &&
+      (!source.pathPattern || source.pathPattern.test(evidenceUrl.pathname)) &&
+      (!source.evidenceType || product.evidence_type === source.evidenceType) &&
+      (!source.seller ||
+        product.seller?.toLocaleLowerCase("es") ===
+          source.seller.toLocaleLowerCase("es")) &&
+      (source.priceIncludesVat === undefined ||
+        product.price_includes_vat === source.priceIncludesVat) &&
+      (source.vatRate === undefined || product.vat_rate === source.vatRate) &&
+      (!expectedReference || product.manufacturer_reference === expectedReference)
+    );
   }
 
   const expectedReference = product.sku.replace(/^ROCA-/, "");

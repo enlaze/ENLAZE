@@ -89,8 +89,14 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     endpoint: "pb-ingest",
-    evidence_version: "roca-bc3-v1",
-    verified_providers: ["ManoMano", "Leroy Merlin", "OBRAMAT", "Roca"],
+    evidence_version: "official-sources-v2",
+    verified_providers: [
+      "ManoMano",
+      "Leroy Merlin",
+      "OBRAMAT",
+      "Roca",
+      "IKEA",
+    ],
   });
 }
 

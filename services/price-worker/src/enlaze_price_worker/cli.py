@@ -7,7 +7,8 @@ import re
 from pathlib import Path
 
 from .bc3 import parse_roca_catalog
-from .ingest import send_roca_products
+from .ikea import IKEA_WEBSITE, list_ikea_product_urls, scrape_ikea_products
+from .ingest import send_products, send_roca_products
 from .source import download_roca_catalog, verify_roca_catalog_link
 
 ALLOWED_ENV_KEYS = {
@@ -48,6 +49,20 @@ def _positive_integer(value: str) -> int:
     return parsed
 
 
+def _nonnegative_integer(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("no puede ser negativo")
+    return parsed
+
+
+def _nonnegative_float(value: str) -> float:
+    parsed = float(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("no puede ser negativo")
+    return parsed
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Importa tarifas oficiales verificables en ENLAZE")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -72,6 +87,42 @@ def build_parser() -> argparse.ArgumentParser:
     roca.add_argument("--batch-size", type=_positive_integer, default=200)
     roca.add_argument("--max-products", type=_positive_integer)
     roca.add_argument("--env-file", type=Path, help="Carga únicamente variables permitidas")
+
+    ikea = commands.add_parser(
+        "ikea",
+        help="Importa fichas oficiales de IKEA España relacionadas con reforma",
+    )
+    ikea.add_argument(
+        "--send",
+        action="store_true",
+        help="Envía los datos; sin esta opción es simulación",
+    )
+    ikea.add_argument("--api-url", default=os.environ.get("PRICE_INGEST_URL", ""))
+    ikea.add_argument("--batch-size", type=_positive_integer, default=100)
+    ikea.add_argument(
+        "--max-products",
+        type=_positive_integer,
+        default=25,
+        help="Límite de fichas por ejecución; por seguridad el valor predeterminado es 25",
+    )
+    ikea.add_argument(
+        "--start-at",
+        type=_nonnegative_integer,
+        default=0,
+        help="Posición desde la que reanudar el catálogo filtrado",
+    )
+    ikea.add_argument(
+        "--delay-seconds",
+        type=_nonnegative_float,
+        default=1.0,
+        help="Pausa entre fichas para no sobrecargar la web oficial",
+    )
+    ikea.add_argument(
+        "--all-products",
+        action="store_true",
+        help="Incluye todo IKEA; sin esta opción solo rastrea productos útiles para reformas",
+    )
+    ikea.add_argument("--env-file", type=Path, help="Carga únicamente variables permitidas")
 
     serve = commands.add_parser(
         "serve",
@@ -143,6 +194,69 @@ def run_roca(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_ikea(args: argparse.Namespace) -> int:
+    if args.env_file:
+        load_env_file(args.env_file)
+    if args.batch_size > 500:
+        raise ValueError("El tamaño de lote no puede superar 500 productos")
+
+    candidates = list_ikea_product_urls(
+        include_all=args.all_products,
+        limit=args.start_at + args.max_products,
+    )
+    selected_urls = candidates[args.start_at : args.start_at + args.max_products]
+    if not selected_urls:
+        raise ValueError("No hay fichas IKEA en el intervalo solicitado")
+    products, page_errors = scrape_ikea_products(
+        selected_urls,
+        delay_seconds=args.delay_seconds,
+    )
+    if not products:
+        raise RuntimeError("IKEA no devolvió ninguna ficha verificable")
+
+    summary = {
+        "mode": "send" if args.send else "dry-run",
+        "provider": "IKEA",
+        "scope": "todos los productos" if args.all_products else "productos de reforma",
+        "candidates_scanned": len(candidates),
+        "start_at": args.start_at,
+        "pages_requested": len(selected_urls),
+        "products": len(products),
+        "page_errors": len(page_errors),
+        "next_start_at": args.start_at + len(selected_urls),
+        "sample": [
+            {
+                "sku": product.sku,
+                "name": product.name,
+                "price_incl_vat": product.price,
+                "category": product.category,
+            }
+            for product in products[:3]
+        ],
+    }
+    if page_errors:
+        summary["error_sample"] = page_errors[:3]
+
+    if args.send:
+        api_key = os.environ.get("SYNC_API_KEY") or os.environ.get("AGENT_API_KEY")
+        if not args.api_url:
+            raise ValueError("Falta PRICE_INGEST_URL o --api-url")
+        if not api_key:
+            raise ValueError("Falta SYNC_API_KEY o AGENT_API_KEY")
+        summary["ingest"] = send_products(
+            products,
+            provider_name="IKEA",
+            sector="construccion",
+            source_url=IKEA_WEBSITE,
+            api_url=args.api_url,
+            api_key=api_key,
+            batch_size=args.batch_size,
+        )
+
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    return 0
+
+
 def run_server(args: argparse.Namespace) -> int:
     if args.env_file:
         load_env_file(args.env_file)
@@ -172,6 +286,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "roca":
             return run_roca(args)
+        if args.command == "ikea":
+            return run_ikea(args)
         if args.command == "serve":
             return run_server(args)
     except (OSError, RuntimeError, ValueError, PermissionError) as error:

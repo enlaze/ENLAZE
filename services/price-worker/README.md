@@ -1,8 +1,8 @@
 # ENLAZE Price Worker
 
 Servicio independiente para importar tarifas públicas y oficiales en el banco de
-precios de ENLAZE. La primera fuente es el catálogo profesional BC3/FIEBDC que
-Roca publica desde su propia zona profesional.
+precios de ENLAZE. Incluye el catálogo profesional BC3/FIEBDC que Roca publica
+desde su zona profesional y las fichas JSON-LD de IKEA España.
 
 ## Criterios de funcionamiento
 
@@ -12,7 +12,7 @@ Roca publica desde su propia zona profesional.
 - confirma que Roca sigue publicando el enlace exacto antes de descargarlo;
 - conserva fecha y SHA-256 del BC3 como evidencia de cada observación;
 - trabaja en modo simulación por defecto; `--send` es imprescindible para escribir;
-- envía precios sin IVA, conforme a la convención del banco de precios.
+- registra si el precio incluye IVA: Roca se importa sin IVA e IKEA con IVA.
 
 ## Ejecución local
 
@@ -30,7 +30,24 @@ python3 -m venv .venv
 PRICE_INGEST_URL=https://enlaze.es/api/pb/ingest \
 SYNC_API_KEY=... \
 .venv/bin/enlaze-price-worker roca --send
+
+# IKEA: simulación limitada a 25 productos de reforma
+.venv/bin/enlaze-price-worker ikea
+
+# IKEA: lote real de 100 fichas, con una pausa entre peticiones
+PRICE_INGEST_URL=https://enlaze.es/api/pb/ingest \
+SYNC_API_KEY=... \
+.venv/bin/enlaze-price-worker ikea --send --max-products 100
 ```
+
+IKEA publica más de 28.000 URLs. El comando filtra por defecto cocinas, baños,
+iluminación, puertas y revestimientos, y limita cada ejecución a 25 fichas. Usa
+`--start-at` para reanudar y `--all-products` solo cuando se haya planificado un
+rastreo completo. Cada ficha se valida contra vendedor, SKU, URL y precio.
+
+Leroy Merlin y OBRAMAT publican sitemaps, pero actualmente responden HTTP 403 al
+worker identificado. El servicio no intenta superar esa protección. Porcelanosa
+publica referencias en España, pero no ofrece una tarifa pública verificable.
 
 Para comprobar un archivo ya descargado sin usar la red:
 
@@ -72,7 +89,7 @@ docker run --rm \
   enlaze-price-worker roca --send
 ```
 
-El catálogo completo es grande, por lo que una ejecución semanal es suficiente.
+Los catálogos completos son grandes, por lo que una ejecución semanal es suficiente.
 n8n puede lanzar este contenedor o su comando cada lunes. El volumen `/data`
 conserva ETag y `Last-Modified` para evitar descargas innecesarias.
 

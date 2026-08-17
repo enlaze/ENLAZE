@@ -41,7 +41,7 @@ def user_agent() -> str:
     return configured or DEFAULT_USER_AGENT
 
 
-def assert_robots_allowed(target_url: str) -> None:
+def load_robots_policy(target_url: str) -> urllib.robotparser.RobotFileParser:
     parsed = urllib.parse.urlparse(target_url)
     robots_url = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, "/robots.txt", "", "", ""))
     request = urllib.request.Request(robots_url, headers={"User-Agent": user_agent()})
@@ -57,7 +57,8 @@ def assert_robots_allowed(target_url: str) -> None:
             robots_text = response.read(2 * 1024 * 1024).decode("utf-8", errors="replace")
     except urllib.error.HTTPError as error:
         if error.code in (404, 410):
-            return
+            parser.parse([])
+            return parser
         raise RuntimeError(
             f"No se pudo verificar robots.txt de {parsed.netloc}: HTTP {error.code}"
         ) from error
@@ -65,6 +66,14 @@ def assert_robots_allowed(target_url: str) -> None:
         raise RuntimeError(f"No se pudo verificar robots.txt de {parsed.netloc}") from error
 
     parser.parse(robots_text.splitlines())
+    return parser
+
+
+def assert_robots_allowed(
+    target_url: str,
+    policy: urllib.robotparser.RobotFileParser | None = None,
+) -> None:
+    parser = policy or load_robots_policy(target_url)
     if not parser.can_fetch(user_agent(), target_url):
         raise PermissionError(f"robots.txt no autoriza el acceso automatizado a {target_url}")
 

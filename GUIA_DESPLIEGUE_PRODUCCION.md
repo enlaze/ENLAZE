@@ -127,11 +127,11 @@ Una vez desplegado n8n:
 4. Añadir `N8N_PRICE_SEARCH_WEBHOOK_URL` en Vercel apuntando al webhook de n8n
 
 
-## 3.1 Worker de tarifas oficiales (Roca)
+## 3.1 Worker de tarifas oficiales (Roca e IKEA)
 
 El importador vive en `services/price-worker` y debe ejecutarse fuera de Vercel,
-por ejemplo en el mismo VPS que n8n. Roca publica un catálogo BC3 grande, por lo
-que se recomienda una ejecución semanal en vez de diaria.
+por ejemplo en el mismo VPS que n8n. Roca publica un catálogo BC3 grande e IKEA
+publica miles de fichas, por lo que se recomienda una ejecución semanal por lotes.
 
 El proceso comprueba `robots.txt`, se identifica de forma explícita y confirma
 que el enlace descargable siga publicado en la web profesional oficial. No usa
@@ -144,8 +144,9 @@ huella SHA-256 del catálogo que lo respalda.
    - `PRICE_INGEST_URL=https://enlaze.es/api/pb/ingest`
    - `SYNC_API_KEY` con el mismo secreto configurado en ENLAZE
    - `PRICE_WORKER_USER_AGENT=ENLAZE-Public-Price-Monitor/1.0`
-4. Usar el comando `roca --send`. Sin `--send`, el worker solo valida y muestra
-   una muestra, sin modificar el banco de precios.
+4. Usar `roca --send` para Roca. Para IKEA usar, por ejemplo,
+   `ikea --send --max-products 100 --start-at 0`, avanzando `--start-at` en cada
+   lote. Sin `--send`, el worker solo valida y muestra una muestra.
 5. Alertar si la ejecución falla: ante un cambio de enlace, permiso o formato,
    el worker se detiene y conserva los últimos precios válidos.
 

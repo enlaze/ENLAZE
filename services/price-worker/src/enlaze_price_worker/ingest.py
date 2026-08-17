@@ -24,9 +24,12 @@ def _chunks(products: Sequence[PriceProduct], size: int) -> Iterable[Sequence[Pr
         yield products[index : index + size]
 
 
-def send_roca_products(
+def send_products(
     products: Sequence[PriceProduct],
     *,
+    provider_name: str,
+    sector: str,
+    source_url: str,
     api_url: str,
     api_key: str,
     batch_size: int,
@@ -35,9 +38,9 @@ def send_roca_products(
     for product_batch in _chunks(products, batch_size):
         body = json.dumps(
             {
-                "provider_name": "Roca",
-                "sector": "construccion",
-                "source_url": ROCA_CATALOG_URL,
+                "provider_name": provider_name,
+                "sector": sector,
+                "source_url": source_url,
                 "products": [product.as_payload() for product in product_batch],
             },
             ensure_ascii=False,
@@ -79,3 +82,21 @@ def send_roca_products(
         for key in ("inserted", "updated", "errors"):
             totals[key] += int(result.get(key, 0))
     return totals
+
+
+def send_roca_products(
+    products: Sequence[PriceProduct],
+    *,
+    api_url: str,
+    api_key: str,
+    batch_size: int,
+) -> dict[str, int]:
+    return send_products(
+        products,
+        provider_name="Roca",
+        sector="construccion",
+        source_url=ROCA_CATALOG_URL,
+        api_url=api_url,
+        api_key=api_key,
+        batch_size=batch_size,
+    )
