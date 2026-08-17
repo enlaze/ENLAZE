@@ -29,6 +29,12 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import * as crypto from "crypto";
+import {
+  getEvidenceVerificationLabel,
+  getVerifiedProviderSource,
+  hasReliableProviderEvidence,
+  type ReliablePriceEvidenceProduct,
+} from "@/lib/price-ingest-evidence";
 
 const VALID_SECTORS = [
   "construccion",
@@ -39,24 +45,16 @@ const VALID_SECTORS = [
   "educacion",
 ];
 
-interface IngestProduct {
+interface IngestProduct extends ReliablePriceEvidenceProduct {
   name: string;
-  price: number;
   unit?: string;
   category?: string;
   subcategory?: string;
   brand?: string;
-  sku?: string;
   description?: string;
-  product_url?: string;
-  raw_price?: string;
-  currency?: string;
-  seller?: string;
   price_basis?: string;
-  price_includes_vat?: boolean;
   price_scope?: string;
   observed_at?: string;
-  evidence_type?: string;
 }
 
 interface IngestBody {
@@ -64,81 +62,6 @@ interface IngestBody {
   sector: string;
   source_url?: string;
   products: IngestProduct[];
-}
-
-const MANOMANO_ORIGIN = "https://www.manomano.es";
-const VERIFIED_PROVIDER_SOURCES: Record<
-  string,
-  { origin: string; skuPattern: RegExp; website: string }
-> = {
-  manomano: {
-    origin: MANOMANO_ORIGIN,
-    skuPattern: /^MM-\d+$/,
-    website: MANOMANO_ORIGIN,
-  },
-  "leroy merlin": {
-    origin: "https://www.leroymerlin.es",
-    skuPattern: /^LM-\d+$/,
-    website: "https://www.leroymerlin.es",
-  },
-  obramat: {
-    origin: "https://www.obramat.es",
-    skuPattern: /^OB-\d+$/,
-    website: "https://www.obramat.es",
-  },
-};
-
-function parseSpanishPriceLabel(value: unknown) {
-  const label = String(value || "").replace(/\u00a0/g, " ").trim();
-  if (
-    !/^(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d{1,2})?\s*€$/.test(label)
-  ) {
-    return Number.NaN;
-  }
-
-  const numericValue = label.replace(/\s*€$/, "");
-  if (numericValue.includes(",")) {
-    return Number.parseFloat(
-      numericValue.replace(/\./g, "").replace(",", ".")
-    );
-  }
-  if (/^\d{1,3}(?:\.\d{3})+$/.test(numericValue)) {
-    return Number.parseFloat(numericValue.replace(/\./g, ""));
-  }
-  return Number.parseFloat(numericValue);
-}
-
-function normalizeProviderName(value: string) {
-  return value.trim().toLocaleLowerCase("es");
-}
-
-function getVerifiedProviderSource(providerName: string) {
-  return VERIFIED_PROVIDER_SOURCES[normalizeProviderName(providerName)];
-}
-
-function hasReliableProviderEvidence(
-  providerName: string,
-  product: IngestProduct
-) {
-  const source = getVerifiedProviderSource(providerName);
-  if (!source) return false;
-  const evidencePrice = parseSpanishPriceLabel(product.raw_price);
-  let productUrl: URL;
-  try {
-    productUrl = new URL(product.product_url || "");
-  } catch {
-    return false;
-  }
-
-  return (
-    typeof product.sku === "string" &&
-    source.skuPattern.test(product.sku) &&
-    typeof product.product_url === "string" &&
-    productUrl.origin === source.origin &&
-    Number.isFinite(evidencePrice) &&
-    Math.abs(evidencePrice - product.price) < 0.005 &&
-    (!product.currency || product.currency === "EUR")
-  );
 }
 
 function chunkArray<T>(items: T[], size: number) {
@@ -160,6 +83,15 @@ function getErrorMessage(error: unknown) {
     return error.message;
   }
   return "Error procesando el lote de precios";
+}
+
+export async function GET() {
+  return NextResponse.json({
+    ok: true,
+    endpoint: "pb-ingest",
+    evidence_version: "roca-bc3-v1",
+    verified_providers: ["ManoMano", "Leroy Merlin", "OBRAMAT", "Roca"],
+  });
 }
 
 export async function POST(request: Request) {
@@ -305,7 +237,8 @@ export async function POST(request: Request) {
   let updated = 0;
   let errors = 0;
   const details: Array<{ name: string; action: string; error?: string }> = [];
-  const isManoMano = normalizeProviderName(provider_name) === "manomano";
+  const isManoMano =
+    provider_name.trim().toLocaleLowerCase("es") === "manomano";
   const isVerifiedProvider = Boolean(verifiedProviderSource);
 
   if (isVerifiedProvider) {
@@ -333,7 +266,7 @@ export async function POST(request: Request) {
           name: p.name,
           action: "error",
           error:
-            "Precio rechazado: faltan referencia, URL oficial o etiqueta exacta en euros",
+            "Precio rechazado: faltan referencia o evidencias oficiales verificables",
         });
         continue;
       }
@@ -469,6 +402,7 @@ export async function POST(request: Request) {
             commercial_name: existing.commercial_name,
             sector,
             unit_price: newPrice,
+            vat_rate: product.vat_rate ?? 21,
             sku: product.sku,
             source_url: product.product_url,
             last_synced_at: syncedAt,
@@ -514,6 +448,7 @@ export async function POST(request: Request) {
                   newCandidates.map((product) => ({
                     commercial_name: product.name.trim(),
                     unit_price: product.price,
+                    vat_rate: product.vat_rate ?? 21,
                     sale_unit: product.unit || "ud",
                     category: product.category || "material",
                     subcategory: product.subcategory || "",
@@ -595,7 +530,10 @@ export async function POST(request: Request) {
                 product_id: productId,
                 provider_id: providerId,
                 observed_price: product.price,
-                source: "n8n",
+                source:
+                  product.evidence_type === "official_bc3_catalog"
+                    ? "provider_catalog"
+                    : "n8n",
                 source_url: product.product_url,
                 metadata: {
                   sku: product.sku,
@@ -606,10 +544,14 @@ export async function POST(request: Request) {
                   seller: product.seller,
                   price_basis: product.price_basis,
                   price_includes_vat: product.price_includes_vat,
+                  vat_rate: product.vat_rate,
                   price_scope: product.price_scope,
                   observed_at: product.observed_at,
                   evidence_type: product.evidence_type,
-                  verification: "official_sku_url_raw_price",
+                  manufacturer_reference: product.manufacturer_reference,
+                  catalog_sha256: product.catalog_sha256,
+                  catalog_published_at: product.catalog_published_at,
+                  verification: getEvidenceVerificationLabel(provider_name),
                 },
               }))
             );
@@ -664,9 +606,13 @@ export async function POST(request: Request) {
         seller: p.seller,
         price_basis: p.price_basis,
         price_includes_vat: p.price_includes_vat,
+        vat_rate: p.vat_rate,
         price_scope: p.price_scope,
         observed_at: p.observed_at,
         evidence_type: p.evidence_type,
+        manufacturer_reference: p.manufacturer_reference,
+        catalog_sha256: p.catalog_sha256,
+        catalog_published_at: p.catalog_published_at,
         verification: isManoMano
           ? "sku_url_raw_price"
           : "provider_payload",

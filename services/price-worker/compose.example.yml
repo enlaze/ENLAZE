@@ -1,0 +1,14 @@
+services:
+  roca-price-worker:
+    build: .
+    environment:
+      PRICE_INGEST_URL: https://enlaze.es/api/pb/ingest
+      SYNC_API_KEY: ${SYNC_API_KEY}
+      PRICE_WORKER_USER_AGENT: ${PRICE_WORKER_USER_AGENT:-ENLAZE-Public-Price-Monitor/1.0}
+    command: ["roca", "--send"]
+    volumes:
+      - roca-price-state:/data
+    restart: "no"
+
+volumes:
+  roca-price-state:

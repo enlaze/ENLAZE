@@ -28,6 +28,9 @@ Fecha: 2026-07-16
 | `WEBHOOK_SECRET` | Verificar webhooks de n8n | Generar con `openssl rand -hex 16` |
 | `SERP_API_KEY` | Búsqueda de precios de mercado vía SerpAPI | serpapi.com |
 | `N8N_PRICE_SEARCH_WEBHOOK_URL` | URL del webhook de n8n para búsqueda de precios | Se configura tras desplegar n8n |
+| `PRICE_INGEST_URL` | Endpoint del importador de tarifas oficiales | `https://enlaze.es/api/pb/ingest` |
+| `PRICE_WORKER_USER_AGENT` | Identificación pública del rastreador | `ENLAZE-Public-Price-Monitor/1.0` |
+| `VERCEL_AUTOMATION_BYPASS_SECRET` | Solo si el dominio tiene protección de automatizaciones | Configurarlo también en Vercel |
 | `NEXT_PUBLIC_POSTHOG_KEY` | PostHog analytics | eu.posthog.com → Project → Settings |
 | `NEXT_PUBLIC_POSTHOG_HOST` | PostHog host | `https://eu.i.posthog.com` |
 | `NEXT_PUBLIC_SENTRY_DSN` | Sentry error tracking | sentry.io → Project → Settings → DSN |
@@ -124,6 +127,35 @@ Una vez desplegado n8n:
 4. Añadir `N8N_PRICE_SEARCH_WEBHOOK_URL` en Vercel apuntando al webhook de n8n
 
 
+## 3.1 Worker de tarifas oficiales (Roca)
+
+El importador vive en `services/price-worker` y debe ejecutarse fuera de Vercel,
+por ejemplo en el mismo VPS que n8n. Roca publica un catálogo BC3 grande, por lo
+que se recomienda una ejecución semanal en vez de diaria.
+
+El proceso comprueba `robots.txt`, se identifica de forma explícita y confirma
+que el enlace descargable siga publicado en la web profesional oficial. No usa
+modo stealth ni intenta superar bloqueos. Cada precio conserva la fecha y la
+huella SHA-256 del catálogo que lo respalda.
+
+1. Construir la imagen desde `services/price-worker/Dockerfile`.
+2. Crear en n8n un workflow semanal, por ejemplo los lunes a las 04:00.
+3. Ejecutar el contenedor con volumen persistente en `/data` y estas variables:
+   - `PRICE_INGEST_URL=https://enlaze.es/api/pb/ingest`
+   - `SYNC_API_KEY` con el mismo secreto configurado en ENLAZE
+   - `PRICE_WORKER_USER_AGENT=ENLAZE-Public-Price-Monitor/1.0`
+4. Usar el comando `roca --send`. Sin `--send`, el worker solo valida y muestra
+   una muestra, sin modificar el banco de precios.
+5. Alertar si la ejecución falla: ante un cambio de enlace, permiso o formato,
+   el worker se detiene y conserva los últimos precios válidos.
+
+Antes de habilitar la escritura en producción, ejecutar una simulación:
+
+```bash
+docker run --rm -v enlaze-roca-state:/data enlaze-price-worker roca
+```
+
+
 ## 4. Checklist pre-lanzamiento
 
 ### Seguridad
@@ -181,6 +213,8 @@ Usuario → enlaze.es (Vercel/Next.js)
          Resend (emails transaccionales)
               ↓
          n8n (agente diario + price sync)
+              ↓
+         Price Worker (tarifas oficiales BC3/API/feed)
               ↓
          PostHog (analytics) + Sentry (errores)
 ```

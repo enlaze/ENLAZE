@@ -30,6 +30,13 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 /debug-scraper/
+**/__pycache__/
+*.pyc
+/services/price-worker/.state/
+/services/price-worker/.venv/
+/services/price-worker/build/
+*.egg-info/
+/.scrapling_cache/
 
 # env files (can opt-in for committing if needed)
 .env*

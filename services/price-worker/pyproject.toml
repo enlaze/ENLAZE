@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "enlaze-price-worker"
+version = "0.1.0"
+description = "Importador trazable de tarifas oficiales para el banco de precios de ENLAZE"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "certifi>=2024.2.2",
+  "scrapling[fetchers]==0.4.11",
+]
+
+[project.scripts]
+enlaze-price-worker = "enlaze_price_worker.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+enlaze_price_worker = ["certs/*.pem"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
