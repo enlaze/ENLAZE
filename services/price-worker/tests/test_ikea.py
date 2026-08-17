@@ -40,6 +40,7 @@ class IkeaProductTests(unittest.TestCase):
         )
 
         self.assertEqual(product.sku, "IKEA-605.800.77")
+        self.assertTrue(product.name.endswith("(605.800.77)"))
         self.assertEqual(product.price, 7.99)
         self.assertEqual(product.raw_price, "7,99 €")
         self.assertEqual(product.category, "iluminacion")

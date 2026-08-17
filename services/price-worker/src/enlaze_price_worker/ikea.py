@@ -206,9 +206,10 @@ def parse_ikea_json_ld(
     category_label = str(product.get("category") or "").strip()
     category, subcategory = _category(category_label, name)
     description = re.sub(r"\s+", " ", str(product.get("description") or "")).strip()
+    display_name = f"{name} ({reference})"
 
     return PriceProduct(
-        name=name[:240],
+        name=display_name[:240],
         price=price,
         unit="ud",
         category=category,
