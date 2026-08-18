@@ -1,0 +1,111 @@
+name: Sincronizar tarifas autorizadas
+
+on:
+  schedule:
+    - cron: "7 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: authorized-supplier-feeds
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Leroy Merlin y Grupo Puma
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SYNC_API_KEY: ${{ secrets.SYNC_API_KEY }}
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v6
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Comprobar fuentes autorizadas
+        id: feeds
+        shell: bash
+        env:
+          LEROY_FEED_URL: ${{ secrets.LEROY_AUTHORIZED_FEED_URL }}
+          LEROY_AUTHORIZATION: ${{ secrets.LEROY_AUTHORIZATION_REFERENCE }}
+          PUMA_FEED_URL: ${{ secrets.PUMA_AUTHORIZED_FEED_URL }}
+          PUMA_AUTHORIZATION: ${{ secrets.PUMA_AUTHORIZATION_REFERENCE }}
+        run: |
+          mkdir -p tmp/authorized-feeds
+          if [[ -n "$LEROY_FEED_URL" && -n "$LEROY_AUTHORIZATION" ]]; then
+            echo "leroy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "leroy=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [[ -n "$PUMA_FEED_URL" && -n "$PUMA_AUTHORIZATION" ]]; then
+            echo "puma=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "puma=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Descargar tarifa autorizada de Leroy Merlin
+        if: steps.feeds.outputs.leroy == 'true'
+        shell: bash
+        env:
+          FEED_URL: ${{ secrets.LEROY_AUTHORIZED_FEED_URL }}
+          FEED_TOKEN: ${{ secrets.LEROY_AUTHORIZED_FEED_TOKEN }}
+        run: |
+          if [[ -n "$FEED_TOKEN" ]]; then
+            curl --fail --location --retry 3 \
+              --header "Authorization: Bearer $FEED_TOKEN" \
+              --output tmp/authorized-feeds/leroy.json "$FEED_URL"
+          else
+            curl --fail --location --retry 3 \
+              --output tmp/authorized-feeds/leroy.json "$FEED_URL"
+          fi
+
+      - name: Enviar Leroy Merlin a Enlaze
+        if: steps.feeds.outputs.leroy == 'true'
+        env:
+          AUTHORIZATION_REFERENCE: ${{ secrets.LEROY_AUTHORIZATION_REFERENCE }}
+        run: >-
+          node scripts/import-authorized-supplier-feed.js
+          --provider leroy
+          --input tmp/authorized-feeds/leroy.json
+          --authorization-reference "$AUTHORIZATION_REFERENCE"
+          --send
+
+      - name: Descargar tarifa autorizada de Grupo Puma
+        if: steps.feeds.outputs.puma == 'true'
+        shell: bash
+        env:
+          FEED_URL: ${{ secrets.PUMA_AUTHORIZED_FEED_URL }}
+          FEED_TOKEN: ${{ secrets.PUMA_AUTHORIZED_FEED_TOKEN }}
+        run: |
+          if [[ -n "$FEED_TOKEN" ]]; then
+            curl --fail --location --retry 3 \
+              --header "Authorization: Bearer $FEED_TOKEN" \
+              --output tmp/authorized-feeds/grupo-puma.json "$FEED_URL"
+          else
+            curl --fail --location --retry 3 \
+              --output tmp/authorized-feeds/grupo-puma.json "$FEED_URL"
+          fi
+
+      - name: Enviar Grupo Puma a Enlaze
+        if: steps.feeds.outputs.puma == 'true'
+        env:
+          AUTHORIZATION_REFERENCE: ${{ secrets.PUMA_AUTHORIZATION_REFERENCE }}
+        run: >-
+          node scripts/import-authorized-supplier-feed.js
+          --provider grupo-puma
+          --input tmp/authorized-feeds/grupo-puma.json
+          --authorization-reference "$AUTHORIZATION_REFERENCE"
+          --send
+
+      - name: Registrar que aún faltan las fuentes autorizadas
+        if: steps.feeds.outputs.leroy != 'true' && steps.feeds.outputs.puma != 'true'
+        run: >-
+          echo "Pendiente de recibir una fuente de precios y autorización de los proveedores."

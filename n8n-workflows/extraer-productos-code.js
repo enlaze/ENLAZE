@@ -64,7 +64,7 @@ for (const item of items) {
         seen.add(key);
         prices.push({ name: name.substring(0, 160), sku: p.sku || '', brand: p.brand?.name || '', price, unit: detectUnit(name), category: detectCategory(name), is_available: true, _source: source });
       }
-    } catch(e) {}
+    } catch {}
   }
 
   // Price regex
@@ -85,84 +85,14 @@ for (const item of items) {
   }
 }
 
-// FALLBACK: if scraping got nothing, use reference market prices
+// Fail closed: nunca convertir valores manuales o estimados en precios oficiales.
 if (prices.length === 0) {
-  const fecha = new Date().toISOString().slice(0, 10);
-  const referencia = [
-    // BigMat - materiales basicos
-    ['Saco cemento gris CEM II/B-L 32.5 R 25kg', 4.95, 'saco', 'albanileria', 'BigMat'],
-    ['Saco cemento blanco BL II/B-L 42.5 R 25kg', 8.50, 'saco', 'albanileria', 'BigMat'],
-    ['Mortero cola C1 gris 25kg', 5.90, 'saco', 'albanileria', 'BigMat'],
-    ['Mortero cola C2TE flexible 25kg', 12.50, 'saco', 'albanileria', 'BigMat'],
-    ['Mortero autonivelante 25kg', 9.75, 'saco', 'albanileria', 'BigMat'],
-    ['Yeso manual YG 20kg', 3.85, 'saco', 'albanileria', 'BigMat'],
-    ['Pasta de juntas 5kg', 6.90, 'saco', 'albanileria', 'BigMat'],
-    ['Ladrillo hueco doble 24x11.5x9', 0.28, 'ud', 'obra_gruesa', 'BigMat'],
-    ['Bloque hormigon 40x20x20', 1.15, 'ud', 'obra_gruesa', 'BigMat'],
-    ['Rasilla ceramica 50x20x3', 0.45, 'ud', 'obra_gruesa', 'BigMat'],
-    ['Mallazo 15x15x6mm 2x5m', 28.50, 'ud', 'obra_gruesa', 'BigMat'],
-    ['Arena lavada 0-4mm big bag 1m3', 42.00, 'ud', 'obra_gruesa', 'BigMat'],
-    ['Grava 12-18mm big bag 1m3', 48.00, 'ud', 'obra_gruesa', 'BigMat'],
-
-    // Porcelanosa - ceramica y revestimientos
-    ['Porcelanico rectificado 60x60 gris mate', 32.00, 'm2', 'revestimientos', 'Porcelanosa'],
-    ['Porcelanico rectificado 120x60 blanco', 45.00, 'm2', 'revestimientos', 'Porcelanosa'],
-    ['Azulejo pasta blanca 30x90 brillo', 28.50, 'm2', 'revestimientos', 'Porcelanosa'],
-    ['Porcelanico efecto madera 20x120', 38.00, 'm2', 'revestimientos', 'Porcelanosa'],
-    ['Revestimiento piedra natural 30x60', 52.00, 'm2', 'revestimientos', 'Porcelanosa'],
-    ['Mosaico porcelanico 30x30', 35.00, 'm2', 'revestimientos', 'Porcelanosa'],
-    ['Encimera porcelanica XTone 320x144', 185.00, 'm2', 'revestimientos', 'Porcelanosa'],
-
-    // Roca - sanitarios
-    ['Inodoro compacto adosado Roca The Gap', 189.00, 'ud', 'fontaneria', 'Roca'],
-    ['Inodoro suspendido Roca Inspira', 385.00, 'ud', 'fontaneria', 'Roca'],
-    ['Lavabo sobre encimera Roca Inspira Round', 195.00, 'ud', 'fontaneria', 'Roca'],
-    ['Lavabo mural Roca The Gap 60cm', 89.00, 'ud', 'fontaneria', 'Roca'],
-    ['Plato ducha resina Roca Terran 120x80', 295.00, 'ud', 'fontaneria', 'Roca'],
-    ['Banera acrilica Roca Easy 170x75', 245.00, 'ud', 'fontaneria', 'Roca'],
-    ['Grifo lavabo Roca L20 monomando', 65.00, 'ud', 'fontaneria', 'Roca'],
-    ['Grifo termostatico ducha Roca T-1000', 185.00, 'ud', 'fontaneria', 'Roca'],
-    ['Mampara frontal corredera Roca Victoria 120', 320.00, 'ud', 'fontaneria', 'Roca'],
-
-    // Bauhaus - materiales construccion
-    ['Saco hormigon seco H-25 25kg', 3.95, 'saco', 'albanileria', 'Bauhaus'],
-    ['Impermeabilizante liquido 5L', 24.90, 'ud', 'aislamiento', 'Bauhaus'],
-    ['Lamina impermeabilizante asfaltica 1x10m', 32.00, 'ud', 'aislamiento', 'Bauhaus'],
-    ['Panel poliestireno extruido XPS 50mm 1250x600', 8.50, 'ud', 'aislamiento', 'Bauhaus'],
-    ['Lana mineral 40mm rollo 12m2', 45.00, 'ud', 'aislamiento', 'Bauhaus'],
-    ['Tubo PVC evacuacion 110mm 3m', 12.90, 'ud', 'instalaciones', 'Bauhaus'],
-    ['Tubo multicapa 20mm rollo 50m', 65.00, 'ud', 'instalaciones', 'Bauhaus'],
-    ['Pintura plastica interior blanca 15L', 42.00, 'ud', 'pintura', 'Bauhaus'],
-    ['Pintura fachadas elastica blanca 15L', 68.00, 'ud', 'pintura', 'Bauhaus'],
-
-    // Bricoking
-    ['Tornillo autorroscante 4.5x40 caja 200ud', 8.50, 'ud', 'general', 'Bricoking'],
-    ['Taco expansion metalico 10x80 caja 50ud', 12.90, 'ud', 'general', 'Bricoking'],
-    ['Disco corte diamante 230mm', 14.50, 'ud', 'general', 'Bricoking'],
-    ['Cinta carrocero 50mm x 50m', 4.20, 'ud', 'general', 'Bricoking'],
-    ['Espuma poliuretano 750ml', 6.50, 'ud', 'aislamiento', 'Bricoking'],
-    ['Silicona neutra transparente 300ml', 5.90, 'ud', 'general', 'Bricoking'],
-
-    // Grupo Puma - morteros profesionales
-    ['Mortero monocapa Pumacril liso 25kg', 14.80, 'saco', 'albanileria', 'Grupo Puma'],
-    ['Mortero reparacion Pumacem R4 25kg', 18.50, 'saco', 'albanileria', 'Grupo Puma'],
-    ['Adhesivo cementoso Pegoland C2TE 25kg', 13.90, 'saco', 'albanileria', 'Grupo Puma'],
-    ['Lechada Pumacolor Plus 5kg', 9.50, 'saco', 'albanileria', 'Grupo Puma'],
-    ['Impermeabilizante Pumaseal flex 25kg', 28.00, 'saco', 'aislamiento', 'Grupo Puma'],
-    ['Mortero proyectado MP-5 1000kg', 85.00, 'ud', 'albanileria', 'Grupo Puma']
-  ];
-
-  for (const [name, price, unit, category, source] of referencia) {
-    prices.push({
-      name,
-      price,
-      unit,
-      category,
-      is_available: true,
-      description: 'Precio referencia mercado espanol ' + fecha,
-      _source: source
-    });
-  }
+  return [{
+    json: {
+      _empty: true,
+      message: 'No se encontraron productos con precio y evidencia oficial; no se enviaron estimaciones.'
+    }
+  }];
 }
 
 // Group by provider

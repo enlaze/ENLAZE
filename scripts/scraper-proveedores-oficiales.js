@@ -24,6 +24,7 @@ const path = require("node:path");
 const puppeteer = require("puppeteer-core");
 
 const DEFAULT_API_URL = "https://enlaze.vercel.app/api/pb/ingest";
+const DEFAULT_USER_AGENT = "ENLAZE-Public-Price-Monitor/1.0";
 const DEFAULT_BATCH_SIZE = 200;
 const DEFAULT_TIMEOUT_MS = 120_000;
 const BLOCKED_RESOURCE_TYPES = new Set(["image", "media", "font"]);
@@ -277,7 +278,9 @@ function validateProduct(product, provider) {
     Number.isFinite(rawPrice) &&
     Math.abs(rawPrice - product.price) < 0.005 &&
     (!provider.directSellerPattern ||
-      provider.directSellerPattern.test(product.seller))
+      provider.directSellerPattern.test(product.seller)) &&
+    (provider.key !== "leroy" ||
+      Boolean(product.authorization_reference?.trim()))
   );
 }
 
@@ -522,9 +525,12 @@ async function extractProducts(page, provider, category) {
       seller: candidate.seller || provider.name,
       price_basis: candidate.price_basis || "unidad",
       price_includes_vat: true,
+      vat_rate: 21,
       price_scope: provider.priceScope,
       observed_at: observedAt,
       evidence_type: "official_product_listing",
+      manufacturer_reference: candidate.reference,
+      authorization_reference: category.authorizationReference,
     };
     if (!validateProduct(product, provider)) continue;
     if (!unique.has(product.sku)) unique.set(product.sku, product);
@@ -798,10 +804,21 @@ async function main() {
       getOption("timeout-ms", process.env.SCRAPER_TIMEOUT_MS),
       DEFAULT_TIMEOUT_MS
     ),
+    authorizationReference: String(
+      getOption(
+        "authorization-reference",
+        process.env.LEROY_AUTHORIZATION_REFERENCE || ""
+      )
+    ).trim(),
   };
 
   if (!options.dryRun && !options.apiKey) {
     throw new Error("Falta SYNC_API_KEY o AGENT_API_KEY");
+  }
+  if (providerKeys.includes("leroy") && !options.authorizationReference) {
+    throw new Error(
+      "Leroy Merlin requiere una referencia de autorización para uso comercial"
+    );
   }
   const executablePath = findChromeExecutable();
   if (!executablePath) {
@@ -814,17 +831,9 @@ async function main() {
     executablePath,
     headless: true,
     protocolTimeout: 300_000,
-    args: [
-      "--disable-blink-features=AutomationControlled",
-      "--disable-dev-shm-usage",
-      "--no-sandbox",
-      "--window-size=1440,1200",
-    ],
+    args: ["--disable-dev-shm-usage", "--no-sandbox", "--window-size=1440,1200"],
   });
-  const browserUserAgent = (await browser.userAgent()).replace(
-    /HeadlessChrome\//,
-    "Chrome/"
-  );
+  const browserUserAgent = DEFAULT_USER_AGENT;
 
   const availableCategoryKeys = new Set(
     providers.flatMap((provider) =>
@@ -848,6 +857,14 @@ async function main() {
       )
       .map((category) => ({ provider, category }))
   );
+  for (const task of tasks) {
+    if (task.provider.key === "leroy") {
+      task.category = {
+        ...task.category,
+        authorizationReference: options.authorizationReference,
+      };
+    }
+  }
   console.log(
     `Rastreo oficial: ${providers.map((item) => item.name).join(", ")}; ` +
       `${tasks.length} categorías; ${options.maxPages} página(s) por categoría`

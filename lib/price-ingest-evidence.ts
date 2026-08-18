@@ -14,6 +14,7 @@ export interface ReliablePriceEvidenceProduct {
   catalog_url?: string;
   catalog_store?: string;
   catalog_page?: number;
+  authorization_reference?: string;
 }
 
 type ProductPageSource = {
@@ -27,6 +28,18 @@ type ProductPageSource = {
   priceIncludesVat?: boolean;
   vatRate?: number;
   skuPrefix?: string;
+  authorizationReferenceRequired?: boolean;
+};
+
+type AuthorizedTariffSource = {
+  evidenceMode: "authorized_tariff";
+  origin: string;
+  skuPattern: RegExp;
+  skuPrefix: string;
+  website: string;
+  seller: string;
+  evidenceType: string;
+  tariffPathPattern: RegExp;
 };
 
 type OfficialCatalogSource = {
@@ -36,7 +49,10 @@ type OfficialCatalogSource = {
   website: string;
 };
 
-type VerifiedProviderSource = ProductPageSource | OfficialCatalogSource;
+type VerifiedProviderSource =
+  | ProductPageSource
+  | OfficialCatalogSource
+  | AuthorizedTariffSource;
 
 const ROCA_BC3_URL =
   "https://www.acae.es/catalogos/roca/fiebdc-roca.zip";
@@ -52,6 +68,12 @@ const VERIFIED_PROVIDER_SOURCES: Record<string, VerifiedProviderSource> = {
     evidenceMode: "product_page",
     origin: "https://www.leroymerlin.es",
     skuPattern: /^LM-\d+$/,
+    skuPrefix: "LM-",
+    evidenceType: "official_product_listing",
+    seller: "Leroy Merlin",
+    priceIncludesVat: true,
+    vatRate: 21,
+    authorizationReferenceRequired: true,
     website: "https://www.leroymerlin.es",
   },
   obramat: {
@@ -77,6 +99,16 @@ const VERIFIED_PROVIDER_SOURCES: Record<string, VerifiedProviderSource> = {
     catalogUrl: ROCA_BC3_URL,
     skuPattern: /^ROCA-A[A-Z0-9.]+$/,
     website: "https://www.roca.es",
+  },
+  "grupo puma": {
+    evidenceMode: "authorized_tariff",
+    origin: "https://www.grupopuma.com",
+    skuPattern: /^PUMA-[A-Z0-9][A-Z0-9._-]*$/i,
+    skuPrefix: "PUMA-",
+    seller: "Grupo Puma",
+    evidenceType: "authorized_price_tariff",
+    tariffPathPattern: /^\/uploads\/.+/,
+    website: "https://www.grupopuma.com/es-ES",
   },
 };
 
@@ -117,6 +149,12 @@ export function getEvidenceVerificationLabel(
     product?.evidence_type === "official_pdf_catalog"
   ) {
     return "official_catalog_sku_source_url_raw_price_sha256";
+  }
+  if (normalizeProviderName(providerName) === "leroy merlin") {
+    return "authorized_direct_seller_sku_url_raw_price";
+  }
+  if (normalizeProviderName(providerName) === "grupo puma") {
+    return "authorized_tariff_sku_raw_price_sha256";
   }
   return getVerifiedProviderSource(providerName)?.evidenceMode ===
     "official_catalog"
@@ -208,7 +246,35 @@ export function hasReliableProviderEvidence(
       (source.priceIncludesVat === undefined ||
         product.price_includes_vat === source.priceIncludesVat) &&
       (source.vatRate === undefined || product.vat_rate === source.vatRate) &&
-      (!expectedReference || product.manufacturer_reference === expectedReference)
+      (!expectedReference || product.manufacturer_reference === expectedReference) &&
+      (!source.authorizationReferenceRequired ||
+        Boolean(product.authorization_reference?.trim()))
+    );
+  }
+
+  if (source.evidenceMode === "authorized_tariff") {
+    const expectedReference = product.sku.slice(source.skuPrefix.length);
+    const publishedAt = Date.parse(product.catalog_published_at || "");
+    let catalogUrl: URL;
+    try {
+      catalogUrl = new URL(product.catalog_url || "");
+    } catch {
+      return false;
+    }
+
+    return (
+      evidenceUrl.href === catalogUrl.href &&
+      catalogUrl.origin === source.origin &&
+      source.tariffPathPattern.test(catalogUrl.pathname) &&
+      product.evidence_type === source.evidenceType &&
+      product.seller?.toLocaleLowerCase("es") ===
+        source.seller.toLocaleLowerCase("es") &&
+      typeof product.price_includes_vat === "boolean" &&
+      product.vat_rate === 21 &&
+      product.manufacturer_reference === expectedReference &&
+      /^[a-f0-9]{64}$/i.test(product.catalog_sha256 || "") &&
+      Number.isFinite(publishedAt) &&
+      Boolean(product.authorization_reference?.trim())
     );
   }
 

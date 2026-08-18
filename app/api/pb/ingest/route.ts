@@ -89,13 +89,14 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     endpoint: "pb-ingest",
-    evidence_version: "official-sources-v2.3",
+    evidence_version: "official-sources-v2.4",
     verified_providers: [
       "ManoMano",
       "Leroy Merlin",
       "OBRAMAT",
       "Roca",
       "IKEA",
+      "Grupo Puma",
     ],
   });
 }
@@ -315,10 +316,39 @@ export async function POST(request: Request) {
           );
         }
 
+        const nameChunks = chunkArray(
+          Array.from(
+            new Set(validProducts.map((product) => product.name.trim()))
+          ),
+          100
+        );
+        const nameLookupResults = await Promise.all(
+          nameChunks.map((nameChunk) =>
+            supabase
+              .from("pb_products")
+              .select("id, unit_price, sku, commercial_name")
+              .eq("provider_id", providerId)
+              .eq("sector", sector)
+              .in("commercial_name", nameChunk)
+          )
+        );
+        for (const lookup of nameLookupResults) {
+          if (lookup.error) throw lookup.error;
+          existingProducts.push(
+            ...((lookup.data || []) as ExistingProduct[])
+          );
+        }
+
         const existingBySku = new Map(
           existingProducts
             .filter((product) => product.sku)
             .map((product) => [product.sku as string, product])
+        );
+        const existingByName = new Map(
+          existingProducts.map((product) => [
+            product.commercial_name,
+            product,
+          ])
         );
         const changedRows: Array<Record<string, unknown>> = [];
         const unchangedRows: Array<Record<string, unknown>> = [];
@@ -332,7 +362,9 @@ export async function POST(request: Request) {
         const syncedAt = new Date().toISOString();
 
         for (const product of validProducts) {
-          const existing = existingBySku.get(product.sku as string);
+          const existing =
+            existingBySku.get(product.sku as string) ||
+            existingByName.get(product.name.trim());
 
           if (!existing) {
             const skuKey = product.sku as string;
@@ -369,14 +401,14 @@ export async function POST(request: Request) {
             sku: product.sku,
             source_url: product.product_url,
             last_synced_at: syncedAt,
+            is_active: true,
+            is_available: true,
           };
 
           if (Math.abs(oldPrice - newPrice) > 0.001) {
             changedRows.push({
               ...commonUpdate,
               price_trend: newPrice > oldPrice ? "up" : "down",
-              is_active: true,
-              is_available: true,
             });
             updated++;
             details.push({ name: product.name, action: "updated" });
@@ -518,6 +550,7 @@ export async function POST(request: Request) {
                   catalog_url: product.catalog_url,
                   catalog_store: product.catalog_store,
                   catalog_page: product.catalog_page,
+                  authorization_reference: product.authorization_reference,
                   verification: getEvidenceVerificationLabel(
                     provider_name,
                     product
@@ -583,6 +616,8 @@ export async function POST(request: Request) {
         manufacturer_reference: p.manufacturer_reference,
         catalog_sha256: p.catalog_sha256,
         catalog_published_at: p.catalog_published_at,
+        catalog_url: p.catalog_url,
+        authorization_reference: p.authorization_reference,
         verification: isManoMano
           ? "sku_url_raw_price"
           : "provider_payload",

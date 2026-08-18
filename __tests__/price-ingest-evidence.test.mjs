@@ -52,8 +52,89 @@ test("keeps accepting verified direct-seller product pages", () => {
       product_url: "https://www.leroymerlin.es/productos/cemento-12345.html",
       raw_price: "4,95 €",
       currency: "EUR",
+      seller: "Leroy Merlin",
+      price_includes_vat: true,
+      vat_rate: 21,
+      evidence_type: "official_product_listing",
+      manufacturer_reference: "12345",
+      authorization_reference: "LM-AUTH-2026-001",
     }),
     true
+  );
+});
+
+test("rejects Leroy prices without direct seller or authorization evidence", () => {
+  const product = {
+    price: 4.95,
+    sku: "LM-12345",
+    product_url: "https://www.leroymerlin.es/productos/cemento-12345.html",
+    raw_price: "4,95 €",
+    currency: "EUR",
+    seller: "Leroy Merlin",
+    price_includes_vat: true,
+    vat_rate: 21,
+    evidence_type: "official_product_listing",
+    manufacturer_reference: "12345",
+    authorization_reference: "LM-AUTH-2026-001",
+  };
+
+  assert.equal(
+    hasReliableProviderEvidence("Leroy Merlin", {
+      ...product,
+      seller: "Marketplace",
+    }),
+    false
+  );
+  assert.equal(
+    hasReliableProviderEvidence("Leroy Merlin", {
+      ...product,
+      authorization_reference: "",
+    }),
+    false
+  );
+});
+
+const validPumaTariffProduct = {
+  price: 13.9,
+  sku: "PUMA-PEGOLAND-C2TE-25",
+  product_url:
+    "https://www.grupopuma.com/uploads/tarifas/tarifa-profesional-2026.pdf",
+  raw_price: "13,90 €",
+  currency: "EUR",
+  seller: "Grupo Puma",
+  price_includes_vat: false,
+  vat_rate: 21,
+  evidence_type: "authorized_price_tariff",
+  manufacturer_reference: "PEGOLAND-C2TE-25",
+  catalog_sha256: "c".repeat(64),
+  catalog_published_at: "2026-01-01T00:00:00.000Z",
+  catalog_url:
+    "https://www.grupopuma.com/uploads/tarifas/tarifa-profesional-2026.pdf",
+  authorization_reference: "PUMA-AUTH-2026-001",
+};
+
+test("accepts a Grupo Puma product only from an authorized official tariff", () => {
+  assert.equal(
+    hasReliableProviderEvidence("Grupo Puma", validPumaTariffProduct),
+    true
+  );
+});
+
+test("rejects Grupo Puma market estimates and non-official tariffs", () => {
+  assert.equal(
+    hasReliableProviderEvidence("Grupo Puma", {
+      ...validPumaTariffProduct,
+      authorization_reference: "",
+    }),
+    false
+  );
+  assert.equal(
+    hasReliableProviderEvidence("Grupo Puma", {
+      ...validPumaTariffProduct,
+      product_url: "https://example.com/tarifa.pdf",
+      catalog_url: "https://example.com/tarifa.pdf",
+    }),
+    false
   );
 });
 

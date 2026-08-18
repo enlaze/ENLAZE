@@ -9,10 +9,12 @@
     "lint": "eslint",
     "test:p1": "node --import tsx --test __tests__/p1-review.test.mjs",
     "test:price-evidence": "node --import tsx --test __tests__/price-ingest-evidence.test.mjs",
+    "test:authorized-suppliers": "node --test __tests__/authorized-supplier-feed.test.mjs",
     "test:price-worker": "PYTHONPATH=services/price-worker/src python3 -m unittest discover -s services/price-worker/tests",
     "test:integration": "node --import tsx --test __tests__/account-deletion-lock.integration.test.mjs",
     "scrape:prices": "node scripts/scraper-precios.js",
     "scrape:suppliers": "node scripts/scraper-proveedores-oficiales.js",
+    "import:authorized-supplier": "node scripts/import-authorized-supplier-feed.js",
     "obramat:catalog-check": "node scripts/check-obramat-catalog.js",
     "obramat:catalog-links": "node scripts/obramat-catalog-links.js",
     "obramat:catalog-import": "node scripts/import-obramat-catalog.js"
