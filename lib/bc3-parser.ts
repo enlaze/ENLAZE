@@ -26,7 +26,7 @@ export interface BC3Concept {
   summary: string;
   price: number;
   date: string;
-  /** 0=unclassified, 1=labor, 2=machinery, 3=material */
+  /** 0=unclassified, 1=labor, 2=machinery, 3=material, 4=auxiliary/waste */
   type: number;
 }
 
@@ -108,13 +108,40 @@ function safeInt(val: string | undefined): number {
   return isNaN(n) ? 0 : n;
 }
 
+/**
+ * FIEBDC chapter concepts may end in one or more # characters while their
+ * decomposition references omit them. Store both sides under one stable code.
+ */
+function normalizeCode(value: string | undefined): string {
+  return (value || "").trim().replace(/#+$/, "");
+}
+
 // ─── Record parsers ─────────────────────────────────────────────────────────
 
 function parseVersion(body: string, meta: BC3Metadata): void {
   const fields = splitFields(body);
-  meta.fiebdcVersion = fields[0]?.trim() || "";
-  meta.generatedBy = fields[1]?.trim() || "";
-  meta.headerTitle = fields[2]?.trim() || "";
+  const versionFieldIndex = fields.findIndex((field) =>
+    /FIEBDC-3\/\d{4}/i.test(field)
+  );
+
+  if (versionFieldIndex === -1) {
+    meta.fiebdcVersion = fields[0]?.trim() || "";
+    meta.generatedBy = fields[1]?.trim() || "";
+    meta.headerTitle = fields[2]?.trim() || "";
+    return;
+  }
+
+  const versionField = fields[versionFieldIndex]?.trim() || "";
+  meta.fiebdcVersion =
+    versionField.match(/FIEBDC-3\/\d{4}/i)?.[0] || versionField;
+
+  // CYPE writes the producer before the FIEBDC version, while other banks
+  // commonly place the version first and the producer second.
+  meta.generatedBy =
+    versionFieldIndex === 0
+      ? fields[1]?.trim() || ""
+      : fields[0]?.trim() || fields[versionFieldIndex + 1]?.trim() || "";
+  meta.headerTitle = fields[versionFieldIndex + 1]?.trim() || fields[2]?.trim() || "";
 }
 
 function parseConstants(body: string, meta: BC3Metadata): void {
@@ -166,7 +193,7 @@ function parseConcept(body: string): BC3Concept | null {
   const fields = splitFields(body);
   if (fields.length < 1) return null;
 
-  const code = fields[0]?.trim() || "";
+  const code = normalizeCode(fields[0]);
   if (!code) return null;
 
   return {
@@ -183,7 +210,7 @@ function parseDecomposition(body: string): BC3Decomposition | null {
   const fields = splitFields(body);
   if (fields.length < 2) return null;
 
-  const parentCode = fields[0]?.trim() || "";
+  const parentCode = normalizeCode(fields[0]);
   if (!parentCode) return null;
 
   const childrenRaw = fields[1] || "";
@@ -192,7 +219,7 @@ function parseDecomposition(body: string): BC3Decomposition | null {
   // Children come in triples: code\factor\yield\code\factor\yield\...
   const children: BC3DecompositionChild[] = [];
   for (let i = 0; i + 2 < parts.length; i += 3) {
-    const childCode = parts[i].trim();
+    const childCode = normalizeCode(parts[i]);
     if (!childCode) continue;
     children.push({
       childCode,
@@ -209,7 +236,7 @@ function parseLongText(body: string): BC3LongText | null {
   const fields = splitFields(body);
   if (fields.length < 2) return null;
 
-  const code = fields[0]?.trim() || "";
+  const code = normalizeCode(fields[0]);
   if (!code) return null;
 
   return {
@@ -508,6 +535,10 @@ export function classifyConcepts(parsed: ParsedBC3): ClassifiedConcepts {
       itemCodes.add(c.code);
     } else if (hasUnit && !isParent && allChildCodes.has(c.code)) {
       // Resource: has unit, only appears as child
+      resourceCodes.add(c.code);
+    } else if (c.type === 4 && hasUnit && !isParent) {
+      // CYPE includes waste/environmental concepts referenced by ~R records.
+      // They are auxiliary resources, not independent price items.
       resourceCodes.add(c.code);
     } else if (hasUnit && !isParent && !allChildCodes.has(c.code)) {
       // Standalone item: has unit, no decomposition links at all

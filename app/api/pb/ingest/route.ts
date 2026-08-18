@@ -35,6 +35,7 @@ import {
   hasReliableProviderEvidence,
   type ReliablePriceEvidenceProduct,
 } from "@/lib/price-ingest-evidence";
+import { claimUniqueProduct } from "@/lib/price-ingest-dedupe";
 
 const VALID_SECTORS = [
   "construccion",
@@ -358,7 +359,7 @@ export async function POST(request: Request) {
           productId: string;
         }> = [];
         const claimedExistingIds = new Set<string>();
-        const claimedNewSkus = new Set<string>();
+        const claimedNewProductKeys = new Set<string>();
         const syncedAt = new Date().toISOString();
 
         for (const product of validProducts) {
@@ -367,15 +368,13 @@ export async function POST(request: Request) {
             existingByName.get(product.name.trim());
 
           if (!existing) {
-            const skuKey = product.sku as string;
-            if (claimedNewSkus.has(skuKey)) {
+            if (!claimUniqueProduct(claimedNewProductKeys, product)) {
               details.push({
                 name: product.name,
                 action: "unchanged",
               });
               continue;
             }
-            claimedNewSkus.add(skuKey);
             newCandidates.push(product);
             continue;
           }
@@ -439,7 +438,7 @@ export async function POST(request: Request) {
           newCandidates.length > 0
             ? supabase
                 .from("pb_products")
-                .insert(
+                .upsert(
                   newCandidates.map((product) => ({
                     commercial_name: product.name.trim(),
                     unit_price: product.price,
@@ -458,7 +457,8 @@ export async function POST(request: Request) {
                     last_synced_at: syncedAt,
                     source_url: product.product_url,
                     price_trend: "stable",
-                  }))
+                  })),
+                  { onConflict: "provider_id,commercial_name" }
                 )
                 .select("id, sku, commercial_name")
             : Promise.resolve({

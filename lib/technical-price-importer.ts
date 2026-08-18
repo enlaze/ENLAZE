@@ -16,6 +16,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   type ParsedBC3,
   type BC3Concept,
+  type BC3DecompositionChild,
   classifyConcepts,
   inferComponentType,
 } from "./bc3-parser";
@@ -47,6 +48,85 @@ export interface ImportResult {
 interface ImportError {
   code?: string;
   error: string;
+}
+
+export interface CalculatedComponentCost {
+  childCode: string;
+  componentType: "labor" | "material" | "machinery" | "auxiliary";
+  yield: number;
+  unitCost: number;
+  totalCost: number;
+}
+
+export interface ItemCostBreakdown {
+  laborCost: number;
+  materialCost: number;
+  machineryCost: number;
+  indirectCost: number;
+  totalCost: number;
+  components: CalculatedComponentCost[];
+}
+
+/**
+ * Calculate an item's component costs following the order of its ~D record.
+ * FIEBDC percentage concepts (code/unit "%") use the accumulated component
+ * subtotal as their unit cost. CYPE uses this for direct complementary costs.
+ */
+export function calculateItemCostBreakdown(
+  children: BC3DecompositionChild[],
+  conceptMap: Map<string, BC3Concept>
+): ItemCostBreakdown {
+  let laborCost = 0;
+  let materialCost = 0;
+  let machineryCost = 0;
+  let indirectCost = 0;
+  let runningSubtotal = 0;
+  const components: CalculatedComponentCost[] = [];
+
+  for (const child of children) {
+    const childConcept = conceptMap.get(child.childCode);
+    if (!childConcept) continue;
+
+    const componentType = inferComponentType(childConcept);
+    const effectiveYield = child.factor * child.quantityPerUnit;
+    const isPercentage =
+      child.childCode.trim() === "%" || childConcept.unit.trim() === "%";
+    const unitCost = isPercentage ? runningSubtotal : childConcept.price;
+    const totalCost = effectiveYield * unitCost;
+
+    switch (componentType) {
+      case "labor":
+        laborCost += totalCost;
+        break;
+      case "material":
+        materialCost += totalCost;
+        break;
+      case "machinery":
+        machineryCost += totalCost;
+        break;
+      case "auxiliary":
+        indirectCost += totalCost;
+        break;
+    }
+
+    runningSubtotal += totalCost;
+    components.push({
+      childCode: child.childCode,
+      componentType,
+      yield: effectiveYield,
+      unitCost,
+      totalCost,
+    });
+  }
+
+  return {
+    laborCost,
+    materialCost,
+    machineryCost,
+    indirectCost,
+    totalCost: runningSubtotal,
+    components,
+  };
 }
 
 // ─── Confidence scores by source ────────────────────────────────────────────
@@ -280,40 +360,21 @@ export async function importBC3ToDatabase(
       const longText =
         parsed.longTexts.find((lt) => lt.code === itemCode)?.text || "";
 
-      // Pre-calculate cost breakdown from components if this item has decomposition
-      let laborCost = 0;
-      let materialCost = 0;
-      let machineryCost = 0;
-      let indirectCost = 0;
-
       const children =
         classified.parentChildMap.get(itemCode) || [];
-      for (const child of children) {
-        const childConcept = conceptMap.get(child.childCode);
-        if (!childConcept) continue;
-        const componentType = inferComponentType(childConcept);
-        const cost = child.quantityPerUnit * childConcept.price;
-        switch (componentType) {
-          case "labor":
-            laborCost += cost;
-            break;
-          case "material":
-            materialCost += cost;
-            break;
-          case "machinery":
-            machineryCost += cost;
-            break;
-          case "auxiliary":
-            indirectCost += cost;
-            break;
-        }
-      }
+      const costBreakdown = calculateItemCostBreakdown(children, conceptMap);
+      const {
+        laborCost,
+        materialCost,
+        machineryCost,
+        indirectCost,
+      } = costBreakdown;
 
       // Use the declared price if available, otherwise sum of components
       const unitPrice =
         concept.price > 0
           ? concept.price
-          : laborCost + materialCost + machineryCost + indirectCost;
+          : costBreakdown.totalCost;
 
       const row = {
         chapter_id: chapterId,
@@ -391,6 +452,7 @@ export async function importBC3ToDatabase(
 
       const children =
         classified.parentChildMap.get(itemCode) || [];
+      const costBreakdown = calculateItemCostBreakdown(children, conceptMap);
 
       // If overwriting, delete existing components first
       if (options.overwrite) {
@@ -412,6 +474,7 @@ export async function importBC3ToDatabase(
         }
 
         const componentType = inferComponentType(childConcept);
+        const calculatedComponent = costBreakdown.components[sortIdx];
 
         const componentRow = {
           price_item_id: itemId,
@@ -421,8 +484,8 @@ export async function importBC3ToDatabase(
           description: "",
           unit: childConcept.unit || "ud",
           // DB column is "yield" — we use the object key directly
-          yield: child.quantityPerUnit,
-          unit_cost: childConcept.price,
+          yield: calculatedComponent?.yield ?? child.quantityPerUnit,
+          unit_cost: calculatedComponent?.unitCost ?? childConcept.price,
           source: options.source,
           sort_order: sortIdx,
         };

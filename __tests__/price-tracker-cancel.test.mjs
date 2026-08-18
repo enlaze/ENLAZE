@@ -5,7 +5,9 @@ import test from "node:test";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { mapWithConcurrency } = require("../scripts/scraper-precios.js");
+const { isRetryableBrowserError, mapWithConcurrency } = require(
+  "../scripts/scraper-precios.js"
+);
 const root = path.resolve(import.meta.dirname, "..");
 
 test("el planificador deja de iniciar trabajos cuando se activa la cancelación", async () => {
@@ -61,4 +63,21 @@ test("la interfaz permite detener el rastreo en la página y en segundo plano", 
   assert.match(background, /method: "DELETE"/);
   assert.match(scraper, /startSyncCancellationMonitor/);
   assert.match(scraper, /activeBrowsers/);
+});
+
+test("ManoMano reintenta páginas con errores temporales del servidor", () => {
+  assert.equal(
+    isRetryableBrowserError(
+      new Error(
+        'No aparecieron tarjetas en la página 11. Título: "500 - Error interno del servidor".'
+      )
+    ),
+    true
+  );
+  assert.equal(
+    isRetryableBrowserError(
+      new Error("ManoMano activó su verificación de seguridad")
+    ),
+    false
+  );
 });

@@ -729,8 +729,13 @@ function isRetryableBrowserError(error) {
   ) {
     return false;
   }
-  return /timed out|protocolTimeout|Target closed|Session closed|frame was detached/i.test(
-    message
+  return (
+    /timed out|protocolTimeout|Target closed|Session closed|frame was detached/i.test(
+      message
+    ) ||
+    /No aparecieron tarjetas.*(?:Título: "5\d\d|Error interno del servidor)/i.test(
+      message
+    )
   );
 }
 
@@ -1245,6 +1250,7 @@ module.exports = {
   extractProducts,
   findChromeExecutable,
   hasNextCategoryPage,
+  isRetryableBrowserError,
   mapWithConcurrency,
   parseOptionalLimit,
   validateProduct,

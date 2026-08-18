@@ -32,6 +32,7 @@ const PUBLIC_API_ROUTES = [
   "/api/pb/ingest",        // Price ingest from n8n (Bearer token auth internally)
   "/api/pb/sync/run",      // Sync trigger (Bearer token auth internally)
   "/api/prices/n8n-sync",  // n8n polling (Bearer token auth internally)
+  "/api/technical-prices/import", // BC3 import (Bearer token auth internally)
 ];
 
 function isPublicRoute(pathname: string): boolean {
