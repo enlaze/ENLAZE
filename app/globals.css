@@ -392,3 +392,93 @@ html[data-theme="dark"] [data-settings-surface] {
     padding: 26px 20px !important;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Mensajería (WhatsApp y Emails) — tokens del rediseño.
+
+   Las dos pantallas comparten motor (components/messaging/) y paleta,
+   así que comparten también esta superficie. Mismo patrón que
+   `[data-settings-surface]`: los tokens viven SOLO dentro de
+   `[data-msg-surface]` para que no se filtren al resto del dashboard,
+   y el tema oscuro se engancha a la clase `.dark` que ya pone el
+   ThemeProvider en <html>.
+
+   A diferencia de Ajustes, esta superficie NO sangra ni pinta fondo:
+   se apoya sobre el degradado del <main> del dashboard, que ya es
+   prácticamente el `#f7f9f9` del diseño original.
+   ───────────────────────────────────────────────────────────── */
+[data-msg-surface] {
+  --msg-panel: #ffffff;
+  --msg-panel-2: #f7faf9;
+  --msg-bd: #e6ebe9;
+  --msg-bd-2: #d5dedb;
+  --msg-tx: #0f2233;
+  --msg-tx-2: #44586a;
+  --msg-mut: #7c8c96;
+  --msg-brand: #00c896;
+  --msg-brand-deep: #00b184;
+  --msg-brand-tx: #059a76;
+  --msg-brand-soft: #e9faf4;
+  --msg-chip: #f1f5f4;
+  --msg-dang: #dc4c4c;
+  --msg-dang-soft: #fdeeee;
+  --msg-warn: #a8730d;
+  --msg-warn-soft: #fdf6e7;
+  --msg-warn-bd: #f0dcae;
+  --msg-bub-bg: #e9e3da;
+  --msg-bub: #dcf8c6;
+  --msg-bub-tx: #10231a;
+  --msg-sh: 0 1px 2px rgba(15, 34, 51, 0.05);
+  --msg-pop-sh: 0 14px 34px rgba(15, 34, 51, 0.14);
+
+  color: var(--msg-tx);
+}
+
+html.dark [data-msg-surface],
+html[data-theme="dark"] [data-msg-surface] {
+  --msg-panel: #111917;
+  --msg-panel-2: #151e1c;
+  --msg-bd: #202b28;
+  --msg-bd-2: #2a3733;
+  --msg-tx: #e8f0ed;
+  --msg-tx-2: #b2c1bc;
+  --msg-mut: #7e8d87;
+  --msg-brand: #00c896;
+  --msg-brand-deep: #00c896;
+  --msg-brand-tx: #3fdcb4;
+  --msg-brand-soft: rgba(0, 200, 150, 0.13);
+  --msg-chip: #19211f;
+  --msg-dang: #ff7a7a;
+  --msg-dang-soft: rgba(255, 122, 122, 0.13);
+  --msg-warn: #f0b03c;
+  --msg-warn-soft: rgba(240, 176, 60, 0.11);
+  --msg-warn-bd: rgba(240, 176, 60, 0.4);
+  --msg-bub-bg: #0d1614;
+  --msg-bub: #0f3b2c;
+  --msg-bub-tx: #d8f5e9;
+  --msg-sh: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --msg-pop-sh: 0 14px 34px rgba(0, 0, 0, 0.5);
+}
+
+/* Los estilos del diseño son inline; foco, hover y placeholder necesitan CSS. */
+[data-msg-surface] ::placeholder {
+  color: var(--msg-mut);
+}
+[data-msg-surface] input:focus,
+[data-msg-surface] select:focus,
+[data-msg-surface] textarea:focus {
+  border-color: var(--msg-brand);
+  box-shadow: 0 0 0 3px rgba(0, 200, 150, 0.18);
+}
+[data-msg-surface] [data-msg-row]:last-child {
+  border-bottom: 0 !important;
+}
+[data-msg-surface] [data-msg-hover]:hover {
+  background: var(--msg-panel-2);
+}
+
+@media (max-width: 1040px) {
+  [data-msg-surface] [data-msg-compose] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}

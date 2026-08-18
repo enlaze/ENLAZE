@@ -1,185 +1,24 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase-browser";
-import PageHeader from "@/components/ui/page-header";
-import { Card, CardHeader } from "@/components/ui/card";
-import { FormField, Select, Textarea } from "@/components/ui/form-fields";
-import { Button } from "@/components/ui/button";
-import Badge from "@/components/ui/badge";
-import EmptyState from "@/components/ui/empty-state";
-import InfoFlipCard from "@/components/ui/InfoFlipCard";
-import Link from "next/link";
 
-type Client = { id: string; name: string; phone: string };
-type Message = { id: string; client_id: string; content: string; status: string; created_at: string; clients: { name: string; phone: string } };
+import PageHeader from "@/components/ui/page-header";
+import InfoFlipCard from "@/components/ui/InfoFlipCard";
+import WhatsAppSurface from "@/components/whatsapp/WhatsAppSurface";
 
 export default function MessagesPage() {
-  const [clients, setClients] = useState<Client[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [selectedClient, setSelectedClient] = useState("");
-  const [content, setContent] = useState("");
-  const [sending, setSending] = useState(false);
-  const [success, setSuccess] = useState("");
-  const [error, setError] = useState("");
-  const [whatsAppConnected, setWhatsAppConnected] = useState<boolean | null>(null);
-  const supabase = createClient();
-
-  const fetchClients = async () => {
-    const { data } = await supabase.from("clients").select("id, name, phone").order("name");
-    if (data) setClients(data);
-  };
-
-  const fetchMessages = async () => {
-    const { data } = await supabase.from("messages").select("*, clients(name, phone)").eq("channel", "whatsapp").order("created_at", { ascending: false }).limit(50);
-    if (data) setMessages(data as Message[]);
-  };
-
-  const fetchWhatsAppStatus = async () => {
-    const response = await fetch("/api/integrations/whatsapp").catch(() => null);
-    if (!response) {
-      setWhatsAppConnected(false);
-      return;
-    }
-    const data = await response.json().catch(() => null);
-    setWhatsAppConnected(Boolean(data?.connected));
-  };
-
-  useEffect(() => {
-    fetchClients();
-    fetchMessages();
-    fetchWhatsAppStatus();
-  }, []);
-
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedClient || !content) return;
-    setSending(true);
-    setSuccess("");
-    setError("");
-    const { data: { user } } = await supabase.auth.getUser();
-    const client = clients.find((item) => item.id === selectedClient);
-    const response = await fetch("/api/whatsapp/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to: client?.phone, message: content }),
-    });
-    const result = await response.json().catch(() => null);
-    await supabase.from("messages").insert({
-      user_id: user?.id,
-      client_id: selectedClient,
-      channel: "whatsapp",
-      content,
-      status: response.ok ? "sent" : "failed",
-      sent_at: response.ok ? new Date().toISOString() : null,
-    });
-    if (response.ok) {
-      setContent("");
-      setSelectedClient("");
-      setSuccess("Mensaje enviado desde tu WhatsApp Business.");
-    } else {
-      setError(result?.error || "No se pudo enviar el mensaje.");
-    }
-    setSending(false);
-    await fetchMessages();
-    setTimeout(() => setSuccess(""), 5000);
-  };
-
-  const statusBadge = (s: string) => {
-    if (s === "sent" || s === "delivered") return <Badge variant="green">{s === "sent" ? "Enviado" : "Entregado"}</Badge>;
-    if (s === "pending") return <Badge variant="yellow">Pendiente</Badge>;
-    return <Badge variant="red">Error</Badge>;
-  };
-
-  const clientsWithPhone = clients.filter(c => c.phone);
-
   return (
     <>
       <PageHeader
         title="WhatsApp"
-        description="Envía mensajes a tus clientes por WhatsApp"
+        description="Envía, programa y automatiza mensajes a tus clientes"
         titleAdornment={
           <InfoFlipCard
             label="Información sobre WhatsApp"
-            what="Todos tus mensajes de WhatsApp con clientes en un solo sitio, directamente desde ENLAZE. Sin tener que buscar en el móvil ni perder conversaciones entre chats."
-            howTo="Para no dejar ningún mensaje sin contestar ni perder el hilo de lo que hablaste con cada cliente. Ves todas las conversaciones ordenadas, sabes cuáles tienes pendientes y siempre tienes a mano el historial antes de responder."
+            what="Todos tus mensajes de WhatsApp con clientes en un solo sitio, directamente desde ENLAZE. Eliges a quién escribes, qué les dices y cuándo sale — con la vista previa de cómo lo recibe cada cliente."
+            howTo="Para no dejar ningún mensaje sin contestar ni repetir el mismo recordatorio cliente por cliente. Filtras por presupuesto pendiente o factura vencida, escribes una vez con variables como {nombre} o {importe}, y cada uno recibe su versión."
           />
         }
       />
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1 space-y-6">
-          <Card>
-            <h2 className="text-base font-semibold text-navy-900 dark:text-white mb-5">Nuevo mensaje</h2>
-            <form onSubmit={handleSend} className="space-y-4">
-              <FormField label="Cliente" required>
-                <Select value={selectedClient} onChange={e => setSelectedClient(e.target.value)} required>
-                  <option value="">Seleccionar cliente...</option>
-                  {clientsWithPhone.map(c => (
-                    <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>
-                  ))}
-                </Select>
-                {clients.length > 0 && clientsWithPhone.length === 0 && (
-                  <p className="mt-2 text-xs text-amber-600">Ningún cliente tiene teléfono. Agrega teléfonos en la sección Clientes.</p>
-                )}
-              </FormField>
-              <FormField label="Mensaje" required>
-                <Textarea value={content} onChange={e => setContent(e.target.value)} required rows={4} placeholder="Escribe tu mensaje..." />
-              </FormField>
-              {success && <p className="text-sm text-brand-green font-medium">{success}</p>}
-              {error && <p className="text-sm text-red-600 font-medium">{error}</p>}
-              <Button type="submit" disabled={sending} className="w-full">
-                {sending ? "Enviando..." : "Enviar mensaje"}
-              </Button>
-            </form>
-
-            <div className="mt-6 rounded-xl bg-navy-50/60 dark:bg-zinc-900/50 border border-navy-100 dark:border-zinc-800 p-4">
-              <p className="text-xs font-semibold text-navy-700 dark:text-zinc-200 mb-1">
-                {whatsAppConnected ? "WhatsApp Business conectado" : "Conectar WhatsApp Business"}
-              </p>
-              <p className="text-xs text-navy-500 dark:text-zinc-400">
-                {whatsAppConnected
-                  ? "Los mensajes se enviarán desde el número verificado de tu empresa."
-                  : "Para enviar mensajes reales necesitas conectar tu cuenta de Meta Business."}
-              </p>
-              {!whatsAppConnected && (
-                <Link
-                  href="/dashboard/settings/integrations"
-                  className="mt-2 inline-block text-xs font-semibold text-brand-green hover:underline"
-                >
-                  Ir a Integraciones
-                </Link>
-              )}
-            </div>
-          </Card>
-        </div>
-
-        <div className="lg:col-span-2">
-          <Card padding={false} className="overflow-hidden">
-            <CardHeader title="Historial de mensajes" />
-            {messages.length === 0 ? (
-              <div className="py-16 text-center">
-                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto text-navy-300 dark:text-zinc-600 mb-3"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                <h3 className="text-base font-semibold text-navy-900 dark:text-white">Sin mensajes todavía</h3>
-                <p className="mt-1 text-sm text-navy-500 dark:text-zinc-400">Envía tu primer mensaje de WhatsApp</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-navy-50 dark:divide-zinc-800">
-                {messages.map(msg => (
-                  <div key={msg.id} className="px-6 py-4 hover:bg-navy-50/40 dark:hover:bg-zinc-800/50 transition-colors">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium text-navy-900 dark:text-white">{msg.clients?.name || "Cliente"}</span>
-                      {statusBadge(msg.status)}
-                    </div>
-                    <p className="text-sm text-navy-600">{msg.content}</p>
-                    <p className="mt-1 text-xs text-navy-400">{new Date(msg.created_at).toLocaleString("es-ES")}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        </div>
-      </div>
+      <WhatsAppSurface />
     </>
   );
 }
