@@ -137,6 +137,14 @@ export const IcoMonitor = (p: IconProps) => (
   </svg>
 );
 
+/** Menú lateral — pestaña Personalización. */
+export const IcoLayout = (p: IconProps) => (
+  <svg {...svgProps(p)}>
+    <rect x="3" y="4" width="18" height="16" rx="2.5" />
+    <path d="M9.5 4v16M6 9h1M6 12.5h1" />
+  </svg>
+);
+
 export const IcoMessage = (p: IconProps) => (
   <svg {...svgProps(p)}>
     <path d="M4 5.5A2.5 2.5 0 016.5 3h11A2.5 2.5 0 0120 5.5v8A2.5 2.5 0 0117.5 16H9l-4.5 4v-4H6.5A2.5 2.5 0 014 13.5z" />

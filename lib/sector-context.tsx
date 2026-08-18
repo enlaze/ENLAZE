@@ -80,6 +80,14 @@ interface SectorContextValue {
   fieldVisible: (entity: string, field: string) => boolean;
   /** Get visible sidebar modules */
   visibleModules: () => SidebarModule[];
+  /**
+   * Hrefs que el usuario ha ocultado a mano en Ajustes → Personalización.
+   * Se aplica ENCIMA del filtrado por sector y solo afecta al menú lateral:
+   * las rutas siguen accesibles por URL directa.
+   */
+  hiddenModules: string[];
+  /** Persiste la lista de hrefs ocultos en profiles.hidden_modules. Lanza si falla. */
+  setHiddenModules: (hrefs: string[]) => Promise<void>;
   /** Get service types for budgets */
   serviceTypes: () => ServiceType[];
   /** Get budget categories */
@@ -123,6 +131,8 @@ const SectorContext = createContext<SectorContextValue>({
   options: () => [],
   fieldVisible: () => true,
   visibleModules: () => [],
+  hiddenModules: [],
+  setHiddenModules: async () => {},
   serviceTypes: () => [],
   budgetCategories: () => [],
   subcategories: () => [],
@@ -142,6 +152,8 @@ export function SectorProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<SectorConfig | null>(null);
   const [sectorKey, setSectorKey] = useState("construccion");
   const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [hiddenModules, setHiddenModulesState] = useState<string[]>([]);
 
   const loadConfig = async () => {
     setLoading(true);
@@ -151,12 +163,33 @@ export function SectorProvider({ children }: { children: ReactNode }) {
     const { data: { user } } = await supabase.auth.getUser();
     let granular = "construccion";
 
+    setUserId(user?.id ?? null);
+
     if (user) {
-      const { data: profile } = await supabase
+      // `hidden_modules` es la preferencia personal de menú (Ajustes →
+      // Personalización). Si la columna aún no existe en el proyecto (migración
+      // 20260818 sin aplicar) la query falla entera, así que reintentamos sin
+      // ella: la detección de sector nunca debe depender de esa preferencia.
+      let profile: { business_sector?: string | null; hidden_modules?: string[] | null } | null = null;
+      const full = await supabase
         .from("profiles")
-        .select("business_sector")
+        .select("business_sector, hidden_modules")
         .eq("id", user.id)
         .maybeSingle();
+
+      if (full.error) {
+        const { data } = await supabase
+          .from("profiles")
+          .select("business_sector")
+          .eq("id", user.id)
+          .maybeSingle();
+        profile = data;
+      } else {
+        profile = full.data;
+      }
+
+      setHiddenModulesState(Array.isArray(profile?.hidden_modules) ? profile.hidden_modules : []);
+
       if (profile?.business_sector) {
         granular = normalizeSectorId(profile.business_sector);
       } else {
@@ -167,6 +200,8 @@ export function SectorProvider({ children }: { children: ReactNode }) {
           .maybeSingle();
         if (fiscal?.sector_key) granular = fiscal.sector_key;
       }
+    } else {
+      setHiddenModulesState([]);
     }
 
     setSectorKey(granular);
@@ -222,6 +257,28 @@ export function SectorProvider({ children }: { children: ReactNode }) {
     return modules;
   };
 
+  /**
+   * Guarda las secciones ocultas del usuario. Actualiza el estado local antes
+   * de escribir (el sidebar reacciona al instante) y revierte si Supabase falla.
+   */
+  const setHiddenModules = async (hrefs: string[]): Promise<void> => {
+    const next = Array.from(new Set(hrefs));
+    const previous = hiddenModules;
+    setHiddenModulesState(next);
+
+    if (!userId) return;
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ hidden_modules: next, updated_at: new Date().toISOString() })
+      .eq("id", userId);
+
+    if (error) {
+      setHiddenModulesState(previous);
+      throw new Error(error.message);
+    }
+  };
+
   const serviceTypes = (): ServiceType[] => {
     return config?.service_types || [];
   };
@@ -252,6 +309,8 @@ export function SectorProvider({ children }: { children: ReactNode }) {
         options,
         fieldVisible,
         visibleModules,
+        hiddenModules,
+        setHiddenModules,
         serviceTypes,
         budgetCategories,
         subcategories: getSubcategories,

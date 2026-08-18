@@ -17,9 +17,10 @@ import EmpresaPanel from "@/components/settings/EmpresaPanel";
 import NotificacionesPanel from "@/components/settings/NotificacionesPanel";
 import IntegracionesPanel from "@/components/settings/IntegracionesPanel";
 import CuentaPanel from "@/components/settings/CuentaPanel";
-import { IcoAccount, IcoBell, IcoCompany, IcoPlug, IcoSparkle } from "@/components/settings/ui";
+import PersonalizacionPanel from "@/components/settings/PersonalizacionPanel";
+import { IcoAccount, IcoBell, IcoCompany, IcoLayout, IcoPlug, IcoSparkle } from "@/components/settings/ui";
 
-export type SettingsTab = "empresa" | "notificaciones" | "integraciones" | "cuenta";
+export type SettingsTab = "empresa" | "notificaciones" | "integraciones" | "personalizacion" | "cuenta";
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode; path: string }[] = [
   { id: "empresa", label: "Empresa y datos fiscales", icon: <IcoCompany />, path: "/dashboard/settings" },
@@ -34,6 +35,12 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode; path: strin
     label: "Integraciones",
     icon: <IcoPlug />,
     path: "/dashboard/settings/integrations",
+  },
+  {
+    id: "personalizacion",
+    label: "Personalización",
+    icon: <IcoLayout />,
+    path: "/dashboard/settings/personalizacion",
   },
   { id: "cuenta", label: "Cuenta y tema", icon: <IcoAccount />, path: "/dashboard/settings/cuenta" },
 ];
@@ -183,6 +190,7 @@ export default function SettingsShell({ initialTab = "empresa" }: { initialTab?:
         </div>
         {tab === "notificaciones" && <NotificacionesPanel />}
         {tab === "integraciones" && <IntegracionesPanel />}
+        {tab === "personalizacion" && <PersonalizacionPanel />}
         {tab === "cuenta" && <CuentaPanel />}
       </main>
     </div>
