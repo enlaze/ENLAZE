@@ -1,0 +1,233 @@
+[
+  {
+    "updatedAt": "2026-08-17T10:49:27.555Z",
+    "createdAt": "2026-07-27T21:15:50.934Z",
+    "id": "ManoM0600AllPx26",
+    "name": "ENLAZE - ManoMano Puppeteer - Todos los precios 06:00",
+    "description": null,
+    "active": true,
+    "isArchived": false,
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "cronExpression",
+                "expression": "0 6 * * *"
+              }
+            ]
+          }
+        },
+        "id": "schedule-manomano-0600",
+        "name": "Cada día 06:00",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          240,
+          220
+        ]
+      },
+      {
+        "parameters": {},
+        "id": "manual-manomano",
+        "name": "Ejecutar manualmente",
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          240,
+          380
+        ]
+      },
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 1
+              }
+            ]
+          }
+        },
+        "id": "poll-manomano-requests",
+        "name": "Comprobar solicitudes cada minuto",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          240,
+          540
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://enlaze.vercel.app/api/prices/n8n-sync",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "x-vercel-protection-bypass",
+                "value": "={{ $env.VERCEL_AUTOMATION_BYPASS_SECRET }}"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ action: \"claim\" }) }}",
+          "options": {
+            "timeout": 120000
+          }
+        },
+        "id": "claim-manomano-request",
+        "name": "Recoger solicitud de ENLAZE",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          500,
+          540
+        ],
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "MxfBS0YmCERT2Ouh",
+            "name": "Header Auth account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const requestId = $json.request_id;\nif (!requestId) return [];\nreturn $input.all();"
+        },
+        "id": "filter-manomano-request",
+        "name": "Continuar si hay solicitud",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          760,
+          540
+        ]
+      },
+      {
+        "parameters": {
+          "executeOnce": true,
+          "command": "={{ 'cd \"/Users/alvaromirallesgrande/Desktop/enlaze\" && /opt/homebrew/bin/node --env-file=.env.local scripts/scraper-precios.js --no-debug' + ($json.request_id ? ' --sync-request-id \"' + $json.request_id + '\"' : '') }}"
+        },
+        "id": "execute-manomano-puppeteer",
+        "name": "Rastrear todos los precios y enviar a ENLAZE",
+        "type": "n8n-nodes-base.executeCommand",
+        "typeVersion": 1,
+        "position": [
+          540,
+          300
+        ]
+      }
+    ],
+    "connections": {
+      "Cada día 06:00": {
+        "main": [
+          [
+            {
+              "node": "Rastrear todos los precios y enviar a ENLAZE",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ejecutar manualmente": {
+        "main": [
+          [
+            {
+              "node": "Rastrear todos los precios y enviar a ENLAZE",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Comprobar solicitudes cada minuto": {
+        "main": [
+          [
+            {
+              "node": "Recoger solicitud de ENLAZE",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Recoger solicitud de ENLAZE": {
+        "main": [
+          [
+            {
+              "node": "Continuar si hay solicitud",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Continuar si hay solicitud": {
+        "main": [
+          [
+            {
+              "node": "Rastrear todos los precios y enviar a ENLAZE",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1",
+      "timezone": "Europe/Madrid",
+      "saveDataErrorExecution": "all",
+      "saveDataSuccessExecution": "all",
+      "saveManualExecutions": true,
+      "binaryMode": "separate"
+    },
+    "staticData": {
+      "node:Cada día 06:00": {
+        "recurrenceRules": []
+      },
+      "node:Comprobar solicitudes cada minuto": {
+        "recurrenceRules": []
+      }
+    },
+    "meta": {
+      "templateCredsSetupCompleted": true
+    },
+    "pinData": {},
+    "versionId": "7f6eb0d9-d651-4a3f-a0a8-4e9c49e3afdf",
+    "activeVersionId": "7f6eb0d9-d651-4a3f-a0a8-4e9c49e3afdf",
+    "versionCounter": 20,
+    "triggerCount": 2,
+    "tags": [],
+    "shared": [
+      {
+        "updatedAt": "2026-07-27T21:15:50.935Z",
+        "createdAt": "2026-07-27T21:15:50.935Z",
+        "role": "workflow:owner",
+        "workflowId": "ManoM0600AllPx26",
+        "projectId": "wyDU0Urm9d4WLHBH",
+        "project": {
+          "updatedAt": "2026-04-14T12:32:35.540Z",
+          "createdAt": "2026-04-01T17:19:55.673Z",
+          "id": "wyDU0Urm9d4WLHBH",
+          "name": "enlaze dkpamg <enlaze.soporte@gmail.com>",
+          "type": "personal",
+          "icon": null,
+          "description": null,
+          "creatorId": "8fac1eee-20a4-4691-a781-597ff729ce9d"
+        }
+      }
+    ],
+    "versionMetadata": {
+      "name": null,
+      "description": null
+    }
+  }
+]

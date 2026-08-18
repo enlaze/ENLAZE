@@ -1,0 +1,765 @@
+[
+  {
+    "updatedAt": "2026-07-28T10:44:39.089Z",
+    "createdAt": "2026-07-28T10:44:39.089Z",
+    "id": "EnlazeConstruc26",
+    "name": "ENLAZE - Construcción: fuentes oficiales 08:00",
+    "description": "CYPE, BOE, Google News, INE y ESIOS. El scraping retail de ManoMano se ejecuta en un workflow independiente a las 06:00.",
+    "active": true,
+    "isArchived": false,
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "cronExpression",
+                "expression": "0 8 * * *"
+              }
+            ]
+          }
+        },
+        "id": "c35c2b26-f223-4bcc-8b9d-139c2fc3891e",
+        "name": "Cada día 08:00",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          256,
+          464
+        ],
+        "retryOnFail": true
+      },
+      {
+        "parameters": {
+          "url": "https://info.cype.com/es/programa_relacionado/generador-de-precios/",
+          "options": {
+            "redirect": {},
+            "response": {
+              "response": {
+                "fullResponse": false,
+                "neverError": true,
+                "responseFormat": "text",
+                "outputPropertyName": "data"
+              }
+            }
+          }
+        },
+        "id": "7b109be4-bea3-476c-845a-ee4e1d40f152",
+        "name": "CYPE - Generador de precios novedades",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          544,
+          816
+        ],
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "jsCode": "const html = String($input.first().json.data || $input.first().json.body || '');\nconst updates = [];\nconst seen = new Set();\n\nfunction cleanText(value) {\n  return String(value || '')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/&nbsp;|&#160;/gi, ' ')\n    .replace(/&amp;/gi, '&')\n    .replace(/&quot;/gi, '\"')\n    .replace(/&#39;|&apos;/gi, \"'\")\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nconst updateRegex = /<summary[^>]*class=[\"'][^\"']*e-n-accordion-item-title[^\"']*[\"'][^>]*>[\\s\\S]{0,1200}?class=[\"']e-n-accordion-item-title-text[\"'][^>]*>([\\s\\S]*?)<\\/div>[\\s\\S]*?<\\/summary>/gi;\nlet match;\n\nwhile ((match = updateRegex.exec(html)) !== null && updates.length < 12) {\n  const title = cleanText(match[1]);\n  if (!title || title.length < 8 || seen.has(title.toLowerCase())) continue;\n\n  const followingHtml = html.slice(updateRegex.lastIndex, updateRegex.lastIndex + 4000);\n  const descriptionMatch = followingHtml.match(/<p[^>]*>([\\s\\S]*?)<\\/p>/i);\n  const description = cleanText(descriptionMatch?.[1]).substring(0, 1000);\n  seen.add(title.toLowerCase());\n  updates.push({\n    title: title.substring(0, 200),\n    content: description || title,\n    source: 'cype-generador-precios',\n    metadata: {\n      url: 'https://info.cype.com/es/programa_relacionado/generador-de-precios/',\n      captured_at: new Date().toISOString()\n    }\n  });\n}\n\nif (updates.length === 0) return [];\nreturn [{ json: { cype_updates: updates } }];"
+        },
+        "id": "d8806d2f-759b-446e-9276-75291caadce2",
+        "name": "Extraer novedades CYPE",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          784,
+          816
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://enlaze.vercel.app/api/webhooks/construccion",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json) }}",
+          "options": {
+            "timeout": 120000
+          }
+        },
+        "id": "53535eb4-32f1-4a11-a8d4-ba4d5df1d085",
+        "name": "Enviar feed CYPE a Enlaze",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1808,
+          816
+        ],
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "MxfBS0YmCERT2Ouh",
+            "name": "Header Auth account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "https://www.boe.es/rss/boe.php?s=5",
+          "options": {
+            "response": {
+              "response": {
+                "responseFormat": "text"
+              }
+            }
+          }
+        },
+        "id": "f09bb361-a1d6-47e2-aa95-88ec2696cceb",
+        "name": "BOE - Normativas",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          544,
+          1104
+        ],
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "jsCode": "const xml = String($input.first().json.data || $input.first().json.body || '');\nconst regulations = [];\nconst seen = new Set();\nconst itemRegex = /<item>([\\s\\S]*?)<\\/item>/gi;\nconst titleRegex = /<title><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/title>|<title>([\\s\\S]*?)<\\/title>/i;\nconst descRegex = /<description><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/description>|<description>([\\s\\S]*?)<\\/description>/i;\nconst linkRegex = /<link>([^<]+)<\\/link>/i;\nconst keywords = [\n  'construcci', 'edific', 'vivienda', 'urbanis', 'reforma',\n  'instalaci', 'electric', 'fontaner', 'climat', 'residuo',\n  'seguridad', 'laboral', 'prevenci', 'eficiencia energ'\n];\n\nfunction cleanText(value) {\n  return String(value || '')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/&nbsp;|&#160;/gi, ' ')\n    .replace(/&amp;/gi, '&')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nlet match;\nwhile ((match = itemRegex.exec(xml)) !== null && regulations.length < 20) {\n  const item = match[1];\n  const titleMatch = item.match(titleRegex) || [];\n  const descMatch = item.match(descRegex) || [];\n  const title = cleanText(titleMatch[1] || titleMatch[2]);\n  const description = cleanText(descMatch[1] || descMatch[2]);\n  const url = cleanText((item.match(linkRegex) || [])[1]);\n  const searchable = (title + ' ' + description).toLowerCase();\n\n  if (\n    !title ||\n    seen.has(title.toLowerCase()) ||\n    !keywords.some((keyword) => searchable.includes(keyword))\n  ) {\n    continue;\n  }\n\n  seen.add(title.toLowerCase());\n  regulations.push({\n    title: title.substring(0, 200),\n    description: description.substring(0, 1_000),\n    source: 'boe-rss',\n    metadata: {\n      url,\n      captured_at: new Date().toISOString()\n    }\n  });\n}\n\nif (regulations.length === 0) return [];\nreturn [{ json: { regulations } }];"
+        },
+        "id": "0f4b6b59-251c-43ad-b1f0-7d5fce932677",
+        "name": "Filtrar normativas relevantes",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          784,
+          1104
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://enlaze.vercel.app/api/webhooks/construccion",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json) }}",
+          "options": {
+            "timeout": 120000
+          }
+        },
+        "id": "f32cf1e2-163e-4b78-9875-70f1c1d78bb1",
+        "name": "Enviar normativas a Enlaze",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2016,
+          1104
+        ],
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "MxfBS0YmCERT2Ouh",
+            "name": "Header Auth account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "https://news.google.com/rss/search?q=precios+materiales+construccion+OR+reforma+OR+energia+OR+hipotecas+site%3Aexpansion.com+OR+site%3Acincodias.elpais.com+OR+site%3Aeleconomista.es&hl=es&gl=ES&ceid=ES:es",
+          "options": {
+            "response": {
+              "response": {
+                "responseFormat": "text"
+              }
+            }
+          }
+        },
+        "id": "33543d5f-3aae-461b-939b-2fb153a607c3",
+        "name": "Google News - Sector",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          544,
+          1344
+        ],
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "jsCode": "const xml = String($input.first().json.data || $input.first().json.body || '');\nconst news = [];\nconst seen = new Set();\nconst itemRegex = /<item>([\\s\\S]*?)<\\/item>/gi;\nconst titleRegex = /<title><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/title>|<title>([\\s\\S]*?)<\\/title>/i;\nconst linkRegex = /<link>([^<]+)<\\/link>/i;\nconst pubDateRegex = /<pubDate>([^<]+)<\\/pubDate>/i;\n\nfunction cleanText(value) {\n  return String(value || '')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/&nbsp;|&#160;/gi, ' ')\n    .replace(/&amp;/gi, '&')\n    .replace(/&quot;/gi, '\"')\n    .replace(/&#39;|&apos;/gi, \"'\")\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nlet match;\nwhile ((match = itemRegex.exec(xml)) !== null && news.length < 10) {\n  const item = match[1];\n  const titleMatch = item.match(titleRegex) || [];\n  const title = cleanText(titleMatch[1] || titleMatch[2]);\n  const url = cleanText((item.match(linkRegex) || [])[1]);\n  const publishedAt = cleanText((item.match(pubDateRegex) || [])[1]);\n\n  if (!title || seen.has(title.toLowerCase())) continue;\n  seen.add(title.toLowerCase());\n  news.push({\n    title: title.substring(0, 200),\n    content: publishedAt ? 'Fecha de publicación: ' + publishedAt : '',\n    source: 'google-news-rss',\n    metadata: {\n      url,\n      published_at: publishedAt,\n      captured_at: new Date().toISOString()\n    }\n  });\n}\n\nif (news.length === 0) return [];\nreturn [{ json: { news } }];"
+        },
+        "id": "aa04c990-7784-48b1-88cc-4b6e35919c42",
+        "name": "Extraer noticias relevantes",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          720,
+          1344
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://enlaze.vercel.app/api/webhooks/construccion",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json) }}",
+          "options": {
+            "timeout": 120000
+          }
+        },
+        "id": "eac2d9ed-c13f-400e-9a2f-d6099e9881e9",
+        "name": "Enviar noticias a Enlaze",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1744,
+          1344
+        ],
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "MxfBS0YmCERT2Ouh",
+            "name": "Header Auth account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/8381?nult=5",
+          "options": {
+            "response": {
+              "response": {
+                "responseFormat": "json"
+              }
+            }
+          }
+        },
+        "id": "57c6aa6b-56e1-489d-96f0-b6c05fc51e4b",
+        "name": "INE - API Índices materiales construcción",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          528,
+          1568
+        ],
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "jsCode": "const inputItems = $input.all().map((item) => item.json);\nconst ineData =\n  inputItems.length === 1 && Array.isArray(inputItems[0])\n    ? inputItems[0]\n    : inputItems.flatMap((item) => Array.isArray(item) ? item : [item]);\nconst signals = [];\nconst capturedAt = new Date().toISOString();\n\nfor (const series of ineData.slice(0, 25)) {\n  const name = String(series.Nombre || series.nombre || '')\n    .replace(/<[^>]*>/g, '')\n    .trim();\n  const points = Array.isArray(series.Data || series.data)\n    ? (series.Data || series.data)\n    : [];\n\n  if (!name || points.length === 0) continue;\n  const current = Number(points[0].Valor ?? points[0].valor);\n  const previous =\n    points.length > 1 ? Number(points[1].Valor ?? points[1].valor) : null;\n  if (!Number.isFinite(current)) continue;\n\n  const variation =\n    Number.isFinite(previous) && previous !== 0\n      ? ((current - previous) / previous) * 100\n      : null;\n\n  signals.push({\n    name: name.substring(0, 180),\n    value: current,\n    previous_value: Number.isFinite(previous) ? previous : null,\n    variation_pct:\n      variation === null ? null : Number(variation.toFixed(2)),\n    unit: 'index',\n    source: 'INE-API',\n    description:\n      variation === null\n        ? 'Índice INE: ' + name\n        : 'Índice INE: ' + name + '. Variación: ' + variation.toFixed(2) + '%',\n    captured_at: capturedAt\n  });\n}\n\nif (signals.length === 0) return [];\nreturn [{ json: { market_signals: signals } }];"
+        },
+        "id": "7644a884-ae6e-494f-898b-9b2cda7227ec",
+        "name": "Procesar datos INE",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          752,
+          1568
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://enlaze.vercel.app/api/webhooks/construccion",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json) }}",
+          "options": {
+            "timeout": 120000
+          }
+        },
+        "id": "3682cd8b-eaf5-4404-a283-920536820391",
+        "name": "Enviar índices INE a Enlaze",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1952,
+          1584
+        ],
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "MxfBS0YmCERT2Ouh",
+            "name": "Header Auth account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "={{ 'https://apidatos.ree.es/es/datos/mercados/precios-mercados-tiempo-real?start_date=' + $now.setZone('Europe/Madrid').toFormat(\"yyyy-MM-dd'T'00:00\") + '&end_date=' + $now.setZone('Europe/Madrid').toFormat(\"yyyy-MM-dd'T'23:59\") + '&time_trunc=hour' }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {
+            "response": {
+              "response": {
+                "fullResponse": false,
+                "neverError": false,
+                "responseFormat": "json"
+              }
+            }
+          }
+        },
+        "id": "ebbce85b-7dcf-4e62-9298-13a0fb488310",
+        "name": "REE REData - Precio electricidad PVPC",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          496,
+          1856
+        ],
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "jsCode": "const response = $input.first().json;\nconst included = Array.isArray(response.included) ? response.included : [];\nconst pvpc = included.find((item) => {\n  const title = String(item?.attributes?.title || item?.type || '').toLowerCase();\n  return title === 'pvpc' || title.includes('precio voluntario');\n});\n\nconst values = Array.isArray(pvpc?.attributes?.values)\n  ? pvpc.attributes.values\n      .map((item) => ({\n        value: Number(item?.value),\n        datetime: item?.datetime || null\n      }))\n      .filter((item) => Number.isFinite(item.value) && item.value >= 0)\n  : [];\n\nif (values.length === 0) return [];\n\nconst capturedAt = new Date().toISOString();\nconst numericValues = values.map((item) => item.value);\nconst average = numericValues.reduce((sum, value) => sum + value, 0) / numericValues.length;\nconst minimum = Math.min(...numericValues);\nconst maximum = Math.max(...numericValues);\nconst metadata = {\n  period_start: values[0]?.datetime || null,\n  period_end: values[values.length - 1]?.datetime || null,\n  sample_count: values.length,\n  captured_at: capturedAt,\n  api_title: response?.data?.attributes?.title || null\n};\n\nconst signals = [\n  {\n    name: 'electricidad_pvpc_media_hoy',\n    value: Number(average.toFixed(4)),\n    description: 'Precio medio diario PVPC de electricidad en España'\n  },\n  {\n    name: 'electricidad_pvpc_max_hoy',\n    value: maximum,\n    description: 'Precio máximo diario PVPC de electricidad en España'\n  },\n  {\n    name: 'electricidad_pvpc_min_hoy',\n    value: minimum,\n    description: 'Precio mínimo diario PVPC de electricidad en España'\n  }\n].map((item) => ({\n    ...item,\n    unit: 'EUR/MWh',\n    source: 'REE-REData-PVPC',\n    metadata\n  }));\n\nreturn [{ json: { market_signals: signals } }];"
+        },
+        "id": "4a5fb422-9e31-4dd3-bb0e-24389d6b2dcd",
+        "name": "Procesar precio PVPC REE",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          832,
+          1856
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://enlaze.vercel.app/api/webhooks/construccion",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json) }}",
+          "options": {
+            "timeout": 120000
+          }
+        },
+        "id": "f77de829-2e29-4333-bc83-690a9277a2a5",
+        "name": "Enviar señales energía a Enlaze",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1968,
+          1824
+        ],
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "MxfBS0YmCERT2Ouh",
+            "name": "Header Auth account"
+          }
+        }
+      },
+      {
+        "parameters": {},
+        "id": "7a224e77-a211-4107-ac38-b6656f66ba08",
+        "name": "Manual Trigger",
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          176,
+          608
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = Array.isArray($json.cype_updates) ? $json.cype_updates : [];\nconst news = items\n  .filter((item) => item && typeof item.title === 'string' && item.title.trim())\n  .map((item) => ({\n    title: item.title.trim().substring(0, 200),\n    content: item.content || item.description || 'Novedad de CYPE.',\n    source: item.source || 'cype-generador-precios',\n    metadata: item.metadata || {}\n  }));\n\nif (news.length === 0) return [];\nreturn [{\n  json: {\n    action: 'update_news',\n    sector: 'construccion',\n    data: { news }\n  }\n}];"
+        },
+        "id": "60f91b48-4a14-4382-ae72-529d213e3585",
+        "name": "Preparar payload CYPE Enlaze",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1408,
+          816
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = Array.isArray($json.market_signals)\n  ? $json.market_signals\n  : [];\nconst prices = items\n  .filter((item) => item && item.name && Number.isFinite(Number(item.value)))\n  .map((item) => ({\n    title: item.name,\n    value: Number(item.value),\n    unit: item.unit || 'EUR/MWh',\n    category: 'energia',\n    subcategory: 'electricidad',\n    source: item.source || 'REE-REData-PVPC',\n    description: item.description || '',\n    metadata: item.metadata || { captured_at: new Date().toISOString() }\n  }));\n\nif (prices.length === 0) return [];\nreturn [{\n  json: {\n    action: 'update_prices',\n    sector: 'construccion',\n    data: {\n      source_group: 'REE-REData-PVPC',\n      prices\n    }\n  }\n}];"
+        },
+        "id": "1e71ad0e-3978-4c42-adba-7c3e7ae587ac",
+        "name": "Preparar payload energía Enlaze",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1584,
+          1856
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = Array.isArray($json.news) ? $json.news : [];\nconst news = items\n  .filter((item) => item && typeof item.title === 'string' && item.title.trim())\n  .map((item) => ({\n    title: item.title.trim().substring(0, 200),\n    content: item.content || item.description || '',\n    source: item.source || 'google-news-rss',\n    metadata: item.metadata || {}\n  }));\n\nif (news.length === 0) return [];\nreturn [{\n  json: {\n    action: 'update_news',\n    sector: 'construccion',\n    data: { news }\n  }\n}];"
+        },
+        "id": "a970146b-8d4b-4d24-bb56-5d0c4cdba14a",
+        "name": "Preparar payload noticias Enlaze",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1536,
+          1344
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = Array.isArray($json.regulations) ? $json.regulations : [];\nconst regulations = items\n  .filter((item) => item && typeof item.title === 'string' && item.title.trim())\n  .map((item) => ({\n    title: item.title.trim().substring(0, 200),\n    description: item.description || '',\n    source: item.source || 'boe-rss',\n    metadata: item.metadata || {}\n  }));\n\nif (regulations.length === 0) return [];\nreturn [{\n  json: {\n    action: 'update_regulations',\n    sector: 'construccion',\n    data: { regulations }\n  }\n}];"
+        },
+        "id": "89be5874-ad57-46c6-89a6-b9dcdbbd1dd1",
+        "name": "Preparar payload normativas Enlaze",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1712,
+          1104
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = Array.isArray($json.market_signals)\n  ? $json.market_signals\n  : [];\nconst prices = items\n  .filter((item) => Number.isFinite(Number(item.value)))\n  .slice(0, 25)\n  .map((item) => ({\n    title: item.title || item.name,\n    value: Number(item.value),\n    unit: item.unit || 'index',\n    category: 'indice_mercado',\n    subcategory: item.subcategory || 'INE',\n    source: item.source || 'INE-API',\n    description: item.description || '',\n    metadata: {\n      previous_value: item.previous_value ?? null,\n      variation_pct: item.variation_pct ?? null,\n      captured_at: item.captured_at || new Date().toISOString()\n    }\n  }))\n  .filter((item) => item.title);\n\nif (prices.length === 0) {\n  return [{\n    json: {\n      skip_send: true,\n      reason: 'No hay índices INE válidos para enviar'\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    action: 'update_prices',\n    sector: 'construccion',\n    data: {\n      source_group: 'INE-indices-construccion',\n      prices\n    }\n  }\n}];"
+        },
+        "id": "c9521f83-37a2-47ad-82ab-9a136416544e",
+        "name": "Preparar payload INE Enlaze",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1472,
+          1568
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ $json.skip_send }}",
+                "value2": true
+              }
+            ]
+          }
+        },
+        "id": "468fdd22-47ea-447b-a184-79b7abeb2c58",
+        "name": "IF - Ignorar INE vacío",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          1664,
+          1568
+        ]
+      }
+    ],
+    "connections": {
+      "Cada día 08:00": {
+        "main": [
+          [
+            {
+              "node": "CYPE - Generador de precios novedades",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "BOE - Normativas",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Google News - Sector",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "INE - API Índices materiales construcción",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "REE REData - Precio electricidad PVPC",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Manual Trigger": {
+        "main": [
+          [
+            {
+              "node": "CYPE - Generador de precios novedades",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "BOE - Normativas",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Google News - Sector",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "INE - API Índices materiales construcción",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "REE REData - Precio electricidad PVPC",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "CYPE - Generador de precios novedades": {
+        "main": [
+          [
+            {
+              "node": "Extraer novedades CYPE",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Extraer novedades CYPE": {
+        "main": [
+          [
+            {
+              "node": "Preparar payload CYPE Enlaze",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Preparar payload CYPE Enlaze": {
+        "main": [
+          [
+            {
+              "node": "Enviar feed CYPE a Enlaze",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "BOE - Normativas": {
+        "main": [
+          [
+            {
+              "node": "Filtrar normativas relevantes",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Filtrar normativas relevantes": {
+        "main": [
+          [
+            {
+              "node": "Preparar payload normativas Enlaze",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Preparar payload normativas Enlaze": {
+        "main": [
+          [
+            {
+              "node": "Enviar normativas a Enlaze",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Google News - Sector": {
+        "main": [
+          [
+            {
+              "node": "Extraer noticias relevantes",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Extraer noticias relevantes": {
+        "main": [
+          [
+            {
+              "node": "Preparar payload noticias Enlaze",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Preparar payload noticias Enlaze": {
+        "main": [
+          [
+            {
+              "node": "Enviar noticias a Enlaze",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "INE - API Índices materiales construcción": {
+        "main": [
+          [
+            {
+              "node": "Procesar datos INE",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Procesar datos INE": {
+        "main": [
+          [
+            {
+              "node": "Preparar payload INE Enlaze",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Preparar payload INE Enlaze": {
+        "main": [
+          [
+            {
+              "node": "IF - Ignorar INE vacío",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "IF - Ignorar INE vacío": {
+        "main": [
+          [],
+          [
+            {
+              "node": "Enviar índices INE a Enlaze",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "REE REData - Precio electricidad PVPC": {
+        "main": [
+          [
+            {
+              "node": "Procesar precio PVPC REE",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Procesar precio PVPC REE": {
+        "main": [
+          [
+            {
+              "node": "Preparar payload energía Enlaze",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Preparar payload energía Enlaze": {
+        "main": [
+          [
+            {
+              "node": "Enviar señales energía a Enlaze",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1",
+      "timezone": "Europe/Madrid",
+      "saveDataErrorExecution": "all",
+      "saveDataSuccessExecution": "all",
+      "saveManualExecutions": true
+    },
+    "staticData": {
+      "node:Cada día 08:00": {
+        "recurrenceRules": []
+      }
+    },
+    "meta": {
+      "templateCredsSetupCompleted": true
+    },
+    "pinData": {},
+    "versionId": "a767c611-40c3-4e84-91e3-dcac98094d9e",
+    "activeVersionId": "a767c611-40c3-4e84-91e3-dcac98094d9e",
+    "versionCounter": 11,
+    "triggerCount": 1,
+    "tags": [],
+    "shared": [
+      {
+        "updatedAt": "2026-07-28T10:44:39.091Z",
+        "createdAt": "2026-07-28T10:44:39.091Z",
+        "role": "workflow:owner",
+        "workflowId": "EnlazeConstruc26",
+        "projectId": "wyDU0Urm9d4WLHBH",
+        "project": {
+          "updatedAt": "2026-04-14T12:32:35.540Z",
+          "createdAt": "2026-04-01T17:19:55.673Z",
+          "id": "wyDU0Urm9d4WLHBH",
+          "name": "enlaze dkpamg <enlaze.soporte@gmail.com>",
+          "type": "personal",
+          "icon": null,
+          "description": null,
+          "creatorId": "8fac1eee-20a4-4691-a781-597ff729ce9d"
+        }
+      }
+    ],
+    "versionMetadata": {
+      "name": "Producción 1.0 - Fuentes oficiales 08:00",
+      "description": "CYPE, BOE, noticias, INE y energía conectados con ENLAZE y verificados correctamente."
+    }
+  }
+]
