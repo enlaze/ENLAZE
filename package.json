@@ -10,6 +10,7 @@
     "test:p1": "node --import tsx --test __tests__/p1-review.test.mjs",
     "test:price-evidence": "node --import tsx --test __tests__/price-ingest-evidence.test.mjs",
     "test:authorized-suppliers": "node --test __tests__/authorized-supplier-feed.test.mjs",
+    "test:price-tracker-cancel": "node --test __tests__/price-tracker-cancel.test.mjs",
     "test:price-worker": "PYTHONPATH=services/price-worker/src python3 -m unittest discover -s services/price-worker/tests",
     "test:integration": "node --import tsx --test __tests__/account-deletion-lock.integration.test.mjs",
     "scrape:prices": "node scripts/scraper-precios.js",

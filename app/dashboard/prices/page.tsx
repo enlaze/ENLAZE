@@ -54,7 +54,7 @@ const LABEL_CLS = "block text-xs font-medium text-navy-600 dark:text-zinc-300 mb
 
 interface N8nSyncRequest {
   id: string;
-  status: "pending" | "running" | "completed" | "failed";
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
   progress?: {
     completed?: number;
     total?: number;
@@ -85,6 +85,10 @@ export default function PricesPage() {
   const [contextLoaded, setContextLoaded] = useState(false);
   const [loadingItems, setLoadingItems] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [cancellingSync, setCancellingSync] = useState(false);
+  const [activeSyncRequestId, setActiveSyncRequestId] = useState<string | null>(
+    null
+  );
   const [syncLabel, setSyncLabel] = useState("Rastrear mercado");
   const [syncProgress, setSyncProgress] = useState({
     completed: 0,
@@ -282,7 +286,10 @@ export default function PricesPage() {
       });
       if (n8nResponse.ok) {
         const n8nData = await n8nResponse.json();
-        const n8nCompletedAt = n8nData?.request?.completed_at;
+        const n8nCompletedAt =
+          n8nData?.request?.status === "completed"
+            ? n8nData.request.completed_at
+            : null;
         if (
           n8nCompletedAt &&
           (!latestTimestamp ||
@@ -533,6 +540,16 @@ export default function PricesPage() {
         throw new Error(request.error || "n8n no pudo completar el rastreo");
       }
 
+      if (request.status === "cancelled") {
+        setSyncProgress((current) => ({
+          ...current,
+          label: "Rastreo cancelado",
+        }));
+        setSyncLabel("Rastreo cancelado");
+        toast.success("El rastreo se ha detenido");
+        return;
+      }
+
       if (request.status === "completed") {
         const total = Math.max(1, request.progress?.total ?? 5);
         setSyncProgress({
@@ -581,7 +598,7 @@ export default function PricesPage() {
         toast.error(request.error || "El último rastreo no pudo completarse");
         return;
       }
-      if (request.status === "completed") return;
+      if (request.status === "completed" || request.status === "cancelled") return;
 
       const total = Math.max(1, request.progress?.total ?? 5);
       const completed = Math.min(
@@ -590,6 +607,7 @@ export default function PricesPage() {
       );
 
       setSyncing(true);
+      setActiveSyncRequestId(request.id);
       setSyncProgress({
         completed,
         total,
@@ -611,6 +629,7 @@ export default function PricesPage() {
     } finally {
       if (generation === syncPollGeneration.current) {
         setSyncing(false);
+        setActiveSyncRequestId(null);
         setSyncLabel("Rastrear mercado");
       }
     }
@@ -653,6 +672,7 @@ export default function PricesPage() {
       }
 
       const request = payload.request as N8nSyncRequest;
+      setActiveSyncRequestId(request.id);
       const initialTotal = Math.max(1, request.progress?.total ?? 5);
       const initialCompleted = Math.min(
         initialTotal,
@@ -681,8 +701,43 @@ export default function PricesPage() {
     } finally {
       if (generation === syncPollGeneration.current) {
         setSyncing(false);
+        setActiveSyncRequestId(null);
         setSyncLabel("Rastrear mercado");
       }
+    }
+  }
+
+  async function cancelMarketSync() {
+    if (!activeSyncRequestId || cancellingSync) return;
+
+    setCancellingSync(true);
+    try {
+      const response = await fetch("/api/prices/n8n-sync", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ request_id: activeSyncRequestId }),
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || payload?.request?.status !== "cancelled") {
+        throw new Error(payload.error || "No se pudo detener el rastreo");
+      }
+
+      syncPollGeneration.current += 1;
+      setSyncing(false);
+      setActiveSyncRequestId(null);
+      setSyncLabel("Rastrear mercado");
+      setSyncProgress((current) => ({
+        ...current,
+        label: "Rastreo cancelado",
+      }));
+      toast.success("Rastreo detenido correctamente");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "No se pudo detener el rastreo"
+      );
+    } finally {
+      setCancellingSync(false);
     }
   }
 
@@ -1090,13 +1145,23 @@ export default function PricesPage() {
                 Última sync: <span className="font-medium text-navy-700 dark:text-zinc-300">{lastSyncDate}</span>
               </span>
             )}
-            <button
-              onClick={syncFromMarket}
-              disabled={syncing}
-              className="inline-flex items-center gap-2 rounded-xl border border-navy-200 bg-white px-4 py-2.5 text-sm font-medium text-navy-700 hover:bg-navy-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 disabled:opacity-50 transition"
-            >
-              {syncing ? syncLabel : "Rastrear mercado"}
-            </button>
+            {syncing ? (
+              <button
+                onClick={cancelMarketSync}
+                disabled={!activeSyncRequestId || cancellingSync}
+                className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-950/60"
+              >
+                <span className="h-2.5 w-2.5 rounded-sm bg-current" aria-hidden="true" />
+                {cancellingSync ? "Deteniendo..." : "Detener rastreo"}
+              </button>
+            ) : (
+              <button
+                onClick={syncFromMarket}
+                className="inline-flex items-center gap-2 rounded-xl border border-navy-200 bg-white px-4 py-2.5 text-sm font-medium text-navy-700 transition hover:bg-navy-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              >
+                {syncLabel}
+              </button>
+            )}
             <button
               onClick={importDefaults}
               className="inline-flex items-center gap-2 rounded-xl border border-navy-200 bg-white px-4 py-2.5 text-sm font-medium text-navy-700 hover:bg-navy-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 transition"

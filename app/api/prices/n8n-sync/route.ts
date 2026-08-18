@@ -6,7 +6,12 @@ const REQUEST_TYPE = "manual_price_sync";
 const REQUEST_SECTOR = "construccion";
 const MAX_REQUEST_AGE_MS = 90 * 60 * 1000;
 
-type RequestPhase = "pending" | "running" | "completed" | "failed";
+type RequestPhase =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
 interface SyncRequestData {
   kind: typeof REQUEST_TYPE;
@@ -15,6 +20,7 @@ interface SyncRequestData {
   phase: RequestPhase;
   started_at?: string;
   completed_at?: string;
+  cancel_requested_at?: string;
   progress?: {
     completed?: number;
     total?: number;
@@ -58,9 +64,10 @@ function hasN8nAuthorization(request: Request) {
 
 function publicStatus(row: SyncRequestRow) {
   const phase =
-    row.status === "completed" || row.status === "failed"
+    row.data?.phase ||
+    (row.status === "completed" || row.status === "failed"
       ? row.status
-      : row.data?.phase || "pending";
+      : "pending");
 
   return {
     id: row.id,
@@ -71,6 +78,7 @@ function publicStatus(row: SyncRequestRow) {
     requested_at: row.data?.requested_at || row.created_at,
     started_at: row.data?.started_at || null,
     completed_at: row.data?.completed_at || row.processed_at || null,
+    cancel_requested_at: row.data?.cancel_requested_at || null,
   };
 }
 
@@ -327,6 +335,28 @@ async function updateRequestFromN8n(
   }
 
   const currentRow = current as SyncRequestRow;
+  if (currentRow.data?.phase === "cancelled") {
+    return NextResponse.json(
+      {
+        ok: false,
+        cancelled: true,
+        error: "El usuario canceló este rastreo",
+        request: publicStatus(currentRow),
+      },
+      { status: 409 }
+    );
+  }
+  if (currentRow.status !== "processing") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "El rastreo ya ha finalizado",
+        request: publicStatus(currentRow),
+      },
+      { status: 409 }
+    );
+  }
+
   const completedAt = new Date().toISOString();
   const nextStatus =
     action === "complete"
@@ -360,7 +390,7 @@ async function updateRequestFromN8n(
     "write_n8n_update_locked",
     {
       p_id: requestId,
-      p_expected_status: null,
+      p_expected_status: "processing",
       p_status: nextStatus,
       p_data: nextData,
       p_processed_at:
@@ -375,6 +405,26 @@ async function updateRequestFromN8n(
     );
   }
   if (!updated) {
+    const { data: latest } = await admin
+      .from("n8n_updates")
+      .select("id,status,created_at,processed_at,data")
+      .eq("id", requestId)
+      .eq("sector", REQUEST_SECTOR)
+      .eq("update_type", REQUEST_TYPE)
+      .maybeSingle();
+
+    if ((latest as SyncRequestRow | null)?.data?.phase === "cancelled") {
+      return NextResponse.json(
+        {
+          ok: false,
+          cancelled: true,
+          error: "El usuario canceló este rastreo",
+          request: publicStatus(latest as SyncRequestRow),
+        },
+        { status: 409 }
+      );
+    }
+
     // El propietario está en proceso de borrado de cuenta: se omite sin
     // error, n8n no debe reintentar indefinidamente esta actualización.
     return NextResponse.json({ ok: true, skipped: true });
@@ -383,6 +433,47 @@ async function updateRequestFromN8n(
   return NextResponse.json({
     ok: true,
     request: publicStatus(updated as SyncRequestRow),
+  });
+}
+
+async function getRequestStatusForN8n(body: Record<string, unknown>) {
+  const requestId =
+    typeof body.request_id === "string" ? body.request_id.trim() : "";
+  if (!requestId) {
+    return NextResponse.json(
+      { error: "request_id es obligatorio" },
+      { status: 400 }
+    );
+  }
+
+  const admin = createAdminClient();
+  if (!admin) {
+    return NextResponse.json(
+      { error: "SUPABASE_SERVICE_ROLE_KEY no está configurada" },
+      { status: 503 }
+    );
+  }
+
+  const { data: current, error } = await admin
+    .from("n8n_updates")
+    .select("id,status,created_at,processed_at,data")
+    .eq("id", requestId)
+    .eq("sector", REQUEST_SECTOR)
+    .eq("update_type", REQUEST_TYPE)
+    .single();
+
+  if (error || !current) {
+    return NextResponse.json(
+      { error: "Solicitud no encontrada" },
+      { status: 404 }
+    );
+  }
+
+  const request = publicStatus(current as SyncRequestRow);
+  return NextResponse.json({
+    ok: true,
+    cancelled: request.status === "cancelled",
+    request,
   });
 }
 
@@ -398,6 +489,7 @@ async function handleN8nRequest(request: Request) {
   const action = body.action;
 
   if (action === "claim") return claimNextRequest();
+  if (action === "status") return getRequestStatusForN8n(body);
   if (action === "progress" || action === "complete" || action === "fail") {
     return updateRequestFromN8n(action, body);
   }
@@ -412,6 +504,108 @@ export async function POST(request: Request) {
   return hasN8nAuthorization(request)
     ? handleN8nRequest(request)
     : handleUserRequest(request);
+}
+
+export async function DELETE(request: Request) {
+  const user = await getAuthenticatedUser();
+  if (!user) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  const admin = createAdminClient();
+  if (!admin) {
+    return NextResponse.json(
+      { error: "La conexión segura con Supabase no está configurada" },
+      { status: 503 }
+    );
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const requestId =
+    typeof body?.request_id === "string" ? body.request_id.trim() : "";
+  if (!requestId) {
+    return NextResponse.json(
+      { error: "request_id es obligatorio" },
+      { status: 400 }
+    );
+  }
+
+  const { data: current, error: readError } = await admin
+    .from("n8n_updates")
+    .select("id,status,created_at,processed_at,data")
+    .eq("id", requestId)
+    .eq("sector", REQUEST_SECTOR)
+    .eq("update_type", REQUEST_TYPE)
+    .single();
+
+  const currentRow = current as SyncRequestRow | null;
+  if (
+    readError ||
+    !currentRow ||
+    currentRow.data?.requested_by !== user.id
+  ) {
+    return NextResponse.json(
+      { error: "Solicitud no encontrada" },
+      { status: 404 }
+    );
+  }
+
+  if (currentRow.data?.phase === "cancelled") {
+    return NextResponse.json({
+      ok: true,
+      already_cancelled: true,
+      request: publicStatus(currentRow),
+    });
+  }
+
+  if (currentRow.status !== "processing") {
+    return NextResponse.json(
+      {
+        error: "El rastreo ya ha finalizado y no se puede cancelar",
+        request: publicStatus(currentRow),
+      },
+      { status: 409 }
+    );
+  }
+
+  const cancelledAt = new Date().toISOString();
+  const { data: cancelled, error: cancelError } = await admin.rpc(
+    "write_n8n_update_locked",
+    {
+      p_id: currentRow.id,
+      p_expected_status: "processing",
+      p_status: "completed",
+      p_data: {
+        ...currentRow.data,
+        phase: "cancelled",
+        cancel_requested_at: cancelledAt,
+        completed_at: cancelledAt,
+        progress: {
+          ...currentRow.data?.progress,
+          label: "Rastreo cancelado por el usuario",
+        },
+      },
+      p_processed_at: cancelledAt,
+    }
+  );
+
+  if (cancelError) {
+    return NextResponse.json(
+      { error: `No se pudo cancelar el rastreo: ${cancelError.message}` },
+      { status: 500 }
+    );
+  }
+  if (!cancelled) {
+    return NextResponse.json(
+      { error: "El rastreo cambió de estado antes de poder cancelarlo" },
+      { status: 409 }
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    request: publicStatus(cancelled as SyncRequestRow),
+  });
 }
 
 export async function GET(request: Request) {
