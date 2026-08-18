@@ -1,0 +1,1883 @@
+[
+  {
+    "updatedAt": "2026-07-25T18:18:23.886Z",
+    "createdAt": "2026-05-18T14:31:57.936Z",
+    "id": "wfdP2cJs0ioJAJ6g",
+    "name": "Enlaze -Construcción y reformas",
+    "description": null,
+    "active": false,
+    "isArchived": false,
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "hours",
+                "hoursInterval": 24
+              }
+            ]
+          }
+        },
+        "id": "c35c2b26-f223-4bcc-8b9d-139c2fc3891e",
+        "name": "Cada 24 horas",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          256,
+          464
+        ],
+        "retryOnFail": true
+      },
+      {
+        "parameters": {
+          "url": "https://www.manomano.es/cementos-y-morteros-3950",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "User-Agent",
+                "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+              },
+              {
+                "name": "Accept",
+                "value": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+              },
+              {
+                "name": "Accept-Language",
+                "value": "es-ES,es;q=0.9,en;q=0.8"
+              },
+              {
+                "name": "Referer",
+                "value": "https://www.obramat.es/"
+              },
+              {
+                "name": "Cache-Control",
+                "value": "no-cache"
+              },
+              {
+                "name": "Pragma",
+                "value": "no-cache"
+              }
+            ]
+          },
+          "options": {
+            "redirect": {},
+            "response": {
+              "response": {
+                "fullResponse": false,
+                "neverError": true,
+                "responseFormat": "text",
+                "outputPropertyName": "data"
+              }
+            }
+          }
+        },
+        "id": "573599c4-af69-400e-8198-f0da32b806a9",
+        "name": "OBRAMAT - Cementos y morteros",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          544,
+          272
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://www.obramat.es/fontaneria/",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "User-Agent",
+                "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+              },
+              {
+                "name": "Accept",
+                "value": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+              },
+              {
+                "name": "Accept-Language",
+                "value": "es-ES,es;q=0.9,en;q=0.8"
+              },
+              {
+                "name": "Referer",
+                "value": "https://www.obramat.es/"
+              },
+              {
+                "name": "Cache-Control",
+                "value": "no-cache"
+              },
+              {
+                "name": "Pragma",
+                "value": "no-cache"
+              }
+            ]
+          },
+          "options": {
+            "redirect": {},
+            "response": {
+              "response": {
+                "fullResponse": false,
+                "neverError": true,
+                "responseFormat": "text",
+                "outputPropertyName": "data"
+              }
+            }
+          }
+        },
+        "id": "b6edc029-a1f6-43dc-b7f2-e820a36f517b",
+        "name": "OBRAMAT - Fontanería baño",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          544,
+          592
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "\nconst items = $input.all();\nconst prices = [];\nconst seen = new Set();\n\nfunction cleanText(t) {\n  return (t || '')\n    .replace(/\\s+/g, ' ')\n    .replace(/&nbsp;/g, ' ')\n    .replace(/&amp;/g, '&')\n    .trim();\n}\n\nfunction pushItem(title, value, source, subcategory, unit = 'ud', description = '') {\n  if (!title || !Number.isFinite(value) || value <= 0 || value > 50000) return;\n  const key = `${title}|${value}|${source}`;\n  if (seen.has(key)) return;\n  seen.add(key);\n  prices.push({\n    title: title.substring(0, 160),\n    value: Number(value.toFixed(2)),\n    unit,\n    category: 'material',\n    subcategory,\n    source,\n    description\n  });\n}\n\nfor (const item of items) {\n  const html = item.json.data || item.json.body || '';\n  const lower = html.toLowerCase();\n\n  const blocks = html.match(/.{0,250}(€|eur).{0,120}/gi) || [];\n  for (const block of blocks.slice(0, 80)) {\n    const priceMatch = block.match(/(\\d{1,4}(?:[.,]\\d{2})?)\\s*(?:€|eur)/i);\n    if (!priceMatch) continue;\n    const value = parseFloat(priceMatch[1].replace(',', '.'));\n    const titleMatch =\n      block.match(/(?:title|alt|data-name|aria-label|product-name|nombre)[=\"':>\\s]*([^\"<>|]{8,140})/i) ||\n      block.match(/>([^<>]{8,120})</);\n    const rawTitle = titleMatch ? cleanText(titleMatch[1]) : '';\n    let source = 'retail-web';\n    let subcategory = 'General';\n    if (lower.includes('leroymerlin')) source = 'leroy-merlin';\n    if (lower.includes('obramat')) source = 'obramat';\n    if (/ducha|mampara|lavabo|grifo|inodoro/i.test(rawTitle + ' ' + block)) subcategory = 'Fontaneria';\n    else if (/cement|mortero|yeso|escayola|ladrillo|bloque|aislamiento/i.test(rawTitle + ' ' + block)) subcategory = 'Albanileria';\n\n    if (rawTitle && rawTitle.length >= 8) {\n      pushItem(rawTitle, value, source, subcategory, 'ud', 'Precio capturado automáticamente desde web retail');\n    }\n  }\n}\n\nif (prices.length === 0) {\n  const fechaHoy = new Date().toLocaleDateString('es-ES');\n  const fallback = [\n    ['Plato de ducha resina 70x120 antideslizante', 189.00, 'Fontaneria'],\n    ['Plato de ducha resina 80x120 antideslizante', 199.00, 'Fontaneria'],\n    ['Mampara frontal 120 cm corredera', 245.00, 'Fontaneria'],\n    ['Mampara fija 80 cm cristal templado', 189.00, 'Fontaneria'],\n    ['Saco cemento gris 25 kg CEM II', 4.85, 'Albanileria'],\n    ['Saco mortero cola C1 25 kg', 5.90, 'Albanileria'],\n    ['Saco mortero cola C2TE 25 kg', 12.50, 'Albanileria'],\n    ['Azulejo porcelánico 60x60 rectificado', 19.90, 'Albanileria'],\n    ['Azulejo cerámico 30x60 brillo', 13.50, 'Albanileria'],\n    ['Grifo termostático ducha visto', 89.00, 'Fontaneria'],\n    ['Inodoro compacto adosado a pared', 149.00, 'Fontaneria'],\n    ['Mueble lavabo 80 cm + espejo LED', 349.00, 'Fontaneria']\n  ];\n  for (const [title, value, subcategory] of fallback) {\n    pushItem(title, value, 'referencia-mercado-' + fechaHoy, subcategory, title.includes('Azulejo') ? 'm2' : 'ud', 'Precio de referencia de mercado español');\n  }\n}\n\nreturn [{ json: { sector: 'construccion', prices } }];\n"
+        },
+        "id": "2ef3c691-2ede-41df-83f3-05ddef4bbb38",
+        "name": "Extraer y normalizar precios retail",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1168,
+          272
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://enlaze.vercel.app/api/pb/ingest",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json) }}",
+          "options": {
+            "timeout": 60000
+          }
+        },
+        "id": "15f54519-0296-49ed-a1f1-bfbe4c3ee707",
+        "name": "Enviar precios retail a Enlaze",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1888,
+          272
+        ],
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "AVNfthNvkbd4K09E",
+            "name": "Unnamed credential"
+          },
+          "httpHeaderAuth": {
+            "id": "00WTdAFCZp67qL2k",
+            "name": "Header Auth ENLAZE Sync API"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "https://info.cype.com/es/programa_relacionado/generador-de-precios/",
+          "options": {
+            "redirect": {},
+            "response": {
+              "response": {
+                "fullResponse": false,
+                "neverError": true,
+                "responseFormat": "text",
+                "outputPropertyName": "data"
+              }
+            }
+          }
+        },
+        "id": "7b109be4-bea3-476c-845a-ee4e1d40f152",
+        "name": "CYPE - Generador de precios novedades",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          544,
+          816
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "\nconst html = $input.first().json.data || $input.first().json.body || '';\nconst updates = [];\nconst seen = new Set();\n\nfunction cleanText(t) {\n  return (t || '').replace(/\\s+/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').trim();\n}\n\nconst cardRegex = /<a[^>]+href=\"([^\"]*generador-de-precios[^\"]*)\"[^>]*>[\\s\\S]{0,800}?<h[23][^>]*>([\\s\\S]{1,220}?)<\\/h[23]>[\\s\\S]{0,500}?(?:Publicado el\\s*([^<]+))?/gi;\nlet m;\nwhile ((m = cardRegex.exec(html)) !== null && updates.length < 8) {\n  const url = m[1].startsWith('http') ? m[1] : ('https://info.cype.com' + m[1]);\n  const title = cleanText(m[2]).replace(/<[^>]+>/g, '');\n  const published = cleanText(m[3] || '');\n  if (!title || seen.has(title)) continue;\n  seen.add(title);\n  updates.push({\n    title: title.substring(0, 180),\n    description: (published ? `Publicado: ${published}. ` : '') + 'Novedad detectada en CYPE Generador de precios.',\n    source: 'cype-generador-precios',\n    metadata: { url, fecha: new Date().toISOString() }\n  });\n}\n\nif (updates.length === 0) {\n  updates.push({\n    title: 'Revisar novedades del Generador de precios de CYPE',\n    description: 'No se pudieron parsear tarjetas de novedad. Visita manualmente: https://info.cype.com/es/programa_relacionado/generador-de-precios/',\n    source: 'cype-generador-precios',\n    metadata: { url: 'https://info.cype.com/es/programa_relacionado/generador-de-precios/', fecha: new Date().toISOString() }\n  });\n}\n\nreturn [{ json: { sector: 'construccion', cype_updates: updates } }];\n"
+        },
+        "id": "d8806d2f-759b-446e-9276-75291caadce2",
+        "name": "Extraer novedades CYPE",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          784,
+          816
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://enlaze.vercel.app/api/webhooks/construccion",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json) }}",
+          "options": {
+            "timeout": 60000
+          }
+        },
+        "id": "53535eb4-32f1-4a11-a8d4-ba4d5df1d085",
+        "name": "Enviar feed CYPE a Enlaze",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1808,
+          816
+        ],
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "00WTdAFCZp67qL2k",
+            "name": "Header Auth ENLAZE Sync API"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "https://www.boe.es/rss/boe.php?s=5",
+          "options": {
+            "response": {
+              "response": {
+                "responseFormat": "text"
+              }
+            }
+          }
+        },
+        "id": "f09bb361-a1d6-47e2-aa95-88ec2696cceb",
+        "name": "BOE - Normativas",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          544,
+          1104
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "\nconst xml = $input.first().json.data || $input.first().json.body || '';\nconst regulations = [];\nconst itemRegex = /<item>([\\s\\S]*?)<\\/item>/gi;\nconst titleRegex = /<title><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/title>|<title>([\\s\\S]*?)<\\/title>/i;\nconst descRegex = /<description><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/description>|<description>([\\s\\S]*?)<\\/description>/i;\nconst linkRegex = /<link>([^<]+)<\\/link>/i;\nconst keywords = ['construcci','edific','vivienda','urbanis','reforma','instalaci','electri','fontaner','climat','residuo','seguridad','laboral','prevencion','iva','fiscal','autonomo','empresa','comercio','sanitar','hostel','alimenta'];\n\nlet m;\nwhile ((m = itemRegex.exec(xml)) !== null) {\n  const item = m[1];\n  const title = ((item.match(titleRegex) || [])[1] || (item.match(titleRegex) || [])[2] || '').trim();\n  const desc = ((item.match(descRegex) || [])[1] || (item.match(descRegex) || [])[2] || '').trim();\n  const link = ((item.match(linkRegex) || [])[1] || '').trim();\n  const txt = (title + ' ' + desc).toLowerCase();\n  if (title && keywords.some(k => txt.includes(k))) {\n    regulations.push({\n      title: title.substring(0, 200),\n      description: desc.substring(0, 500),\n      source: 'boe-rss',\n      metadata: { url: link, fecha: new Date().toISOString() }\n    });\n  }\n}\nif (regulations.length === 0) {\n  regulations.push({\n    title: 'Sin nuevas normativas relevantes hoy',\n    description: 'No se han detectado publicaciones del BOE relevantes para construcción o reforma en esta comprobación.',\n    source: 'boe-rss'\n  });\n}\nreturn [{ json: { sector: 'construccion', regulations } }];\n"
+        },
+        "id": "0f4b6b59-251c-43ad-b1f0-7d5fce932677",
+        "name": "Filtrar normativas relevantes",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          784,
+          1104
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://enlaze.vercel.app/api/webhooks/construccion",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json) }}",
+          "options": {
+            "timeout": 60000
+          }
+        },
+        "id": "f32cf1e2-163e-4b78-9875-70f1c1d78bb1",
+        "name": "Enviar normativas a Enlaze",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2016,
+          1104
+        ],
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "MxfBS0YmCERT2Ouh",
+            "name": "Header Auth account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "https://news.google.com/rss/search?q=precios+materiales+construccion+OR+reforma+OR+energia+OR+hipotecas+site%3Aexpansion.com+OR+site%3Acincodias.elpais.com+OR+site%3Aeleconomista.es&hl=es&gl=ES&ceid=ES:es",
+          "options": {
+            "response": {
+              "response": {
+                "responseFormat": "text"
+              }
+            }
+          }
+        },
+        "id": "33543d5f-3aae-461b-939b-2fb153a607c3",
+        "name": "Google News - Sector",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          544,
+          1344
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "\nconst xml = $input.first().json.data || $input.first().json.body || '';\nconst news = [];\nconst itemRegex = /<item>([\\s\\S]*?)<\\/item>/gi;\nconst titleRegex = /<title><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/title>|<title>([\\s\\S]*?)<\\/title>/i;\nconst linkRegex = /<link>([^<]+)<\\/link>/i;\nconst pubDateRegex = /<pubDate>([^<]+)<\\/pubDate>/i;\nlet m, count = 0;\nwhile ((m = itemRegex.exec(xml)) !== null && count < 6) {\n  const item = m[1];\n  const title = ((item.match(titleRegex) || [])[1] || (item.match(titleRegex) || [])[2] || '').trim();\n  const link = ((item.match(linkRegex) || [])[1] || '').trim();\n  const pubDate = ((item.match(pubDateRegex) || [])[1] || '').trim();\n  if (title) {\n    news.push({\n      title: title.substring(0, 200),\n      content: `Fecha: ${pubDate || 'hoy'}${link ? ' | URL: ' + link : ''}`,\n      source: 'google-news-rss',\n      metadata: { url: link, fecha: new Date().toISOString() }\n    });\n    count++;\n  }\n}\nif (news.length === 0) {\n  news.push({\n    title: 'Sin noticias relevantes del sector hoy',\n    content: 'No se han detectado noticias nuevas en esta comprobación.',\n    source: 'google-news-rss'\n  });\n}\nreturn [{ json: { sector: 'construccion', news } }];\n"
+        },
+        "id": "aa04c990-7784-48b1-88cc-4b6e35919c42",
+        "name": "Extraer noticias relevantes",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          720,
+          1344
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://enlaze.vercel.app/api/webhooks/construccion",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json) }}",
+          "options": {
+            "timeout": 60000
+          }
+        },
+        "id": "eac2d9ed-c13f-400e-9a2f-d6099e9881e9",
+        "name": "Enviar noticias a Enlaze",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1744,
+          1344
+        ],
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "MxfBS0YmCERT2Ouh",
+            "name": "Header Auth account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/8381?nult=5",
+          "options": {
+            "response": {
+              "response": {
+                "responseFormat": "json"
+              }
+            }
+          }
+        },
+        "id": "57c6aa6b-56e1-489d-96f0-b6c05fc51e4b",
+        "name": "INE - API Índices materiales construcción",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          528,
+          1568
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Procesar datos JSON del INE (API pública)\nconst ineData = $input.first().json;\nconst signals = [];\nconst fecha = new Date().toISOString();\n\n// La API devuelve un array de series con datos\nif (Array.isArray(ineData)) {\n  for (const serie of ineData.slice(0, 25)) {\n    const nombre = (serie.Nombre || serie.nombre || '').replace(/<[^>]*>/g, '').trim();\n    const datos = serie.Data || serie.data || [];\n    \n    if (nombre && datos.length > 0) {\n      const ultimoValor = datos[0].Valor;\n      const penultimoValor = datos.length > 1 ? datos[1].Valor : null;\n      const variacion = (ultimoValor != null && penultimoValor != null && penultimoValor !== 0)\n        ? ((ultimoValor - penultimoValor) / penultimoValor * 100).toFixed(2)\n        : '0';\n      const periodo = datos[0].Fecha \n        ? new Date(datos[0].Fecha / 1000).toLocaleDateString('es-ES')\n        : 'último periodo';\n      \n      signals.push({\n        name: nombre.substring(0, 150),\n        value: ultimoValor,\n        previous_value: penultimoValor,\n        variation_pct: parseFloat(variacion),\n        unit: 'index',\n        source: 'INE-API',\n        description: `Índice ${nombre} - Periodo: ${periodo} - Variación: ${variacion}%`,\n        captured_at: fecha\n      });\n    }\n  }\n}\n\nif (signals.length === 0) {\n  signals.push({\n    name: 'INE API check',\n    value: null,\n    unit: 'n/a',\n    source: 'INE-API',\n    description: 'No se pudieron obtener datos de la API del INE. Verificar endpoint.',\n    captured_at: fecha\n  });\n}\n\nreturn [{ json: { sector: 'construccion', market_signals: signals, source: 'INE-API', total: signals.length } }];\n"
+        },
+        "id": "7644a884-ae6e-494f-898b-9b2cda7227ec",
+        "name": "Procesar datos INE",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          752,
+          1568
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://enlaze.vercel.app/api/webhooks/construccion",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json) }}",
+          "options": {
+            "timeout": 60000
+          }
+        },
+        "id": "3682cd8b-eaf5-4404-a283-920536820391",
+        "name": "Enviar índices INE a Enlaze",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1952,
+          1584
+        ],
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "MxfBS0YmCERT2Ouh",
+            "name": "Header Auth account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "https://www.esios.ree.es/es/pvpc",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "User-Agent",
+                "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+              },
+              {
+                "name": "Accept",
+                "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+              },
+              {
+                "name": "Accept-Language",
+                "value": "es-ES,es;q=0.9"
+              }
+            ]
+          },
+          "options": {
+            "redirect": {},
+            "response": {
+              "response": {
+                "fullResponse": false,
+                "neverError": true,
+                "responseFormat": "text",
+                "outputPropertyName": "data"
+              }
+            }
+          }
+        },
+        "id": "ebbce85b-7dcf-4e62-9298-13a0fb488310",
+        "name": "ESIOS REE - Precio electricidad PVPC",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          496,
+          1856
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Extraer precio electricidad de ESIOS/REE\nconst html = $input.first().json.data || $input.first().json.body || '';\nconst signals = [];\nconst fecha = new Date().toISOString();\n\n// Intentar extraer precio medio del PVPC\nconst precioMatch = html.match(/(?:precio medio|media)[^0-9]{0,80}?(\\d{1,4}[.,]\\d{1,4})\\s*(?:€\\/(?:MWh|kWh)|cts)/i)\n  || html.match(/(\\d{1,3}[.,]\\d{2,4})\\s*€\\/MWh/i)\n  || html.match(/pvpc[^0-9]{0,60}?(\\d{1,4}[.,]\\d{1,4})/i);\n\nif (precioMatch) {\n  const valor = parseFloat(precioMatch[1].replace(',', '.'));\n  signals.push({\n    name: 'electricidad_pvpc_media_hoy',\n    value: valor,\n    unit: 'EUR/MWh',\n    source: 'ESIOS-REE',\n    description: 'Precio medio PVPC electricidad España hoy',\n    captured_at: fecha\n  });\n}\n\n// Intentar extraer máximo y mínimo\nconst maxMatch = html.match(/(?:máxim|max)[^0-9]{0,40}?(\\d{1,4}[.,]\\d{1,4})\\s*(?:€|cts)/i);\nconst minMatch = html.match(/(?:mínim|min)[^0-9]{0,40}?(\\d{1,4}[.,]\\d{1,4})\\s*(?:€|cts)/i);\nif (maxMatch) signals.push({ name: 'electricidad_pvpc_max_hoy', value: parseFloat(maxMatch[1].replace(',', '.')), unit: 'EUR/MWh', source: 'ESIOS-REE', description: 'Precio máximo PVPC hoy', captured_at: fecha });\nif (minMatch) signals.push({ name: 'electricidad_pvpc_min_hoy', value: parseFloat(minMatch[1].replace(',', '.')), unit: 'EUR/MWh', source: 'ESIOS-REE', description: 'Precio mínimo PVPC hoy', captured_at: fecha });\n\nif (signals.length === 0) {\n  signals.push({\n    name: 'electricidad_pvpc_monitor',\n    value: null,\n    unit: 'EUR/MWh',\n    source: 'ESIOS-REE',\n    description: 'No se pudo extraer el precio PVPC. ESIOS puede requerir API token. Consulta: https://www.esios.ree.es/es/pvpc',\n    captured_at: fecha\n  });\n}\n\nreturn [{ json: { sector: 'construccion', market_signals: signals, source: 'ESIOS-REE' } }];\n"
+        },
+        "id": "4a5fb422-9e31-4dd3-bb0e-24389d6b2dcd",
+        "name": "Procesar precio electricidad",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          832,
+          1856
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://enlaze.vercel.app/api/webhooks/construccion",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json) }}",
+          "options": {
+            "timeout": 60000
+          }
+        },
+        "id": "f77de829-2e29-4333-bc83-690a9277a2a5",
+        "name": "Enviar señales energía a Enlaze",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1968,
+          1824
+        ],
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "MxfBS0YmCERT2Ouh",
+            "name": "Header Auth account"
+          }
+        }
+      },
+      {
+        "parameters": {},
+        "id": "789dabe3-5473-49de-98a5-dcf10e467bdc",
+        "name": "Merge retail 2",
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 3,
+        "position": [
+          752,
+          432
+        ]
+      },
+      {
+        "parameters": {},
+        "id": "3969e5a1-0dea-4a87-a17f-b79a5dd515c5",
+        "name": "Merge retail final",
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 3,
+        "position": [
+          960,
+          272
+        ]
+      },
+      {
+        "parameters": {},
+        "id": "7a224e77-a211-4107-ac38-b6656f66ba08",
+        "name": "Manual Trigger",
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          176,
+          608
+        ]
+      },
+      {
+        "parameters": {},
+        "id": "38a127bb-5f9c-4218-b353-ae0758223d68",
+        "name": "Merge Leroy",
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 3,
+        "position": [
+          736,
+          64
+        ]
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "Eres un agente experto en construcción, reformas, presupuestos, normativa española y gestión empresarial para pymes del sector. Tu tarea es limpiar, clasificar y enriquecer datos capturados automáticamente. No debes inventar precios, fechas, fuentes ni normativa. Si un dato no está claro, marca needs_review true o impact_level bajo. Devuelve siempre JSON válido, sin markdown, sin explicaciones y sin texto fuera del JSON.\n\nDatos de entrada:\n{{ $json }}\n\nDevuelve un array de objetos con formato precios."
+        },
+        "id": "26f4a8a5-52b1-4e3f-9069-ec659daf73f3",
+        "name": "Gemini - Normalizar precios retail",
+        "type": "@n8n/n8n-nodes-langchain.chainLlm",
+        "typeVersion": 1.4,
+        "position": [
+          1344,
+          272
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "options": {
+            "temperature": 0.1
+          }
+        },
+        "id": "ee56b1a9-4c78-4b38-9cda-a67400bd465b",
+        "name": "Gemini Model Retail",
+        "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+        "typeVersion": 1,
+        "position": [
+          1376,
+          432
+        ],
+        "retryOnFail": true,
+        "credentials": {
+          "googlePalmApi": {
+            "id": "cJfm1S37YQHCMBYf",
+            "name": "Google Gemini(PaLM) Api account"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "try {\n  let t = $input.first().json.text || '';\n  t = t.replace(/```json/g, '').replace(/```/g, '').trim();\n  const parsed = JSON.parse(t);\n  const aiPrices = Array.isArray(parsed) ? parsed : (parsed.prices || []);\n  if (aiPrices.length === 0) throw new Error(\"No prices found\");\n  \n  const products = aiPrices.map(p => ({\n    name: p.title || p.name,\n    price: p.value || p.price,\n    unit: p.unit || 'ud',\n    category: p.category || 'material',\n    subcategory: p.subcategory || '',\n    brand: p.brand || '',\n    sku: p.sku || ''\n  })).filter(p => p.name && p.price > 0);\n\n  return [{ \n    json: { \n      provider_name: 'Leroy Merlin / OBRAMAT',\n      sector: 'construccion',\n      source_url: 'https://www.leroymerlin.es',\n      products: products\n    } \n  }];\n} catch(e) {\n  const fallbackItems = $items(\"Extraer y normalizar precios retail\");\n  const fallbackPrices = fallbackItems?.[0]?.json?.prices || $json.prices || [];\n  const products = fallbackPrices.map(p => ({\n    name: p.title || p.name,\n    price: p.value || p.price,\n    unit: p.unit || 'ud',\n    category: p.category || 'material',\n    subcategory: p.subcategory || '',\n    brand: '',\n    sku: ''\n  })).filter(p => p.name && p.price > 0);\n\n  return [{ \n    json: { \n      provider_name: 'Leroy Merlin / OBRAMAT',\n      sector: 'construccion',\n      source_url: 'https://www.leroymerlin.es',\n      products: products\n    } \n  }];\n}"
+        },
+        "id": "8584eeda-18e8-42d9-8342-b0ba6f70d1c5",
+        "name": "Code - Validar JSON precios IA",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1664,
+          272
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "try {\n  let t = $input.first().json.text || '';\n  t = t.replace(/```json/g, '').replace(/```/g, '').trim();\n  const parsed = JSON.parse(t);\n  const aiPrices = Array.isArray(parsed) ? parsed : (parsed.prices || []);\n  if (aiPrices.length === 0) throw new Error(\"No prices found\");\n  \n  const products = aiPrices.map(p => ({\n    name: p.title || p.name,\n    price: p.value || p.price,\n    unit: p.unit || 'ud',\n    category: p.category || 'material',\n    subcategory: p.subcategory || '',\n    brand: p.brand || '',\n    sku: p.sku || ''\n  })).filter(p => p.name && p.price > 0);\n\n  return [{ \n    json: { \n      provider_name: 'Leroy Merlin / OBRAMAT',\n      sector: 'construccion',\n      source_url: 'https://www.leroymerlin.es',\n      products: products\n    } \n  }];\n} catch(e) {\n  const fallbackItems = $items(\"Extraer y normalizar precios retail\");\n  const fallbackPrices = fallbackItems?.[0]?.json?.prices || $json.prices || [];\n  const products = fallbackPrices.map(p => ({\n    name: p.title || p.name,\n    price: p.value || p.price,\n    unit: p.unit || 'ud',\n    category: p.category || 'material',\n    subcategory: p.subcategory || '',\n    brand: '',\n    sku: ''\n  })).filter(p => p.name && p.price > 0);\n\n  return [{ \n    json: { \n      provider_name: 'Leroy Merlin / OBRAMAT',\n      sector: 'construccion',\n      source_url: 'https://www.leroymerlin.es',\n      products: products\n    } \n  }];\n}"
+        },
+        "id": "60f91b48-4a14-4382-ae72-529d213e3585",
+        "name": "Code - Validar JSON CYPE",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1408,
+          816
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "try {\n  let t = $input.first().json.text;\n  t = t.replace(/```json/g, '').replace(/```/g, '').trim();\n  const parsed = JSON.parse(t);\n  return [{ json: { regulations: parsed, ai_enriched: true } }];\n} catch(e) {\n  return [{ json: { regulations: $json.regulations, ai_enriched: false } }];\n}"
+        },
+        "id": "7da99352-7207-44d7-8422-227b30d4358e",
+        "name": "Code - Validar JSON normativas",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1440,
+          1104
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "try {\n  let t = $input.first().json.text;\n  t = t.replace(/```json/g, '').replace(/```/g, '').trim();\n  const parsed = JSON.parse(t);\n  return [{ json: { news: parsed, ai_enriched: true } }];\n} catch(e) {\n  return [{ json: { news: $json.news, ai_enriched: false } }];\n}"
+        },
+        "id": "2b03dfe6-4db2-425a-b708-d6f307e8fbc1",
+        "name": "Code - Validar JSON noticias",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1328,
+          1344
+        ]
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "Eres un agente experto en construcción, reformas, presupuestos, normativa española y gestión empresarial para pymes del sector. Tu tarea es limpiar, clasificar y enriquecer datos capturados automáticamente. No debes inventar precios, fechas, fuentes ni normativa. Si un dato no está claro, marca needs_review true o impact_level bajo. Devuelve siempre JSON válido, sin markdown, sin explicaciones y sin texto fuera del JSON.\n\nDatos de entrada:\n{{ $json }}\n\nDevuelve un array de objetos con formato precios (categoría: indice_mercado)."
+        },
+        "id": "171317fd-4299-4dd7-9115-c46e5ae026d3",
+        "name": "Gemini - Interpretar índices INE",
+        "type": "@n8n/n8n-nodes-langchain.chainLlm",
+        "typeVersion": 1.4,
+        "position": [
+          960,
+          1568
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "options": {
+            "temperature": 0.1
+          }
+        },
+        "id": "302cb24b-017f-489c-91a4-177fd2ddcf51",
+        "name": "Gemini Model INE",
+        "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+        "typeVersion": 1,
+        "position": [
+          1024,
+          1696
+        ],
+        "retryOnFail": true,
+        "credentials": {
+          "googlePalmApi": {
+            "id": "iCO4ImfRz53Tc1Eb",
+            "name": "Google Gemini(PaLM) Api account 2"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "try {\n  let t = $input.first().json.text;\n  t = t.replace(/```json/g, '').replace(/```/g, '').trim();\n  const parsed = JSON.parse(t);\n  return [{ json: { market_signals: parsed, ai_enriched: true } }];\n} catch(e) {\n  return [{ json: { market_signals: $json.market_signals, ai_enriched: false } }];\n}"
+        },
+        "id": "7582ea1f-f069-4cd6-8d79-eb4086e9d2d2",
+        "name": "Code - Validar JSON índices",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1296,
+          1568
+        ]
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "Eres un agente experto en construcción, reformas, presupuestos, normativa española y gestión empresarial para pymes del sector. Tu tarea es limpiar, clasificar y enriquecer datos capturados automáticamente. No debes inventar precios, fechas, fuentes ni normativa. Si un dato no está claro, marca needs_review true o impact_level bajo. Devuelve siempre JSON válido, sin markdown, sin explicaciones y sin texto fuera del JSON.\n\nDatos de entrada:\n{{ $json }}\n\nDevuelve un array de objetos con formato precios (categoría: energia)."
+        },
+        "id": "5dc8e958-ab04-407a-b469-8daa7b8095ea",
+        "name": "Gemini - Interpretar energía",
+        "type": "@n8n/n8n-nodes-langchain.chainLlm",
+        "typeVersion": 1.4,
+        "position": [
+          1120,
+          1856
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "options": {
+            "temperature": 0.1
+          }
+        },
+        "id": "0af5fa4c-f53d-4dd6-87ef-c4a7fc7f5ef7",
+        "name": "Gemini Model ESIOS",
+        "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+        "typeVersion": 1,
+        "position": [
+          1248,
+          2080
+        ],
+        "retryOnFail": true,
+        "credentials": {
+          "googlePalmApi": {
+            "id": "cJfm1S37YQHCMBYf",
+            "name": "Google Gemini(PaLM) Api account"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "\ntry {\n  let t = $input.first().json.text || '';\n  t = t.replace(/```json/g, '').replace(/```/g, '').trim();\n  const parsed = JSON.parse(t);\n  const aiData = Array.isArray(parsed) ? parsed : (parsed.market_signals || []);\n  if (aiData.length === 0) throw new Error(\"No items\");\n  \n  const prices = aiData.map(s => ({ title: s.title || s.name, value: s.value, unit: s.unit, category: 'energia', source: s.source, description: s.description || s.summary, metadata: { captured_at: s.captured_at } }));\n  return [{ json: { action: 'update_prices', sector: 'construccion', data: { prices } } }];\n} catch(e) {\n  const fallbackItems = $items(\"Procesar precio electricidad\");\n  const fb = fallbackItems && fallbackItems.length > 0 && fallbackItems[0].json ? fallbackItems[0].json.market_signals : ($json.market_signals || []);\n  const prices = fb.map(s => ({ title: s.name, value: s.value, unit: s.unit, category: 'energia', source: s.source, description: s.description, metadata: { captured_at: s.captured_at } }));\n  return [{ json: { action: 'update_prices', sector: 'construccion', data: { prices } } }];\n}\n"
+        },
+        "id": "1e71ad0e-3978-4c42-adba-7c3e7ae587ac",
+        "name": "Code - Validar JSON energía",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1584,
+          1856
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "\nconst aiData = $json.news || [];\nconst fallbackData = $items(\"Extraer noticias relevantes\")[0]?.json?.news || [];\nconst items = aiData.length > 0 ? aiData : fallbackData;\n\nconst news = items.map(n => ({\n  title: n.title || 'Sin título',\n  content: n.summary || n.sector_impact || n.description || n.content || 'Sin contenido',\n  source: n.source || 'google-news',\n  metadata: n.metadata || {}\n}));\n\nreturn [{\n  json: {\n    action: \"update_news\",\n    sector: \"construccion\",\n    data: { news }\n  }\n}];\n"
+        },
+        "id": "a970146b-8d4b-4d24-bb56-5d0c4cdba14a",
+        "name": "Preparar payload noticias Enlaze",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1536,
+          1344
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "\nconst aiData = $json.regulations || [];\nconst fallbackData = $items(\"Filtrar normativas relevantes\")[0]?.json?.regulations || [];\nconst items = aiData.length > 0 ? aiData : fallbackData;\n\nconst regulations = items.map(n => ({\n  title: n.title || 'Sin título',\n  description: n.summary || n.recommended_action || n.description || 'Sin descripción',\n  source: n.source || 'boe',\n  metadata: n.metadata || {}\n}));\n\nreturn [{\n  json: {\n    action: \"update_regulations\",\n    sector: \"construccion\",\n    data: { regulations }\n  }\n}];\n"
+        },
+        "id": "89be5874-ad57-46c6-89a6-b9dcdbbd1dd1",
+        "name": "Preparar payload normativas Enlaze",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1712,
+          1104
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "\nconst aiData = $json.market_signals || [];\nconst fallbackData = $items(\"Procesar datos INE\")[0]?.json?.market_signals || [];\nconst items = aiData.length > 0 ? aiData : fallbackData;\n\nconst validPrices = items.filter(s => \n  s.value !== null && s.value !== undefined && !isNaN(s.value)\n).slice(0, 15).map(s => ({\n  title: s.title || s.name || 'Índice INE',\n  value: s.value,\n  unit: s.unit || 'index',\n  category: s.category || 'indice_mercado',\n  subcategory: s.subcategory || 'general',\n  source: s.source || 'INE',\n  description: s.description || s.summary || '',\n  metadata: s.metadata || {}\n}));\n\nif (validPrices.length === 0) {\n  return [{ json: { skip_send: true, reason: \"No hay índices INE válidos para enviar a Enlaze\" } }];\n}\n\nreturn [{\n  json: {\n    action: \"update_prices\",\n    sector: \"construccion\",\n    data: { prices: validPrices }\n  }\n}];\n"
+        },
+        "id": "c9521f83-37a2-47ad-82ab-9a136416544e",
+        "name": "Preparar payload INE Enlaze",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1472,
+          1568
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ $json.skip_send }}",
+                "value2": true
+              }
+            ]
+          }
+        },
+        "id": "468fdd22-47ea-447b-a184-79b7abeb2c58",
+        "name": "IF - Ignorar INE vacío",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          1664,
+          1568
+        ]
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "Eres un agente experto en construcción, reformas, presupuestos, normativa española y gestión empresarial para pymes del sector. Tu tarea es limpiar, clasificar y enriquecer datos capturados automáticamente. No debes inventar precios, fechas, fuentes ni normativa. Si un dato no está claro, marca needs_review true o impact_level bajo. Devuelve siempre JSON válido, sin markdown, sin explicaciones y sin texto fuera del JSON.\n\nDatos de entrada:\n{{ $json }}\n\nDevuelve un array de objetos con formato precios."
+        },
+        "id": "bd56356a-95e6-486f-8c4a-3b9aa7ca9640",
+        "name": "Gemini - Normalizar precios retail1",
+        "type": "@n8n/n8n-nodes-langchain.chainLlm",
+        "typeVersion": 1.4,
+        "position": [
+          1024,
+          816
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "options": {
+            "temperature": 0.1
+          }
+        },
+        "id": "07332ed2-1ecb-4ae6-8827-cf9a679935b1",
+        "name": "Gemini Model Retail1",
+        "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+        "typeVersion": 1,
+        "position": [
+          1088,
+          944
+        ],
+        "retryOnFail": true,
+        "credentials": {
+          "googlePalmApi": {
+            "id": "cJfm1S37YQHCMBYf",
+            "name": "Google Gemini(PaLM) Api account"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "Eres un agente experto en construcción, reformas, presupuestos, normativa española y gestión empresarial para pymes del sector. Tu tarea es limpiar, clasificar y enriquecer datos capturados automáticamente. No debes inventar precios, fechas, fuentes ni normativa. Si un dato no está claro, marca needs_review true o impact_level bajo. Devuelve siempre JSON válido, sin markdown, sin explicaciones y sin texto fuera del JSON.\n\nDatos de entrada:\n{{ $json }}\n\nDevuelve un array de objetos con formato precios."
+        },
+        "id": "53ef43d0-826c-4570-bbac-4b06b7f78ee4",
+        "name": "Gemini - Normalizar precios retail2",
+        "type": "@n8n/n8n-nodes-langchain.chainLlm",
+        "typeVersion": 1.4,
+        "position": [
+          1056,
+          1104
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "options": {
+            "temperature": 0.1
+          }
+        },
+        "id": "bd2e931a-3fc9-4fdb-b2dd-358e4049af41",
+        "name": "Gemini Model Retail2",
+        "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+        "typeVersion": 1,
+        "position": [
+          1120,
+          1232
+        ],
+        "retryOnFail": true,
+        "credentials": {
+          "googlePalmApi": {
+            "id": "cJfm1S37YQHCMBYf",
+            "name": "Google Gemini(PaLM) Api account"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "Eres un agente experto en construcción, reformas, presupuestos, normativa española y gestión empresarial para pymes del sector. Tu tarea es limpiar, clasificar y enriquecer datos capturados automáticamente. No debes inventar precios, fechas, fuentes ni normativa. Si un dato no está claro, marca needs_review true o impact_level bajo. Devuelve siempre JSON válido, sin markdown, sin explicaciones y sin texto fuera del JSON.\n\nDatos de entrada:\n{{ $json }}\n\nDevuelve un array de objetos con formato precios (categoría: indice_mercado)."
+        },
+        "id": "0051b874-931f-4549-88a2-9268f3fa936d",
+        "name": "Gemini - Interpretar índices INE1",
+        "type": "@n8n/n8n-nodes-langchain.chainLlm",
+        "typeVersion": 1.4,
+        "position": [
+          928,
+          1344
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "options": {
+            "temperature": 0.1
+          }
+        },
+        "id": "18c321bf-d46f-4682-b3ae-ac80e97a3e61",
+        "name": "Gemini Model INE1",
+        "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+        "typeVersion": 1,
+        "position": [
+          992,
+          1456
+        ],
+        "retryOnFail": true,
+        "credentials": {
+          "googlePalmApi": {
+            "id": "iCO4ImfRz53Tc1Eb",
+            "name": "Google Gemini(PaLM) Api account 2"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "url": "https://www.manomano.es/las-categorias-de-productos-mas-populares/5756",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "User-Agent",
+                "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+              },
+              {
+                "name": "Accept",
+                "value": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+              },
+              {
+                "name": "Accept-Language",
+                "value": "es-ES,es;q=0.9,en;q=0.8"
+              },
+              {
+                "name": "Cache-Control",
+                "value": "no-cache"
+              },
+              {
+                "name": "Pragma",
+                "value": "no-cache"
+              },
+              {
+                "name": "Referer",
+                "value": "https://www.leroymerlin.es/"
+              }
+            ]
+          },
+          "options": {
+            "redirect": {},
+            "response": {
+              "response": {
+                "fullResponse": false,
+                "neverError": true,
+                "responseFormat": "text",
+                "outputPropertyName": "data"
+              }
+            }
+          }
+        },
+        "id": "3128dff5-f192-48a2-9317-40092edb0303",
+        "name": "Leroy - puertas-ventanas-y-escaleras/",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          528,
+          -336
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://www.manomano.es/cat/madera",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "User-Agent",
+                "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+              },
+              {
+                "name": "Accept",
+                "value": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+              },
+              {
+                "name": "Accept-Language",
+                "value": "es-ES,es;q=0.9,en;q=0.8"
+              },
+              {
+                "name": "Cache-Control",
+                "value": "no-cache"
+              },
+              {
+                "name": "Pragma",
+                "value": "no-cache"
+              },
+              {
+                "name": "Referer",
+                "value": "https://www.leroymerlin.es/"
+              }
+            ]
+          },
+          "options": {
+            "redirect": {},
+            "response": {
+              "response": {
+                "fullResponse": false,
+                "neverError": true,
+                "responseFormat": "text",
+                "outputPropertyName": "data"
+              }
+            }
+          }
+        },
+        "id": "c1d905b4-3b5d-4e74-8e77-53c277bfa259",
+        "name": "Leroy - madera",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          528,
+          -176
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://www.manomano.es/hub/albanileria-3944",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "User-Agent",
+                "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+              },
+              {
+                "name": "Accept",
+                "value": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+              },
+              {
+                "name": "Accept-Language",
+                "value": "es-ES,es;q=0.9,en;q=0.8"
+              },
+              {
+                "name": "Cache-Control",
+                "value": "no-cache"
+              },
+              {
+                "name": "Pragma",
+                "value": "no-cache"
+              },
+              {
+                "name": "Referer",
+                "value": "https://www.leroymerlin.es/"
+              }
+            ]
+          },
+          "options": {
+            "redirect": {},
+            "response": {
+              "response": {
+                "fullResponse": false,
+                "neverError": true,
+                "responseFormat": "text",
+                "outputPropertyName": "data"
+              }
+            }
+          }
+        },
+        "id": "2481daa9-f776-467b-a98d-8a2ef3d1893d",
+        "name": "Leroy - baños",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          544,
+          -16
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://www.manomano.es/cat/iluminacion",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "User-Agent",
+                "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+              },
+              {
+                "name": "Accept",
+                "value": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+              },
+              {
+                "name": "Accept-Language",
+                "value": "es-ES,es;q=0.9,en;q=0.8"
+              },
+              {
+                "name": "Referer",
+                "value": "https://www.leroymerlin.es/"
+              },
+              {
+                "name": "Cache-Control",
+                "value": "no-cache"
+              },
+              {
+                "name": "Pragma",
+                "value": "no-cache"
+              }
+            ]
+          },
+          "options": {
+            "redirect": {},
+            "response": {
+              "response": {
+                "fullResponse": false,
+                "neverError": true,
+                "responseFormat": "text",
+                "outputPropertyName": "data"
+              }
+            }
+          }
+        },
+        "id": "c9b1e380-7404-4923-bf20-1d9b4aaf9edc",
+        "name": "Leroy - iluminación",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          544,
+          128
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://www.manomano.es/hub/construccion-y-materiales-3943",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "User-Agent",
+                "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+              },
+              {
+                "name": "Accept",
+                "value": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+              },
+              {
+                "name": "Accept-Language",
+                "value": "es-ES,es;q=0.9,en;q=0.8"
+              },
+              {
+                "name": "Cache-Control",
+                "value": "no-cache"
+              },
+              {
+                "name": "Pragma",
+                "value": "no-cache"
+              },
+              {
+                "name": "Referer",
+                "value": "https://www.leroymerlin.es/"
+              }
+            ]
+          },
+          "options": {
+            "redirect": {},
+            "response": {
+              "response": {
+                "fullResponse": false,
+                "neverError": true,
+                "responseFormat": "text",
+                "outputPropertyName": "data"
+              }
+            }
+          }
+        },
+        "id": "d343184f-cde1-406a-8f4d-b3f0461aa5d4",
+        "name": "Leroy - materiales construcción",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          528,
+          -512
+        ]
+      }
+    ],
+    "connections": {
+      "Cada 24 horas": {
+        "main": [
+          [
+            {
+              "node": "Leroy - baños",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Leroy - iluminación",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "OBRAMAT - Cementos y morteros",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "OBRAMAT - Fontanería baño",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "CYPE - Generador de precios novedades",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "BOE - Normativas",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Google News - Sector",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "INE - API Índices materiales construcción",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "ESIOS REE - Precio electricidad PVPC",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Leroy - madera",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Leroy - puertas-ventanas-y-escaleras/",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Leroy - materiales construcción",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OBRAMAT - Cementos y morteros": {
+        "main": [
+          [
+            {
+              "node": "Merge retail 2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OBRAMAT - Fontanería baño": {
+        "main": [
+          [
+            {
+              "node": "Merge retail 2",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Merge retail 2": {
+        "main": [
+          [
+            {
+              "node": "Merge retail final",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Merge retail final": {
+        "main": [
+          [
+            {
+              "node": "Extraer y normalizar precios retail",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Extraer y normalizar precios retail": {
+        "main": [
+          [
+            {
+              "node": "Gemini - Normalizar precios retail",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "CYPE - Generador de precios novedades": {
+        "main": [
+          [
+            {
+              "node": "Extraer novedades CYPE",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Extraer novedades CYPE": {
+        "main": [
+          [
+            {
+              "node": "Gemini - Normalizar precios retail1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "BOE - Normativas": {
+        "main": [
+          [
+            {
+              "node": "Filtrar normativas relevantes",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Filtrar normativas relevantes": {
+        "main": [
+          [
+            {
+              "node": "Gemini - Normalizar precios retail2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Google News - Sector": {
+        "main": [
+          [
+            {
+              "node": "Extraer noticias relevantes",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Extraer noticias relevantes": {
+        "main": [
+          [
+            {
+              "node": "Gemini - Interpretar índices INE1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "INE - API Índices materiales construcción": {
+        "main": [
+          [
+            {
+              "node": "Procesar datos INE",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Procesar datos INE": {
+        "main": [
+          [
+            {
+              "node": "Gemini - Interpretar índices INE",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "ESIOS REE - Precio electricidad PVPC": {
+        "main": [
+          [
+            {
+              "node": "Procesar precio electricidad",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Procesar precio electricidad": {
+        "main": [
+          [
+            {
+              "node": "Gemini - Interpretar energía",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Manual Trigger": {
+        "main": [
+          [
+            {
+              "node": "OBRAMAT - Cementos y morteros",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "OBRAMAT - Fontanería baño",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "CYPE - Generador de precios novedades",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Leroy - iluminación",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Leroy - baños",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "BOE - Normativas",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Google News - Sector",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "INE - API Índices materiales construcción",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "ESIOS REE - Precio electricidad PVPC",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Leroy - puertas-ventanas-y-escaleras/",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Leroy - madera",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Leroy - materiales construcción",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Merge Leroy": {
+        "main": [
+          [
+            {
+              "node": "Merge retail final",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gemini - Normalizar precios retail": {
+        "main": [
+          [
+            {
+              "node": "Code - Validar JSON precios IA",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code - Validar JSON precios IA": {
+        "main": [
+          [
+            {
+              "node": "Enviar precios retail a Enlaze",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gemini Model Retail": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "Gemini - Normalizar precios retail",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code - Validar JSON CYPE": {
+        "main": [
+          [
+            {
+              "node": "Enviar feed CYPE a Enlaze",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code - Validar JSON normativas": {
+        "main": [
+          [
+            {
+              "node": "Preparar payload normativas Enlaze",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code - Validar JSON noticias": {
+        "main": [
+          [
+            {
+              "node": "Preparar payload noticias Enlaze",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gemini - Interpretar índices INE": {
+        "main": [
+          [
+            {
+              "node": "Code - Validar JSON índices",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code - Validar JSON índices": {
+        "main": [
+          [
+            {
+              "node": "Preparar payload INE Enlaze",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gemini Model INE": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "Gemini - Interpretar índices INE",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gemini - Interpretar energía": {
+        "main": [
+          [
+            {
+              "node": "Code - Validar JSON energía",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code - Validar JSON energía": {
+        "main": [
+          [
+            {
+              "node": "Enviar señales energía a Enlaze",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gemini Model ESIOS": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "Gemini - Interpretar energía",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Preparar payload noticias Enlaze": {
+        "main": [
+          [
+            {
+              "node": "Enviar noticias a Enlaze",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Preparar payload normativas Enlaze": {
+        "main": [
+          [
+            {
+              "node": "Enviar normativas a Enlaze",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Preparar payload INE Enlaze": {
+        "main": [
+          [
+            {
+              "node": "IF - Ignorar INE vacío",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "IF - Ignorar INE vacío": {
+        "main": [
+          [],
+          [
+            {
+              "node": "Enviar índices INE a Enlaze",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gemini - Normalizar precios retail1": {
+        "main": [
+          [
+            {
+              "node": "Code - Validar JSON CYPE",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gemini Model Retail1": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "Gemini - Normalizar precios retail1",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gemini Model Retail2": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "Gemini - Normalizar precios retail2",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gemini - Normalizar precios retail2": {
+        "main": [
+          [
+            {
+              "node": "Code - Validar JSON normativas",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gemini - Interpretar índices INE1": {
+        "main": [
+          [
+            {
+              "node": "Code - Validar JSON noticias",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gemini Model INE1": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "Gemini - Interpretar índices INE1",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Leroy - puertas-ventanas-y-escaleras/": {
+        "main": [
+          [
+            {
+              "node": "Merge Leroy",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Leroy - madera": {
+        "main": [
+          [
+            {
+              "node": "Merge Leroy",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Leroy - baños": {
+        "main": [
+          [
+            {
+              "node": "Merge Leroy",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Leroy - iluminación": {
+        "main": [
+          [
+            {
+              "node": "Merge Leroy",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Leroy - materiales construcción": {
+        "main": [
+          [
+            {
+              "node": "Merge Leroy",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1",
+      "binaryMode": "separate"
+    },
+    "staticData": null,
+    "meta": {
+      "templateCredsSetupCompleted": true
+    },
+    "pinData": {},
+    "versionId": "b4692990-f014-4cb0-b5c8-14a3c0ecaefb",
+    "activeVersionId": null,
+    "versionCounter": 172,
+    "triggerCount": 0,
+    "tags": [
+      {
+        "updatedAt": "2026-04-16T19:02:11.059Z",
+        "createdAt": "2026-04-16T19:02:11.059Z",
+        "id": "1N8JSxvolDqdlJEE",
+        "name": "automatizacion"
+      },
+      {
+        "updatedAt": "2026-04-19T15:28:38.969Z",
+        "createdAt": "2026-04-19T15:28:38.969Z",
+        "id": "3qfeBlAjEtzK8j9N",
+        "name": "v6.3"
+      },
+      {
+        "updatedAt": "2026-04-16T08:16:13.547Z",
+        "createdAt": "2026-04-16T08:16:13.547Z",
+        "id": "8Am1YUIQEpnC1zqa",
+        "name": "enlaze"
+      },
+      {
+        "updatedAt": "2026-04-16T16:37:34.721Z",
+        "createdAt": "2026-04-16T16:37:34.721Z",
+        "id": "NLbMGsFRRZ4759m9",
+        "name": "multiusuario"
+      },
+      {
+        "updatedAt": "2026-04-16T08:16:13.557Z",
+        "createdAt": "2026-04-16T08:16:13.557Z",
+        "id": "ij8AJjXgoUMI5wYv",
+        "name": "comercio-local"
+      }
+    ],
+    "shared": [
+      {
+        "updatedAt": "2026-05-18T14:31:57.947Z",
+        "createdAt": "2026-05-18T14:31:57.947Z",
+        "role": "workflow:owner",
+        "workflowId": "wfdP2cJs0ioJAJ6g",
+        "projectId": "wyDU0Urm9d4WLHBH",
+        "project": {
+          "updatedAt": "2026-04-14T12:32:35.540Z",
+          "createdAt": "2026-04-01T17:19:55.673Z",
+          "id": "wyDU0Urm9d4WLHBH",
+          "name": "enlaze dkpamg <enlaze.soporte@gmail.com>",
+          "type": "personal",
+          "icon": null,
+          "description": null,
+          "creatorId": "8fac1eee-20a4-4691-a781-597ff729ce9d"
+        }
+      }
+    ],
+    "versionMetadata": {
+      "name": null,
+      "description": null
+    }
+  }
+]

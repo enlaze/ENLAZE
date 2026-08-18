@@ -33,7 +33,15 @@ const DEFAULT_CATEGORY_ATTEMPTS = 2;
 const DEFAULT_CATEGORY_CONCURRENCY = 2;
 const MAX_CATEGORY_CONCURRENCY = 3;
 const DEFAULT_CATEGORY_TIMEOUT_MS = 15 * 60 * 1000;
+const CANCELLATION_POLL_INTERVAL_MS = 5_000;
 const BLOCKED_RESOURCE_TYPES = new Set(["image", "media", "font"]);
+
+class SyncCancelledError extends Error {
+  constructor(message = "Rastreo cancelado por el usuario") {
+    super(message);
+    this.name = "SyncCancelledError";
+  }
+}
 
 const DEFAULT_CATEGORIES = [
   {
@@ -105,12 +113,18 @@ function parseOptionalLimit(value) {
   return parsePositiveInteger(value, Number.POSITIVE_INFINITY);
 }
 
-async function mapWithConcurrency(items, concurrency, worker) {
+async function mapWithConcurrency(
+  items,
+  concurrency,
+  worker,
+  shouldStop = () => false
+) {
   const results = new Array(items.length);
   let nextIndex = 0;
 
   async function runWorker() {
     while (nextIndex < items.length) {
+      if (shouldStop()) break;
       const currentIndex = nextIndex;
       nextIndex += 1;
       results[currentIndex] = await worker(items[currentIndex], currentIndex);
@@ -124,7 +138,13 @@ async function mapWithConcurrency(items, concurrency, worker) {
   await Promise.all(
     Array.from({ length: workerCount }, () => runWorker())
   );
-  return results;
+  return results.filter((result) => result !== undefined);
+}
+
+function throwIfSyncCancelled(options) {
+  if (options.cancelState?.cancelled) {
+    throw new SyncCancelledError();
+  }
 }
 
 function slugify(value) {
@@ -483,6 +503,7 @@ async function scrapeCategory(page, category, options) {
     pageNumber <= options.maxPages;
     pageNumber += 1
   ) {
+    throwIfSyncCancelled(options);
     if (
       Number.isFinite(options.maxProducts) &&
       uniqueProducts.size >= options.maxProducts
@@ -497,6 +518,7 @@ async function scrapeCategory(page, category, options) {
       waitUntil: "domcontentloaded",
       timeout: options.timeoutMs,
     });
+    throwIfSyncCancelled(options);
 
     if (pageNumber === 1) await dismissCookieBanner(page);
 
@@ -538,6 +560,7 @@ async function scrapeCategory(page, category, options) {
     }
 
     const renderedCards = await scrollUntilStable(page);
+    throwIfSyncCancelled(options);
     const pageProducts = await extractProducts(page, category);
     let newProducts = 0;
 
@@ -608,7 +631,10 @@ async function postIngestBatch(category, products, options, batchNumber) {
       source_url: category.url,
       products,
     }),
-    signal: AbortSignal.timeout(options.timeoutMs),
+    signal: AbortSignal.any([
+      AbortSignal.timeout(options.timeoutMs),
+      options.cancelState.abortController.signal,
+    ]),
   });
 
   const responseText = await response.text();
@@ -665,6 +691,7 @@ async function ingestProducts(category, products, options) {
     offset < products.length;
     offset += options.batchSize, batchNumber += 1
   ) {
+    throwIfSyncCancelled(options);
     const batch = products.slice(offset, offset + options.batchSize);
     console.log(
       `[${category.name}] Enviando lote ${batchNumber}/${aggregate.batches} ` +
@@ -745,7 +772,7 @@ async function launchBrowser(executablePath, userDataDir, options) {
 }
 
 async function reportSyncRequest(options, action, payload = {}) {
-  if (!options.syncRequestId || !options.apiKey) return;
+  if (!options.syncRequestId || !options.apiKey) return null;
 
   try {
     const response = await fetch(options.syncRequestUrl, {
@@ -767,18 +794,28 @@ async function reportSyncRequest(options, action, payload = {}) {
       signal: AbortSignal.timeout(30_000),
     });
 
+    const responseText = await response.text();
+    let result = {};
+    try {
+      result = responseText ? JSON.parse(responseText) : {};
+    } catch {
+      result = { responseText };
+    }
+
     if (!response.ok) {
-      const responseText = await response.text();
+      if (result.cancelled === true) return result;
       console.warn(
         `[Solicitud n8n] No se pudo informar el estado ${action}: ` +
           `HTTP ${response.status} ${responseText.slice(0, 240)}`
       );
     }
+    return result;
   } catch (error) {
     console.warn(
       `[Solicitud n8n] No se pudo informar el estado ${action}: ` +
         (error instanceof Error ? error.message : String(error))
     );
+    return null;
   }
 }
 
@@ -803,6 +840,56 @@ async function closeBrowser(browser) {
   }
 }
 
+async function activateSyncCancellation(options) {
+  if (options.cancelState.cancelled) return;
+  options.cancelState.cancelled = true;
+  options.cancelState.abortController.abort(new SyncCancelledError());
+  console.log("[Solicitud n8n] Cancelación recibida; cerrando el rastreador.");
+  await Promise.allSettled(
+    Array.from(options.cancelState.activeBrowsers, (browser) =>
+      closeBrowser(browser)
+    )
+  );
+}
+
+function startSyncCancellationMonitor(options) {
+  if (!options.syncRequestId || !options.apiKey) {
+    return async () => undefined;
+  }
+
+  let stopped = false;
+  let timer;
+  let currentCheck = Promise.resolve();
+
+  const check = async () => {
+    const result = await reportSyncRequest(options, "status");
+    if (
+      result?.cancelled === true ||
+      result?.request?.status === "cancelled"
+    ) {
+      await activateSyncCancellation(options);
+    }
+  };
+
+  const tick = async () => {
+    if (stopped || options.cancelState.cancelled) return;
+    await check();
+    if (!stopped && !options.cancelState.cancelled) {
+      timer = setTimeout(() => {
+        currentCheck = tick();
+      }, CANCELLATION_POLL_INTERVAL_MS);
+    }
+  };
+
+  currentCheck = tick();
+
+  return async () => {
+    stopped = true;
+    if (timer) clearTimeout(timer);
+    await currentCheck;
+  };
+}
+
 async function scrapeCategoryWithRetries(
   executablePath,
   category,
@@ -825,6 +912,8 @@ async function scrapeCategoryWithRetries(
         browserProfileDir,
         options
       );
+      options.cancelState.activeBrowsers.add(browser);
+      throwIfSyncCancelled(options);
       const page = await createConfiguredPage(browser, options);
       let categoryTimer;
       const categoryTimeout = new Promise((_, reject) => {
@@ -849,6 +938,9 @@ async function scrapeCategoryWithRetries(
       }
     } catch (error) {
       lastError = error;
+      if (options.cancelState.cancelled || error instanceof SyncCancelledError) {
+        throw new SyncCancelledError();
+      }
       if (
         attempt >= DEFAULT_CATEGORY_ATTEMPTS ||
         !isRetryableBrowserError(error)
@@ -861,6 +953,7 @@ async function scrapeCategoryWithRetries(
           `con un navegador limpio (${attempt + 1}/${DEFAULT_CATEGORY_ATTEMPTS})`
       );
     } finally {
+      if (browser) options.cancelState.activeBrowsers.delete(browser);
       await closeBrowser(browser);
       await fsPromises.rm(browserProfileDir, {
         recursive: true,
@@ -908,6 +1001,11 @@ async function main() {
       ),
       DEFAULT_CATEGORY_TIMEOUT_MS
     ),
+    cancelState: {
+      cancelled: false,
+      activeBrowsers: new Set(),
+      abortController: new AbortController(),
+    },
     debug:
       !hasFlag("no-debug") &&
       (hasFlag("debug") || process.env.SCRAPER_DEBUG === "1"),
@@ -975,59 +1073,93 @@ async function main() {
   );
 
   let completedCategories = 0;
-  const summary = await mapWithConcurrency(
-    categories,
-    options.categoryConcurrency,
-    async (category) => {
-      let categorySummary;
-      try {
-        const { products, pagesScraped, debugArtifacts } =
-          await scrapeCategoryWithRetries(
-            executablePath,
+  const stopCancellationMonitor = startSyncCancellationMonitor(options);
+  let summary;
+  try {
+    summary = await mapWithConcurrency(
+      categories,
+      options.categoryConcurrency,
+      async (category) => {
+        let categorySummary;
+        try {
+          throwIfSyncCancelled(options);
+          const { products, pagesScraped, debugArtifacts } =
+            await scrapeCategoryWithRetries(
+              executablePath,
+              category,
+              options
+            );
+          throwIfSyncCancelled(options);
+          if (products.length === 0) {
+            throw new Error(
+              "Las tarjetas se cargaron, pero ningún producto fue válido."
+            );
+          }
+          const ingestResult = await ingestProducts(
             category,
+            products,
             options
           );
-        if (products.length === 0) {
-          throw new Error(
-            "Las tarjetas se cargaron, pero ningún producto fue válido."
-          );
+          categorySummary = {
+            category: category.name,
+            ok: true,
+            products: products.length,
+            pagesScraped,
+            debugArtifacts,
+            ingestResult,
+          };
+        } catch (error) {
+          if (
+            options.cancelState.cancelled ||
+            error instanceof SyncCancelledError
+          ) {
+            return {
+              category: category.name,
+              ok: false,
+              cancelled: true,
+              error: "Cancelado por el usuario",
+            };
+          }
+
+          const message =
+            error instanceof Error ? error.message : String(error);
+          console.error(`[${category.name}] ERROR: ${message}`);
+          categorySummary = {
+            category: category.name,
+            ok: false,
+            error: message,
+          };
         }
-        const ingestResult = await ingestProducts(
-          category,
-          products,
-          options
-        );
-        categorySummary = {
-          category: category.name,
-          ok: true,
-          products: products.length,
-          pagesScraped,
-          debugArtifacts,
-          ingestResult,
-        };
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error);
-        console.error(`[${category.name}] ERROR: ${message}`);
-        categorySummary = {
-          category: category.name,
-          ok: false,
-          error: message,
-        };
-      }
 
-      completedCategories += 1;
-      await reportSyncRequest(options, "progress", {
-        progress: {
-          completed: completedCategories,
-          total: categories.length,
-          label: category.name,
-        },
-      });
+        if (options.cancelState.cancelled) return categorySummary;
 
-      return categorySummary;
-    }
-  );
+        completedCategories += 1;
+        const progressResult = await reportSyncRequest(options, "progress", {
+          progress: {
+            completed: completedCategories,
+            total: categories.length,
+            label: category.name,
+          },
+        });
+        if (
+          progressResult?.cancelled === true ||
+          progressResult?.request?.status === "cancelled"
+        ) {
+          await activateSyncCancellation(options);
+        }
+
+        return categorySummary;
+      },
+      () => options.cancelState.cancelled
+    );
+  } finally {
+    await stopCancellationMonitor();
+  }
+
+  if (options.cancelState.cancelled) {
+    console.log("Rastreo cancelado. No se iniciarán más categorías ni lotes.");
+    return { summary, cancelled: true };
+  }
 
   console.log("\nResumen:");
   console.table(
@@ -1108,10 +1240,12 @@ if (require.main === module) {
 module.exports = {
   DEFAULT_CATEGORIES,
   PRODUCT_CARD_SELECTOR,
+  SyncCancelledError,
   buildPageUrl,
   extractProducts,
   findChromeExecutable,
   hasNextCategoryPage,
+  mapWithConcurrency,
   parseOptionalLimit,
   validateProduct,
 };

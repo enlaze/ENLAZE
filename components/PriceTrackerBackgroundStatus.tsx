@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 
 interface TrackerRequest {
   id: string;
-  status: "pending" | "running" | "completed" | "failed";
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
   progress?: {
     completed?: number;
     total?: number;
@@ -25,6 +25,8 @@ export default function PriceTrackerBackgroundStatus() {
   const pathname = usePathname();
   const activeRequestId = useRef<string | null>(null);
   const [request, setRequest] = useState<TrackerRequest | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -90,6 +92,31 @@ export default function PriceTrackerBackgroundStatus() {
 
   if (!request || pathname === "/dashboard/prices") return null;
 
+  const cancelRequest = async () => {
+    if (cancelling) return;
+    setCancelling(true);
+    setCancelError(null);
+
+    try {
+      const response = await fetch("/api/prices/n8n-sync", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ request_id: request.id }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload?.request?.status !== "cancelled") {
+        throw new Error(payload.error || "No se pudo detener el rastreo");
+      }
+      setRequest(payload.request as TrackerRequest);
+    } catch (error) {
+      setCancelError(
+        error instanceof Error ? error.message : "No se pudo detener el rastreo"
+      );
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const total = Math.max(1, request.progress?.total ?? 5);
   const completed =
     request.status === "completed"
@@ -98,18 +125,24 @@ export default function PriceTrackerBackgroundStatus() {
   const percentage = Math.round((completed / total) * 100);
   const isFailed = request.status === "failed";
   const isCompleted = request.status === "completed";
+  const isCancelled = request.status === "cancelled";
+  const isActive = request.status === "pending" || request.status === "running";
 
   const title = isFailed
     ? "El rastreo necesita atención"
-    : isCompleted
-      ? "Rastreo completado"
-      : "Rastreando el mercado";
+    : isCancelled
+      ? "Rastreo detenido"
+      : isCompleted
+        ? "Rastreo completado"
+        : "Rastreando el mercado";
 
   const description = isFailed
     ? request.error || "No se pudo completar el rastreo"
-    : isCompleted
-      ? `${request.result?.products || 0} precios procesados`
-      : request.progress?.label || "El rastreador sigue trabajando";
+    : isCancelled
+      ? "La búsqueda se ha cancelado y no procesará más categorías"
+      : isCompleted
+        ? `${request.result?.products || 0} precios procesados`
+        : request.progress?.label || "El rastreador sigue trabajando";
 
   return (
     <aside
@@ -132,6 +165,8 @@ export default function PriceTrackerBackgroundStatus() {
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="m5 12 4 4L19 6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
+          ) : isCancelled ? (
+            <span className="h-3.5 w-3.5 rounded-sm bg-current" />
           ) : isFailed ? (
             <span className="text-lg font-bold">!</span>
           ) : (
@@ -144,7 +179,7 @@ export default function PriceTrackerBackgroundStatus() {
             <p className="text-sm font-semibold text-navy-900 dark:text-white">
               {title}
             </p>
-            {!isFailed && (
+            {!isFailed && !isCancelled && (
               <span className="text-xs font-semibold tabular-nums text-brand-green">
                 {percentage}%
               </span>
@@ -153,8 +188,13 @@ export default function PriceTrackerBackgroundStatus() {
           <p className="mt-0.5 line-clamp-2 text-xs text-navy-500 dark:text-zinc-400">
             {description}
           </p>
+          {cancelError && (
+            <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+              {cancelError}
+            </p>
+          )}
 
-          {!isFailed && (
+          {!isFailed && !isCancelled && (
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-navy-100 dark:bg-zinc-800">
               <div
                 className="h-full rounded-full bg-brand-green transition-[width] duration-500"
@@ -165,16 +205,28 @@ export default function PriceTrackerBackgroundStatus() {
 
           <div className="mt-3 flex items-center justify-between gap-3">
             <span className="text-[11px] text-navy-400 dark:text-zinc-500">
-              {isCompleted || isFailed
+              {isCompleted || isFailed || isCancelled
                 ? "Proceso finalizado"
                 : "Puedes seguir usando ENLAZE"}
             </span>
-            <Link
-              href="/dashboard/prices"
-              className="text-xs font-semibold text-brand-green hover:underline"
-            >
-              Ver rastreador
-            </Link>
+            <div className="flex items-center gap-3">
+              {isActive && (
+                <button
+                  type="button"
+                  onClick={cancelRequest}
+                  disabled={cancelling}
+                  className="text-xs font-semibold text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
+                >
+                  {cancelling ? "Deteniendo..." : "Detener"}
+                </button>
+              )}
+              <Link
+                href="/dashboard/prices"
+                className="text-xs font-semibold text-brand-green hover:underline"
+              >
+                Ver rastreador
+              </Link>
+            </div>
           </div>
         </div>
       </div>

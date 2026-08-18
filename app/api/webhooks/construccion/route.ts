@@ -131,15 +131,15 @@ export async function POST(request: Request) {
           }
 
           // Buscar si ya existe
-          const { data: existing, error: existingError } = await supabaseAdmin
+          const { data: existingRows, error: existingError } = await supabaseAdmin
             .from("sector_data")
             .select("id")
             .eq("sector", sector)
             .eq("data_type", "price")
-            .eq("title", price.title)
-            .maybeSingle();
+            .eq("title", price.title);
 
           throwIfSupabaseError(existingError, `No se pudo consultar el precio ${price.title}`);
+          const existingIds = (existingRows || []).map((row) => row.id);
 
           const rawSource = [price.source, price.source_url, price.description, price.title, price.name].join(" ").toLowerCase();
           let supplierName = "Banco ENLAZE base";
@@ -176,7 +176,7 @@ export async function POST(request: Request) {
             supplierName = "Banco ENLAZE base";
           }
 
-          if (existing) {
+          if (existingIds.length > 0) {
             const { error } = await supabaseAdmin
               .from("sector_data")
               .update({
@@ -193,7 +193,7 @@ export async function POST(request: Request) {
                   source_type: sourceType,
                 },
               })
-              .eq("id", existing.id);
+              .in("id", existingIds);
 
             throwIfSupabaseError(error, `No se pudo actualizar el precio ${price.title}`);
           } else {
@@ -247,17 +247,17 @@ export async function POST(request: Request) {
             throw new Error("Cada normativa necesita title");
           }
 
-          const { data: existing, error: existingError } = await supabaseAdmin
+          const { data: existingRows, error: existingError } = await supabaseAdmin
             .from("sector_data")
             .select("id")
             .eq("sector", sector)
             .eq("data_type", "regulation")
-            .eq("title", reg.title)
-            .maybeSingle();
+            .eq("title", reg.title);
 
           throwIfSupabaseError(existingError, `No se pudo consultar la normativa ${reg.title}`);
+          const existingIds = (existingRows || []).map((row) => row.id);
 
-          if (existing) {
+          if (existingIds.length > 0) {
             const { error } = await supabaseAdmin
               .from("sector_data")
               .update({
@@ -266,7 +266,7 @@ export async function POST(request: Request) {
                 last_updated: new Date().toISOString(),
                 metadata: reg.metadata || {},
               })
-              .eq("id", existing.id);
+              .in("id", existingIds);
 
             throwIfSupabaseError(error, `No se pudo actualizar la normativa ${reg.title}`);
           } else {
@@ -307,15 +307,15 @@ export async function POST(request: Request) {
             throw new Error("Cada noticia necesita title");
           }
 
-          const { data: existing, error: existingError } = await supabaseAdmin
+          const { data: existingRows, error: existingError } = await supabaseAdmin
             .from("sector_data")
             .select("id")
             .eq("sector", sector)
             .eq("data_type", "news")
-            .eq("title", newsItem.title)
-            .maybeSingle();
+            .eq("title", newsItem.title);
 
           throwIfSupabaseError(existingError, `No se pudo consultar la noticia ${newsItem.title}`);
+          const existingIds = (existingRows || []).map((row) => row.id);
 
           const newsData = {
             description: newsItem.content || newsItem.description || "",
@@ -324,11 +324,11 @@ export async function POST(request: Request) {
             last_updated: new Date().toISOString(),
           };
 
-          if (existing) {
+          if (existingIds.length > 0) {
             const { error } = await supabaseAdmin
               .from("sector_data")
               .update(newsData)
-              .eq("id", existing.id);
+              .in("id", existingIds);
 
             throwIfSupabaseError(error, `No se pudo actualizar la noticia ${newsItem.title}`);
           } else {
@@ -547,7 +547,7 @@ async function triggerAlertProcessing() {
 export async function GET() {
   return NextResponse.json({
     name: "Enlaze Webhook API - Construccion",
-    version: "1.1",
+    version: "1.2",
     actions: ["update_prices", "update_regulations", "update_news"],
     auth: "Bearer token en header Authorization",
     note: "Los precios se guardan tanto en sector_data como en Price Bank V2 (pb_products)",
