@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { useSector } from "@/lib/sector-context";
 import AcceptanceTimeline from "@/components/AcceptanceTimeline";
 import { saveDocumentVersion, getNextVersion } from "@/lib/document-versions";
-import { generateBudgetPDFHTML, printPDF } from "@/lib/pdf-generator";
+import { printPDF } from "@/lib/pdf-generator";
 import { logActivity } from "@/lib/activity-log";
 import { notify } from "@/lib/notifications";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -32,6 +32,7 @@ interface BudgetItem {
 
 interface Budget {
   id: string;
+  client_id?: string | null;
   budget_number: string;
   title: string;
   client_name: string;
@@ -123,14 +124,6 @@ export default function BudgetDetailPage() {
   const toast = useToast();
   const [budget, setBudget] = useState<Budget | null>(null);
   const [items, setItems] = useState<BudgetItem[]>([]);
-  const [branding, setBranding] = useState({
-    name: "",
-    logoUrl: "",
-    nif: "",
-    address: "",
-    phone: "",
-    email: "",
-  });
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
 
@@ -151,32 +144,37 @@ export default function BudgetDetailPage() {
         return;
       }
 
-      const [{ data: bi }, { data: profile }, { data: fiscal }] = await Promise.all([
-        supabase
-          .from("budget_items")
-          .select("*")
-          .eq("budget_id", params.id)
-          .order("created_at", { ascending: true }),
-        supabase
-          .from("profiles")
-          .select("business_name, full_name, logo_url")
-          .maybeSingle(),
-        supabase
-          .from("fiscal_settings")
-          .select("*")
-          .maybeSingle(),
-      ]);
+      const { data: bi } = await supabase
+        .from("budget_items")
+        .select("*")
+        .eq("budget_id", params.id)
+        .order("created_at", { ascending: true });
 
-      setBudget(b);
+      const { data: selectedClient } = b.client_id
+        ? await supabase
+            .from("clients")
+            .select("name, email, phone")
+            .eq("id", b.client_id)
+            .maybeSingle()
+        : { data: null };
+      const hydratedBudget = {
+        ...b,
+        client_name: b.client_name || selectedClient?.name || "",
+        client_email: b.client_email || selectedClient?.email || "",
+        client_phone: b.client_phone || selectedClient?.phone || "",
+      } as Budget;
+      setBudget(hydratedBudget);
       setItems(bi || []);
-      setBranding({
-        name: profile?.business_name || profile?.full_name || "",
-        logoUrl: profile?.logo_url || "",
-        nif: (fiscal as { nif?: string; cif?: string } | null)?.nif || (fiscal as { nif?: string; cif?: string } | null)?.cif || "",
-        address: (fiscal as { address?: string; fiscal_address?: string } | null)?.address || (fiscal as { address?: string; fiscal_address?: string } | null)?.fiscal_address || "",
-        phone: (fiscal as { phone?: string } | null)?.phone || "",
-        email: (fiscal as { email?: string } | null)?.email || "",
-      });
+      if (selectedClient) {
+        void supabase
+          .from("budgets")
+          .update({
+            client_name: hydratedBudget.client_name,
+            client_email: hydratedBudget.client_email,
+            client_phone: hydratedBudget.client_phone,
+          })
+          .eq("id", b.id);
+      }
     } catch {
       router.push("/dashboard/budgets");
     } finally {
@@ -273,10 +271,12 @@ export default function BudgetDetailPage() {
       .insert({
         budget_number: newNumber,
         title: budget.title + " (copia)",
+        client_id: budget.client_id || null,
         client_name: budget.client_name,
         client_email: budget.client_email,
         client_phone: budget.client_phone,
         client_address: budget.client_address,
+        client_nif: budget.client_nif || "",
         service_type: budget.service_type,
         status: "pendiente",
         subtotal: budget.subtotal,
@@ -321,43 +321,9 @@ export default function BudgetDetailPage() {
     router.push(`/dashboard/budgets/${newB.id}`);
   }
 
-  const [downloadingPDF, setDownloadingPDF] = useState(false);
+  const [exportingPDF, setExportingPDF] = useState<"client" | "internal" | null>(null);
 
-  function generatePDF() {
-    if (!budget) return;
-
-    const sTypes = serviceTypes();
-    const serviceLabelsMap: Record<string, string> = Object.fromEntries(sTypes.map(s => [s.value, s.label]));
-    const cats = budgetCategories();
-    const categoryLabelsMap: Record<string, string> = Object.fromEntries(cats.map(c => [c.value, c.label]));
-
-    const html = generateBudgetPDFHTML(
-      {
-        ...budget,
-        company_name: branding.name,
-        company_logo_url: branding.logoUrl,
-        company_nif: branding.nif,
-        company_address: branding.address,
-        company_phone: branding.phone,
-        company_email: branding.email,
-        client_name: budget.client_name,
-        client_email: budget.client_email,
-        client_phone: budget.client_phone,
-        client_address: budget.client_address
-      },
-      items.map(i => ({
-        ...i,
-        subtotal_cost: 0
-      })),
-      'client',
-      serviceLabelsMap,
-      categoryLabelsMap
-    );
-
-    printPDF(html);
-  }
-
-  async function downloadPDF() {
+  async function exportPDF(mode: "client" | "internal") {
     if (!budget) return;
     const pdfWindow = window.open("", "_blank");
     if (!pdfWindow) {
@@ -365,12 +331,12 @@ export default function BudgetDetailPage() {
       return;
     }
     pdfWindow.document.write("<p style='font-family:sans-serif;padding:24px'>Preparando PDF...</p>");
-    setDownloadingPDF(true);
+    setExportingPDF(mode);
     try {
       const res = await fetch("/api/budgets/pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ budgetId: budget.id }),
+        body: JSON.stringify({ budgetId: budget.id, mode }),
       });
 
       if (!res.ok) {
@@ -380,13 +346,13 @@ export default function BudgetDetailPage() {
 
       const html = await res.text();
       printPDF(html, pdfWindow);
-      toast.success("PDF preparado. Selecciona ‘Guardar como PDF’ en el diálogo de impresión.");
+      toast.success(`${mode === "client" ? "PDF del cliente" : "PDF interno"} preparado. Selecciona ‘Guardar como PDF’ en el diálogo de impresión.`);
     } catch (err: any) {
       pdfWindow.close();
       console.error("Error downloading PDF:", err);
-      toast.error(err.message || "Error al descargar el PDF");
+      toast.error(err.message || "Error al preparar el PDF");
     } finally {
-      setDownloadingPDF(false);
+      setExportingPDF(null);
     }
   }
 
@@ -437,16 +403,18 @@ export default function BudgetDetailPage() {
             {budget.title}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <Link
             href={`/dashboard/budgets/${budget.id}/edit`}
             className="inline-flex items-center justify-center rounded-lg border border-navy-200 bg-white px-4 py-2 text-sm font-medium text-navy-700 transition hover:bg-navy-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
           >
             Editar
           </Link>
-          <Button variant="secondary" onClick={generatePDF}>Imprimir</Button>
-          <Button onClick={downloadPDF} disabled={downloadingPDF}>
-            {downloadingPDF ? "Preparando..." : "Guardar PDF"}
+          <Button onClick={() => exportPDF("client")} disabled={exportingPDF !== null}>
+            {exportingPDF === "client" ? "Preparando..." : "PDF cliente"}
+          </Button>
+          <Button variant="secondary" onClick={() => exportPDF("internal")} disabled={exportingPDF !== null}>
+            {exportingPDF === "internal" ? "Preparando..." : "PDF interno"}
           </Button>
         </div>
       </div>
@@ -505,6 +473,11 @@ export default function BudgetDetailPage() {
             <p className="text-base font-medium text-navy-900 dark:text-white">
               {budget.client_name || "Sin nombre"}
             </p>
+            {budget.client_nif && (
+              <p className="text-navy-600 dark:text-zinc-400">
+                <span className="text-navy-400 dark:text-zinc-500">NIF/CIF:</span> {budget.client_nif}
+              </p>
+            )}
             {budget.client_email && (
               <p className="text-navy-600 dark:text-zinc-400">
                 <span className="text-navy-400 dark:text-zinc-500">Email:</span> {budget.client_email}
@@ -635,16 +608,35 @@ export default function BudgetDetailPage() {
         </Card>
       </div>
 
-      {/* Notes */}
-      {budget.notes && (
-        <Card className="mb-6">
-          <h3 className="mb-2 text-base font-semibold text-navy-900 dark:text-white">
-            Notas
-          </h3>
-          <p className="whitespace-pre-wrap text-sm text-navy-600 dark:text-zinc-300">
-            {budget.notes}
-          </p>
-        </Card>
+      {(budget.conditions_text || budget.notes) && (
+        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+          {budget.conditions_text && (
+            <Card>
+              <h3 className="mb-2 text-base font-semibold text-navy-900 dark:text-white">
+                Condiciones del presupuesto
+              </h3>
+              <p className="whitespace-pre-wrap text-sm text-navy-600 dark:text-zinc-300">
+                {budget.conditions_text}
+              </p>
+              <p className="mt-3 text-xs text-navy-400 dark:text-zinc-500">
+                Incluidas en el PDF del cliente y en la copia interna.
+              </p>
+            </Card>
+          )}
+          {budget.notes && (
+            <Card className="border-amber-200 bg-amber-50/40 dark:border-amber-900/50 dark:bg-amber-950/10">
+              <h3 className="mb-2 text-base font-semibold text-navy-900 dark:text-white">
+                Notas internas
+              </h3>
+              <p className="whitespace-pre-wrap text-sm text-navy-600 dark:text-zinc-300">
+                {budget.notes}
+              </p>
+              <p className="mt-3 text-xs font-medium text-amber-700 dark:text-amber-400">
+                Información privada: solo aparece en el PDF interno.
+              </p>
+            </Card>
+          )}
+        </div>
       )}
 
       {/* Actions */}

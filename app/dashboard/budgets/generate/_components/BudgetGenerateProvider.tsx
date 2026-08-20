@@ -53,6 +53,9 @@ function isEstimateSourceType(sourceType: string | null | undefined): boolean {
   return ESTIMATE_SOURCE_TYPES.has(String(sourceType || ""));
 }
 
+export const DEFAULT_BUDGET_CONDITIONS =
+  "Presupuesto válido durante 30 días desde su fecha de emisión. Los trabajos no incluidos expresamente se presupuestarán aparte. Cualquier modificación del alcance deberá aprobarse por escrito antes de ejecutarse.";
+
 export interface Partida {
   id: string;
   concept: string;
@@ -423,11 +426,17 @@ export interface BudgetState {
   // Common Data
   title: string;
   clientId: string;
+  clientName: string;
+  clientEmail: string;
+  clientPhone: string;
+  clientCompany: string;
   projectId: string;
   serviceType: string;
   startDate: string | null;
   endDate: string | null;
   description: string;
+  conditionsText: string;
+  internalNotes: string;
   ivaPercent: number;
   marginPercent: number;
 
@@ -561,11 +570,17 @@ export function BudgetGenerateProvider({
     sector: normalizeSector(initialSector),
     title: "",
     clientId: "",
+    clientName: "",
+    clientEmail: "",
+    clientPhone: "",
+    clientCompany: "",
     projectId: "",
     serviceType: "",
     startDate: null,
     endDate: null,
     description: "",
+    conditionsText: DEFAULT_BUDGET_CONDITIONS,
+    internalNotes: "",
     ivaPercent: 21,
     marginPercent: 20,
     validationError: null,
@@ -1007,6 +1022,29 @@ export function BudgetGenerateProvider({
         return null;
       }
 
+      let clientSnapshot = {
+        name: state.clientName || "",
+        email: state.clientEmail || "",
+        phone: state.clientPhone || "",
+        company: state.clientCompany || "",
+      };
+      if (state.clientId) {
+        const { data: selectedClient } = await supabase
+          .from("clients")
+          .select("name, email, phone, company")
+          .eq("id", state.clientId)
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (selectedClient) {
+          clientSnapshot = {
+            name: selectedClient.name || clientSnapshot.name,
+            email: selectedClient.email || "",
+            phone: selectedClient.phone || "",
+            company: selectedClient.company || "",
+          };
+        }
+      }
+
       // Build snapshot — exclude circular/transient fields
       const snapshot = {
         ...state,
@@ -1033,12 +1071,17 @@ export function BudgetGenerateProvider({
           status: "borrador",
           title: state.title || "Borrador de Presupuesto (Wizard)",
           client_id: state.clientId || null,
+          client_name: clientSnapshot.name,
+          client_email: clientSnapshot.email,
+          client_phone: clientSnapshot.phone,
           project_id: state.projectId || null,
           service_type: state.serviceType || state.sector || "general",
           subtotal: state.totals.clientPrice,
           iva_percent: state.ivaPercent,
           iva_amount: state.totals.clientPrice * (state.ivaPercent / 100),
           total: state.totals.clientPrice * (1 + state.ivaPercent / 100),
+          notes: state.internalNotes,
+          conditions_text: state.conditionsText,
           wizard_state: snapshot
         }).select("id").single();
 
@@ -1056,11 +1099,16 @@ export function BudgetGenerateProvider({
         const { error } = await supabase.from("budgets").update({
           title: state.title || "Borrador de Presupuesto (Wizard)",
           client_id: state.clientId || null,
+          client_name: clientSnapshot.name,
+          client_email: clientSnapshot.email,
+          client_phone: clientSnapshot.phone,
           project_id: state.projectId || null,
           service_type: state.serviceType || state.sector || "general",
           subtotal: state.totals.clientPrice,
           iva_amount: state.totals.clientPrice * (state.ivaPercent / 100),
           total: state.totals.clientPrice * (1 + state.ivaPercent / 100),
+          notes: state.internalNotes,
+          conditions_text: state.conditionsText,
           wizard_state: snapshot,
           updated_at: new Date().toISOString()
         }).eq("id", draftId);
@@ -1089,6 +1137,7 @@ export function BudgetGenerateProvider({
           quantity: p.quantity,
           unit: normalizeBudgetItemUnit(p.unit),
           category: p.category,
+          chapter: p.chapter || p.category || "otros",
           unit_price: p.unit_price_client,
           subtotal: p.subtotal_client
         }));
@@ -1100,6 +1149,7 @@ export function BudgetGenerateProvider({
           quantity: m.quantity,
           unit: normalizeBudgetItemUnit(m.unit),
           category: "material",
+          chapter: m.linkedChapter || "materiales",
           unit_price: m.unit_price * marginMultiplier,
           subtotal: m.subtotal * marginMultiplier
         }));
@@ -1154,6 +1204,7 @@ export function BudgetGenerateProvider({
         quantity: p.quantity,
         unit: normalizeBudgetItemUnit(p.unit),
         category: p.category,
+        chapter: p.chapter || p.category || "otros",
         unit_price: p.unit_price_client,
         subtotal: p.subtotal_client
       }));
@@ -1165,6 +1216,7 @@ export function BudgetGenerateProvider({
         quantity: m.quantity,
         unit: normalizeBudgetItemUnit(m.unit),
         category: "material",
+        chapter: m.linkedChapter || "materiales",
         unit_price: m.unit_price * marginMultiplier,
         subtotal: m.subtotal * marginMultiplier
       }));
@@ -1184,6 +1236,8 @@ export function BudgetGenerateProvider({
         client_id: state.clientId || null,
         project_id: state.projectId || null,
         service_type: state.serviceType || state.sector || "general",
+        notes: state.internalNotes,
+        conditions_text: state.conditionsText,
         updated_at: new Date().toISOString()
       }).eq("id", budgetId);
       if (upErr) throw upErr;

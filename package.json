@@ -17,6 +17,7 @@
     "test:budget-timeline": "node --import tsx --test __tests__/budget-timeline.test.mjs",
     "test:budget-recalculation": "node --test __tests__/budget-recalculation.test.mjs",
     "test:budget-finalization": "node --import tsx --test __tests__/budget-finalization.test.mjs",
+    "test:budget-pdf-completion": "node --import tsx --test __tests__/budget-ai-pdf-completion.test.mjs",
     "test:price-import": "node --import tsx --test __tests__/price-import.test.mjs",
     "test:platform-assistant": "node --import tsx --test __tests__/platform-assistant.test.mjs",
     "test:price-worker": "PYTHONPATH=services/price-worker/src python3 -m unittest discover -s services/price-worker/tests",

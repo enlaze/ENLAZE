@@ -888,9 +888,12 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
-            placeholder="Notas adicionales (visibles en el presupuesto)..."
+            placeholder="Recordatorios y notas privadas para el equipo (solo PDF interno)..."
             className={`${inputCls} resize-none`}
           />
+          <p className="mt-1 text-xs text-navy-400 dark:text-zinc-500">
+            Estas notas nunca se muestran en el PDF del cliente.
+          </p>
         </Card>
 
         {/* Totales */}

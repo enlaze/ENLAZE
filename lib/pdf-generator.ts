@@ -119,6 +119,16 @@ const unitLabels: Record<string, string> = {
 
 const fmt = (n: number) => n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
+function escapeHTML(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  })[character] || character);
+}
+
 // ─── Shared HTML Building Blocks ────────────────────────────────────────────
 
 function buildHeaderHTML(budget: PDFBudget, isInternal: boolean): string {
@@ -169,6 +179,26 @@ function buildFooterHTML(budget: PDFBudget): string {
     </div>`;
 }
 
+function buildBudgetTextBlockHTML(label: string, text: string | null | undefined, accent = "#00c896"): string {
+  if (!text) return "";
+  const safeText = escapeHTML(text);
+  return `
+    <div style="clear:both;margin-top:24px;">
+      <div style="font-size:14px;font-weight:700;color:${accent};text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">${label}</div>
+      <div style="background:#f8fafc;border-left:4px solid ${accent};padding:12px 16px;border-radius:0 8px 8px 0;font-size:13px;color:#334155;line-height:1.55;white-space:pre-wrap;">${safeText}</div>
+    </div>`;
+}
+
+function buildInternalNotesHTML(notes: string | null | undefined): string {
+  if (!notes) return "";
+  const safeNotes = escapeHTML(notes);
+  return `
+    <div style="clear:both;margin-top:24px;">
+      <div style="font-size:14px;font-weight:700;color:#b45309;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Notas internas - No enviar al cliente</div>
+      <div class="notes" style="white-space:pre-wrap;">${safeNotes}</div>
+    </div>`;
+}
+
 function pageStyles(isInternal: boolean): string {
   return `
     @page { size: A4 ${isInternal ? 'landscape' : 'portrait'}; margin: 15mm; }
@@ -181,22 +211,24 @@ function pageStyles(isInternal: boolean): string {
     .task-list { padding-left: 0; margin: 6px 0; list-style: none; }
     .task-item { padding: 3px 0; font-size: 12px; color: #475569; }
     .task-item::before { content: "\\2713 "; color: #00c896; font-weight: bold; }
-    .totals-box { background: #f8fafc; border-radius: 8px; padding: 16px 24px; min-width: 280px; float: right; }
+    .totals-box { background: #f8fafc; border-radius: 8px; padding: 16px 24px; min-width: 280px; float: right; break-inside: avoid; page-break-inside: avoid; }
     .total-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; }
     .total-final { font-size: 20px; font-weight: 800; color: #00c896; border-top: 2px solid #e2e8f0; margin-top: 8px; padding-top: 8px; }
-    .break-card { display: inline-block; background: #f8fafc; border-radius: 8px; padding: 12px 16px; text-align: center; margin-right: 12px; min-width: 100px; }
+    .break-card { display: inline-block; background: #f8fafc; border-radius: 8px; padding: 12px 16px; text-align: center; margin-right: 12px; min-width: 100px; break-inside: avoid; page-break-inside: avoid; }
     .break-label { font-size: 10px; color: #64748b; text-transform: uppercase; }
     .break-value { font-size: 15px; font-weight: 700; color: #0a1628; }
-    .notes { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 13px; color: #92400e; }
+    .notes { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 13px; color: #92400e; break-inside: avoid; page-break-inside: avoid; }
+    .budget-summary-row { break-inside: avoid; page-break-inside: avoid; }
+    tr { break-inside: avoid; page-break-inside: avoid; }
     .confidence-bar { display: inline-block; height: 6px; border-radius: 3px; }
     .margin-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
     /* Presupix client format */
     .px-section-row td { background: #f1f5f9; font-weight: 700; font-size: 13px; color: #0a1628; padding: 8px 6px; }
     .px-subtotal-row td { background: #f8fafc; font-weight: 700; font-size: 13px; color: #0a1628; padding: 8px 6px; border-top: 1px solid #cbd5e1; }
-    .px-breakdown { float: right; min-width: 260px; margin-top: 8px; }
+    .px-breakdown { float: right; min-width: 260px; margin-top: 8px; break-inside: avoid; page-break-inside: avoid; }
     .px-breakdown-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 13px; color: #334155; }
     .px-breakdown-total { font-size: 18px; font-weight: 800; color: #0a1628; border-top: 2px solid #0a1628; margin-top: 6px; padding-top: 6px; }
-    .px-block { clear: both; margin-top: 24px; }
+    .px-block { clear: both; margin-top: 24px; break-inside: avoid; page-break-inside: avoid; }
     .px-label { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
     .px-text { font-size: 13px; color: #1e293b; line-height: 1.5; }
     .px-divider { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
@@ -344,7 +376,8 @@ export function generateClientPDFHTML(
     </div>
   </div>
 
-  ${budget.notes ? `<div style="clear:both;margin-top:24px;"><div style="font-size:14px;font-weight:700;color:#00c896;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Notas</div><div class="notes">${budget.notes}</div></div>` : ""}
+  ${buildBudgetTextBlockHTML("Observaciones", budget.observations)}
+  ${buildBudgetTextBlockHTML("Condiciones del presupuesto", budget.conditions_text)}
 
   ${buildFooterHTML(budget)}
 </body>
@@ -612,7 +645,9 @@ export function generateInternalPDFHTML(
     </div>
   </div>
 
-  ${budget.notes ? `<div style="clear:both;margin-top:24px;"><div style="font-size:14px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Notas</div><div class="notes">${budget.notes}</div></div>` : ""}
+  ${buildBudgetTextBlockHTML("Observaciones", budget.observations, "#334155")}
+  ${buildBudgetTextBlockHTML("Condiciones del presupuesto", budget.conditions_text, "#334155")}
+  ${buildInternalNotesHTML(budget.notes)}
 
   ${buildFooterHTML(budget)}
 </body>
@@ -721,12 +756,6 @@ function renderPresupixClientHTML(budget: PDFBudget, items: PDFBudgetItem[]): st
       { percent: Math.max(0, 100 - depositPct), concept: "Pago a la finalizaci&oacute;n (resto)", moment: "A la entrega de la obra &middot; Salvo acuerdo por fases." },
     ];
 
-  const notasHTML = budget.notes ? `
-    <div class="px-block">
-      <div class="px-label">Notas</div>
-      <div class="px-text">${budget.notes}</div>
-    </div>` : "";
-
   const cobroHTML = (budget.payment_method || budget.payment_iban) ? `
     <div class="px-block">
       <div class="px-label">M&eacute;todo de cobro</div>
@@ -804,7 +833,6 @@ function renderPresupixClientHTML(budget: PDFBudget, items: PDFBudgetItem[]): st
     <div class="px-breakdown-row"><span>Pendiente</span><span>${fmt(pendingAmount)} &euro;</span></div>` : ""}
   </div>
 
-  ${notasHTML}
   ${cobroHTML}
   ${formaPagoHTML}
 
@@ -904,7 +932,7 @@ export function generateBudgetPDFHTML(
     const globalMargin = totalCost > 0 ? (totalProfit / totalCost) * 100 : 0;
 
     internalBreakdown = `
-      <div style="display:flex;gap:16px;margin-top:20px;border:2px dashed #059669;padding:10px;border-radius:8px;">
+      <div class="budget-summary-row" style="display:flex;gap:16px;margin-top:20px;border:2px dashed #059669;padding:10px;border-radius:8px;">
         <div class="break-card" style="background:#ecfdf5;flex:1;">
           <div class="break-label" style="color:#059669;">Coste Directo Total</div>
           <div class="break-value">${totalCost.toFixed(2)} &euro;</div>
@@ -954,7 +982,7 @@ export function generateBudgetPDFHTML(
     </table>
   </div>
 
-  <div style="display:flex;gap:16px;margin-bottom:20px;">
+  <div class="budget-summary-row" style="display:flex;gap:16px;margin-bottom:20px;">
     <div class="break-card">
       <div class="break-label">Material</div>
       <div class="break-value">${materialTotal.toFixed(2)} &euro;</div>
@@ -979,7 +1007,9 @@ export function generateBudgetPDFHTML(
     </div>
   </div>
 
-  ${budget.notes ? `<div style="clear:both;margin-top:24px;"><div style="font-size:14px;font-weight:700;color:${mode === 'internal' ? '#334155' : '#00c896'};text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Notas</div><div class="notes">${budget.notes}</div></div>` : ""}
+  ${buildBudgetTextBlockHTML("Observaciones", budget.observations, "#334155")}
+  ${buildBudgetTextBlockHTML("Condiciones del presupuesto", budget.conditions_text, "#334155")}
+  ${buildInternalNotesHTML(budget.notes)}
 
   ${buildFooterHTML(budget)}
 </body>
