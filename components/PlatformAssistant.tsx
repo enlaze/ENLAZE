@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AudioLines, Bot, Mic, MicOff, Send, Volume2, VolumeX, X } from "lucide-react";
 import { getGuideForPath } from "@/lib/platform-assistant-guide";
+import { selectPreferredSpanishFemaleVoice } from "@/lib/platform-assistant-voice";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -85,6 +86,7 @@ export default function PlatformAssistant() {
   const endRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const preferredVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
   const messagesRef = useRef<ChatMessage[]>([INITIAL_MESSAGE]);
   const loadingRef = useRef(false);
   const listeningRef = useRef(false);
@@ -106,6 +108,22 @@ export default function PlatformAssistant() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading, open]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+    const loadPreferredVoice = () => {
+      preferredVoiceRef.current = selectPreferredSpanishFemaleVoice(
+        window.speechSynthesis.getVoices(),
+      );
+    };
+    loadPreferredVoice();
+    window.speechSynthesis.addEventListener("voiceschanged", loadPreferredVoice);
+
+    return () => {
+      window.speechSynthesis.removeEventListener("voiceschanged", loadPreferredVoice);
+    };
+  }, []);
 
   const cancelSpeech = useCallback(() => {
     utteranceRef.current = null;
@@ -139,16 +157,15 @@ export default function PlatformAssistant() {
     stopRecognition(true);
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(spokenText);
-    const spanishVoices = window.speechSynthesis
-      .getVoices()
-      .filter((voice) => voice.lang.toLowerCase().startsWith("es"));
-    utterance.voice = spanishVoices.find((voice) => voice.lang.toLowerCase() === "es-es")
-      || spanishVoices[0]
-      || null;
-    utterance.lang = "es-ES";
-    utterance.rate = 1.02;
-    utterance.pitch = 1;
-    utterance.volume = 1;
+    const preferredVoice = selectPreferredSpanishFemaleVoice(
+      window.speechSynthesis.getVoices(),
+    ) || preferredVoiceRef.current;
+    preferredVoiceRef.current = preferredVoice;
+    utterance.voice = preferredVoice;
+    utterance.lang = preferredVoice?.lang || "es-ES";
+    utterance.rate = 0.96;
+    utterance.pitch = 1.04;
+    utterance.volume = 0.98;
     utteranceRef.current = utterance;
     setVoicePhase("speaking");
     setVoiceNotice(null);
@@ -342,7 +359,7 @@ export default function PlatformAssistant() {
     conversationModeRef.current = true;
     setConversationMode(true);
     setVoiceOutputEnabled(true);
-    setVoiceNotice("Puedes hablar cuando veas «Te escucho». Para interrumpirme, pulsa el micrófono.");
+    setVoiceNotice("Voz femenina activada. Puedes hablar cuando veas «Te escucho». Para interrumpirme, pulsa el micrófono.");
     window.setTimeout(() => startListeningRef.current(), 100);
   };
 
@@ -392,9 +409,15 @@ export default function PlatformAssistant() {
             : `Te acompaño en ${guide.label}`;
 
   return (
-    <div className="fixed bottom-5 right-5 z-50">
+    <div
+      className="fixed right-5 z-[60] transition-[bottom] duration-300 ease-out"
+      style={{ bottom: "calc(1.25rem + var(--enlaze-price-tracker-offset, 0px))" }}
+    >
       {open && (
-        <section className="mb-3 flex h-[min(650px,78vh)] w-[min(400px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+        <section
+          className="mb-3 flex h-[min(650px,78vh)] w-[min(400px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900"
+          style={{ maxHeight: "calc(100vh - 2.5rem - var(--enlaze-price-tracker-offset, 0px))" }}
+        >
           <header className="flex items-center gap-3 border-b border-navy-100 bg-navy-900 px-4 py-3 text-white dark:border-zinc-700">
             <span className={`flex h-9 w-9 items-center justify-center rounded-xl bg-brand-green text-navy-900 ${voicePhase === "speaking" ? "animate-pulse" : ""}`}>
               <Bot className="h-5 w-5" />
