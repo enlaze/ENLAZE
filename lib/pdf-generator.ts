@@ -46,8 +46,11 @@ export interface PDFBudget {
   technical_document_names?: string[];
   execution_weeks_min?: number | null;
   execution_weeks_max?: number | null;
+  preparation_weeks_min?: number | null;
+  preparation_weeks_max?: number | null;
   total_weeks_min?: number | null;
   total_weeks_max?: number | null;
+  schedule_assumptions?: string[];
   execution_phases?: Array<{
     title: string;
     duration_days_min?: number;
@@ -299,6 +302,17 @@ export function generateClientPDFHTML(
       </div>`;
   }
 
+  const scheduleHTML = budget.execution_weeks_min != null && budget.execution_weeks_max != null ? `
+    <div style="background:#f8fafc;border:1px solid #cbd5e1;padding:10px 14px;border-radius:8px;margin-bottom:16px;">
+      <div style="font-size:12px;color:#64748b;text-transform:uppercase;margin-bottom:5px;">Plazo orientativo</div>
+      <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:#334155;">
+        <span><strong>Preparacion y suministros:</strong> ${budget.preparation_weeks_min ?? "-"}-${budget.preparation_weeks_max ?? "-"} semanas</span>
+        <span><strong>Ejecucion:</strong> ${budget.execution_weeks_min}-${budget.execution_weeks_max} semanas</span>
+        <span><strong>Total recomendado:</strong> ${budget.total_weeks_min ?? "-"}-${budget.total_weeks_max ?? "-"} semanas</span>
+      </div>
+      <div style="font-size:10px;color:#64748b;margin-top:5px;">Plazo sujeto a validacion tecnica, licencias, medicion final y confirmacion de suministros.</div>
+    </div>` : "";
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -315,6 +329,7 @@ export function generateClientPDFHTML(
 
   ${qualityHTML}
   ${climaNote}
+  ${scheduleHTML}
 
   <div style="margin-bottom:24px;">
     <div style="font-size:14px;font-weight:700;color:#00c896;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Desglose por capitulos</div>
@@ -361,9 +376,11 @@ export function generateInternalPDFHTML(
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
         <div class="break-card"><div class="break-label">Ubicacion</div><div class="break-value" style="font-size:12px;">${budget.location || "Base nacional"}</div></div>
         <div class="break-card"><div class="break-label">Ajuste geografico</div><div class="break-value" style="font-size:12px;">${budget.geographic_profile || "Media nacional"}</div></div>
+        <div class="break-card"><div class="break-label">Preparacion y compras</div><div class="break-value" style="font-size:12px;">${budget.preparation_weeks_min ?? "-"}-${budget.preparation_weeks_max ?? "-"} semanas</div></div>
         <div class="break-card"><div class="break-label">Ejecucion</div><div class="break-value" style="font-size:12px;">${budget.execution_weeks_min ?? "-"}-${budget.execution_weeks_max ?? "-"} semanas</div></div>
         <div class="break-card"><div class="break-label">Plazo total</div><div class="break-value" style="font-size:12px;">${budget.total_weeks_min ?? "-"}-${budget.total_weeks_max ?? "-"} semanas</div></div>
       </div>
+      <div style="font-size:11px;color:#475569;margin-bottom:8px;"><strong>Criterio de plazo:</strong> Ruta critica calculada por superficie, gremios, secados y suministros. El plazo total se mide desde la validacion del encargo hasta la entrega; parte del aprovisionamiento puede solaparse con la ejecucion.</div>
       ${budget.geographic_adjustment ? `<div style="font-size:11px;color:#475569;margin-bottom:8px;"><strong>Criterio geografico:</strong> ${budget.geographic_adjustment}</div>` : ""}
       ${(budget.technical_document_names || []).length > 0 ? `<div style="font-size:11px;color:#475569;margin-bottom:8px;"><strong>Documentacion tecnica utilizada:</strong> ${budget.technical_document_names!.join(", ")}</div>` : ""}
       ${phasesHTML ? `

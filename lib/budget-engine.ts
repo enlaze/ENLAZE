@@ -56,6 +56,10 @@ export interface TimelinePhase {
 }
 
 export interface RealisticTimeline {
+  preparation_weeks_min: number;
+  preparation_weeks_max: number;
+  execution_working_days_min: number;
+  execution_working_days_max: number;
   execution_weeks_min: number;
   execution_weeks_max: number;
   total_weeks_min: number;
@@ -1272,165 +1276,283 @@ export function estimateRealisticTimeline(
   scope: BudgetScope,
   items: EnginePartida[]
 ): RealisticTimeline {
-  const area = scope.superficie_m2;
-  const banos = scope.num_banos;
-  const chapters = new Set(items.map(i => i.chapter));
-
+  const area = getAffectedArea(scope);
+  const banos = Math.max(scope.num_banos || 0, 1);
+  const quantities = buildScopeQuantities({ ...scope, superficie_m2: area });
+  const includedItems = items.filter((item) => item.status !== "opcional");
+  const chapters = new Set(includedItems.map((item) => item.chapter));
   const phases: TimelinePhase[] = [];
-  const criticalPath: string[] = [];
 
-  // Phase 1: Protections + Demolitions (parallel start)
-  if (chapters.has("protecciones") || chapters.has("demoliciones")) {
-    const demoMin = Math.max(Math.ceil(area / 40), 3);
-    const demoMax = Math.max(Math.ceil(area / 25), 5);
+  const hasAny = (...names: string[]) => names.some((name) => chapters.has(name));
+  const addPhase = (
+    title: string,
+    durationMin: number,
+    durationMax: number,
+    description: string,
+  ) => {
+    const previous = phases[phases.length - 1]?.title;
     phases.push({
-      title: "Protecciones y demoliciones",
-      duration_days_min: demoMin,
-      duration_days_max: demoMax,
-      description: "Proteccion de zonas comunes, demolicion de tabiques, pavimentos y revestimientos.",
+      title,
+      duration_days_min: Math.max(1, Math.ceil(durationMin)),
+      duration_days_max: Math.max(Math.ceil(durationMin), Math.ceil(durationMax)),
+      description,
+      ...(previous ? { depends_on: [previous] } : {}),
     });
-    criticalPath.push("Protecciones y demoliciones");
+  };
+
+  const effortDays = (phaseChapters: string[], crewSize: number) => {
+    const hours = includedItems
+      .filter((item) => phaseChapters.includes(item.chapter))
+      .reduce((sum, item) => sum + Math.max(Number(item.estimated_hours) || 0, 0), 0);
+    if (hours <= 0) return { min: 0, max: 0 };
+    return {
+      min: Math.ceil(hours / (Math.max(crewSize, 1) * 8 * 0.9)),
+      max: Math.ceil(hours / (Math.max(crewSize, 1) * 8 * 0.65)),
+    };
+  };
+
+  const hasDemolition = hasAny("protecciones", "demoliciones");
+  const hasMasonry = hasAny("albanileria", "falsos_techos");
+  const hasPlumbing = chapters.has("fontaneria");
+  const hasElectrical = chapters.has("electricidad");
+  const hasClima = chapters.has("climatizacion");
+  const hasWetFinishes = hasAny("impermeabilizacion", "revestimientos", "pavimentos", "rodapie");
+  const hasPainting = chapters.has("pintura");
+  const hasInteriorCarpentry = chapters.has("carpinteria_interior");
+  const hasExteriorCarpentry = chapters.has("carpinteria_exterior");
+  const hasKitchen = chapters.has("cocina");
+  const hasSanitary = chapters.has("sanitarios");
+  const hasCleaning = chapters.has("limpieza");
+  const hasWaste = chapters.has("residuos");
+
+  if (hasDemolition) {
+    const effort = effortDays(["protecciones", "demoliciones"], 2);
+    const demolitionArea = Math.max(quantities.demolitionArea, area * 0.25);
+    addPhase(
+      "Implantacion, protecciones y demoliciones",
+      Math.max(4, Math.ceil(demolitionArea / 22), effort.min),
+      Math.max(7, Math.ceil(demolitionArea / 12), effort.max),
+      "Implantacion de obra, protecciones, desmontajes, demolicion selectiva y retirada progresiva de escombros.",
+    );
   }
 
-  // Phase 2: Rough installations (plumbing + electrical) — partially parallel
-  if (chapters.has("fontaneria") || chapters.has("electricidad")) {
-    const instMin = Math.max(5, Math.ceil(area / 30));
-    const instMax = Math.max(8, Math.ceil(area / 20));
-    phases.push({
-      title: "Instalaciones (fontaneria y electricidad)",
-      duration_days_min: instMin + (banos > 1 ? (banos - 1) * 2 : 0),
-      duration_days_max: instMax + (banos > 1 ? (banos - 1) * 3 : 0),
-      description: `Primera fijacion de fontaneria (${banos} banos${scope.incluye_cocina ? " + cocina" : ""}), cableado electrico y cuadro.`,
-      depends_on: ["Protecciones y demoliciones"],
-    });
-    criticalPath.push("Instalaciones (fontaneria y electricidad)");
+  if (hasMasonry) {
+    const effort = effortDays(["albanileria", "falsos_techos"], 2);
+    addPhase(
+      "Replanteo y albanileria base",
+      Math.max(4, Math.ceil(quantities.partitionArea / 10) + 2, effort.min),
+      Math.max(7, Math.ceil(quantities.partitionArea / 6) + 3, effort.max),
+      "Replanteo, nueva tabiqueria, regularizacion inicial y preparacion de pasos para instalaciones.",
+    );
   }
 
-  // Phase 3: Masonry + ceilings
-  if (chapters.has("albanileria") || chapters.has("falsos_techos")) {
-    const masonMin = Math.max(4, Math.ceil(area / 35));
-    const masonMax = Math.max(7, Math.ceil(area / 22));
-    phases.push({
-      title: "Albanileria y falsos techos",
-      duration_days_min: masonMin,
-      duration_days_max: masonMax,
-      description: "Levantado de tabiqueria, formacion de falsos techos, ayudas de albanileria.",
-      depends_on: ["Instalaciones (fontaneria y electricidad)"],
-    });
-    criticalPath.push("Albanileria y falsos techos");
+  const installationTrades = [hasPlumbing, hasElectrical, hasClima].filter(Boolean).length;
+  if (installationTrades > 0) {
+    const crewSize = Math.min(Math.max(installationTrades * 2, 2), 5);
+    const effort = effortDays(["fontaneria", "electricidad", "climatizacion"], crewSize);
+    const installMin = installationTrades === 1
+      ? Math.ceil(area / 45) + 2
+      : installationTrades === 2
+        ? Math.ceil(area / 35) + 4
+        : Math.ceil(area / 28) + 5;
+    const installMax = installationTrades === 1
+      ? Math.ceil(area / 28) + 4
+      : installationTrades === 2
+        ? Math.ceil(area / 22) + 6
+        : Math.ceil(area / 18) + 7;
+    const extraWetRooms = hasPlumbing ? Math.max(banos - 1, 0) : 0;
+    addPhase(
+      "Instalaciones empotradas y coordinacion de gremios",
+      Math.max(4, installMin + extraWetRooms, effort.min),
+      Math.max(7, installMax + extraWetRooms * 2, effort.max),
+      `Primera fase de ${[
+        hasPlumbing ? "fontaneria" : "",
+        hasElectrical ? "electricidad" : "",
+        hasClima ? "climatizacion" : "",
+      ].filter(Boolean).join(", ")}; incluye pruebas antes de cerrar rozas y falsos techos.`,
+    );
   }
 
-  // Phase 4: Waterproofing + tiling
-  if (chapters.has("impermeabilizacion") || chapters.has("revestimientos") || chapters.has("pavimentos")) {
-    const tileMin = Math.max(5, Math.ceil(area / 20));
-    const tileMax = Math.max(10, Math.ceil(area / 12));
-    phases.push({
-      title: "Impermeabilizacion, alicatados y solados",
-      duration_days_min: tileMin,
-      duration_days_max: tileMax,
-      description: "Impermeabilizacion de zonas humedas, alicatado, solado y rodapie.",
-      depends_on: ["Albanileria y falsos techos"],
-    });
-    criticalPath.push("Impermeabilizacion, alicatados y solados");
+  if ((hasMasonry && (installationTrades > 0 || hasWetFinishes)) || (installationTrades > 0 && hasWetFinishes)) {
+    addPhase(
+      "Cierres, recrecidos, falsos techos y secados",
+      Math.max(3, Math.ceil(area / 55) + 2),
+      Math.max(6, Math.ceil(area / 30) + 4),
+      "Cierre de rozas, ayudas de albanileria, recrecidos y tiempos tecnicos de curado y secado antes de revestir.",
+    );
   }
 
-  // Phase 5: Painting
-  if (chapters.has("pintura")) {
-    const paintMin = Math.max(3, Math.ceil(area / 40));
-    const paintMax = Math.max(5, Math.ceil(area / 25));
-    phases.push({
-      title: "Pintura y acabados",
-      duration_days_min: paintMin,
-      duration_days_max: paintMax,
-      description: "Preparacion de superficies, alisado y dos manos de pintura.",
-      depends_on: ["Impermeabilizacion, alicatados y solados"],
-    });
-    criticalPath.push("Pintura y acabados");
+  if (hasWetFinishes) {
+    const finishArea =
+      (chapters.has("pavimentos") ? quantities.pavementArea : 0) +
+      (chapters.has("revestimientos") || chapters.has("impermeabilizacion") ? quantities.wetWallArea : 0);
+    addPhase(
+      "Impermeabilizacion, alicatados, solados y remates",
+      Math.max(5, Math.ceil(Math.max(finishArea, 10) / 22) + 2),
+      Math.max(9, Math.ceil(Math.max(finishArea, 10) / 13) + 4),
+      "Preparacion de soportes, impermeabilizacion, colocacion, rejuntado, rodapie y curado de adhesivos.",
+    );
   }
 
-  // Phase 6: Carpentry (can overlap with painting)
-  if (chapters.has("carpinteria_interior") || chapters.has("carpinteria_exterior")) {
-    phases.push({
-      title: "Carpinteria interior y exterior",
-      duration_days_min: 3,
-      duration_days_max: Math.max(5, Math.ceil(area / 40)),
-      description: `Instalacion de ${Math.ceil(area / 14)} puertas${scope.incluye_ventanas ? ` y ${Math.ceil(area / 15)} ventanas` : ""}.`,
-      depends_on: ["Pintura y acabados"],
-    });
+  if (hasPainting) {
+    const effort = effortDays(["pintura"], 2);
+    const paintArea = quantities.wallPaintArea + quantities.ceilingArea;
+    addPhase(
+      "Preparacion, pintura y tiempos entre manos",
+      Math.max(4, Math.ceil(paintArea / 45) + 2, effort.min),
+      Math.max(7, Math.ceil(paintArea / 28) + 4, effort.max),
+      "Proteccion, reparacion y lijado, imprimacion, dos manos y secados entre aplicaciones.",
+    );
   }
 
-  // Phase 7: Fixtures (sanitarios, cocina, mecanismos)
-  if (chapters.has("sanitarios") || chapters.has("cocina")) {
-    const fixMin = 3 + (scope.incluye_cocina ? 3 : 0) + (banos > 1 ? 2 : 0);
-    const fixMax = 5 + (scope.incluye_cocina ? 5 : 0) + (banos > 1 ? 3 : 0);
-    phases.push({
-      title: "Aparatos sanitarios, cocina y mecanismos",
-      duration_days_min: fixMin,
-      duration_days_max: fixMax,
-      description: `Montaje de sanitarios (${banos} banos)${scope.incluye_cocina ? ", muebles y encimera de cocina" : ""}, mecanismos electricos.`,
-      depends_on: ["Carpinteria interior y exterior"],
-    });
-    criticalPath.push("Aparatos sanitarios, cocina y mecanismos");
+  const completionCandidatesMin: number[] = [];
+  const completionCandidatesMax: number[] = [];
+  const completionScopes: string[] = [];
+  if (hasInteriorCarpentry) {
+    completionCandidatesMin.push(Math.ceil(quantities.doorsEstimated / 3) + 1);
+    completionCandidatesMax.push(Math.ceil(quantities.doorsEstimated / 2) + 2);
+    completionScopes.push(`${quantities.doorsEstimated} puertas interiores`);
+  }
+  if (hasExteriorCarpentry) {
+    completionCandidatesMin.push(Math.ceil(quantities.windowsCountEstimated / 3) + 1);
+    completionCandidatesMax.push(Math.ceil(quantities.windowsCountEstimated / 2) + 2);
+    completionScopes.push(`${quantities.windowsCountEstimated} ventanas`);
+  }
+  if (hasKitchen) {
+    completionCandidatesMin.push(5);
+    completionCandidatesMax.push(9);
+    completionScopes.push("mobiliario y encimera de cocina");
+  }
+  if (hasSanitary) {
+    completionCandidatesMin.push(2 + banos * 2);
+    completionCandidatesMax.push(4 + banos * 2);
+    completionScopes.push(`aparatos de ${banos} bano(s)`);
+  }
+  if (hasElectrical) {
+    completionCandidatesMin.push(2);
+    completionCandidatesMax.push(4);
+    completionScopes.push("mecanismos y comprobaciones electricas");
+  }
+  if (hasClima) {
+    completionCandidatesMin.push(4);
+    completionCandidatesMax.push(7);
+    completionScopes.push("equipos y puesta en marcha de climatizacion");
   }
 
-  // Phase 8: AC
-  if (scope.incluye_climatizacion && chapters.has("climatizacion")) {
-    phases.push({
-      title: "Climatizacion",
-      duration_days_min: 3,
-      duration_days_max: 5,
-      description: "Instalacion de unidades interiores/exteriores de aire acondicionado.",
-      depends_on: ["Pintura y acabados"],
-    });
+  if (completionCandidatesMin.length > 0) {
+    const workstreams = completionCandidatesMin.length;
+    const coordinationMin = Math.min(Math.max(workstreams - 1, 0), 3) + (phases.length >= 5 ? Math.ceil(area / 80) : 0);
+    const coordinationMax = Math.min(Math.max((workstreams - 1) * 2, 0), 8);
+    addPhase(
+      "Carpinterias, equipamiento y terminaciones",
+      Math.max(...completionCandidatesMin) + coordinationMin,
+      Math.max(...completionCandidatesMax) + coordinationMax,
+      `Montaje y ajuste de ${completionScopes.join(", ")}. Los gremios se solapan solo en zonas compatibles.`,
+    );
   }
 
-  // Phase 9: Cleanup
-  if (chapters.has("limpieza")) {
-    phases.push({
-      title: "Limpieza final y repasos",
-      duration_days_min: 2,
-      duration_days_max: 4,
-      description: "Limpieza profesional, repasos de pintura y verificacion de instalaciones.",
-      depends_on: ["Aparatos sanitarios, cocina y mecanismos"],
-    });
-    criticalPath.push("Limpieza final y repasos");
+  if (hasCleaning || phases.length >= 4) {
+    addPhase(
+      "Pruebas, repasos, limpieza y entrega",
+      Math.max(2, Math.ceil(area / 100) + 1),
+      Math.max(4, Math.ceil(area / 60) + 3),
+      "Pruebas finales, correccion de incidencias, limpieza fina y entrega documentada.",
+    );
+  } else if (hasWaste && !hasDemolition) {
+    addPhase(
+      "Gestion y retirada de residuos",
+      1,
+      Math.max(2, Math.ceil(area / 80)),
+      "Carga, retirada, tasas y entrega a gestor autorizado.",
+    );
   }
 
-  // Sum critical path durations (sequential)
-  const execMin = phases.reduce((s, p) => s + p.duration_days_min, 0);
-  const execMax = phases.reduce((s, p) => s + p.duration_days_max, 0);
+  if (phases.length === 0) {
+    addPhase(
+      "Ejecucion del alcance seleccionado",
+      Math.max(2, Math.ceil(area / 40)),
+      Math.max(4, Math.ceil(area / 25)),
+      "Planificacion provisional pendiente de completar las partidas del presupuesto.",
+    );
+  }
 
-  // Apply overlap factor (~15% for parallel phases)
-  const overlapFactor = 0.85;
-  const adjustedExecMin = Math.round(execMin * overlapFactor);
-  const adjustedExecMax = Math.round(execMax * overlapFactor);
+  // The phases above already group tasks that can genuinely run in parallel.
+  // Therefore there is no blanket overlap discount. The upper duration uses a
+  // likely adverse percentile instead of adding every worst case at once.
+  const rawMinDays = phases.reduce((sum, phase) => sum + phase.duration_days_min, 0);
+  const rawMaxDays = phases.reduce((sum, phase) => sum + phase.duration_days_max, 0);
+  const complexProject = phases.length >= 5 || chapters.size >= 8;
+  const coordinationMinFactor = complexProject ? 1.08 : phases.length >= 3 ? 1.03 : 1;
+  const coordinationMaxFactor = complexProject ? 1.10 : phases.length >= 3 ? 1.05 : 1;
+  const executionDaysMin = Math.max(1, Math.ceil(rawMinDays * coordinationMinFactor));
+  const likelyAdverseDays = rawMinDays + (rawMaxDays - rawMinDays) * 0.72;
+  const executionDaysMax = Math.max(
+    executionDaysMin + 2,
+    Math.ceil(likelyAdverseDays * coordinationMaxFactor),
+  );
+  const executionWeeksMin = Math.ceil(executionDaysMin / 5);
+  const executionWeeksMax = Math.ceil(executionDaysMax / 5);
 
-  // Buffer for permits, weather, supply delays: +15-20%
-  const bufferMin = Math.ceil(adjustedExecMin * 1.12);
-  const bufferMax = Math.ceil(adjustedExecMax * 1.22);
-
-  const execWeeksMin = Math.ceil(adjustedExecMin / 5);
-  const execWeeksMax = Math.ceil(adjustedExecMax / 5);
-  const totalWeeksMin = Math.ceil(bufferMin / 5);
-  const totalWeeksMax = Math.ceil(bufferMax / 5);
+  // Preparation and supply lead times are a separate critical path. For a
+  // comprehensive project part of it can overlap demolition and rough works;
+  // for a single long-lead trade (windows/kitchen) it cannot be hidden.
+  let preparationDaysMin = complexProject ? 15 : 3;
+  let preparationDaysMax = complexProject ? 30 : 7;
+  if (hasDemolition || hasMasonry) {
+    preparationDaysMin = Math.max(preparationDaysMin, 5);
+    preparationDaysMax = Math.max(preparationDaysMax, 15);
+  }
+  if (hasKitchen) {
+    preparationDaysMin = Math.max(preparationDaysMin, 15);
+    preparationDaysMax = Math.max(preparationDaysMax, 30);
+  }
+  if (hasClima) {
+    preparationDaysMin = Math.max(preparationDaysMin, 10);
+    preparationDaysMax = Math.max(preparationDaysMax, 20);
+  }
+  if (hasExteriorCarpentry) {
+    preparationDaysMin = Math.max(preparationDaysMin, 25);
+    preparationDaysMax = Math.max(preparationDaysMax, 45);
+  }
+  const preparationWeeksMin = Math.ceil(preparationDaysMin / 5);
+  const preparationWeeksMax = Math.ceil(preparationDaysMax / 5);
+  const canOverlapSupplies = phases.length >= 4;
+  const nonOverlappingPreparationMin = canOverlapSupplies
+    ? Math.max(1, Math.ceil(preparationWeeksMin * 0.35))
+    : preparationWeeksMin;
+  const nonOverlappingPreparationMax = canOverlapSupplies
+    ? Math.max(1, Math.ceil(preparationWeeksMax * 0.55))
+    : preparationWeeksMax;
+  const contingencyMin = executionWeeksMin >= 10 ? 1 : 0;
+  const contingencyMax = executionWeeksMax >= 10
+    ? Math.max(2, Math.ceil(executionWeeksMax * 0.10))
+    : 1;
+  const totalWeeksMin = executionWeeksMin + nonOverlappingPreparationMin + contingencyMin;
+  const totalWeeksMax = executionWeeksMax + nonOverlappingPreparationMax + contingencyMax;
 
   const assumptions: string[] = [
-    "Jornadas de 8h, 5 dias/semana.",
-    "Un equipo de obra operativo desde el inicio.",
-    `Superficie: ${area} m2, ${banos} bano(s).`,
+    "Calendario calculado por ruta critica; los solapes solo se aplican entre gremios y zonas compatibles.",
+    "Jornadas de 8 horas, 5 dias por semana, con cuadrillas especializadas de 1-2 operarios por gremio.",
+    `Alcance considerado: ${Math.round(area)} m2 y ${banos} bano(s).`,
+    `Preparacion, validacion tecnica y aprovisionamiento: ${preparationWeeksMin}-${preparationWeeksMax} semanas; parte puede solaparse con la ejecucion.`,
+    "El plazo total incluye coordinacion, secados, suministros habituales y una contingencia de obra razonable.",
+    "No incluye paralizaciones extraordinarias, amianto, vicios ocultos ni cambios de alcance posteriores.",
   ];
-  if (scope.incluye_cocina) assumptions.push("Incluye cocina completa (mobiliario + instalaciones).");
-  if (scope.incluye_ventanas) assumptions.push("Incluye cambio de ventanas (puede requerir licencia municipal).");
-  if (scope.incluye_climatizacion) assumptions.push("Incluye climatizacion (coordinacion con instalador externo).");
-  assumptions.push("No se consideran retrasos por permisos, suministros o inclemencias.");
+  if (hasKitchen) assumptions.push("La cocina requiere medicion definitiva antes de fabricar mobiliario y encimera.");
+  if (hasExteriorCarpentry) assumptions.push("Las ventanas se consideran fabricadas a medida y condicionadas por su plazo de suministro.");
+  if (hasDemolition || hasExteriorCarpentry) assumptions.push("Licencias y permisos municipales deben confirmarse antes de comprometer la fecha de inicio.");
 
   return {
-    execution_weeks_min: execWeeksMin,
-    execution_weeks_max: execWeeksMax,
+    preparation_weeks_min: preparationWeeksMin,
+    preparation_weeks_max: preparationWeeksMax,
+    execution_working_days_min: executionDaysMin,
+    execution_working_days_max: executionDaysMax,
+    execution_weeks_min: executionWeeksMin,
+    execution_weeks_max: executionWeeksMax,
     total_weeks_min: totalWeeksMin,
     total_weeks_max: totalWeeksMax,
     phase_breakdown: phases,
-    critical_path: criticalPath,
+    critical_path: phases.map((phase) => phase.title),
     assumptions,
   };
 }

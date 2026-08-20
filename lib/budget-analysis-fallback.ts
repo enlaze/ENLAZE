@@ -41,9 +41,8 @@ export function buildDeterministicBudgetAnalysis({
     saltoki: "Saltoki",
     "referencia-mercado": "Referencia mercado",
   };
-  const totalDurationDays = timeline.phase_breakdown.reduce(
-    (total, phase) => total + Math.round((phase.duration_days_min + phase.duration_days_max) / 2),
-    0,
+  const totalDurationDays = Math.round(
+    (timeline.execution_working_days_min + timeline.execution_working_days_max) / 2,
   );
 
   return {
@@ -92,9 +91,9 @@ export function buildDeterministicBudgetAnalysis({
     })),
     estimated_timeline: {
       total_duration_days: totalDurationDays,
-      total_duration_weeks: timeline.execution_weeks_min,
+      total_duration_weeks: Math.ceil(totalDurationDays / 5),
       confidence: 0.75,
-      notes: `Ejecución estimada: ${timeline.execution_weeks_min}-${timeline.execution_weeks_max} semanas.`,
+      notes: `Ejecución estimada: ${timeline.execution_weeks_min}-${timeline.execution_weeks_max} semanas. Plazo total recomendado: ${timeline.total_weeks_min}-${timeline.total_weeks_max} semanas.`,
     },
     estimated_price_range: marketRange,
     pricing_confidence: trackerProductsCount > 0 ? 76 : 65,

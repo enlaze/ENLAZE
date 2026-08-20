@@ -44,8 +44,11 @@ function buildBudgetMeta(state: BudgetState): PDFBudget {
     technical_document_names: state.sectorData.technical_document_names || [],
     execution_weeks_min: state.realisticTimeline?.execution_weeks_min || null,
     execution_weeks_max: state.realisticTimeline?.execution_weeks_max || null,
+    preparation_weeks_min: state.realisticTimeline?.preparation_weeks_min || null,
+    preparation_weeks_max: state.realisticTimeline?.preparation_weeks_max || null,
     total_weeks_min: state.realisticTimeline?.total_weeks_min || null,
     total_weeks_max: state.realisticTimeline?.total_weeks_max || null,
+    schedule_assumptions: state.realisticTimeline?.assumptions || [],
     execution_phases: state.realisticTimeline?.phase_breakdown || [],
   };
 }

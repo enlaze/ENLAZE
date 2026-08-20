@@ -61,7 +61,12 @@ export function LiveSummaryPanel() {
   let endDateValue = state.endDate ? new Date(state.endDate) : null;
   if (!endDateValue && state.startDate && estimatedTimeline?.total_duration_days) {
     endDateValue = new Date(state.startDate);
-    endDateValue.setDate(endDateValue.getDate() + parseInt(estimatedTimeline.total_duration_days.toString(), 10));
+    let workingDays = parseInt(estimatedTimeline.total_duration_days.toString(), 10);
+    while (workingDays > 0) {
+      endDateValue.setDate(endDateValue.getDate() + 1);
+      const day = endDateValue.getDay();
+      if (day !== 0 && day !== 6) workingDays--;
+    }
   }
 
   const endDateFormatted = endDateValue
@@ -268,6 +273,12 @@ export function LiveSummaryPanel() {
             )}
             {realisticTimeline ? (
               <>
+                <div className="flex justify-between items-center text-sm mt-1">
+                  <span className="text-navy-500 dark:text-zinc-400">Preparacion y suministros</span>
+                  <span className="font-medium text-navy-900 dark:text-white">
+                    {realisticTimeline.preparation_weeks_min}-{realisticTimeline.preparation_weeks_max} semanas
+                  </span>
+                </div>
                 <div className="flex justify-between items-center text-sm mt-1">
                   <span className="text-navy-500 dark:text-zinc-400">Ejecucion estimada</span>
                   <span className="font-medium text-navy-900 dark:text-white">

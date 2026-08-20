@@ -1848,12 +1848,14 @@ export function BudgetGenerateProvider({
             description: ph.description,
           }))
         : data.calendar_phases || [];
-      const totalDays = calendarPhases.reduce((s: number, p: any) => s + (p.duration_days || 0), 0);
+      const totalDays = engineTimeline
+        ? Math.round((engineTimeline.execution_working_days_min + engineTimeline.execution_working_days_max) / 2)
+        : calendarPhases.reduce((s: number, p: any) => s + (p.duration_days || 0), 0);
       const estimatedTimeline = engineTimeline ? {
         total_duration_days: totalDays,
-        total_duration_weeks: engineTimeline.execution_weeks_min,
+        total_duration_weeks: Math.ceil(totalDays / 5),
         confidence: 0.8,
-        notes: `Ejecucion ${engineTimeline.execution_weeks_min}-${engineTimeline.execution_weeks_max} semanas. Plazo total ${engineTimeline.total_weeks_min}-${engineTimeline.total_weeks_max} semanas.`,
+        notes: `Preparacion y suministros ${engineTimeline.preparation_weeks_min}-${engineTimeline.preparation_weeks_max} semanas. Ejecucion ${engineTimeline.execution_weeks_min}-${engineTimeline.execution_weeks_max} semanas. Plazo total ${engineTimeline.total_weeks_min}-${engineTimeline.total_weeks_max} semanas.`,
       } : data.estimated_timeline || (totalDays > 0 ? {
         total_duration_days: totalDays,
         total_duration_weeks: Math.ceil(totalDays / 5),
