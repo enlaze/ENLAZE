@@ -17,6 +17,7 @@ import Badge from "@/components/ui/badge";
 import Loading from "@/components/ui/loading";
 import Breadcrumbs from "@/components/ui/breadcrumbs";
 import Link from "next/link";
+import { normalizeBudgetItemUnit } from "@/lib/budget-units";
 
 interface BudgetItem {
   id: string;
@@ -310,7 +311,7 @@ export default function BudgetDetailPage() {
         concept: item.concept,
         description: item.description,
         quantity: item.quantity,
-        unit: item.unit,
+        unit: normalizeBudgetItemUnit(item.unit),
         category: item.category,
         unit_price: item.unit_price,
         subtotal: item.subtotal,
@@ -358,6 +359,12 @@ export default function BudgetDetailPage() {
 
   async function downloadPDF() {
     if (!budget) return;
+    const pdfWindow = window.open("", "_blank");
+    if (!pdfWindow) {
+      toast.error("El navegador ha bloqueado la ventana del PDF. Permite las ventanas emergentes e inténtalo de nuevo.");
+      return;
+    }
+    pdfWindow.document.write("<p style='font-family:sans-serif;padding:24px'>Preparando PDF...</p>");
     setDownloadingPDF(true);
     try {
       const res = await fetch("/api/budgets/pdf", {
@@ -371,17 +378,11 @@ export default function BudgetDetailPage() {
         throw new Error(err.error || "Error generando PDF");
       }
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${budget.budget_number}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast.success("PDF descargado");
+      const html = await res.text();
+      printPDF(html, pdfWindow);
+      toast.success("PDF preparado. Selecciona ‘Guardar como PDF’ en el diálogo de impresión.");
     } catch (err: any) {
+      pdfWindow.close();
       console.error("Error downloading PDF:", err);
       toast.error(err.message || "Error al descargar el PDF");
     } finally {
@@ -445,7 +446,7 @@ export default function BudgetDetailPage() {
           </Link>
           <Button variant="secondary" onClick={generatePDF}>Imprimir</Button>
           <Button onClick={downloadPDF} disabled={downloadingPDF}>
-            {downloadingPDF ? "Generando..." : "Descargar PDF"}
+            {downloadingPDF ? "Preparando..." : "Guardar PDF"}
           </Button>
         </div>
       </div>

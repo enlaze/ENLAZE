@@ -41,6 +41,7 @@ import {
   getGeographicFactorForCategory,
 } from "@/lib/geographic-costs";
 import { isTraceableCommercialPrice } from "@/lib/price-traceability";
+import { normalizeBudgetItemUnit } from "@/lib/budget-units";
 
 // The v2 price resolver (/api/prices/resolve, resolver_used: "v2") can
 // return several low-confidence "estimate" source types — market_estimate,
@@ -1086,7 +1087,7 @@ export function BudgetGenerateProvider({
           concept: p.concept,
           description: p.description,
           quantity: p.quantity,
-          unit: p.unit,
+          unit: normalizeBudgetItemUnit(p.unit),
           category: p.category,
           unit_price: p.unit_price_client,
           subtotal: p.subtotal_client
@@ -1097,7 +1098,7 @@ export function BudgetGenerateProvider({
           concept: m.name,
           description: "Material sugerido",
           quantity: m.quantity,
-          unit: m.unit,
+          unit: normalizeBudgetItemUnit(m.unit),
           category: "material",
           unit_price: m.unit_price * marginMultiplier,
           subtotal: m.subtotal * marginMultiplier
@@ -1105,7 +1106,8 @@ export function BudgetGenerateProvider({
 
         const itemsToInsert = [...partidasToInsert, ...materialsToInsert];
         if (itemsToInsert.length > 0) {
-          await supabase.from("budget_items").insert(itemsToInsert);
+          const { error: itemsError } = await supabase.from("budget_items").insert(itemsToInsert);
+          if (itemsError) throw itemsError;
         }
       }
 
@@ -1150,7 +1152,7 @@ export function BudgetGenerateProvider({
         concept: p.concept,
         description: p.description,
         quantity: p.quantity,
-        unit: p.unit,
+        unit: normalizeBudgetItemUnit(p.unit),
         category: p.category,
         unit_price: p.unit_price_client,
         subtotal: p.subtotal_client
@@ -1161,7 +1163,7 @@ export function BudgetGenerateProvider({
         concept: m.name,
         description: "Material sugerido",
         quantity: m.quantity,
-        unit: m.unit,
+        unit: normalizeBudgetItemUnit(m.unit),
         category: "material",
         unit_price: m.unit_price * marginMultiplier,
         subtotal: m.subtotal * marginMultiplier

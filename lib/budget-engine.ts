@@ -771,8 +771,8 @@ const MATERIAL_SPECS: MaterialSpec[] = [
   // Fontaneria
   { name: "Tuberia multicapa 16mm (rollo 50m)", unit: "rollos", unit_price: 42.0, provider_id: "saltoki", qtyFn: q => Math.ceil((q.bathroomsCount + (q.kitchenIncluded ? 1 : 0)) * 1.2), chapter: "fontaneria" },
   { name: "Tuberia PVC evacuacion 110mm (3m)", unit: "ud", unit_price: 8.50, provider_id: "saltoki", qtyFn: q => Math.ceil(q.bathroomsCount * 3 + (q.kitchenIncluded ? 2 : 0)), chapter: "fontaneria" },
-  { name: "Racores y accesorios multicapa", unit: "lotes", unit_price: 95.0, provider_id: "saltoki", qtyFn: q => Math.max(q.bathroomsCount + (q.kitchenIncluded ? 1 : 0), 1), chapter: "fontaneria" },
-  { name: "Llaves de corte y colectores", unit: "lotes", unit_price: 78.0, provider_id: "saltoki", qtyFn: q => Math.max(q.bathroomsCount + (q.kitchenIncluded ? 1 : 0), 1), chapter: "fontaneria" },
+  { name: "Racores y accesorios multicapa", unit: "lote", unit_price: 95.0, provider_id: "saltoki", qtyFn: q => Math.max(q.bathroomsCount + (q.kitchenIncluded ? 1 : 0), 1), chapter: "fontaneria" },
+  { name: "Llaves de corte y colectores", unit: "lote", unit_price: 78.0, provider_id: "saltoki", qtyFn: q => Math.max(q.bathroomsCount + (q.kitchenIncluded ? 1 : 0), 1), chapter: "fontaneria" },
   { name: "Sifones y valvulas de desague", unit: "ud", unit_price: 18.0, provider_id: "leroy-merlin", qtyFn: q => Math.max(q.bathroomsCount * 2 + (q.kitchenIncluded ? 1 : 0), 2), chapter: "fontaneria" },
   // Electricidad
   { name: "Cable H07V-K 2.5mm2 (rollo 100m)", unit: "rollos", unit_price: 32.0, provider_id: "leroy-merlin", qtyFn: q => Math.ceil(q.electricalPointsEstimated / 30), chapter: "electricidad" },
@@ -788,8 +788,8 @@ const MATERIAL_SPECS: MaterialSpec[] = [
   { name: "Pintura plastica blanca mate (cubo 15L)", unit: "cubos", unit_price: 35.0, provider_id: "leroy-merlin", qtyFn: q => Math.ceil((q.wallPaintArea + q.ceilingArea) / 80), chapter: "pintura" },
   { name: "Imprimacion fijadora (cubo 15L)", unit: "cubos", unit_price: 28.0, provider_id: "leroy-merlin", qtyFn: q => Math.ceil((q.wallPaintArea + q.ceilingArea) / 120), chapter: "pintura" },
   { name: "Masilla de reparacion interior (saco 15kg)", unit: "sacos", unit_price: 18.0, provider_id: "obramat", qtyFn: q => Math.max(Math.ceil(q.wallPaintArea / 100), 1), chapter: "pintura" },
-  { name: "Cinta de enmascarar y plastico protector", unit: "lotes", unit_price: 32.0, provider_id: "leroy-merlin", qtyFn: q => Math.max(Math.ceil(q.floorArea / 80), 1), chapter: "pintura" },
-  { name: "Rodillos, brochas y cubetas", unit: "lotes", unit_price: 42.0, provider_id: "leroy-merlin", qtyFn: q => Math.max(Math.ceil(q.floorArea / 100), 1), chapter: "pintura" },
+  { name: "Cinta de enmascarar y plastico protector", unit: "lote", unit_price: 32.0, provider_id: "leroy-merlin", qtyFn: q => Math.max(Math.ceil(q.floorArea / 80), 1), chapter: "pintura" },
+  { name: "Rodillos, brochas y cubetas", unit: "lote", unit_price: 42.0, provider_id: "leroy-merlin", qtyFn: q => Math.max(Math.ceil(q.floorArea / 100), 1), chapter: "pintura" },
   // Sanitarios
   { name: "Inodoro compacto salida dual", unit: "ud", unit_price: 155.0, provider_id: "leroy-merlin", qtyFn: q => q.bathroomsCount, chapter: "sanitarios" },
   { name: "Lavabo sobre encimera + monomando", unit: "ud", unit_price: 130.0, provider_id: "leroy-merlin", qtyFn: q => q.bathroomsCount, chapter: "sanitarios" },

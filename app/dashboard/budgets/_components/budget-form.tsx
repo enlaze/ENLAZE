@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { analytics } from "@/lib/analytics";
 import { saveDocumentVersion } from "@/lib/document-versions";
+import { normalizeBudgetItemUnit } from "@/lib/budget-units";
 
 const fallbackServiceTypes = [
   { value: "reforma", label: "Reforma integral" },
@@ -438,7 +439,7 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
         concept: p.concept,
         description: p.description,
         quantity: p.quantity,
-        unit: p.unit,
+        unit: normalizeBudgetItemUnit(p.unit),
         category: p.category,
         unit_price: p.unit_price,
         subtotal: p.subtotal,

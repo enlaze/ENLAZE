@@ -1,12 +1,15 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { execSync } from "child_process";
-import { writeFileSync, readFileSync, unlinkSync, mkdirSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
-import { randomUUID } from "crypto";
-import { downloadCompanyLogo } from "@/lib/company-logo-download";
+import { generateBudgetPDFHTML } from "@/lib/pdf-generator";
+
+interface FiscalSettings {
+  nif?: string | null;
+  cif?: string | null;
+  address?: string | null;
+  fiscal_address?: string | null;
+  phone?: string | null;
+}
 
 export async function POST(request: Request) {
   const cookieStore = await cookies();
@@ -59,14 +62,14 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     // Try to get fiscal settings for NIF and address
-    let fiscal = null;
+    let fiscal: FiscalSettings | null = null;
     try {
       const { data: f } = await supabase
         .from("fiscal_settings")
         .select("*")
         .eq("user_id", user.id)
         .maybeSingle();
-      fiscal = f;
+      fiscal = f as FiscalSettings | null;
     } catch {
       // fiscal_settings may not exist
     }
@@ -74,14 +77,14 @@ export async function POST(request: Request) {
     const company = {
       name: profile?.business_name || profile?.full_name || "Mi Empresa",
       logo_url: profile?.logo_url || "",
-      nif: (fiscal as any)?.nif || (fiscal as any)?.cif || "",
-      address: (fiscal as any)?.address || (fiscal as any)?.fiscal_address || "",
-      phone: (fiscal as any)?.phone || "",
+      nif: fiscal?.nif || fiscal?.cif || "",
+      address: fiscal?.address || fiscal?.fiscal_address || "",
+      phone: fiscal?.phone || "",
       email: user.email || "",
     };
 
-    const pdfData = {
-      budget: {
+    const html = generateBudgetPDFHTML(
+      {
         budget_number: budget.budget_number,
         title: budget.title,
         client_name: budget.client_name,
@@ -109,95 +112,41 @@ export async function POST(request: Request) {
         execution_deadline_text: budget.execution_deadline_text || "",
         observations: budget.observations || "",
         conditions_text: budget.conditions_text || "",
+        company_name: company.name,
+        company_logo_url: company.logo_url,
+        company_nif: company.nif,
+        company_address: company.address,
+        company_phone: company.phone,
+        company_email: company.email,
       },
-      items: (items || []).map((i: any) => ({
-        concept: i.concept,
-        description: i.description,
-        category: i.category,
-        chapter: i.chapter || i.category,
-        quantity: Number(i.quantity) || 0,
-        unit: i.unit,
-        unit_price: Number(i.unit_price) || 0,
-        subtotal: Number(i.subtotal) || 0,
+      (items || []).map((item) => ({
+        concept: item.concept,
+        description: item.description,
+        category: item.category,
+        chapter: item.chapter || item.category,
+        quantity: Number(item.quantity) || 0,
+        unit: item.unit,
+        unit_price: Number(item.unit_price) || 0,
+        subtotal: Number(item.subtotal) || 0,
       })),
-      company,
-    };
+      "client",
+    );
 
-    // Write JSON input, run Python, read PDF output
-    const tmpDir = tmpdir();
-    const id = randomUUID();
-    const jsonPath = join(tmpDir, `budget-${id}.json`);
-    const pdfPath = join(tmpDir, `budget-${id}.pdf`);
-    const logoPath = join(tmpDir, `budget-logo-${id}`);
-
-    if (company.logo_url) {
-      try {
-        const logoBuffer = await downloadCompanyLogo({
-          rawUrl: company.logo_url,
-          supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          userId: user.id,
-        });
-        if (logoBuffer) {
-          writeFileSync(logoPath, logoBuffer);
-          (company as typeof company & { logo_path?: string }).logo_path = logoPath;
-        }
-      } catch {
-        console.warn("[PDF] Company logo could not be downloaded");
-      }
-    }
-
-    writeFileSync(jsonPath, JSON.stringify(pdfData, null, 2));
-
-    const scriptPath = join(process.cwd(), "scripts", "generate-budget-pdf.py");
-
-    // Ensure reportlab is installed
-    try {
-      execSync("python3 -c \"import reportlab\"", { timeout: 5000, stdio: "pipe" });
-    } catch {
-      console.log("[PDF] Installing reportlab...");
-      try {
-        execSync("pip3 install reportlab --break-system-packages -q", {
-          timeout: 60000,
-          stdio: "pipe",
-        });
-      } catch {
-        // Try without --break-system-packages for older pip
-        execSync("pip3 install reportlab -q", { timeout: 60000, stdio: "pipe" });
-      }
-    }
-
-    try {
-      execSync(`python3 "${scriptPath}" "${jsonPath}" "${pdfPath}"`, {
-        timeout: 30000,
-        encoding: "utf-8",
-      });
-    } catch (execErr: any) {
-      console.error("[PDF] Python error:", execErr.stderr || execErr.message);
-      return NextResponse.json(
-        { error: "Error generando PDF: " + (execErr.stderr || execErr.message) },
-        { status: 500 }
-      );
-    }
-
-    // Read the PDF and return it
-    const pdfBuffer = readFileSync(pdfPath);
-
-    // Cleanup
-    try { unlinkSync(jsonPath); } catch {}
-    try { unlinkSync(pdfPath); } catch {}
-    try { unlinkSync(logoPath); } catch {}
-
-    return new NextResponse(pdfBuffer, {
+    // The browser prints this document using its native PDF engine. This keeps
+    // production independent from Python/pip and matches the wizard export.
+    return new NextResponse(html, {
       status: 200,
       headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${budget.budget_number || "presupuesto"}.pdf"`,
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "private, no-store",
+        "X-Enlaze-PDF-Mode": "browser-print",
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error interno";
     console.error("[PDF] Error:", error);
     return NextResponse.json(
-      { error: error.message || "Error interno" },
+      { error: message },
       { status: 500 }
     );
   }

@@ -988,9 +988,10 @@ export function generateBudgetPDFHTML(
 
 // ─── Print Helper ───────────────────────────────────────────────────────────
 
-export function printPDF(html: string) {
-  const printWindow = window.open("", "_blank");
+export function printPDF(html: string, existingWindow?: Window | null) {
+  const printWindow = existingWindow || window.open("", "_blank");
   if (printWindow) {
+    printWindow.document.open();
     printWindow.document.write(html);
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 500);
