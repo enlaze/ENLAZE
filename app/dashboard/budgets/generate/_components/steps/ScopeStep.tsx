@@ -8,10 +8,14 @@ import { useSector } from "@/lib/sector-context";
 import { useToast } from "@/components/ui/toast";
 import { FileText, Ruler, UploadCloud } from "lucide-react";
 import { getGeographicCostProfile } from "@/lib/geographic-costs";
+import { normalizeBathroomCount } from "@/lib/budget-engine";
 
 interface ClientOption {
   id: string;
   name: string;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
 }
 
 interface ProjectOption {
@@ -92,7 +96,7 @@ export function ScopeStep() {
   const selectedActuaciones: string[] = scopeData.actuaciones || [];
   const selectedCalidad: string = scopeData.calidad || "media";
   const superficieM2: number = scopeData.superficie_m2 || 0;
-  const numBanos: number = scopeData.num_banos || 1;
+  const numBanos = normalizeBathroomCount(scopeData.num_banos);
   const incluyeCocina: boolean = scopeData.incluye_cocina ?? true;
   const incluyeVentanas: boolean = scopeData.incluye_ventanas ?? false;
   const incluyeClimatizacion: boolean = scopeData.incluye_climatizacion ?? false;
@@ -107,7 +111,7 @@ export function ScopeStep() {
       if (!user) return;
 
       const [clientsRes, projectsRes] = await Promise.all([
-        supabase.from("clients").select("id, name").eq("user_id", user.id).order("name"),
+        supabase.from("clients").select("id, name, email, phone, company").eq("user_id", user.id).order("name"),
         supabase.from("projects").select("id, name, client_id").eq("user_id", user.id).order("name")
       ]);
 
@@ -117,6 +121,25 @@ export function ScopeStep() {
     }
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (!state.clientId || clients.length === 0) return;
+    const selectedClient = clients.find((client) => client.id === state.clientId);
+    if (!selectedClient) return;
+    if (
+      state.clientName !== selectedClient.name
+      || state.clientEmail !== (selectedClient.email || "")
+      || state.clientPhone !== (selectedClient.phone || "")
+      || state.clientCompany !== (selectedClient.company || "")
+    ) {
+      updateState({
+        clientName: selectedClient.name,
+        clientEmail: selectedClient.email || "",
+        clientPhone: selectedClient.phone || "",
+        clientCompany: selectedClient.company || "",
+      });
+    }
+  }, [clients, state.clientId, state.clientName, state.clientEmail, state.clientPhone, state.clientCompany]);
 
   useEffect(() => {
     let active = true;
@@ -329,13 +352,28 @@ export function ScopeStep() {
               <label className={labelCls}>Cliente asociado</label>
               <select
                 value={state.clientId || ""}
-                onChange={(e) => updateState({ clientId: e.target.value })}
+                onChange={(e) => {
+                  const clientId = e.target.value;
+                  const selectedClient = clients.find((client) => client.id === clientId);
+                  updateState({
+                    clientId,
+                    clientName: selectedClient?.name || "",
+                    clientEmail: selectedClient?.email || "",
+                    clientPhone: selectedClient?.phone || "",
+                    clientCompany: selectedClient?.company || "",
+                  });
+                }}
                 className={inputCls}
                 disabled={loading}
               >
                 <option value="">Sin asignar</option>
                 {clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
               </select>
+              {state.clientId && (state.clientEmail || state.clientPhone || state.clientCompany) && (
+                <p className="mt-1 text-xs text-navy-500 dark:text-zinc-400">
+                  {[state.clientCompany, state.clientEmail, state.clientPhone].filter(Boolean).join(" · ")}
+                </p>
+              )}
             </div>
 
             <div>
@@ -442,6 +480,33 @@ export function ScopeStep() {
               value={state.description}
               onChange={(e) => updateState({ description: e.target.value })}
             />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className={labelCls}>Condiciones del presupuesto</label>
+              <textarea
+                className={`${inputCls} min-h-[120px] resize-y`}
+                value={state.conditionsText}
+                onChange={(e) => updateState({ conditionsText: e.target.value })}
+                placeholder="Validez, exclusiones, modificaciones del alcance y otras condiciones para el cliente..."
+              />
+              <p className="mt-1 text-xs text-navy-400 dark:text-zinc-500">
+                Se mostrarán en el PDF del cliente y en la copia interna.
+              </p>
+            </div>
+            <div>
+              <label className={labelCls}>Notas internas</label>
+              <textarea
+                className={`${inputCls} min-h-[120px] resize-y`}
+                value={state.internalNotes}
+                onChange={(e) => updateState({ internalNotes: e.target.value })}
+                placeholder="Riesgos, acuerdos, accesos, comprobaciones o recordatorios para el equipo..."
+              />
+              <p className="mt-1 text-xs text-navy-400 dark:text-zinc-500">
+                Son privadas: nunca aparecerán en el PDF del cliente.
+              </p>
+            </div>
           </div>
 
           {state.validationError && (
@@ -579,7 +644,7 @@ export function ScopeStep() {
               />
             </div>
             <div>
-              <label className={labelCls}>Nº de baños</label>
+              <label className={labelCls}>Nº de baños afectados</label>
               <input
                 type="number"
                 min="0"

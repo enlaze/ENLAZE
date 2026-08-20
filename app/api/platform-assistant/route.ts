@@ -33,6 +33,7 @@ export async function POST(request: Request) {
   let body: {
       message?: string;
       pathname?: string;
+      voice_mode?: boolean;
       history?: ConversationMessage[];
   };
   try {
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
   if (!message) return NextResponse.json({ error: "Escribe una pregunta" }, { status: 400 });
 
   const pathname = String(body.pathname || "/dashboard").slice(0, 300);
+  const voiceMode = body.voice_mode === true;
   const localAnswer = buildLocalAssistantAnswer(message, pathname);
   const localResponse = () => NextResponse.json({
     ok: true,
@@ -83,7 +85,8 @@ MAPA REAL DE LA PLATAFORMA:
 ${guideText}
 
 REGLAS:
-- Responde en español y en un máximo de 140 palabras salvo que el usuario pida detalle.
+- Responde en español y en un máximo de ${voiceMode ? "90" : "140"} palabras salvo que el usuario pida detalle.
+- ${voiceMode ? "Habla como una persona cercana y profesional: frases cortas, sin Markdown y sin leer direcciones web. Si falta un dato, haz una sola pregunta aclaratoria." : "Usa un tono cercano, profesional y fácil de leer."}
 - Da pasos numerados cuando expliques un proceso.
 - No inventes botones, datos, precios, automatizaciones ni acciones realizadas.
 - No digas que has abierto, guardado, enviado o modificado nada.

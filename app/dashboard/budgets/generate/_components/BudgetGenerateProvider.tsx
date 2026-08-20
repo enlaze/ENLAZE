@@ -24,6 +24,7 @@ import {
   estimateRealisticTimeline,
   buildClientView,
   buildInternalView,
+  normalizeBathroomCount,
 } from "@/lib/budget-engine";
 import { buildDeterministicBudgetAnalysis } from "@/lib/budget-analysis-fallback";
 import {
@@ -52,6 +53,9 @@ const ESTIMATE_SOURCE_TYPES = new Set(["estimated", "market_estimate", "ai_estim
 function isEstimateSourceType(sourceType: string | null | undefined): boolean {
   return ESTIMATE_SOURCE_TYPES.has(String(sourceType || ""));
 }
+
+export const DEFAULT_BUDGET_CONDITIONS =
+  "Presupuesto válido durante 30 días desde su fecha de emisión. Los trabajos no incluidos expresamente se presupuestarán aparte. Cualquier modificación del alcance deberá aprobarse por escrito antes de ejecutarse.";
 
 export interface Partida {
   id: string;
@@ -423,11 +427,17 @@ export interface BudgetState {
   // Common Data
   title: string;
   clientId: string;
+  clientName: string;
+  clientEmail: string;
+  clientPhone: string;
+  clientCompany: string;
   projectId: string;
   serviceType: string;
   startDate: string | null;
   endDate: string | null;
   description: string;
+  conditionsText: string;
+  internalNotes: string;
   ivaPercent: number;
   marginPercent: number;
 
@@ -561,11 +571,17 @@ export function BudgetGenerateProvider({
     sector: normalizeSector(initialSector),
     title: "",
     clientId: "",
+    clientName: "",
+    clientEmail: "",
+    clientPhone: "",
+    clientCompany: "",
     projectId: "",
     serviceType: "",
     startDate: null,
     endDate: null,
     description: "",
+    conditionsText: DEFAULT_BUDGET_CONDITIONS,
+    internalNotes: "",
     ivaPercent: 21,
     marginPercent: 20,
     validationError: null,
@@ -791,7 +807,7 @@ export function BudgetGenerateProvider({
 
     const scope: BudgetScope = {
       superficie_m2: state.sectorData.superficie_m2 || state.aiInsights?.detected_area_m2 || 80,
-      num_banos: state.sectorData.num_banos || 1,
+      num_banos: normalizeBathroomCount(state.sectorData.num_banos),
       incluye_cocina: state.sectorData.incluye_cocina ?? true,
       incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
       incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,
@@ -1007,6 +1023,29 @@ export function BudgetGenerateProvider({
         return null;
       }
 
+      let clientSnapshot = {
+        name: state.clientName || "",
+        email: state.clientEmail || "",
+        phone: state.clientPhone || "",
+        company: state.clientCompany || "",
+      };
+      if (state.clientId) {
+        const { data: selectedClient } = await supabase
+          .from("clients")
+          .select("name, email, phone, company")
+          .eq("id", state.clientId)
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (selectedClient) {
+          clientSnapshot = {
+            name: selectedClient.name || clientSnapshot.name,
+            email: selectedClient.email || "",
+            phone: selectedClient.phone || "",
+            company: selectedClient.company || "",
+          };
+        }
+      }
+
       // Build snapshot — exclude circular/transient fields
       const snapshot = {
         ...state,
@@ -1033,12 +1072,17 @@ export function BudgetGenerateProvider({
           status: "borrador",
           title: state.title || "Borrador de Presupuesto (Wizard)",
           client_id: state.clientId || null,
+          client_name: clientSnapshot.name,
+          client_email: clientSnapshot.email,
+          client_phone: clientSnapshot.phone,
           project_id: state.projectId || null,
           service_type: state.serviceType || state.sector || "general",
           subtotal: state.totals.clientPrice,
           iva_percent: state.ivaPercent,
           iva_amount: state.totals.clientPrice * (state.ivaPercent / 100),
           total: state.totals.clientPrice * (1 + state.ivaPercent / 100),
+          notes: state.internalNotes,
+          conditions_text: state.conditionsText,
           wizard_state: snapshot
         }).select("id").single();
 
@@ -1056,11 +1100,16 @@ export function BudgetGenerateProvider({
         const { error } = await supabase.from("budgets").update({
           title: state.title || "Borrador de Presupuesto (Wizard)",
           client_id: state.clientId || null,
+          client_name: clientSnapshot.name,
+          client_email: clientSnapshot.email,
+          client_phone: clientSnapshot.phone,
           project_id: state.projectId || null,
           service_type: state.serviceType || state.sector || "general",
           subtotal: state.totals.clientPrice,
           iva_amount: state.totals.clientPrice * (state.ivaPercent / 100),
           total: state.totals.clientPrice * (1 + state.ivaPercent / 100),
+          notes: state.internalNotes,
+          conditions_text: state.conditionsText,
           wizard_state: snapshot,
           updated_at: new Date().toISOString()
         }).eq("id", draftId);
@@ -1089,6 +1138,7 @@ export function BudgetGenerateProvider({
           quantity: p.quantity,
           unit: normalizeBudgetItemUnit(p.unit),
           category: p.category,
+          chapter: p.chapter || p.category || "otros",
           unit_price: p.unit_price_client,
           subtotal: p.subtotal_client
         }));
@@ -1100,6 +1150,7 @@ export function BudgetGenerateProvider({
           quantity: m.quantity,
           unit: normalizeBudgetItemUnit(m.unit),
           category: "material",
+          chapter: m.linkedChapter || "materiales",
           unit_price: m.unit_price * marginMultiplier,
           subtotal: m.subtotal * marginMultiplier
         }));
@@ -1154,6 +1205,7 @@ export function BudgetGenerateProvider({
         quantity: p.quantity,
         unit: normalizeBudgetItemUnit(p.unit),
         category: p.category,
+        chapter: p.chapter || p.category || "otros",
         unit_price: p.unit_price_client,
         subtotal: p.subtotal_client
       }));
@@ -1165,6 +1217,7 @@ export function BudgetGenerateProvider({
         quantity: m.quantity,
         unit: normalizeBudgetItemUnit(m.unit),
         category: "material",
+        chapter: m.linkedChapter || "materiales",
         unit_price: m.unit_price * marginMultiplier,
         subtotal: m.subtotal * marginMultiplier
       }));
@@ -1184,6 +1237,8 @@ export function BudgetGenerateProvider({
         client_id: state.clientId || null,
         project_id: state.projectId || null,
         service_type: state.serviceType || state.sector || "general",
+        notes: state.internalNotes,
+        conditions_text: state.conditionsText,
         updated_at: new Date().toISOString()
       }).eq("id", budgetId);
       if (upErr) throw upErr;
@@ -1340,7 +1395,7 @@ export function BudgetGenerateProvider({
         actuaciones: resolvedActions,
         calidad: (state.sectorData.calidad as "basica" | "media" | "alta") || "media",
         superficie_m2: state.sectorData.superficie_m2 || 80,
-        num_banos: state.sectorData.num_banos || 1,
+        num_banos: normalizeBathroomCount(state.sectorData.num_banos),
         incluye_cocina: state.sectorData.incluye_cocina ?? true,
         incluye_ventanas: state.sectorData.incluye_ventanas ?? resolvedActions.includes("carpinteria_exterior"),
         incluye_climatizacion: state.sectorData.incluye_climatizacion ?? resolvedActions.includes("climatizacion"),
@@ -2015,7 +2070,7 @@ export function BudgetGenerateProvider({
             });
             const fbScope: BudgetScope = {
               superficie_m2: state.sectorData.superficie_m2 || 80,
-              num_banos: state.sectorData.num_banos || 1,
+              num_banos: normalizeBathroomCount(state.sectorData.num_banos),
               incluye_cocina: state.sectorData.incluye_cocina ?? true,
               incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
               incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,
@@ -2086,7 +2141,7 @@ export function BudgetGenerateProvider({
                 });
                 const gScope: BudgetScope = {
                   superficie_m2: state.sectorData.superficie_m2 || 80,
-                  num_banos: state.sectorData.num_banos || 1,
+                  num_banos: normalizeBathroomCount(state.sectorData.num_banos),
                   incluye_cocina: state.sectorData.incluye_cocina ?? true,
                   incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
                   incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,

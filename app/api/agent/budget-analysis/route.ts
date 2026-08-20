@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { getSectorConfig } from "@/lib/agent-prompts";
 import { normalizeSector } from "@/lib/sector-config";
-import { inferBudgetActions, type BudgetScope } from "@/lib/budget-engine";
+import { inferBudgetActions, normalizeBathroomCount, type BudgetScope } from "@/lib/budget-engine";
 import { buildDeterministicBudgetAnalysis } from "@/lib/budget-analysis-fallback";
 
 const anthropic = process.env.ANTHROPIC_API_KEY
@@ -91,7 +91,7 @@ export async function POST(request: Request) {
       : inferBudgetActions(`${service_type || ""} ${description || ""}`);
     const engineScope: BudgetScope = {
       superficie_m2: Math.max(Number(scope?.superficie_m2) || 80, 1),
-      num_banos: Math.max(Number(scope?.num_banos) || 1, 1),
+      num_banos: normalizeBathroomCount(scope?.num_banos),
       incluye_cocina: scope?.incluye_cocina ?? inferredActions.includes("cocina_montaje"),
       incluye_ventanas: scope?.incluye_ventanas ?? inferredActions.includes("carpinteria_exterior"),
       incluye_climatizacion: scope?.incluye_climatizacion ?? inferredActions.includes("climatizacion"),
@@ -429,7 +429,7 @@ REGLAS:
 - Estancias afectadas: ${(scope.estancias || []).join(", ") || "no seleccionadas"}
 - Actuaciones previstas: ${(scope.actuaciones || []).join(", ") || "no seleccionadas"}
 - Nivel de calidad: ${scope.calidad || "media"}
-- N. banos: ${scope.num_banos || 1}
+- N. banos afectados: ${engineScope.num_banos}
 - Incluye cocina: ${scope.incluye_cocina ? "si" : "no"}
 - Incluye cambio ventanas: ${scope.incluye_ventanas ? "si" : "no"}
 - Incluye climatizacion: ${scope.incluye_climatizacion ? "si" : "no"}

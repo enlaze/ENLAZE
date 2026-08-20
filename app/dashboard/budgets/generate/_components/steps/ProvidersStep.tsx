@@ -29,6 +29,9 @@ function buildBudgetMeta(state: BudgetState): PDFBudget {
   return {
     budget_number: state.draftId ? `PRE-${new Date().getFullYear()}` : `BORRADOR-${new Date().getFullYear()}`,
     title: state.title || "Presupuesto Generado",
+    client_name: state.clientName,
+    client_email: state.clientEmail,
+    client_phone: state.clientPhone,
     service_type: state.serviceType || state.sector,
     status: "pendiente",
     created_at: new Date().toISOString(),
@@ -36,6 +39,8 @@ function buildBudgetMeta(state: BudgetState): PDFBudget {
     iva_percent: state.ivaPercent,
     iva_amount: subtotal * (state.ivaPercent / 100),
     total: subtotal * (1 + state.ivaPercent / 100),
+    notes: state.internalNotes,
+    conditions_text: state.conditionsText,
     location: state.sectorData.ubicacion || null,
     geographic_profile: state.partidas.find((partida) => partida.geographic_profile)?.geographic_profile || "Media nacional",
     geographic_adjustment: state.partidas.some((partida) => partida.geographic_factor && partida.geographic_factor !== 1)

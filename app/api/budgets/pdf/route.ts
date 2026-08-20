@@ -11,6 +11,36 @@ interface FiscalSettings {
   phone?: string | null;
 }
 
+type PDFMode = "client" | "internal";
+
+function normalizedConcept(value: unknown) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function findInternalCost(item: Record<string, unknown>, wizardState: unknown) {
+  if (!wizardState || typeof wizardState !== "object") return Number(item.subtotal) || 0;
+  const state = wizardState as { partidas?: unknown; materials?: unknown };
+  const candidates = item.category === "material" && Array.isArray(state.materials)
+    ? state.materials
+    : Array.isArray(state.partidas)
+      ? state.partidas
+      : [];
+  const target = normalizedConcept(item.concept);
+  const match = candidates.find((candidate) => {
+    if (!candidate || typeof candidate !== "object") return false;
+    const record = candidate as Record<string, unknown>;
+    return normalizedConcept(record.concept || record.name) === target;
+  }) as Record<string, unknown> | undefined;
+  if (!match) return Number(item.subtotal) || 0;
+  const cost = Number(match.subtotal_cost ?? match.subtotal);
+  return Number.isFinite(cost) && cost >= 0 ? cost : Number(item.subtotal) || 0;
+}
+
 export async function POST(request: Request) {
   const cookieStore = await cookies();
   const supabase = createServerClient(
@@ -31,7 +61,9 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { budgetId } = await request.json();
+    const body = await request.json() as { budgetId?: unknown; mode?: unknown };
+    const budgetId = typeof body.budgetId === "string" ? body.budgetId : "";
+    const mode: PDFMode = body.mode === "internal" ? "internal" : "client";
     if (!budgetId) {
       return NextResponse.json({ error: "budgetId requerido" }, { status: 400 });
     }
@@ -41,11 +73,28 @@ export async function POST(request: Request) {
       .from("budgets")
       .select("*")
       .eq("id", budgetId)
+      .eq("user_id", user.id)
       .single();
 
     if (bErr || !budget) {
       return NextResponse.json({ error: "Presupuesto no encontrado" }, { status: 404 });
     }
+
+    const { data: selectedClient } = budget.client_id
+      ? await supabase
+          .from("clients")
+          .select("name, email, phone")
+          .eq("id", budget.client_id)
+          .eq("user_id", user.id)
+          .maybeSingle()
+      : { data: null };
+    const clientSnapshot = {
+      name: budget.client_name || selectedClient?.name || "",
+      email: budget.client_email || selectedClient?.email || "",
+      phone: budget.client_phone || selectedClient?.phone || "",
+      address: budget.client_address || "",
+      nif: budget.client_nif || "",
+    };
 
     // Load items
     const { data: items } = await supabase
@@ -87,11 +136,11 @@ export async function POST(request: Request) {
       {
         budget_number: budget.budget_number,
         title: budget.title,
-        client_name: budget.client_name,
-        client_email: budget.client_email,
-        client_phone: budget.client_phone,
-        client_address: budget.client_address,
-        client_nif: budget.client_nif || "",
+        client_name: clientSnapshot.name,
+        client_email: clientSnapshot.email,
+        client_phone: clientSnapshot.phone,
+        client_address: clientSnapshot.address,
+        client_nif: clientSnapshot.nif,
         service_type: budget.service_type,
         status: budget.status,
         created_at: budget.created_at,
@@ -128,8 +177,9 @@ export async function POST(request: Request) {
         unit: item.unit,
         unit_price: Number(item.unit_price) || 0,
         subtotal: Number(item.subtotal) || 0,
+        subtotal_cost: findInternalCost(item as Record<string, unknown>, budget.wizard_state),
       })),
-      "client",
+      mode,
     );
 
     // The browser prints this document using its native PDF engine. This keeps
@@ -140,6 +190,7 @@ export async function POST(request: Request) {
         "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "private, no-store",
         "X-Enlaze-PDF-Mode": "browser-print",
+        "X-Enlaze-PDF-Variant": mode,
       },
     });
   } catch (error: unknown) {

@@ -24,6 +24,7 @@ const TERMINAL_VISIBLE_MS = 12000;
 export default function PriceTrackerBackgroundStatus() {
   const pathname = usePathname();
   const activeRequestId = useRef<string | null>(null);
+  const overlayRef = useRef<HTMLElement | null>(null);
   const [request, setRequest] = useState<TrackerRequest | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
@@ -90,7 +91,38 @@ export default function PriceTrackerBackgroundStatus() {
     };
   }, []);
 
-  if (!request || pathname === "/dashboard/prices") return null;
+  const isOverlayVisible = Boolean(request && pathname !== "/dashboard/prices");
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const overlay = overlayRef.current;
+    const propertyName = "--enlaze-price-tracker-offset";
+
+    if (!isOverlayVisible || !overlay) {
+      root.style.removeProperty(propertyName);
+      return;
+    }
+
+    const updateOffset = () => {
+      const height = Math.ceil(overlay.getBoundingClientRect().height);
+      root.style.setProperty(propertyName, `${height + 16}px`);
+    };
+    updateOffset();
+
+    const observer = typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(updateOffset);
+    observer?.observe(overlay);
+    window.addEventListener("resize", updateOffset);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", updateOffset);
+      root.style.removeProperty(propertyName);
+    };
+  }, [isOverlayVisible]);
+
+  if (!isOverlayVisible || !request) return null;
 
   const cancelRequest = async () => {
     if (cancelling) return;
@@ -146,6 +178,8 @@ export default function PriceTrackerBackgroundStatus() {
 
   return (
     <aside
+      ref={overlayRef}
+      data-price-tracker-overlay="true"
       aria-live="polite"
       className={`fixed bottom-5 right-5 z-50 w-[min(360px,calc(100vw-2.5rem))] rounded-2xl border bg-white p-4 shadow-xl dark:bg-zinc-900 ${
         isFailed
