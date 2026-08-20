@@ -24,6 +24,7 @@ import {
   estimateRealisticTimeline,
   buildClientView,
   buildInternalView,
+  normalizeBathroomCount,
 } from "@/lib/budget-engine";
 import { buildDeterministicBudgetAnalysis } from "@/lib/budget-analysis-fallback";
 import {
@@ -806,7 +807,7 @@ export function BudgetGenerateProvider({
 
     const scope: BudgetScope = {
       superficie_m2: state.sectorData.superficie_m2 || state.aiInsights?.detected_area_m2 || 80,
-      num_banos: state.sectorData.num_banos || 1,
+      num_banos: normalizeBathroomCount(state.sectorData.num_banos),
       incluye_cocina: state.sectorData.incluye_cocina ?? true,
       incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
       incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,
@@ -1394,7 +1395,7 @@ export function BudgetGenerateProvider({
         actuaciones: resolvedActions,
         calidad: (state.sectorData.calidad as "basica" | "media" | "alta") || "media",
         superficie_m2: state.sectorData.superficie_m2 || 80,
-        num_banos: state.sectorData.num_banos || 1,
+        num_banos: normalizeBathroomCount(state.sectorData.num_banos),
         incluye_cocina: state.sectorData.incluye_cocina ?? true,
         incluye_ventanas: state.sectorData.incluye_ventanas ?? resolvedActions.includes("carpinteria_exterior"),
         incluye_climatizacion: state.sectorData.incluye_climatizacion ?? resolvedActions.includes("climatizacion"),
@@ -2069,7 +2070,7 @@ export function BudgetGenerateProvider({
             });
             const fbScope: BudgetScope = {
               superficie_m2: state.sectorData.superficie_m2 || 80,
-              num_banos: state.sectorData.num_banos || 1,
+              num_banos: normalizeBathroomCount(state.sectorData.num_banos),
               incluye_cocina: state.sectorData.incluye_cocina ?? true,
               incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
               incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,
@@ -2140,7 +2141,7 @@ export function BudgetGenerateProvider({
                 });
                 const gScope: BudgetScope = {
                   superficie_m2: state.sectorData.superficie_m2 || 80,
-                  num_banos: state.sectorData.num_banos || 1,
+                  num_banos: normalizeBathroomCount(state.sectorData.num_banos),
                   incluye_cocina: state.sectorData.incluye_cocina ?? true,
                   incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
                   incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,

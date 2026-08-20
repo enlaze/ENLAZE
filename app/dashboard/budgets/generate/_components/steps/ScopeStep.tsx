@@ -8,6 +8,7 @@ import { useSector } from "@/lib/sector-context";
 import { useToast } from "@/components/ui/toast";
 import { FileText, Ruler, UploadCloud } from "lucide-react";
 import { getGeographicCostProfile } from "@/lib/geographic-costs";
+import { normalizeBathroomCount } from "@/lib/budget-engine";
 
 interface ClientOption {
   id: string;
@@ -95,7 +96,7 @@ export function ScopeStep() {
   const selectedActuaciones: string[] = scopeData.actuaciones || [];
   const selectedCalidad: string = scopeData.calidad || "media";
   const superficieM2: number = scopeData.superficie_m2 || 0;
-  const numBanos: number = scopeData.num_banos || 1;
+  const numBanos = normalizeBathroomCount(scopeData.num_banos);
   const incluyeCocina: boolean = scopeData.incluye_cocina ?? true;
   const incluyeVentanas: boolean = scopeData.incluye_ventanas ?? false;
   const incluyeClimatizacion: boolean = scopeData.incluye_climatizacion ?? false;
@@ -643,7 +644,7 @@ export function ScopeStep() {
               />
             </div>
             <div>
-              <label className={labelCls}>Nº de baños</label>
+              <label className={labelCls}>Nº de baños afectados</label>
               <input
                 type="number"
                 min="0"

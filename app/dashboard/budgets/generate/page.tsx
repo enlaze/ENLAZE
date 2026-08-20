@@ -240,8 +240,8 @@ export default function GenerateBudgetPage() {
           ← Volver a presupuestos
         </Link>
         <PageHeader
-          title="Generador de presupuestos (Pro)"
-          description="Asistente interactivo conectado a mercado real y sugerencias de IA."
+          title="Presupuesto inteligente"
+          description="Crea presupuestos realistas con precios de mercado y asistencia de IA."
         />
       </div>
 

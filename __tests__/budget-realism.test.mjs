@@ -1,15 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import {
   adjustToMarket,
   applyMaterialBasketToItems,
   buildDeterministicBudgetItems,
+  buildScopeQuantities,
   buildScopeMaterials,
   getAffectedArea,
   getMarketRange,
   getRequestedChapters,
   inferBudgetActions,
   normalizeBudgetItemsToScope,
+  normalizeBathroomCount,
 } from "../lib/budget-engine.ts";
 import { buildDeterministicBudgetAnalysis } from "../lib/budget-analysis-fallback.ts";
 
@@ -44,6 +47,45 @@ test("selected rooms and actions constrain area, chapters and materials", () => 
   const chapters = normalizeBudgetItemsToScope(partial, [], 1.2).map((item) => item.chapter);
   assert.deepEqual(new Set(chapters), new Set(["impermeabilizacion", "pintura", "sanitarios"]));
   assert.ok(buildScopeMaterials(partial).every((material) => chapters.includes(material.linked_chapter)));
+});
+
+test("a painting budget can target one room with zero bathrooms", () => {
+  const paintingScope = {
+    ...fullScope,
+    num_banos: 0,
+    incluye_cocina: true,
+    incluye_ventanas: false,
+    incluye_climatizacion: false,
+    estancias: ["salon"],
+    actuaciones: ["pintura"],
+  };
+  const quantities = buildScopeQuantities(paintingScope);
+  const items = buildDeterministicBudgetItems(paintingScope, 1.2);
+
+  assert.equal(normalizeBathroomCount(0), 0);
+  assert.equal(normalizeBathroomCount(undefined), 1);
+  assert.equal(quantities.bathroomsCount, 0);
+  assert.equal(quantities.kitchenIncluded, false);
+  assert.equal(quantities.wetWallArea, 0);
+  assert.ok(items.length >= 4);
+  assert.ok(items.every((item) => item.chapter === "pintura"));
+  assert.ok(buildScopeMaterials(paintingScope).every((material) => material.linked_chapter === "pintura"));
+});
+
+test("the UI and API preserve zero bathrooms and use the new title", async () => {
+  const [pageSource, scopeSource, providerSource, apiSource] = await Promise.all([
+    readFile(new URL("../app/dashboard/budgets/generate/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/dashboard/budgets/generate/_components/steps/ScopeStep.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/dashboard/budgets/generate/_components/BudgetGenerateProvider.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/agent/budget-analysis/route.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(pageSource, /title="Presupuesto inteligente"/);
+  assert.match(scopeSource, /Nº de baños afectados/);
+  assert.match(scopeSource, /min="0"/);
+  assert.doesNotMatch(scopeSource, /scopeData\.num_banos \|\| 1/);
+  assert.doesNotMatch(providerSource, /num_banos: state\.sectorData\.num_banos \|\| 1/);
+  assert.match(apiSource, /num_banos: normalizeBathroomCount\(scope\?\.num_banos\)/);
 });
 
 test("resolved material basket replaces the provisional component instead of being added twice", () => {

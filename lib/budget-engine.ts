@@ -18,6 +18,13 @@ export interface BudgetScope {
   ubicacion: string;
 }
 
+export function normalizeBathroomCount(value: unknown, fallback = 1): number {
+  if (value === null || value === undefined || value === "") return fallback;
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return fallback;
+  return Math.min(10, Math.max(0, Math.round(numericValue)));
+}
+
 export interface ScopeQuantities {
   floorArea: number;
   demolitionArea: number;
@@ -222,12 +229,19 @@ export function getAffectedArea(scope: BudgetScope): number {
 
 export function buildScopeQuantities(scope: BudgetScope): ScopeQuantities {
   const area = getAffectedArea(scope);
-  const banos = Math.max(scope.num_banos || 1, 1);
+  const configuredBathrooms = normalizeBathroomCount(scope.num_banos);
+  const rooms = Array.from(new Set((scope.estancias || []).filter(Boolean)));
+  const wholeProperty = rooms.length === 0 || rooms.includes("vivienda_completa");
+  const selectedBathrooms = rooms.filter((room) => /^bano_\d+$/.test(room)).length;
+  const banos = wholeProperty
+    ? configuredBathrooms
+    : Math.min(configuredBathrooms, selectedBathrooms);
+  const kitchenIncluded = scope.incluye_cocina && (wholeProperty || rooms.includes("cocina"));
   const avgBathroomM2 = 5;
   const avgKitchenM2 = Math.min(Math.max(area * 0.08, 6), 14);
 
   // Wet areas: bathrooms + kitchen if included
-  const wetFloorArea = banos * avgBathroomM2 + (scope.incluye_cocina ? avgKitchenM2 : 0);
+  const wetFloorArea = banos * avgBathroomM2 + (kitchenIncluded ? avgKitchenM2 : 0);
   // Wall height ~2.5m, perimeter approx = 4 * sqrt(area)
   const perimeter = 4 * Math.sqrt(area);
   const wallHeight = 2.5;
@@ -243,7 +257,7 @@ export function buildScopeQuantities(scope: BudgetScope): ScopeQuantities {
     wallPaintArea: Math.round(totalWallArea - wetWallArea),
     wetWallArea: Math.round(wetWallArea),
     bathroomsCount: banos,
-    kitchenIncluded: scope.incluye_cocina,
+    kitchenIncluded,
     windowsCountEstimated: scope.incluye_ventanas ? Math.max(Math.ceil(area / 15), 3) : 0,
     electricalPointsEstimated: Math.round(area * 0.7),
     wasteContainersEstimated: Math.max(Math.ceil(area / 30), 2),
@@ -1277,8 +1291,8 @@ export function estimateRealisticTimeline(
   items: EnginePartida[]
 ): RealisticTimeline {
   const area = getAffectedArea(scope);
-  const banos = Math.max(scope.num_banos || 0, 1);
   const quantities = buildScopeQuantities({ ...scope, superficie_m2: area });
+  const banos = quantities.bathroomsCount;
   const includedItems = items.filter((item) => item.status !== "opcional");
   const chapters = new Set(includedItems.map((item) => item.chapter));
   const phases: TimelinePhase[] = [];
