@@ -123,10 +123,73 @@ export interface MarketAdjustResult {
   marketCeiling: number;
 }
 
+const ACTION_CHAPTERS: Record<string, string[]> = {
+  demoliciones: ["demoliciones", "protecciones", "residuos", "seguridad"],
+  albanileria: ["albanileria", "protecciones", "seguridad"],
+  electricidad: ["electricidad"],
+  iluminacion: ["electricidad"],
+  fontaneria: ["fontaneria"],
+  climatizacion: ["climatizacion"],
+  alicatados: ["revestimientos", "impermeabilizacion"],
+  pavimentos: ["pavimentos", "rodapie"],
+  pintura: ["pintura"],
+  carpinteria_interior: ["carpinteria_interior"],
+  carpinteria_exterior: ["carpinteria_exterior"],
+  cocina_montaje: ["cocina"],
+  banos_sanitarios: ["sanitarios", "impermeabilizacion"],
+  limpieza_final: ["limpieza"],
+  gestion_residuos: ["residuos"],
+};
+
+/**
+ * Chapters explicitly selected by the user. A null result means the user did
+ * not constrain the scope, so the integral/default flow remains available.
+ * Safety and waterproofing chapters are included only when technically tied
+ * to an explicit action.
+ */
+export function getRequestedChapters(scope: BudgetScope): Set<string> | null {
+  const actions = (scope.actuaciones || []).filter(Boolean);
+  if (actions.length === 0) return null;
+
+  const chapters = new Set<string>();
+  for (const action of actions) {
+    for (const chapter of ACTION_CHAPTERS[action] || [action]) chapters.add(chapter);
+  }
+  return chapters;
+}
+
+/**
+ * Estimate the surface actually affected by the selected rooms. The total
+ * dwelling area remains the upper bound. This prevents a kitchen-only job in
+ * a 145 m2 home from being priced as if all 145 m2 were refurbished.
+ */
+export function getAffectedArea(scope: BudgetScope): number {
+  const totalArea = Math.max(Number(scope.superficie_m2) || 60, 20);
+  const rooms = Array.from(new Set((scope.estancias || []).filter(Boolean)));
+  if (rooms.length === 0 || rooms.includes("vivienda_completa")) return totalArea;
+
+  const fixedOrRelative: Record<string, number> = {
+    cocina: Math.min(Math.max(totalArea * 0.08, 6), 14),
+    bano_1: 5,
+    bano_2: 5,
+    salon: totalArea * 0.25,
+    dormitorios: totalArea * 0.35,
+    pasillo: totalArea * 0.12,
+    terraza: totalArea * 0.12,
+    otros: totalArea * 0.10,
+  };
+
+  const selectedArea = rooms.reduce(
+    (sum, room) => sum + (fixedOrRelative[room] || totalArea * 0.10),
+    0,
+  );
+  return Math.round(Math.min(totalArea, Math.max(selectedArea, 3)) * 10) / 10;
+}
+
 // ─── A. Scope Quantities ────────────────────────────────────────────────────
 
 export function buildScopeQuantities(scope: BudgetScope): ScopeQuantities {
-  const area = Math.max(scope.superficie_m2 || 60, 20);
+  const area = getAffectedArea(scope);
   const banos = Math.max(scope.num_banos || 1, 1);
   const avgBathroomM2 = 5;
   const avgKitchenM2 = Math.min(Math.max(area * 0.08, 6), 14);
@@ -203,12 +266,15 @@ export function normalizeBudgetItemsToScope(
   marginMultiplier: number
 ): EnginePartida[] {
   const q = buildScopeQuantities(scope);
+  const requestedChapters = getRequestedChapters(scope);
 
   // 1. Assign chapter to each item
-  const tagged = items.map(item => ({
-    ...item,
-    chapter: item.chapter || detectChapter(item.concept, item.description),
-  }));
+  const tagged = items
+    .map(item => ({
+      ...item,
+      chapter: item.chapter || detectChapter(item.concept, item.description),
+    }))
+    .filter(item => !requestedChapters || requestedChapters.has(item.chapter));
 
   // 2. Correct quantities based on chapter
   const corrected = tagged.map(item => {
@@ -265,7 +331,6 @@ export function normalizeBudgetItemsToScope(
 
     // Bathroom-related: scale by bathroom count
     if (ch === "sanitarios") {
-      const concept = item.concept.toLowerCase();
       if (u === "pa" || u === "global" || u === "lote") {
         // If it's a PA for "all bathrooms", scale the price, not qty
         // But if qty is 1 and we have 2+ banos, adjust
@@ -312,6 +377,7 @@ export function normalizeBudgetItemsToScope(
     chapter: string, concept: string, desc: string,
     qty: number, unit: string, price: number, cat: string
   ) => {
+    if (requestedChapters && !requestedChapters.has(chapter)) return;
     const id = `scope-${chapter}-${nextIdx++}`;
     // Avoid adding if we already have this chapter
     if (existingChapters.has(chapter)) return;
@@ -546,8 +612,11 @@ const MATERIAL_SPECS: MaterialSpec[] = [
 export function buildScopeMaterials(scope: BudgetScope): EngineMaterial[] {
   const q = buildScopeQuantities(scope);
   const qualityMult = scope.calidad === "alta" ? 1.35 : scope.calidad === "basica" ? 0.75 : 1.0;
+  const requestedChapters = getRequestedChapters(scope);
 
-  return MATERIAL_SPECS.map((spec, idx) => {
+  return MATERIAL_SPECS
+    .filter((spec) => !requestedChapters || requestedChapters.has(spec.chapter))
+    .map((spec, idx) => {
     const qty = spec.qtyFn(q);
     const adjustedPrice = Math.round(spec.unit_price * qualityMult * 100) / 100;
     return {
@@ -563,7 +632,89 @@ export function buildScopeMaterials(scope: BudgetScope): EngineMaterial[] {
       isRealData: false,
       sourceType: "market_reference",
     };
+    });
+}
+
+/**
+ * Replace the provisional material component of each chapter with the current
+ * material basket. The basket is evidence for the chapter cost, not an extra
+ * charge, so this prevents materials from being counted twice.
+ */
+export function applyMaterialBasketToItems(
+  items: EnginePartida[],
+  materials: EngineMaterial[],
+  marginMultiplier: number,
+): EnginePartida[] {
+  const authoritativeSources = new Set([
+    "user_catalog", "manual_locked", "private_tariff", "negotiated",
+    "historical_approved", "preferred_supplier", "provider_updated",
+    "n8n_market", "authorized_supplier", "web_search", "private_bc3",
+    "technical_bank",
+  ]);
+  const basketByChapter = new Map<string, { total: number; verified: boolean }>();
+  for (const material of materials) {
+    if (!material.included) continue;
+    const current = basketByChapter.get(material.linked_chapter);
+    const isVerified = Boolean(
+      material.isRealData || authoritativeSources.has(String(material.sourceType || "")),
+    );
+    basketByChapter.set(
+      material.linked_chapter,
+      {
+        total: (current?.total || 0) + material.subtotal,
+        verified: (current?.verified ?? true) && isVerified,
+      },
+    );
+  }
+
+  const itemIndexesByChapter = new Map<string, number[]>();
+  items.forEach((item, index) => {
+    if (authoritativeSources.has(String(item.price_source || ""))) return;
+    if (!item.cost_breakdown || item.cost_breakdown.material_cost <= 0) return;
+    const indexes = itemIndexesByChapter.get(item.chapter) || [];
+    indexes.push(index);
+    itemIndexesByChapter.set(item.chapter, indexes);
   });
+
+  const result = items.map((item) => ({ ...item }));
+  for (const [chapter, indexes] of itemIndexesByChapter) {
+    const basket = basketByChapter.get(chapter);
+    if (!(basket && basket.total > 0)) continue;
+    const provisionalMaterialCost = indexes.reduce(
+      (sum, index) => sum + (items[index].cost_breakdown?.material_cost || 0),
+      0,
+    );
+    if (provisionalMaterialCost <= 0) continue;
+
+    for (const index of indexes) {
+      const item = items[index];
+      const previousMaterialCost = item.cost_breakdown?.material_cost || 0;
+      const share = previousMaterialCost / provisionalMaterialCost;
+      const resolvedMaterialCost = basket.total * share;
+      const subtotalCost = Math.max(
+        item.subtotal_cost - previousMaterialCost + resolvedMaterialCost,
+        0,
+      );
+      const unitPrice = subtotalCost / Math.max(item.quantity, 1);
+      result[index] = {
+        ...item,
+        unit_price: Math.round(unitPrice * 100) / 100,
+        subtotal_cost: Math.round(subtotalCost * 100) / 100,
+        unit_price_client: Math.round(unitPrice * marginMultiplier * 100) / 100,
+        subtotal_client: Math.round(subtotalCost * marginMultiplier * 100) / 100,
+        cost_breakdown: item.cost_breakdown ? {
+          ...item.cost_breakdown,
+          material_cost: Math.round(resolvedMaterialCost * 100) / 100,
+          pvp: Math.round(subtotalCost * marginMultiplier * 100) / 100,
+          margin: Math.round(subtotalCost * (marginMultiplier - 1) * 100) / 100,
+          source: basket.verified ? "tracker_material_basket" : "mixed_material_basket",
+          price_type: basket.verified ? "real" : "market_ref",
+        } : undefined,
+      };
+    }
+  }
+
+  return result;
 }
 
 // ─── E. Market Adjustment ───────────────────────────────────────────────────
@@ -573,24 +724,56 @@ export function getMarketRange(
   serviceType: string
 ): { min: number; max: number } {
   const st = serviceType.toLowerCase();
-  const qualityMult = scope.calidad === "alta" ? 1.35 : scope.calidad === "basica" ? 0.75 : 1.0;
+  const qualityMult = scope.calidad === "alta" ? 1.35 : scope.calidad === "basica" ? 0.80 : 1.0;
+  const affectedArea = getAffectedArea(scope);
 
-  let minPerM2 = 400;
-  let maxPerM2 = 900;
+  let minPerM2 = 350;
+  let maxPerM2 = 1000;
 
-  if (st.includes("integral") || st.includes("completa")) {
-    minPerM2 = 500; maxPerM2 = 1200;
+  const actionBands: Record<string, [number, number]> = {
+    demoliciones: [35, 90],
+    albanileria: [80, 220],
+    electricidad: [80, 180],
+    iluminacion: [25, 90],
+    fontaneria: [70, 190],
+    climatizacion: [70, 180],
+    alicatados: [70, 180],
+    pavimentos: [60, 180],
+    pintura: [25, 70],
+    carpinteria_interior: [70, 220],
+    carpinteria_exterior: [120, 350],
+    cocina_montaje: [120, 350],
+    banos_sanitarios: [120, 350],
+    limpieza_final: [8, 25],
+    gestion_residuos: [15, 50],
+  };
+
+  const selectedActions = Array.from(new Set((scope.actuaciones || []).filter(Boolean)));
+  if (selectedActions.length > 0) {
+    const actionRange = selectedActions.reduce(
+      (range, action) => {
+        const band = actionBands[action] || [30, 100];
+        return { min: range.min + band[0], max: range.max + band[1] };
+      },
+      { min: 0, max: 0 },
+    );
+    minPerM2 = Math.max(actionRange.min, 25);
+    maxPerM2 = Math.max(actionRange.max, minPerM2 * 1.35);
+  } else if (st.includes("obra nueva")) {
+    minPerM2 = 1300; maxPerM2 = 2600;
+  } else if (st.includes("integral") || st.includes("completa") || st === "reforma") {
+    minPerM2 = 750; maxPerM2 = 1600;
   } else if (st.includes("baño") || st.includes("cocina")) {
-    minPerM2 = 600; maxPerM2 = 1500;
+    minPerM2 = 850; maxPerM2 = 2200;
   } else if (st.includes("parcial") || st.includes("pintura")) {
-    minPerM2 = 100; maxPerM2 = 400;
+    minPerM2 = 150; maxPerM2 = 650;
   }
 
   // Location adjustment
   const loc = (scope.ubicacion || "").toLowerCase();
   let locationMult = 1.0;
   if (/madrid|barcelona|baleares|pais vasco|bilbao|san sebastian|ibiza|mallorca/.test(loc)) {
-    locationMult = 1.18;
+    locationMult = 1.12;
   } else if (/valencia|alicante|malaga|sevilla|murcia|granada/.test(loc)) {
     locationMult = 1.0;
   } else if (/interior|rural|zamora|teruel|soria|caceres|badajoz/.test(loc)) {
@@ -601,8 +784,8 @@ export function getMarketRange(
   maxPerM2 = Math.round(maxPerM2 * qualityMult * locationMult);
 
   return {
-    min: minPerM2 * scope.superficie_m2,
-    max: maxPerM2 * scope.superficie_m2,
+    min: minPerM2 * affectedArea,
+    max: maxPerM2 * affectedArea,
   };
 }
 
@@ -639,10 +822,11 @@ export function adjustToMarket(
   items: EnginePartida[],
   materials: EngineMaterial[],
   serviceType: string,
-  marginMultiplier: number
+  marginMultiplier: number,
+  materialsIncludedInItems = false,
 ): MarketAdjustResult {
   // ─── GUARD A: SAFE AREA ──────────────────────────────────────────────
-  const rawArea = scope.superficie_m2;
+  const rawArea = getAffectedArea(scope);
   if (!rawArea || rawArea <= 0) {
     return {
       items,
@@ -667,7 +851,9 @@ export function adjustToMarket(
 
   const computeCurrentPerM2 = () => {
     const itemsTotal = items.reduce((s, i) => s + i.subtotal_client, 0);
-    const matsTotal = materials.filter(m => m.included).reduce((s, m) => s + m.subtotal, 0);
+    const matsTotal = materialsIncludedInItems
+      ? 0
+      : materials.filter(m => m.included).reduce((s, m) => s + m.subtotal, 0);
     const total = itemsTotal + matsTotal * marginMultiplier;
     return total / area;
   };
@@ -710,7 +896,9 @@ export function adjustToMarket(
 
   // ─── Calculate current total ─────────────────────────────────────────
   const itemsTotal = items.reduce((s, i) => s + i.subtotal_client, 0);
-  const matsTotal = materials.filter(m => m.included).reduce((s, m) => s + m.subtotal, 0);
+  const matsTotal = materialsIncludedInItems
+    ? 0
+    : materials.filter(m => m.included).reduce((s, m) => s + m.subtotal, 0);
   const matsTotalWithMargin = matsTotal * marginMultiplier;
   const currentClientTotal = itemsTotal + matsTotalWithMargin;
   const currentPerM2 = currentClientTotal / area;
@@ -733,12 +921,43 @@ export function adjustToMarket(
 
   // ─── Below floor → scale proportionally ──────────────────────────────
   const targetTotal = marketFloor;
-  const scaleFactor = targetTotal / (currentClientTotal || 1);
+  const authoritativeSources = new Set([
+    "user_catalog", "manual_locked", "private_tariff", "negotiated",
+    "historical_approved", "preferred_supplier", "provider_updated",
+    "n8n_market", "authorized_supplier", "web_search", "private_bc3",
+    "technical_bank",
+  ]);
+  const isAuthoritative = (source?: string) => authoritativeSources.has(String(source || ""));
+  const scalableItemsTotal = items
+    .filter((item) => !isAuthoritative(item.price_source))
+    .reduce((sum, item) => sum + item.subtotal_client, 0);
+  const scalableMaterialsTotal = materialsIncludedInItems ? 0 : materials
+    .filter((material) => material.included && !material.isRealData && !isAuthoritative(material.sourceType))
+    .reduce((sum, material) => sum + material.subtotal * marginMultiplier, 0);
+  const scalableTotal = scalableItemsTotal + scalableMaterialsTotal;
+
+  if (scalableTotal <= 0) {
+    return {
+      items,
+      materials,
+      adjusted: false,
+      adjustmentType: "none",
+      message: `El importe queda por debajo de la referencia (${Math.round(currentPerM2)} EUR/m2), pero no se alteran precios ya comprobados. Revisa cantidades o alcance.`,
+      isUndervalued: true,
+      pricePerM2: Math.round(currentPerM2),
+      marketFloor: Math.round(floorPerM2),
+      marketCeiling: Math.round(ceilingPerM2),
+    };
+  }
+
+  const shortfall = Math.max(targetTotal - currentClientTotal, 0);
+  const scaleFactor = 1 + shortfall / scalableTotal;
   const adjustedAt = new Date().toISOString();
   const reason = "Ajustado al mínimo realista de mercado";
 
   // Scale items and tag them
   const scaledItems = items.map(p => {
+    if (isAuthoritative(p.price_source)) return p;
     const originalUnitPrice = p.unit_price;
     const newPrice = Math.round(originalUnitPrice * scaleFactor * 100) / 100;
     const newSubtotalCost = Math.round(p.quantity * newPrice * 100) / 100;
@@ -781,7 +1000,8 @@ export function adjustToMarket(
   // Non-included materials: returned as-is (not scaled, not tagged).
   // sourceType is preserved.
   const scaledMaterials = materials.map(m => {
-    if (!m.included) return m;
+    if (materialsIncludedInItems) return m;
+    if (!m.included || m.isRealData || isAuthoritative(m.sourceType)) return m;
 
     const originalUnitPrice = m.unit_price;
     const newPrice = Math.round(originalUnitPrice * scaleFactor * 100) / 100;
@@ -801,7 +1021,9 @@ export function adjustToMarket(
   });
 
   const newItemsTotal = scaledItems.reduce((s, i) => s + i.subtotal_client, 0);
-  const newMatsTotal = scaledMaterials.filter(m => m.included).reduce((s, m) => s + m.subtotal, 0);
+  const newMatsTotal = materialsIncludedInItems
+    ? 0
+    : scaledMaterials.filter(m => m.included).reduce((s, m) => s + m.subtotal, 0);
   const newTotal = newItemsTotal + newMatsTotal * marginMultiplier;
   const newPerM2 = newTotal / area;
 

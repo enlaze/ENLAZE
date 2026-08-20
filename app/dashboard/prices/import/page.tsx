@@ -40,6 +40,7 @@ interface AnalysisResult {
   invalid_rows: number;
   detected_columns: string[];
   suggested_mapping: ColumnMapping;
+  rows?: ImportRow[];
   preview: ImportRow[];
   warnings: string[];
   errors: string[];
@@ -113,7 +114,7 @@ export default function ImportPricesPage() {
   }, []);
 
   const acceptedFormats = importMode === "generic"
-    ? ".csv,.tsv,.txt,.xlsx,.xls"
+    ? ".csv,.tsv,.txt,.xlsx,.xls,.pdf"
     : ".csv,.tsv,.txt";
 
   /* ── Generic analyze ────────────────────────────────────────────── */
@@ -234,8 +235,9 @@ export default function ImportPricesPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          rows: analysis.preview.filter((r) => r.is_valid),
+          rows: (analysis.rows || analysis.preview).filter((r) => r.is_valid),
           provider_name: providerName.trim(),
+          source_name: `${analysis.file_type.toUpperCase()} · ${analysis.file_name}`,
         }),
       });
 
@@ -278,7 +280,7 @@ export default function ImportPricesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Importar precios"
-        description="Sube CSV, XLSX, o importa desde bases de precios de construcción"
+        description="Sube CSV, Excel o PDF, o importa desde bases de precios de construcción"
         breadcrumbs={[
           { label: "Catálogo de precios", href: "/dashboard/prices" },
           { label: "Importar" },
@@ -295,11 +297,10 @@ export default function ImportPricesPage() {
           >
             <div className="mb-3"><FileText className="h-8 w-8 text-[#00c896]" /></div>
             <h3 className="text-base font-semibold text-navy-900 dark:text-white">
-              CSV / Excel de proveedor
+              Tarifa de proveedor (CSV, Excel o PDF)
             </h3>
             <p className="mt-1.5 text-sm text-navy-500 dark:text-zinc-400">
-              Importa tarifas de cualquier proveedor desde archivos CSV (.csv, .tsv) o Excel (.xlsx, .xls).
-              Detecta columnas automáticamente.
+              Importa tarifas desde CSV, Excel o PDF. En los PDF, la IA extrae solo los productos que muestran un precio explícito.
             </p>
           </button>
 
@@ -395,7 +396,7 @@ export default function ImportPricesPage() {
               <p className="mb-4 text-sm text-navy-600 dark:text-zinc-400">
                 {importMode === "source"
                   ? "Arrastra el CSV exportado desde la fuente"
-                  : "Arrastra un CSV o XLSX de tu proveedor"
+                  : "Arrastra un CSV, Excel o PDF de tu proveedor"
                 }
               </p>
               <input
@@ -487,6 +488,7 @@ export default function ImportPricesPage() {
           )}
 
           {/* Column mapping */}
+          {analysis.file_type !== "pdf" ? (
           <div className="rounded-2xl border border-navy-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
             <h3 className="mb-4 text-sm font-semibold text-navy-900 dark:text-white">Mapeo de columnas</h3>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
@@ -516,6 +518,11 @@ export default function ImportPricesPage() {
               {loading ? "Re-analizando..." : "Aplicar mapeo"}
             </button>
           </div>
+          ) : (
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 text-sm text-blue-800 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-300">
+              La IA ha leído las tablas del PDF. Revisa nombres, unidades y precios en la vista previa; no se importan referencias sin precio visible.
+            </div>
+          )}
 
           {/* Preview table */}
           <div className="rounded-2xl border border-navy-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">

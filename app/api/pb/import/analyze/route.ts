@@ -1,7 +1,7 @@
 /**
  * POST /api/pb/import/analyze
  *
- * Uploads a CSV or XLSX file and returns a preview with validation + column mapping.
+ * Uploads a CSV, XLSX or supplier PDF and returns validated price rows.
  *
  * Body: multipart/form-data
  *   - file: CSV (.csv, .tsv, .txt) or Excel (.xlsx, .xls)
@@ -14,11 +14,13 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { analyzeCSV, analyzeXLSX, type ColumnMapping } from "@/lib/price-import";
+import { analyzePricePDF } from "@/lib/pdf-price-import";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const CSV_EXTENSIONS = [".csv", ".tsv", ".txt"];
 const XLSX_EXTENSIONS = [".xlsx", ".xls"];
-const VALID_EXTENSIONS = [...CSV_EXTENSIONS, ...XLSX_EXTENSIONS];
+const PDF_EXTENSIONS = [".pdf"];
+const VALID_EXTENSIONS = [...CSV_EXTENSIONS, ...XLSX_EXTENSIONS, ...PDF_EXTENSIONS];
 
 export async function POST(request: Request) {
   const cookieStore = await cookies();
@@ -75,8 +77,23 @@ export async function POST(request: Request) {
     }
 
     const isXLSX = XLSX_EXTENSIONS.includes(ext);
+    const isPDF = PDF_EXTENSIONS.includes(ext);
 
-    if (isXLSX) {
+    if (isPDF) {
+      if (!process.env.ANTHROPIC_API_KEY) {
+        return NextResponse.json(
+          { error: "La lectura inteligente de PDF no está configurada" },
+          { status: 503 },
+        );
+      }
+      const buffer = await file.arrayBuffer();
+      const analysis = await analyzePricePDF(buffer, process.env.ANTHROPIC_API_KEY);
+      return NextResponse.json({
+        ...analysis,
+        file_name: file.name,
+        file_size: file.size,
+      });
+    } else if (isXLSX) {
       const buffer = await file.arrayBuffer();
       const sheetIndex = sheetIndexStr ? parseInt(sheetIndexStr, 10) : 0;
       const analysis = await analyzeXLSX(buffer, customMapping, sheetIndex);

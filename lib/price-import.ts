@@ -1,7 +1,7 @@
 /**
  * price-import.ts
  *
- * Parses uploaded CSV/XLSX/BC3 files into a preview format, validates rows,
+ * Parses uploaded CSV/XLSX/PDF/BC3 files into a preview format, validates rows,
  * and inserts confirmed rows into the Price Bank V2 tables.
  *
  * Workflow:
@@ -20,7 +20,7 @@ import crypto from "crypto";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type ImportFileType = "csv" | "xlsx" | "bc3";
+export type ImportFileType = "csv" | "xlsx" | "pdf" | "bc3";
 
 export interface ColumnMapping {
   /** CSV column name → target field */
@@ -54,6 +54,8 @@ export interface ImportAnalysis {
   invalid_rows: number;
   detected_columns: string[];
   suggested_mapping: ColumnMapping;
+  /** Complete validated payload used on confirmation. */
+  rows: ImportRow[];
   preview: ImportRow[];
   warnings: string[];
   errors: string[];
@@ -197,6 +199,38 @@ const SKU_PATTERNS = /^(sku|c[oó]digo|code|ref|referencia|reference|ean|c[oó]d
 const CATEGORY_PATTERNS = /^(categor[ií]a|category|cap[ií]tulo|chapter|tipo|type|familia)$/i;
 const DESC_PATTERNS = /^(descripci[oó]n_larga|long_description|detalle|detail|notas|notes|observaciones)$/i;
 
+/** Parse Spanish and international price formats without confusing thousands and decimals. */
+export function parseLocalizedPrice(value: unknown): number {
+  const raw = String(value ?? "")
+    .trim()
+    .replace(/\s/g, "")
+    .replace(/[^0-9,.-]/g, "");
+  if (!raw) return 0;
+
+  const comma = raw.lastIndexOf(",");
+  const dot = raw.lastIndexOf(".");
+  let normalized = raw;
+
+  if (comma >= 0 && dot >= 0) {
+    const decimalSeparator = comma > dot ? "," : ".";
+    const thousandsSeparator = decimalSeparator === "," ? "." : ",";
+    normalized = raw.split(thousandsSeparator).join("");
+    if (decimalSeparator === ",") normalized = normalized.replace(",", ".");
+  } else if (comma >= 0) {
+    const decimals = raw.length - comma - 1;
+    normalized = decimals > 0 && decimals <= 2
+      ? raw.replace(/\./g, "").replace(",", ".")
+      : raw.replace(/,/g, "");
+  } else if (dot >= 0) {
+    const dotCount = (raw.match(/\./g) || []).length;
+    const decimals = raw.length - dot - 1;
+    if (dotCount > 1 || decimals === 3) normalized = raw.replace(/\./g, "");
+  }
+
+  const parsed = Number.parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function suggestMapping(headers: string[]): ColumnMapping {
   const mapping: ColumnMapping = {
     name: null,
@@ -261,6 +295,7 @@ export function analyzeCSV(
       invalid_rows: 0,
       detected_columns: [],
       suggested_mapping: { name: null, unit: null, unit_price: null, brand: null, sku: null, category: null, description: null },
+      rows: [],
       preview: [],
       warnings,
       errors: ["El archivo está vacío o no tiene cabeceras"],
@@ -296,9 +331,9 @@ export function analyzeCSV(
     const name = getVal(row, mapping.name);
     if (!name) rowErrors.push("Nombre vacío");
 
-    const priceStr = getVal(row, mapping.unit_price).replace(/[€$,]/g, "").replace(",", ".");
-    const unit_price = parseFloat(priceStr) || 0;
-    if (mapping.unit_price && isNaN(parseFloat(priceStr))) {
+    const rawPrice = getVal(row, mapping.unit_price);
+    const unit_price = parseLocalizedPrice(rawPrice);
+    if (mapping.unit_price && rawPrice.trim() && !(unit_price > 0)) {
       rowErrors.push("Precio no numérico");
     }
 
@@ -326,6 +361,7 @@ export function analyzeCSV(
     invalid_rows: importRows.length - validCount,
     detected_columns: headers,
     suggested_mapping: mapping,
+    rows: importRows,
     preview: importRows.slice(0, 50), // Max 50 rows in preview
     warnings,
     errors,
@@ -361,6 +397,7 @@ export async function analyzeXLSX(
         name: null, unit: null, unit_price: null,
         brand: null, sku: null, category: null, description: null,
       },
+      rows: [],
       preview: [],
       warnings,
       errors: [msg],
@@ -388,6 +425,7 @@ export async function analyzeXLSX(
         name: null, unit: null, unit_price: null,
         brand: null, sku: null, category: null, description: null,
       },
+      rows: [],
       preview: [],
       warnings,
       errors: ["El archivo está vacío o no tiene cabeceras"],
@@ -419,11 +457,9 @@ export async function analyzeXLSX(
     const name = getVal(row, mapping.name);
     if (!name) rowErrors.push("Nombre vacío");
 
-    const priceStr = getVal(row, mapping.unit_price)
-      .replace(/[€$,]/g, "")
-      .replace(",", ".");
-    const unit_price = parseFloat(priceStr) || 0;
-    if (mapping.unit_price && isNaN(parseFloat(priceStr))) {
+    const rawPrice = getVal(row, mapping.unit_price);
+    const unit_price = parseLocalizedPrice(rawPrice);
+    if (mapping.unit_price && rawPrice.trim() && !(unit_price > 0)) {
       rowErrors.push("Precio no numérico");
     }
 
@@ -451,6 +487,7 @@ export async function analyzeXLSX(
     invalid_rows: importRows.length - validCount,
     detected_columns: headers,
     suggested_mapping: mapping,
+    rows: importRows,
     preview: importRows.slice(0, 50),
     warnings,
     errors,

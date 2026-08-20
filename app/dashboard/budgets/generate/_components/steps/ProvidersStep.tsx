@@ -5,7 +5,6 @@ import { Store, Package } from "lucide-react";
 import { useBudgetGenerate, type BudgetState } from "../BudgetGenerateProvider";
 import { Card } from "@/components/ui/card";
 import type { PDFBudget } from "@/lib/pdf-generator";
-import { resolveMarketPrices, type PriceRequest, type QualityTier } from "@/lib/price-resolver";
 
 const SECTOR_REFERENCE_PROVIDERS = [
   { name: "Leroy Merlin", specialty: "Materiales, equipamiento y reforma" },
@@ -53,9 +52,7 @@ function buildBudgetMeta(state: BudgetState): PDFBudget {
 
 /** Build legacy flat items array for the old PDF generator (fallback) */
 function buildLegacyPDFItems(state: BudgetState, mode: "client" | "internal") {
-  const marginMultiplier = 1 + (state.marginPercent / 100);
-  return [
-    ...state.partidas.filter(p => p.status !== "opcional").map(p => ({
+  return state.partidas.filter(p => p.status !== "opcional").map(p => ({
       concept: p.concept,
       description: p.description,
       category: p.category,
@@ -64,22 +61,11 @@ function buildLegacyPDFItems(state: BudgetState, mode: "client" | "internal") {
       unit_price: p.unit_price_client,
       subtotal: p.subtotal_client,
       ...(mode === "internal" ? { subtotal_cost: p.subtotal_cost } : {}),
-    })),
-    ...state.materials.filter(m => m.included).map(m => ({
-      concept: m.name,
-      description: "Material",
-      category: "material",
-      quantity: m.quantity,
-      unit: m.unit,
-      unit_price: m.unit_price * marginMultiplier,
-      subtotal: m.subtotal * marginMultiplier,
-      ...(mode === "internal" ? { subtotal_cost: m.subtotal } : {}),
-    })),
-  ];
+    }));
 }
 
 export function ProvidersStep() {
-  const { state, setSelectedProvider, updateMaterial, setUseSuggestedMaterials } = useBudgetGenerate();
+  const { state, setSelectedProvider, updateMaterial, setUseSuggestedMaterials, analyzeWithAI } = useBudgetGenerate();
   const { providerOptions, selectedProviderId, materials, useSuggestedMaterials } = state;
   const [showCompare, setShowCompare] = useState(false);
   const [isRefreshingPrices, setIsRefreshingPrices] = useState(false);
@@ -102,73 +88,32 @@ export function ProvidersStep() {
     setPriceRefreshResult(null);
 
     try {
-      // Build PriceRequest list from current materials
-      const qualityTier: QualityTier = state.sectorData.calidad || "media";
-      const location: string = state.sectorData.ubicacion || "";
-
-      const priceRequests: PriceRequest[] = materials
-        .filter(m => m.included)
-        .map(m => ({
-          materialName: m.name,
-          category: (m as any).category || "material",
-          unit: m.unit,
-          quantity: m.quantity,
-          qualityTier,
-          location,
-        }));
-
-      if (priceRequests.length === 0) {
+      if (materials.filter((material) => material.included).length === 0) {
         setPriceRefreshResult({ ok: false, message: "No hay materiales seleccionados para actualizar." });
         return;
       }
 
-      const result = await resolveMarketPrices({
-        materials: priceRequests,
-        location,
-        forceRefresh: true,
-      });
-
-      if (result.ok && result.resolved.length > 0) {
-        // Update material prices with resolved prices
-        for (const rp of result.resolved) {
-          const mat = materials.find(m =>
-            m.name.toLowerCase().includes(rp.normalizedName) ||
-            rp.normalizedName.includes(m.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""))
-          );
-          if (mat && rp.selectedPrice > 0) {
-            updateMaterial(mat.id, {
-              unit_price: rp.selectedPrice,
-              subtotal: rp.selectedPrice * mat.quantity,
-              sourceType: rp.sourceType,
-              isRealData: rp.sourceType !== "estimated",
-              sourceName: rp.selectedSupplier || "Rastreador ENLAZE",
-              sourceUrl: rp.sourceUrl || undefined,
-              priceCheckedAt: rp.capturedAt || undefined,
-              confidenceScore: rp.confidenceScore,
-            });
-          }
-        }
-
+      const refreshed = await analyzeWithAI(true);
+      if (refreshed) {
         setPriceRefreshResult({
           ok: true,
-          message: `Verificación completada: ${result.summary.fromN8n || 0} del rastreador, ${result.summary.fromWebSearch} web y ${result.summary.estimated} estimados`,
-          summary: result.summary,
+          message: "Presupuesto recalculado con el rastreador y el banco técnico actuales.",
         });
       } else {
         setPriceRefreshResult({
           ok: false,
-          message: result.error || "No se pudieron actualizar los precios. Se mantienen los estimados.",
+          message: "No se pudieron actualizar los precios. Se mantienen los importes anteriores.",
         });
       }
-    } catch (err: any) {
+    } catch (error: unknown) {
       setPriceRefreshResult({
         ok: false,
-        message: err.message || "Error al conectar con el servidor de precios.",
+        message: error instanceof Error ? error.message : "Error al conectar con el servidor de precios.",
       });
     } finally {
       setIsRefreshingPrices(false);
     }
-  }, [isRefreshingPrices, materials, state, updateMaterial]);
+  }, [analyzeWithAI, isRefreshingPrices, materials]);
 
   /** Badge props for source/provider status. Provider match/missing flags take priority when present. */
   const getBadgeProps = (sourceType?: string, isRealData?: boolean, material?: any) => {

@@ -15,8 +15,10 @@ import {
   normalizeBudgetItemsToScope,
   calculateItemCostBreakdown,
   buildScopeMaterials,
+  applyMaterialBasketToItems,
   adjustToMarket,
   getMarketRange,
+  getAffectedArea,
   estimateRealisticTimeline,
   buildClientView,
   buildInternalView,
@@ -63,7 +65,12 @@ export interface Partida {
   base_unit_price?: number;
   geographic_factor?: number;
   geographic_profile?: string;
-  price_source?: "base_nacional" | "geographic_adjustment";
+  price_source?: string;
+  price_source_detail?: string;
+  price_checked_at?: string;
+  confidence_score?: number;
+  cost_breakdown?: EnginePartida["cost_breakdown"];
+  market_adjustment?: EnginePartida["market_adjustment"];
   estimated_hours?: number;
 }
 
@@ -375,6 +382,35 @@ function buildTrackerProviderOptions(materials: Material[]): ProviderOption[] {
   return options;
 }
 
+function integrateMaterialBasket(
+  partidas: Partida[],
+  materials: Material[],
+  marginPercent: number,
+): Partida[] {
+  const marginMultiplier = 1 + marginPercent / 100;
+  return applyMaterialBasketToItems(
+    partidas.map((partida) => ({
+      ...partida,
+      chapter: partida.chapter || "otros",
+      status: partida.status || "incluida",
+    })),
+    materials.map((material) => ({
+      id: material.id,
+      name: material.name,
+      quantity: material.quantity,
+      unit: material.unit,
+      unit_price: material.unit_price,
+      subtotal: material.subtotal,
+      included: material.included,
+      provider_id: material.provider_id || "sin-proveedor",
+      linked_chapter: material.linkedChapter || inferMaterialChapter(material.name),
+      isRealData: Boolean(material.isRealData),
+      sourceType: material.sourceType || "estimated",
+    })),
+    marginMultiplier,
+  );
+}
+
 export interface BudgetState {
   draftId: string | null;
   lastSavedAt: string | null;
@@ -454,6 +490,15 @@ export interface BudgetState {
     trackerProductsAvailable: number;
     lastVerifiedAt: string | null;
     location: string;
+  };
+  realismAudit: {
+    effectiveAreaM2: number;
+    pricePerM2: number;
+    marketMinPerM2: number;
+    marketMaxPerM2: number;
+    verifiedItems: number;
+    totalItems: number;
+    recalculatedAt: string | null;
   };
   /** When true, materials came from AI and should NOT be overwritten by the provider useEffect */
   materialsFromAI: boolean;
@@ -548,6 +593,15 @@ export function BudgetGenerateProvider({
       trackerProductsAvailable: 0,
       lastVerifiedAt: null,
       location: "",
+    },
+    realismAudit: {
+      effectiveAreaM2: 0,
+      pricePerM2: 0,
+      marketMinPerM2: 0,
+      marketMaxPerM2: 0,
+      verifiedItems: 0,
+      totalItems: 0,
+      recalculatedAt: null,
     },
     materialsFromAI: false,
     analysisDirty: false,
@@ -719,13 +773,6 @@ export function BudgetGenerateProvider({
       }
     });
 
-    // In a real scenario, materials cost might be already included in directCost,
-    // but for this wizard demo, we will add them up to show the impact.
-    directCost += materialsCost;
-    const marginMultiplier = 1 + (state.marginPercent / 100);
-    // Add margin over materials too
-    clientPrice += (materialsCost * marginMultiplier);
-
     const profit = clientPrice - directCost;
 
     setState(prev => ({
@@ -889,6 +936,7 @@ export function BudgetGenerateProvider({
           ...prev,
           selectedProviderId: id,
           materials: enriched as Material[],
+          partidas: integrateMaterialBasket(prev.partidas, enriched as Material[], prev.marginPercent),
         };
       }
 
@@ -906,20 +954,25 @@ export function BudgetGenerateProvider({
         ...prev,
         selectedProviderId: id,
         materials: filtered,
+        partidas: integrateMaterialBasket(prev.partidas, filtered, prev.marginPercent),
       };
     });
   };
 
   const updateMaterial = (id: string, updates: Partial<Material>) => {
-    setState(prev => ({
-      ...prev,
-      materials: prev.materials.map(m => {
+    setState(prev => {
+      const materials = prev.materials.map(m => {
         if (m.id !== id) return m;
         const updated = { ...m, ...updates };
         updated.subtotal = updated.quantity * updated.unit_price;
         return updated;
-      })
-    }));
+      });
+      return {
+        ...prev,
+        materials,
+        partidas: integrateMaterialBasket(prev.partidas, materials, prev.marginPercent),
+      };
+    });
   };
 
   const setUseSuggestedMaterials = (val: boolean) => {
@@ -1169,6 +1222,10 @@ export function BudgetGenerateProvider({
         ...prev.priceVerification,
         ...(savedState.priceVerification || {}),
       },
+      realismAudit: {
+        ...prev.realismAudit,
+        ...(savedState.realismAudit || {}),
+      },
     }));
   };
 
@@ -1217,7 +1274,16 @@ export function BudgetGenerateProvider({
   };
 
   const analyzeWithAI = async (forceRegenerate = false): Promise<boolean> => {
-    if (!state.description || state.description.trim().length < 5) return true;
+    const hasStructuredScope =
+      Number(state.sectorData.superficie_m2) > 0 &&
+      (state.serviceType || (state.sectorData.actuaciones || []).length > 0);
+    if (!hasStructuredScope && (!state.description || state.description.trim().length < 5)) {
+      setState((prev) => ({
+        ...prev,
+        analysisError: "Indica la superficie y el tipo de obra, o añade una descripción breve.",
+      }));
+      return false;
+    }
 
     // Include scope data in hash so changes to estancias/calidad/superficie trigger re-analysis
     const scopeStr = JSON.stringify({
@@ -1260,7 +1326,7 @@ export function BudgetGenerateProvider({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sector: state.sector,
-          description: state.description,
+          description: state.description || "Presupuesto definido mediante las selecciones estructuradas del formulario.",
           service_type: state.serviceType,
           project_id: state.projectId,
           technical_document_ids: state.sectorData.technical_document_ids || [],
@@ -1427,18 +1493,10 @@ export function BudgetGenerateProvider({
             }))
           : buildScopeMaterials(engineScope);
 
-        // D) Market adjustment (idempotent)
-        const adjustResult = adjustToMarket(
-          engineScope, withCosts, engineMats, serviceType, marginMultiplier
-        );
-
-        isUndervalued = adjustResult.isUndervalued;
-        marketAdjustMessage = adjustResult.message;
-
-        if (adjustResult.adjusted) {
-          priceWarnings.push(adjustResult.message);
-          pricingConfidence = Math.min(pricingConfidence, 65);
-        }
+        // D) Keep the normalized base until both technical partidas and
+        // commercial materials have been checked. Market calibration happens
+        // afterwards and never changes an authoritative tracked price.
+        const adjustResult = { items: withCosts, materials: engineMats };
 
         // Convert back to Partida format
         finalPartidas = adjustResult.items.map(ep => ({
@@ -1455,6 +1513,8 @@ export function BudgetGenerateProvider({
           subtotal_client: ep.subtotal_client,
           status: ep.status,
           estimated_hours: ep.estimated_hours,
+          cost_breakdown: ep.cost_breakdown,
+          market_adjustment: ep.market_adjustment,
         }));
 
         // Convert engine materials to Material format
@@ -1574,6 +1634,7 @@ export function BudgetGenerateProvider({
             location: engineScope.ubicacion,
           })),
           location: engineScope.ubicacion,
+          forceRefresh: forceRegenerate,
         });
 
         if (priceResult.ok) {
@@ -1645,6 +1706,136 @@ export function BudgetGenerateProvider({
           );
         }
       }
+
+      // Resolve complete budget lines against private tariffs and technical
+      // banks (including imported BC3). Commercial product matches are only
+      // accepted for material/supply lines; labour and services require a
+      // technical or user-controlled source.
+      let verifiedPartidaCount = 0;
+      if (finalPartidas.length > 0) {
+        const qualityTier: QualityTier = (engineScope.calidad as QualityTier) || "media";
+        const partidasPriceResult = await resolveMarketPrices({
+          materials: finalPartidas.map((partida) => ({
+            materialName: partida.concept,
+            category: partida.chapter || partida.category || "otros",
+            unit: partida.unit,
+            quantity: partida.quantity,
+            qualityTier,
+            location: engineScope.ubicacion,
+          })),
+          location: engineScope.ubicacion,
+          forceRefresh: forceRegenerate,
+        });
+
+        if (partidasPriceResult.ok) {
+          const technicalSources = new Set([
+            "user_catalog", "manual_locked", "private_tariff", "negotiated",
+            "historical_approved", "private_bc3", "technical_bank", "enlaze_base",
+          ]);
+
+          finalPartidas = finalPartidas.map((partida, index) => {
+            const resolved = partidasPriceResult.resolved[index];
+            const isSupplyLine = partida.category === "material";
+            const canUseResolved =
+              resolved &&
+              resolved.selectedPrice > 0 &&
+              !isEstimateSourceType(resolved.sourceType) &&
+              (isSupplyLine || technicalSources.has(String(resolved.sourceType)));
+
+            if (!canUseResolved) return partida;
+            verifiedPartidaCount += 1;
+            const unitPrice = Math.round(resolved.selectedPrice * 100) / 100;
+            return {
+              ...partida,
+              base_unit_price: unitPrice,
+              geographic_factor: 1,
+              geographic_profile: "Precio del banco técnico o tarifa vinculada",
+              price_source: String(resolved.sourceType),
+              price_source_detail:
+                resolved.selectedProductName || resolved.selectedSupplier || "Banco de precios ENLAZE",
+              price_checked_at: resolved.capturedAt,
+              confidence_score: resolved.confidenceScore,
+              unit_price: unitPrice,
+              subtotal_cost: unitPrice * partida.quantity,
+              unit_price_client: unitPrice * marginMultiplier,
+              subtotal_client: unitPrice * partida.quantity * marginMultiplier,
+            };
+          });
+        } else {
+          priceWarnings.push(
+            partidasPriceResult.error || "No se pudo contrastar las partidas con el banco técnico.",
+          );
+        }
+      }
+
+      const engineMaterialsForBasket: EngineMaterial[] = finalMaterials.map((material) => ({
+        id: material.id,
+        name: material.name,
+        quantity: material.quantity,
+        unit: material.unit,
+        unit_price: material.unit_price,
+        subtotal: material.subtotal,
+        included: material.included,
+        provider_id: material.provider_id || "sin-proveedor",
+        linked_chapter: material.linkedChapter || inferMaterialChapter(material.name),
+        isRealData: Boolean(material.isRealData),
+        sourceType: material.sourceType || "estimated",
+      }));
+      finalPartidas = applyMaterialBasketToItems(
+        finalPartidas.map((partida) => ({
+          ...partida,
+          chapter: partida.chapter || "otros",
+          status: partida.status || "incluida",
+        })),
+        engineMaterialsForBasket,
+        marginMultiplier,
+      );
+
+      // Final coherence pass after every authoritative source has been applied.
+      // Only estimated lines may be calibrated; tracked and imported prices are
+      // preserved exactly as received.
+      const finalMarketAdjustment = adjustToMarket(
+        engineScope,
+        finalPartidas.map((partida) => ({
+          ...partida,
+          chapter: partida.chapter || "otros",
+          status: partida.status || "incluida",
+        })),
+        engineMaterialsForBasket,
+        serviceType,
+        marginMultiplier,
+        true,
+      );
+
+      finalPartidas = finalMarketAdjustment.items.map((partida) => ({ ...partida }));
+      finalMaterials = finalMarketAdjustment.materials.map((material) => {
+        const previous = finalMaterials.find((candidate) => candidate.id === material.id);
+        return {
+          ...previous,
+          ...material,
+          linkedChapter: material.linked_chapter,
+        } as Material;
+      });
+      isUndervalued = finalMarketAdjustment.isUndervalued;
+      marketAdjustMessage = finalMarketAdjustment.message;
+      if (finalMarketAdjustment.message) priceWarnings.push(finalMarketAdjustment.message);
+      if (finalMarketAdjustment.adjusted) pricingConfidence = Math.min(pricingConfidence, 75);
+
+      const effectiveAreaM2 = getAffectedArea(engineScope);
+      const finalMarketRange = getMarketRange(engineScope, serviceType);
+      const finalClientTotal =
+        finalPartidas
+          .filter((partida) => partida.status !== "opcional")
+          .reduce((sum, partida) => sum + partida.subtotal_client, 0);
+      const realismAudit: BudgetState["realismAudit"] = {
+        effectiveAreaM2,
+        pricePerM2: effectiveAreaM2 > 0 ? finalClientTotal / effectiveAreaM2 : 0,
+        marketMinPerM2: effectiveAreaM2 > 0 ? finalMarketRange.min / effectiveAreaM2 : 0,
+        marketMaxPerM2: effectiveAreaM2 > 0 ? finalMarketRange.max / effectiveAreaM2 : 0,
+        verifiedItems: verifiedPartidaCount,
+        totalItems: finalPartidas.length,
+        recalculatedAt: new Date().toISOString(),
+      };
 
       // --- Timeline via engine ---
       const engineTimelineScope: BudgetScope = {
@@ -1776,6 +1967,7 @@ export function BudgetGenerateProvider({
         isAnalyzing: false,
         lastAnalysisHash: currentHash,
         priceVerification,
+        realismAudit,
         materialsFromAI: finalMaterials.length > 0,
         partidas: finalPartidas.length > 0 ? finalPartidas : prev.partidas,
         materials: finalMaterials.length > 0 ? finalMaterials : prev.materials,

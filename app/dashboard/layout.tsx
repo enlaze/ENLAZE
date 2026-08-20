@@ -10,6 +10,7 @@ import ShortcutsOverlay from "@/components/ShortcutsOverlay";
 import ThemeToggle from "@/components/ThemeToggle";
 import { SectorProvider, useSector } from "@/lib/sector-context";
 import PriceTrackerBackgroundStatus from "@/components/PriceTrackerBackgroundStatus";
+import PlatformAssistant from "@/components/PlatformAssistant";
 import { useToast } from "@/components/ui/toast";
 import { analytics, resetAnalytics } from "@/lib/analytics";
 import { setSentryUser } from "@/lib/sentry";
@@ -319,6 +320,9 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
 
       {/* El rastreo continúa en n8n aunque el usuario cambie de pantalla. */}
       <PriceTrackerBackgroundStatus />
+
+      {/* Ayuda contextual con texto, dictado y lectura en voz alta. */}
+      <PlatformAssistant />
 
       {/* Keyboard shortcuts help (press ?) */}
       <ShortcutsOverlay />

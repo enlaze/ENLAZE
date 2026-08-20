@@ -65,8 +65,14 @@ export async function POST(request: Request) {
       technical_document_ids,
     } = body;
 
-    if (!description || description.trim().length < 5) {
-      return NextResponse.json({ error: "Descripcion insuficiente" }, { status: 400 });
+    const hasStructuredScope =
+      Number(scope?.superficie_m2) > 0 &&
+      (Boolean(service_type) || (Array.isArray(scope?.actuaciones) && scope.actuaciones.length > 0));
+    if (!hasStructuredScope && (!description || description.trim().length < 5)) {
+      return NextResponse.json(
+        { error: "Indica superficie y tipo de obra, o añade una descripción breve" },
+        { status: 400 },
+      );
     }
 
     const activeSector = normalizeSector(sector || "construccion");
@@ -226,19 +232,15 @@ INSTRUCCIONES POR ZONA GEOGRAFICA:
     let pricingInstructions = "";
     if (activeSector === "construccion") {
       pricingInstructions = `
-INSTRUCCIONES CRITICAS DE PRECIO PARA CONSTRUCCION EN ESPANA (2024-2026):
-- Reforma INTEGRAL de vivienda: 500-1200 EUR/m2 (media 700-800 EUR/m2)
-- Reforma de BANO completo: 600-1500 EUR/m2 del bano
-- Reforma de COCINA completa: 600-1400 EUR/m2 de cocina
-- Reforma PARCIAL (pintura, suelos): 100-400 EUR/m2
-- Obra nueva residencial: 900-1800 EUR/m2
-
-DEBES detectar el area en m2 de la descripcion. Si no se indica, estima un area razonable (ej: piso estandar 80-100m2, bano 4-6m2, cocina 8-12m2).
-DEBES verificar que tu presupuesto total dividido por el area cae DENTRO del rango esperado.
-Si tu calculo da menos de 500 EUR/m2 para una reforma integral, SUBE los precios unitarios hasta que encaje.
+INSTRUCCIONES CRITICAS PARA CONSTRUCCION:
+- La superficie, estancias, actuaciones, calidad y ubicacion del FORMULARIO son vinculantes.
+- No uses la descripcion para ampliar el alcance ni para cambiar una seleccion del formulario.
+- Si solo se seleccionan algunas estancias, calcula cantidades para esas estancias, no para toda la vivienda.
+- Si hay actuaciones seleccionadas, genera exclusivamente esas actuaciones y sus auxiliares tecnicamente imprescindibles.
+- Los unit_cost son provisionales: no los presentes como precios comprobados. ENLAZE los contrastara despues con tarifas, BC3 y rastreador.
 
 NIVEL DE DETALLE OBLIGATORIO PARA CONSTRUCCION:
-Para una reforma integral de vivienda, DEBES generar MINIMO 20 partidas (suggested_items) organizadas por capitulos. Ejemplo de capitulos obligatorios:
+Solo para una reforma integral sin actuaciones limitadas, genera MINIMO 20 partidas (suggested_items) organizadas por capitulos. Ejemplo de capitulos:
 1. Trabajos previos y protecciones
 2. Demoliciones y retirada de escombros
 3. Albanileria y tabiqueria
@@ -388,13 +390,13 @@ REGLAS:
 1. No envuelvas el JSON en markdown, devuelve SOLO el objeto JSON.
 2. suggested_items incluye TODAS las partidas: mano de obra, servicios, instalaciones. Cada una con su chapter.
 3. suggested_materials son los materiales fisicos necesarios (NO mano de obra). Cada uno con supplier_name.
-4. Genera datos coherentes con el alcance descrito y los precios de mercado espanol.
-5. Para construccion: MINIMO 20 suggested_items y MINIMO 15 suggested_materials en una reforma integral.
+4. Genera datos coherentes con el alcance estructurado; la descripcion solo complementa.
+5. Para construccion integral: MINIMO 20 suggested_items y MINIMO 15 suggested_materials. Para alcance parcial, incluye solo las actuaciones seleccionadas con el detalle necesario.
 6. Incluye SIEMPRE estimated_timeline y calendar_phases.
 7. Incluye SIEMPRE estimated_price_range con el rango de mercado para el tipo de trabajo.
 8. Incluye estimated_hours en cada partida y depends_on en cada fase para poder planificar la ejecucion.
 9. Los precios de suggested_materials son provisionales hasta que el rastreador confirme una coincidencia.
-10. Los precios deben ser REALISTAS para el mercado espanol actual (2024-2026).`;
+10. No afirmes que un precio es real o actual: la verificacion ocurre despues en el motor de ENLAZE.`;
 
     const userPrompt = scope
       ? `DATOS ESTRUCTURADOS DEL PROYECTO (FUENTE PRINCIPAL — usa estos datos para dimensionar partidas, cantidades y precios):
@@ -416,8 +418,9 @@ INSTRUCCIONES:
 1. Genera partidas para CADA actuacion seleccionada, dimensionadas segun la superficie y estancias.
 2. Si el usuario marca "cocina", genera capitulo de cocina. Si marca "ventanas", genera carpinteria exterior. Etc.
 3. La cantidad de cada partida debe calcularse a partir de los m2, banos, estancias y documentos tecnicos indicados.
-4. Para construccion necesito MINIMO 20 partidas y 15 materiales. Los precios de producto son provisionales hasta la verificacion del rastreador.
-5. La duracion debe ser realista para el alcance descrito y debe incluir dependencias entre fases.`
+4. Si no hay actuaciones limitadas y es una reforma integral, genera MINIMO 20 partidas y 15 materiales. Si hay actuaciones seleccionadas, no añadas capítulos ajenos a ellas.
+5. La duracion debe ser realista para el alcance estructurado y debe incluir dependencias entre fases.
+6. Si la descripcion contradice el formulario, ignora la contradiccion y conserva el formulario.`
       : `Analiza esta peticion de presupuesto y genera la estructura JSON completa:
 
 Descripcion:

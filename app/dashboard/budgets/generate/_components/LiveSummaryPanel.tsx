@@ -5,7 +5,7 @@ import { Building2, BarChart3, Sparkles } from "lucide-react";
 import { useBudgetGenerate } from "./BudgetGenerateProvider";
 
 export function LiveSummaryPanel() {
-  const { state, nextStep, saveDraft } = useBudgetGenerate();
+  const { state, nextStep, saveDraft, analyzeWithAI } = useBudgetGenerate();
   const { totals, marginPercent, sector, providerOptions, selectedProviderId, materials, isRealDataMode } = state;
   const isConstruction = sector === "construccion";
 
@@ -21,14 +21,19 @@ export function LiveSummaryPanel() {
     (isRealDataMode && activeProvider?.isRealData && activeProvider?.name !== "Banco ENLAZE base" && activeProvider?.name !== "Referencia mercado");
 
   // EUR/m2 calculation — user scope always takes priority
-  let detectedArea = state.sectorData?.superficie_m2 || state.aiInsights?.detected_area_m2;
+  let detectedArea = state.realismAudit.effectiveAreaM2 || state.sectorData?.superficie_m2 || state.aiInsights?.detected_area_m2;
   if (!detectedArea && isConstruction) {
     const match = (state.description || "").match(/(\d+)\s*(m2|metros|m²)/i);
     if (match) detectedArea = parseInt(match[1], 10);
   }
   const pricePerM2 = detectedArea && detectedArea > 0 ? totals.clientPrice / detectedArea : null;
 
-  let priceRange = state.aiInsights?.estimated_price_range;
+  let priceRange = state.realismAudit.recalculatedAt && detectedArea
+    ? {
+        min: state.realismAudit.marketMinPerM2 * detectedArea,
+        max: state.realismAudit.marketMaxPerM2 * detectedArea,
+      }
+    : state.aiInsights?.estimated_price_range;
   if (!priceRange && detectedArea && detectedArea > 0 && isConstruction) {
     const serviceType = (state.serviceType || state.description || "").toLowerCase();
     let minExpected = 400;
@@ -138,15 +143,15 @@ export function LiveSummaryPanel() {
       <div className="space-y-4 mb-6">
         <div className="flex justify-between items-center text-sm">
           <span className="text-navy-600 dark:text-zinc-400">
-            {isConstruction ? "Mano de obra y servicios" : "Coste de ejecucion"}
+            {isConstruction ? "Coste de ejecución por partidas" : "Coste de ejecución"}
           </span>
-          <span className="font-semibold text-navy-900 dark:text-white">{(totals.directCost - totals.materialsCost).toFixed(2)} EUR</span>
+          <span className="font-semibold text-navy-900 dark:text-white">{totals.directCost.toFixed(2)} EUR</span>
         </div>
 
         {isConstruction && (
           <div className="flex justify-between items-center text-sm">
             <span className="text-navy-600 dark:text-zinc-400">
-              Materiales ({includedMaterialsCount})
+              Cesta de materiales incluida ({includedMaterialsCount})
             </span>
             <div className="flex items-center gap-2">
               {!isMaterialBasketReal && includedMaterialsCount > 0 && (
@@ -155,6 +160,12 @@ export function LiveSummaryPanel() {
               <span className="font-semibold text-navy-900 dark:text-white">{totals.materialsCost.toFixed(2)} EUR</span>
             </div>
           </div>
+        )}
+
+        {isConstruction && includedMaterialsCount > 0 && (
+          <p className="-mt-2 text-[10px] leading-4 text-navy-400 dark:text-zinc-500">
+            La cesta actualiza el componente de material de las partidas; no se suma una segunda vez.
+          </p>
         )}
 
         <div className="flex justify-between items-center text-sm">
@@ -195,7 +206,7 @@ export function LiveSummaryPanel() {
             </div>
             {priceRange && detectedArea && (
               <div className="flex justify-between items-center mt-1">
-                <span className="text-[10px] text-navy-400 dark:text-zinc-500">Rango mercado ({detectedArea}m2)</span>
+                <span className="text-[10px] text-navy-400 dark:text-zinc-500">Rango para alcance afectado ({detectedArea}m2)</span>
                 <span className="text-[10px] text-navy-400 dark:text-zinc-500">
                   {(priceRange.min / detectedArea).toFixed(0)}-{(priceRange.max / detectedArea).toFixed(0)} EUR/m2
                 </span>
@@ -402,6 +413,17 @@ export function LiveSummaryPanel() {
             La propuesta ha cambiado desde el último análisis. Pulsa "Generar con IA" en el paso de Partidas para recalcular.
           </p>
         </div>
+      )}
+
+      {state.partidas.length > 0 && (
+        <button
+          type="button"
+          onClick={() => analyzeWithAI(true)}
+          disabled={state.isAnalyzing}
+          className="mb-3 w-full rounded-xl border border-brand-green/40 bg-brand-green/10 px-4 py-2.5 text-sm font-bold text-brand-green transition hover:bg-brand-green/20 disabled:opacity-50"
+        >
+          {state.isAnalyzing ? "Recalculando con precios actuales..." : "Volver a calcular presupuesto"}
+        </button>
       )}
 
       <div className="mt-6 flex flex-col gap-2">

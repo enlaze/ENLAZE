@@ -1,16 +1,13 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
-import { Sparkles, Construction } from "lucide-react";
-import { useBudgetGenerate, Partida } from "../BudgetGenerateProvider";
+import React from "react";
+import { RefreshCw, Construction, Database } from "lucide-react";
+import { useBudgetGenerate } from "../BudgetGenerateProvider";
 import { Card } from "@/components/ui/card";
-import { useToast } from "@/components/ui/toast";
 
 export function ItemsStep() {
   const { state, addPartida, updatePartida, removePartida, analyzeWithAI } = useBudgetGenerate();
   const { partidas } = state;
-
-  const [editingId, setEditingId] = useState<string | null>(null);
 
   const handleAdd = () => {
     addPartida({ concept: "Nueva partida", quantity: 1, unit_price: 0 });
@@ -31,15 +28,40 @@ export function ItemsStep() {
             >
               + Añadir partida
             </button>
-            <button 
+            <button
               onClick={() => analyzeWithAI(true)}
               disabled={state.isAnalyzing}
-              className="hidden sm:flex px-4 py-2 bg-brand-green/20 text-brand-green border border-brand-green/30 rounded-lg text-sm font-bold items-center gap-2 hover:bg-brand-green/30 transition disabled:opacity-50"
+              className="flex px-4 py-2 bg-brand-green text-navy-900 border border-brand-green rounded-lg text-sm font-bold items-center gap-2 hover:bg-brand-green/90 transition disabled:opacity-50"
             >
-              <Sparkles className="h-4 w-4" /> {state.isAnalyzing ? "Regenerando propuesta con IA..." : "Generar con IA"}
+              <RefreshCw className={`h-4 w-4 ${state.isAnalyzing ? "animate-spin" : ""}`} />
+              {state.isAnalyzing ? "Recalculando..." : "Volver a calcular"}
             </button>
           </div>
         </div>
+
+        {(state.realismAudit.recalculatedAt || state.analysisError) && (
+          <div className="border-b border-navy-100 bg-navy-50/70 px-6 py-4 dark:border-zinc-800 dark:bg-zinc-800/40">
+            {state.analysisError ? (
+              <p className="text-sm font-medium text-red-600 dark:text-red-400">{state.analysisError}</p>
+            ) : (
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-navy-600 dark:text-zinc-300">
+                <span className="inline-flex items-center gap-1.5 font-semibold text-navy-900 dark:text-white">
+                  <Database className="h-3.5 w-3.5 text-brand-green" />
+                  {state.realismAudit.verifiedItems}/{state.realismAudit.totalItems} partidas contrastadas
+                </span>
+                <span>
+                  Alcance calculado: <strong>{state.realismAudit.effectiveAreaM2.toFixed(1)} m2</strong>
+                </span>
+                <span>
+                  Materiales verificados: <strong>{state.priceVerification.verified}/{state.priceVerification.total}</strong>
+                </span>
+                <span>
+                  Resultado: <strong>{state.realismAudit.pricePerM2.toFixed(0)} EUR/m2</strong>
+                </span>
+              </div>
+            )}
+          </div>
+        )}
         
         {partidas.length === 0 ? (
           <div className="text-center py-12 bg-navy-50 dark:bg-zinc-900/50">
@@ -107,6 +129,14 @@ export function ItemsStep() {
                             title={p.geographic_profile}
                           >
                             Zona ×{p.geographic_factor.toFixed(2)}
+                          </span>
+                        )}
+                        {p.price_source && !["base_nacional", "geographic_adjustment"].includes(p.price_source) && (
+                          <span
+                            className="text-[10px] font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 rounded px-2 py-1"
+                            title={p.price_source_detail || "Precio contrastado"}
+                          >
+                            Banco verificado · {Math.round((p.confidence_score || 0) * 100)}%
                           </span>
                         )}
                       </div>
