@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import {
   buildLocalAssistantAnswer,
   suggestPathForQuestion,
@@ -22,4 +23,30 @@ test("las preguntas con tildes también encuentran su sección", () => {
     suggestPathForQuestion("¿Dónde añado una medición al proyecto?"),
     "/dashboard/projects",
   );
+});
+
+test("la ayuda ofrece una conversación de voz continua e interrumpible", async () => {
+  const source = await readFile(
+    new URL("../components/PlatformAssistant.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /Iniciar conversación por voz/);
+  assert.match(source, /recognition\.interimResults = true/);
+  assert.match(source, /utterance\.onend = finishSpeaking/);
+  assert.match(source, /startListeningRef\.current\(\)/);
+  assert.match(source, /Interrumpir y hablar/);
+  assert.match(source, /speechSynthesis\.cancel\(\)/);
+  assert.match(source, /voice_mode: conversationModeRef\.current/);
+});
+
+test("el servidor adapta las respuestas al modo hablado", async () => {
+  const source = await readFile(
+    new URL("../app/api/platform-assistant/route.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /const voiceMode = body\.voice_mode === true/);
+  assert.match(source, /Habla como una persona cercana y profesional/);
+  assert.match(source, /una sola pregunta aclaratoria/);
 });
