@@ -11,6 +11,7 @@ interface ChatMessage {
   content: string;
   suggestedPath?: string | null;
   suggestedLabel?: string | null;
+  responseMode?: "ai" | "local";
 }
 
 interface BrowserSpeechRecognition {
@@ -89,6 +90,7 @@ export default function PlatformAssistant() {
         content: answer,
         suggestedPath: data.suggested_path,
         suggestedLabel: data.suggested_label,
+        responseMode: data.mode === "local" ? "local" : "ai",
       }]);
       if (response.ok) speak(answer);
     } catch {
@@ -176,6 +178,11 @@ export default function PlatformAssistant() {
                     : "rounded-bl-md border border-navy-100 bg-white text-navy-800 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
                 }`}>
                   <p className="whitespace-pre-wrap">{message.content}</p>
+                  {message.role === "assistant" && message.responseMode === "local" && (
+                    <p className="mt-1.5 text-[10px] text-navy-400 dark:text-zinc-500">
+                      Guía local · la IA avanzada no está disponible temporalmente
+                    </p>
+                  )}
                   {message.suggestedPath && message.suggestedLabel && (
                     <Link
                       href={message.suggestedPath}

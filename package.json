@@ -15,6 +15,7 @@
     "test:construction-webhook": "node --test __tests__/construction-webhook-idempotency.test.mjs",
     "test:budget-realism": "node --import tsx --test __tests__/budget-realism.test.mjs",
     "test:price-import": "node --import tsx --test __tests__/price-import.test.mjs",
+    "test:platform-assistant": "node --import tsx --test __tests__/platform-assistant.test.mjs",
     "test:price-worker": "PYTHONPATH=services/price-worker/src python3 -m unittest discover -s services/price-worker/tests",
     "test:integration": "node --import tsx --test __tests__/account-deletion-lock.integration.test.mjs",
     "scrape:prices": "node scripts/scraper-precios.js",

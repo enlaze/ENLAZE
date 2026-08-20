@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
   PLATFORM_GUIDE,
+  buildLocalAssistantAnswer,
   getGuideForPath,
   suggestPathForQuestion,
 } from "@/lib/platform-assistant-guide";
@@ -29,20 +30,33 @@ export async function POST(request: Request) {
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json({ error: "El asistente no está configurado" }, { status: 503 });
-  }
-
-  try {
-    const body = await request.json() as {
+  let body: {
       message?: string;
       pathname?: string;
       history?: ConversationMessage[];
-    };
-    const message = String(body.message || "").trim().slice(0, 2000);
-    if (!message) return NextResponse.json({ error: "Escribe una pregunta" }, { status: 400 });
+  };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Petición no válida" }, { status: 400 });
+  }
 
-    const pathname = String(body.pathname || "/dashboard").slice(0, 300);
+  const message = String(body.message || "").trim().slice(0, 2000);
+  if (!message) return NextResponse.json({ error: "Escribe una pregunta" }, { status: 400 });
+
+  const pathname = String(body.pathname || "/dashboard").slice(0, 300);
+  const localAnswer = buildLocalAssistantAnswer(message, pathname);
+  const localResponse = () => NextResponse.json({
+    ok: true,
+    answer: localAnswer.answer,
+    suggested_path: localAnswer.suggestedPath,
+    suggested_label: localAnswer.suggestedLabel,
+    mode: "local",
+  });
+
+  if (!process.env.ANTHROPIC_API_KEY) return localResponse();
+
+  try {
     const currentGuide = getGuideForPath(pathname);
     const guideText = PLATFORM_GUIDE
       .map((entry) => `${entry.path} — ${entry.label}: ${entry.purpose}`)
@@ -98,10 +112,13 @@ REGLAS:
       answer,
       suggested_path: suggestedPath,
       suggested_label: suggestedEntry?.label || null,
+      mode: "ai",
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error("[platform-assistant]", message);
-    return NextResponse.json({ error: "No he podido responder ahora. Inténtalo de nuevo." }, { status: 500 });
+    const status = error && typeof error === "object" && "status" in error
+      ? Number((error as { status?: unknown }).status) || null
+      : null;
+    console.warn("[platform-assistant] usando guía local", { status });
+    return localResponse();
   }
 }
