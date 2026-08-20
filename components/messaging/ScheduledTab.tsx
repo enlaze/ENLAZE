@@ -4,36 +4,48 @@
  * Pestaña "Programados": la cola de envíos con su línea de tiempo y, debajo,
  * el historial de lo ya enviado.
  *
- * OJO: la cola es estado local del canal — todavía no hay tabla ni cron que
- * despache envíos diferidos. El motor persistente es un paso aparte.
+ * La cola sale de la tabla `scheduled_messages` — persiste al recargar y la
+ * dispara el cron (app/api/cron/dispatch-scheduled). Aquí solo se pinta: las
+ * acciones son callbacks porque quien habla con /api/scheduled-messages es la
+ * pantalla del canal, que es la que después recarga la lista.
  */
 
-import { HistoryRow, QueueItem, initials, queueBtn, sectionTitle } from "./shared";
+import { HistoryRow, QueueItem, initials, queueBtn, queueTone, sectionTitle } from "./shared";
 
 export default function ScheduledTab({
   queue,
-  onQueueChange,
+  loading,
+  busyId,
   history,
   emptyBody,
   historyTitle,
   historyEmpty,
   onCreateFirst,
   onEdit,
+  onToggle,
   onCancel,
 }: {
   queue: QueueItem[];
-  onQueueChange: (next: QueueItem[] | ((prev: QueueItem[]) => QueueItem[])) => void;
+  /** La primera carga desde la tabla, para no enseñar el vacío en falso. */
+  loading: boolean;
+  /** El envío que tiene una acción en vuelo; sus botones se deshabilitan. */
+  busyId: string | null;
   history: HistoryRow[];
   emptyBody: string;
   historyTitle: string;
   historyEmpty: string;
   onCreateFirst: () => void;
-  onEdit: () => void;
-  onCancel: () => void;
+  onEdit: (item: QueueItem) => void;
+  onToggle: (item: QueueItem) => void;
+  onCancel: (item: QueueItem) => void;
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {queue.length === 0 ? (
+      {loading ? (
+        <div style={{ border: "1px solid var(--msg-bd)", borderRadius: 16, background: "var(--msg-panel)", boxShadow: "var(--msg-sh)", padding: "64px 24px", textAlign: "center", fontSize: 13.5, color: "var(--msg-mut)" }}>
+          Cargando envíos programados…
+        </div>
+      ) : queue.length === 0 ? (
         <div style={{ border: "1px solid var(--msg-bd)", borderRadius: 16, background: "var(--msg-panel)", boxShadow: "var(--msg-sh)", padding: "64px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10, textAlign: "center" }}>
           <div style={{ width: 48, height: 48, borderRadius: 14, display: "grid", placeItems: "center", background: "var(--msg-brand-soft)" }}>
             <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="var(--msg-brand-tx)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -54,18 +66,22 @@ export default function ScheduledTab({
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {queue.map((q) => {
-            const active = q.status === "Activo";
+            const tone = queueTone(q.status);
+            const busy = busyId === q.id;
+            /* Un envío terminado o fallado ya no se pausa ni se reanuda: solo
+               se puede copiar a "Nuevo envío" o quitarlo de la cola. */
+            const closed = q.status === "Completado" || q.status === "Error";
             return (
-              <div key={q.id} style={{ display: "flex", gap: 14 }}>
+              <div key={q.id} style={{ display: "flex", gap: 14, opacity: busy ? 0.6 : 1 }}>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 24, flex: "0 0 10px" }}>
-                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: active ? "var(--msg-brand)" : "var(--msg-warn)" }} />
+                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: tone.dot }} />
                   <span style={{ flex: 1, width: 1, background: "var(--msg-bd)" }} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0, border: "1px solid var(--msg-bd)", borderRadius: 15, background: "var(--msg-panel)", boxShadow: "var(--msg-sh)", padding: "17px 19px", display: "flex", flexDirection: "column", gap: 13 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     <span style={{ padding: "4px 10px", borderRadius: 7, background: "var(--msg-brand-soft)", color: "var(--msg-brand-tx)", fontSize: 11.5, fontWeight: 800 }}>{q.canal}</span>
                     <span style={{ fontSize: 15.5, fontWeight: 800, letterSpacing: "-.02em" }}>{q.titulo}</span>
-                    <span style={{ padding: "4px 11px", borderRadius: 20, background: active ? "var(--msg-brand-soft)" : "var(--msg-warn-soft)", color: active ? "var(--msg-brand-tx)" : "var(--msg-warn)", fontSize: 11.5, fontWeight: 800, marginLeft: "auto" }}>{q.status}</span>
+                    <span style={{ padding: "4px 11px", borderRadius: 20, background: tone.bg, color: tone.fg, fontSize: 11.5, fontWeight: 800, marginLeft: "auto" }}>{q.status}</span>
                   </div>
                   <div style={{ display: "flex", gap: 24, flexWrap: "wrap", fontSize: 13, color: "var(--msg-tx-2)", fontWeight: 600 }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
@@ -81,26 +97,41 @@ export default function ScheduledTab({
                       {q.rec}
                     </span>
                   </div>
+                  {q.nota && (
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12.5, lineHeight: 1.5, color: q.status === "Error" ? "var(--msg-dang)" : "var(--msg-mut)" }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{ flex: "0 0 auto", marginTop: 2 }}>
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="M12 8v5" />
+                        <path d="M12 16h.01" />
+                      </svg>
+                      <span>{q.nota}</span>
+                    </div>
+                  )}
                   <div style={{ display: "flex", alignItems: "center", gap: 8, borderTop: "1px solid var(--msg-bd)", paddingTop: 13 }}>
-                    <button
-                      type="button"
-                      onClick={() => onQueueChange((prev) => prev.map((x) => (x.id === q.id ? { ...x, status: x.status === "Pausado" ? "Activo" : "Pausado" } : x)))}
-                      style={queueBtn}
-                    >
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
-                      {q.status === "Pausado" ? "Reanudar" : "Pausar"}
-                    </button>
-                    <button type="button" onClick={onEdit} style={queueBtn}>
+                    {!closed && (
+                      <button
+                        type="button"
+                        disabled={busy || q.status === "Enviando"}
+                        onClick={() => onToggle(q)}
+                        style={{ ...queueBtn, cursor: busy || q.status === "Enviando" ? "default" : "pointer", opacity: q.status === "Enviando" ? 0.5 : 1 }}
+                      >
+                        {q.status === "Pausado" ? (
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M6 4l13 8-13 8z" /></svg>
+                        ) : (
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
+                        )}
+                        {q.status === "Pausado" ? "Reanudar" : "Pausar"}
+                      </button>
+                    )}
+                    <button type="button" disabled={busy} onClick={() => onEdit(q)} style={queueBtn}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
                       Editar
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        onQueueChange((prev) => prev.filter((x) => x.id !== q.id));
-                        onCancel();
-                      }}
-                      style={{ ...queueBtn, background: "transparent", color: "var(--msg-dang)", marginLeft: "auto" }}
+                      disabled={busy}
+                      onClick={() => onCancel(q)}
+                      style={{ ...queueBtn, background: "transparent", color: "var(--msg-dang)", marginLeft: "auto", cursor: busy ? "default" : "pointer" }}
                     >
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                       Cancelar

@@ -14,6 +14,25 @@
  */
 
 import React from "react";
+import {
+  OPEN_BUDGET_STATUSES,
+  VAR_TOKENS,
+  eur,
+  importeOf,
+  personalize,
+} from "@/lib/messaging-vars";
+import { SCHEDULE_TYPE_TO_MODE } from "@/lib/scheduled-messages";
+import type {
+  AudienceFilter,
+  ScheduledMessage,
+  SchedulerMode,
+} from "@/lib/scheduled-messages";
+
+/* La resolución de variables y los estados de presupuesto abiertos viven en
+   lib/ porque el dispatcher de programados los necesita en el servidor; se
+   reexportan aquí para que las pantallas los sigan importando de un solo sitio. */
+export { OPEN_BUDGET_STATUSES, VAR_TOKENS, eur, importeOf, personalize };
+export type { ScheduledMessage };
 
 /* ── Modelo ──────────────────────────────────────────────────── */
 
@@ -31,6 +50,9 @@ export type MessagingClient = {
   overdue: number;
 };
 
+/** Cómo se etiqueta en la cola cada `status` de scheduled_messages. */
+export type QueueStatus = "Activo" | "Pausado" | "Enviando" | "Completado" | "Error";
+
 export type QueueItem = {
   id: string;
   canal: string;
@@ -38,7 +60,9 @@ export type QueueItem = {
   recips: string;
   next: string;
   rec: string;
-  status: "Activo" | "Pausado";
+  status: QueueStatus;
+  /** El último error del dispatcher, si lo hubo. */
+  nota?: string;
 };
 
 export type HistoryRow = {
@@ -49,7 +73,8 @@ export type HistoryRow = {
   status: "Enviado" | "Fallido";
 };
 
-export type Mode = "ahora" | "unavez" | "dia" | "semana" | "mes" | "ano";
+/** Alias del tipo compartido con la API de programados. */
+export type Mode = SchedulerMode;
 export type FilterKey = "todos" | "pend" | "venc" | "activos" | "none" | "";
 
 /* ── Constantes del diseño ───────────────────────────────────── */
@@ -75,15 +100,7 @@ export const FILTERS: [FilterKey, string][] = [
   ["none", "Ninguno"],
 ];
 
-/** Los mismos estados "abiertos" que usa la pantalla de Presupuestos. */
-export const OPEN_BUDGET_STATUSES = ["pending", "pendiente", "borrador", "sent", "enviado"];
-
-export const VAR_TOKENS = ["{nombre}", "{importe}", "{empresa}"];
-
 /* ── Utilidades ──────────────────────────────────────────────── */
-
-export const eur = (n: number) =>
-  n.toLocaleString("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 
 export const initials = (n: string) =>
   n.split(" ").filter(Boolean).map((p) => p[0]).slice(0, 2).join("").toUpperCase() || "?";
@@ -100,17 +117,6 @@ export const fmtDate = (iso: string) => {
 };
 
 export const todayISO = () => new Date().toISOString().slice(0, 10);
-
-/** El importe que resuelve `{importe}`: lo vencido manda sobre lo pendiente. */
-export const importeOf = (c: MessagingClient) =>
-  c.overdue > 0 ? eur(c.overdue) : c.pending > 0 ? eur(c.pending) : "el importe pendiente";
-
-/** Sustituye {nombre}, {importe} y {empresa} con los datos del cliente. */
-export const personalize = (body: string, c: MessagingClient) =>
-  body
-    .replace(/\{nombre\}/g, c.name.split(" ")[0])
-    .replace(/\{importe\}/g, importeOf(c))
-    .replace(/\{empresa\}/g, c.company || c.name);
 
 /** Trocea el texto en variables y literales para pintar el resaltado. */
 export const highlightSegments = (text: string) =>
@@ -165,6 +171,93 @@ export function idsForFilter(k: FilterKey, clients: MessagingClient[]) {
   if (k === "activos") return clients.filter((c) => c.status === "active").map((c) => c.id);
   return [];
 }
+
+/* ── Puente con la tabla `scheduled_messages` ────────────────── */
+
+/**
+ * Los filtros rápidos que se pueden guardar como audiencia DINÁMICA: al
+ * dispararse, el envío vuelve a preguntarse quién cumple el criterio. "Ninguno"
+ * no es un filtro, es haber vaciado la selección, y por eso mapea a null.
+ */
+export const FILTER_TO_AUDIENCE: Record<FilterKey, AudienceFilter | null> = {
+  todos: "all",
+  pend: "pending_budget",
+  venc: "overdue_invoice",
+  activos: "active",
+  none: null,
+  "": null,
+};
+
+/** El camino de vuelta, para recargar un programado en "Nuevo envío". */
+export const AUDIENCE_TO_FILTER: Record<AudienceFilter, FilterKey> = {
+  all: "todos",
+  pending_budget: "pend",
+  overdue_invoice: "venc",
+  active: "activos",
+};
+
+const AUDIENCE_LABEL: Record<AudienceFilter, string> = {
+  all: "Todos los clientes",
+  pending_budget: "Con presupuesto pendiente",
+  overdue_invoice: "Con factura vencida",
+  active: "Clientes activos",
+};
+
+const STATUS_LABEL: Record<ScheduledMessage["status"], QueueStatus> = {
+  active: "Activo",
+  paused: "Pausado",
+  sending: "Enviando",
+  done: "Completado",
+  failed: "Error",
+};
+
+/** El color del punto y de la etiqueta de cada estado de la cola. */
+export function queueTone(status: QueueStatus) {
+  if (status === "Activo") return { dot: "var(--msg-brand)", bg: "var(--msg-brand-soft)", fg: "var(--msg-brand-tx)" };
+  if (status === "Enviando") return { dot: "var(--msg-brand)", bg: "var(--msg-brand-soft)", fg: "var(--msg-brand-tx)" };
+  if (status === "Pausado") return { dot: "var(--msg-warn)", bg: "var(--msg-warn-soft)", fg: "var(--msg-warn)" };
+  if (status === "Error") return { dot: "var(--msg-dang)", bg: "var(--msg-dang-soft)", fg: "var(--msg-dang)" };
+  return { dot: "var(--msg-mut)", bg: "var(--msg-chip)", fg: "var(--msg-tx-2)" };
+}
+
+/** Un instante de la tabla, en hora de Madrid: "24 ago · 09:00". */
+export const fmtWhen = (iso: string) =>
+  new Date(iso).toLocaleString("es-ES", {
+    timeZone: "Europe/Madrid",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).replace(",", " ·");
+
+/** Traduce una fila de `scheduled_messages` a la tarjeta de la cola. */
+export function scheduledToQueueItem(row: ScheduledMessage, canal: string): QueueItem {
+  const recips =
+    row.audience.mode === "filter"
+      ? AUDIENCE_LABEL[row.audience.filter] + " · se recalcula en cada envío"
+      : row.audience.client_ids.length + (row.audience.client_ids.length === 1 ? " cliente" : " clientes");
+
+  const mode = SCHEDULE_TYPE_TO_MODE[row.schedule_type];
+
+  return {
+    id: row.id,
+    canal,
+    titulo: row.title || row.subject || "Envío sin título",
+    recips,
+    next: row.next_run_at
+      ? fmtWhen(row.next_run_at)
+      : row.last_run_at
+        ? "Último envío: " + fmtWhen(row.last_run_at)
+        : "Sin próxima fecha",
+    rec: MODES.find((m) => m[0] === mode)?.[1] || "Programado",
+    status: STATUS_LABEL[row.status] || "Activo",
+    nota: row.last_error || undefined,
+  };
+}
+
+/** Los que siguen contando para el badge de la pestaña: aún van a salir. */
+export const isPendingSchedule = (row: ScheduledMessage) =>
+  row.status === "active" || row.status === "paused" || row.status === "sending";
 
 /* ── Estilos del diseño ──────────────────────────────────────── */
 

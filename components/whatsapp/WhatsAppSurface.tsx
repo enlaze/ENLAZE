@@ -11,9 +11,10 @@
  * components/messaging/, compartido con Emails; aquí solo viven el canal,
  * la burbuja de WhatsApp y las etiquetas propias.
  *
- * OJO: la cola de "Programados" es estado local — todavía no hay
- * tabla ni worker que despache envíos diferidos. El envío inmediato
- * sí es real (POST /api/whatsapp/send-bulk + filas en `messages`).
+ * "Ahora" envía directo (POST /api/whatsapp/send-bulk + filas en `messages`).
+ * Lo programado se guarda en la tabla `scheduled_messages` vía
+ * /api/scheduled-messages y lo dispara el cron a su hora, con el navegador
+ * cerrado (app/api/cron/dispatch-scheduled).
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -25,7 +26,10 @@ import Composer from "@/components/messaging/Composer";
 import ConfirmBar from "@/components/messaging/ConfirmBar";
 import Scheduler from "@/components/messaging/Scheduler";
 import ScheduledTab from "@/components/messaging/ScheduledTab";
+import { useScheduledMessages } from "@/components/messaging/useScheduledMessages";
 import {
+  AUDIENCE_TO_FILTER,
+  FILTER_TO_AUDIENCE,
   FilterKey,
   HistoryRow,
   MODES,
@@ -34,12 +38,19 @@ import {
   OPEN_BUDGET_STATUSES,
   QueueItem,
   TabBar,
-  fmtDate,
+  idsForFilter,
   initials,
+  isPendingSchedule,
   personalize,
   scheduleSummary,
+  scheduledToQueueItem,
   todayISO,
 } from "@/components/messaging/shared";
+import {
+  MODE_TO_SCHEDULE_TYPE,
+  SCHEDULE_TYPE_TO_MODE,
+  type Audience,
+} from "@/lib/scheduled-messages";
 
 const TEMPLATES: { name: string; body: string }[] = [
   { name: "Recordatorio de presupuesto", body: "Hola {nombre}, tu presupuesto de {importe} sigue disponible. ¿Lo confirmamos?" },
@@ -72,8 +83,11 @@ export default function WhatsAppSurface() {
   const [weekdays, setWeekdays] = useState<number[]>([0]);
   const [monthday, setMonthday] = useState(1);
 
-  const [queue, setQueue] = useState<QueueItem[]>([]);
   const [sending, setSending] = useState(false);
+
+  /* La cola vive en `scheduled_messages`, no en este componente: sobrevive a
+     la recarga y es la misma lista que lee el cron para disparar. */
+  const scheduled = useScheduledMessages("whatsapp");
 
   /* ── Datos ───────────────────────────────────────────────── */
 
@@ -161,6 +175,14 @@ export default function WhatsAppSurface() {
   const canSend = connected === true && n > 0 && !sending;
   const summary = scheduleSummary(mode, date, time, weekdays, monthday, n, { one: "mensaje", many: "mensajes" });
 
+  const queue = useMemo(
+    () => scheduled.rows.map((row) => scheduledToQueueItem(row, "WhatsApp")),
+    [scheduled.rows]
+  );
+  /* El contador de la pestaña cuenta lo que aún va a salir; los terminados
+     siguen en la lista pero no engordan el badge. */
+  const pendingCount = useMemo(() => scheduled.rows.filter(isPendingSchedule).length, [scheduled.rows]);
+
   /* ── Acciones ────────────────────────────────────────────── */
 
   const sendNow = async () => {
@@ -223,21 +245,77 @@ export default function WhatsAppSurface() {
       sendNow();
       return;
     }
-    const label = MODES.find((m) => m[0] === mode)![1];
-    setQueue((prev) => [
-      {
-        id: "q" + Date.now(),
-        canal: "WhatsApp",
-        titulo: template || "Envío sin título",
-        recips: n + (n === 1 ? " cliente" : " clientes"),
-        next: fmtDate(date) + " · " + time,
-        rec: label,
-        status: "Activo",
-      },
-      ...prev,
-    ]);
+    schedule();
+  };
+
+  /* Un filtro rápido se guarda como criterio, no como lista: al dispararse, el
+     envío vuelve a preguntar quién lo cumple. Una selección hecha a mano se
+     congela tal cual. */
+  const audienceOf = (): Audience => {
+    const dynamic = FILTER_TO_AUDIENCE[filter];
+    return dynamic ? { mode: "filter", filter: dynamic } : { mode: "manual", client_ids: sel.map((c) => c.id) };
+  };
+
+  const schedule = async () => {
+    setSending(true);
+    const result = await scheduled.create({
+      title: template || "Envío sin título",
+      audience: audienceOf(),
+      body: text,
+      schedule_type: MODE_TO_SCHEDULE_TYPE[mode as Exclude<Mode, "ahora">],
+      send_time: time,
+      days_of_week: weekdays,
+      day_of_month: monthday,
+      start_date: date,
+    });
+    setSending(false);
+
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
     setTab("programados");
     toast.success("Envío programado — " + summary.toLowerCase());
+  };
+
+  /* Carga un programado de vuelta en "Nuevo envío". El original se queda como
+     está: al confirmar se crea otro, no se pisa el que ya estaba en cola. */
+  const loadIntoForm = (item: QueueItem) => {
+    const row = scheduled.rows.find((r) => r.id === item.id);
+    if (!row) return;
+
+    setMode(SCHEDULE_TYPE_TO_MODE[row.schedule_type]);
+    setTime(row.send_time.slice(0, 5));
+    setDate(row.start_date);
+    setWeekdays(row.days_of_week || []);
+    setMonthday(row.day_of_month || 1);
+    setText(row.body);
+    setTemplate(row.title || "");
+
+    if (row.audience.mode === "filter") {
+      const key = AUDIENCE_TO_FILTER[row.audience.filter];
+      setFilter(key);
+      setSelected(idsForFilter(key, clients));
+    } else {
+      setFilter("");
+      setSelected(row.audience.client_ids.filter((id) => byId.has(id)));
+    }
+
+    setTab("nuevo");
+    toast.info("Cargado en «Nuevo envío» como copia — el original sigue en cola");
+  };
+
+  const toggleSchedule = async (item: QueueItem) => {
+    const paused = item.status === "Pausado";
+    const result = await scheduled.setStatus(item.id, paused ? "active" : "paused");
+    if (!result.ok) toast.error(result.error);
+    else toast.success(paused ? "Envío reanudado" : "Envío pausado");
+  };
+
+  const cancelSchedule = async (item: QueueItem) => {
+    const result = await scheduled.remove(item.id);
+    if (!result.ok) toast.error(result.error);
+    else toast.success("Envío cancelado");
   };
 
   return (
@@ -269,7 +347,7 @@ export default function WhatsAppSurface() {
         onPick={setTab}
         tabs={[
           { key: "nuevo" as const, label: "Nuevo envío" },
-          { key: "programados" as const, label: "Programados", badge: queue.length },
+          { key: "programados" as const, label: "Programados", badge: pendingCount },
         ]}
       />
 
@@ -350,7 +428,7 @@ export default function WhatsAppSurface() {
 
           <ConfirmBar
             recap={`${n} ${n === 1 ? "destinatario" : "destinatarios"} · ${isNow ? "envío inmediato" : MODES.find((m) => m[0] === mode)![1].toLowerCase()}`}
-            label={sending ? "Enviando…" : connected !== true ? "Conecta WhatsApp" : isNow ? "Enviar ahora" : "Programar envío"}
+            label={sending ? (isNow ? "Enviando…" : "Guardando…") : connected !== true ? "Conecta WhatsApp" : isNow ? "Enviar ahora" : "Programar envío"}
             enabled={canSend}
             busy={sending}
             onConfirm={confirm}
@@ -361,17 +439,16 @@ export default function WhatsAppSurface() {
       {tab === "programados" && (
         <ScheduledTab
           queue={queue}
-          onQueueChange={setQueue}
+          loading={scheduled.loading}
+          busyId={scheduled.busyId}
           history={history}
           emptyBody="Responde a las tres preguntas — a quién, qué y cuándo — y tu primer envío quedará en cola."
           historyTitle="Historial de mensajes"
           historyEmpty="Todavía no has enviado ningún mensaje de WhatsApp."
           onCreateFirst={() => setTab("nuevo")}
-          onEdit={() => {
-            setTab("nuevo");
-            toast.info("Cargado en «Nuevo envío» para editar");
-          }}
-          onCancel={() => toast.success("Envío cancelado")}
+          onEdit={loadIntoForm}
+          onToggle={toggleSchedule}
+          onCancel={cancelSchedule}
         />
       )}
     </div>

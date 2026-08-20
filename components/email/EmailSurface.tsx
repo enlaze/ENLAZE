@@ -10,9 +10,10 @@
  * components/messaging/, compartido con WhatsApp; aquí viven el asunto, el
  * preview de bandeja y la clasificación del correo entrante.
  *
- * OJO: la cola de "Programados" es estado local — todavía no hay tabla ni
- * worker que despache envíos diferidos. El envío inmediato sí es real
- * (POST /api/email/send-bulk + filas en `messages`).
+ * "Ahora" envía directo (POST /api/email/send-bulk + filas en `messages`). Lo
+ * programado se guarda en la tabla `scheduled_messages` vía
+ * /api/scheduled-messages y lo dispara el cron a su hora, con el navegador
+ * cerrado (app/api/cron/dispatch-scheduled).
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -24,7 +25,10 @@ import Composer from "@/components/messaging/Composer";
 import ConfirmBar from "@/components/messaging/ConfirmBar";
 import Scheduler from "@/components/messaging/Scheduler";
 import ScheduledTab from "@/components/messaging/ScheduledTab";
+import { useScheduledMessages } from "@/components/messaging/useScheduledMessages";
 import {
+  AUDIENCE_TO_FILTER,
+  FILTER_TO_AUDIENCE,
   FilterKey,
   HistoryRow,
   MODES,
@@ -34,13 +38,20 @@ import {
   QueueItem,
   TabBar,
   card,
-  fmtDate,
+  idsForFilter,
   initials,
+  isPendingSchedule,
   personalize,
   scheduleSummary,
+  scheduledToQueueItem,
   sectionTitle,
   todayISO,
 } from "@/components/messaging/shared";
+import {
+  MODE_TO_SCHEDULE_TYPE,
+  SCHEDULE_TYPE_TO_MODE,
+  type Audience,
+} from "@/lib/scheduled-messages";
 
 /* ── Bandeja ─────────────────────────────────────────────────── */
 
@@ -164,8 +175,11 @@ export default function EmailSurface() {
   const [weekdays, setWeekdays] = useState<number[]>([0]);
   const [monthday, setMonthday] = useState(1);
 
-  const [queue, setQueue] = useState<QueueItem[]>([]);
   const [sending, setSending] = useState(false);
+
+  /* La cola vive en `scheduled_messages`, no en este componente: sobrevive a
+     la recarga y es la misma lista que lee el cron para disparar. */
+  const scheduled = useScheduledMessages("email");
 
   /* ── Datos ───────────────────────────────────────────────── */
 
@@ -299,6 +313,14 @@ export default function EmailSurface() {
   const canSend = connected && n > 0 && !sending;
   const summary = scheduleSummary(mode, date, time, weekdays, monthday, n, { one: "email", many: "emails" });
 
+  const queue = useMemo(
+    () => scheduled.rows.map((row) => scheduledToQueueItem(row, "Email")),
+    [scheduled.rows]
+  );
+  /* El contador de la pestaña cuenta lo que aún va a salir; los terminados
+     siguen en la lista pero no engordan el badge. */
+  const pendingCount = useMemo(() => scheduled.rows.filter(isPendingSchedule).length, [scheduled.rows]);
+
   const groups = useMemo(() => {
     const threads = inbox?.classified_threads || [];
     return GRUPOS.map((g) => ({
@@ -389,21 +411,79 @@ export default function EmailSurface() {
       sendNow();
       return;
     }
-    const label = MODES.find((m) => m[0] === mode)![1];
-    setQueue((prev) => [
-      {
-        id: "q" + Date.now(),
-        canal: "Email",
-        titulo: template || subject || "Envío sin título",
-        recips: n + (n === 1 ? " cliente" : " clientes"),
-        next: fmtDate(date) + " · " + time,
-        rec: label,
-        status: "Activo",
-      },
-      ...prev,
-    ]);
+    schedule();
+  };
+
+  /* Un filtro rápido se guarda como criterio, no como lista: al dispararse, el
+     envío vuelve a preguntar quién lo cumple. Una selección hecha a mano se
+     congela tal cual. */
+  const audienceOf = (): Audience => {
+    const dynamic = FILTER_TO_AUDIENCE[filter];
+    return dynamic ? { mode: "filter", filter: dynamic } : { mode: "manual", client_ids: sel.map((c) => c.id) };
+  };
+
+  const schedule = async () => {
+    setSending(true);
+    const result = await scheduled.create({
+      title: template || subject || "Envío sin título",
+      audience: audienceOf(),
+      subject,
+      body: text,
+      schedule_type: MODE_TO_SCHEDULE_TYPE[mode as Exclude<Mode, "ahora">],
+      send_time: time,
+      days_of_week: weekdays,
+      day_of_month: monthday,
+      start_date: date,
+    });
+    setSending(false);
+
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
     setTab("programados");
     toast.success("Envío programado — " + summary.toLowerCase());
+  };
+
+  /* Carga un programado de vuelta en "Nuevo envío". El original se queda como
+     está: al confirmar se crea otro, no se pisa el que ya estaba en cola. */
+  const loadIntoForm = (item: QueueItem) => {
+    const row = scheduled.rows.find((r) => r.id === item.id);
+    if (!row) return;
+
+    setMode(SCHEDULE_TYPE_TO_MODE[row.schedule_type]);
+    setTime(row.send_time.slice(0, 5));
+    setDate(row.start_date);
+    setWeekdays(row.days_of_week || []);
+    setMonthday(row.day_of_month || 1);
+    setSubject(row.subject || "");
+    setText(row.body);
+    setTemplate(row.title || "");
+
+    if (row.audience.mode === "filter") {
+      const key = AUDIENCE_TO_FILTER[row.audience.filter];
+      setFilter(key);
+      setSelected(idsForFilter(key, clients));
+    } else {
+      setFilter("");
+      setSelected(row.audience.client_ids.filter((id) => byId.has(id)));
+    }
+
+    setTab("nuevo");
+    toast.info("Cargado en «Nuevo envío» como copia — el original sigue en cola");
+  };
+
+  const toggleSchedule = async (item: QueueItem) => {
+    const paused = item.status === "Pausado";
+    const result = await scheduled.setStatus(item.id, paused ? "active" : "paused");
+    if (!result.ok) toast.error(result.error);
+    else toast.success(paused ? "Envío reanudado" : "Envío pausado");
+  };
+
+  const cancelSchedule = async (item: QueueItem) => {
+    const result = await scheduled.remove(item.id);
+    if (!result.ok) toast.error(result.error);
+    else toast.success("Envío cancelado");
   };
 
   /* ── Bandeja ─────────────────────────────────────────────── */
@@ -570,7 +650,7 @@ export default function EmailSurface() {
         tabs={[
           { key: "bandeja" as const, label: "Bandeja" },
           { key: "nuevo" as const, label: "Nuevo envío" },
-          { key: "programados" as const, label: "Programados", badge: queue.length },
+          { key: "programados" as const, label: "Programados", badge: pendingCount },
         ]}
       />
 
@@ -679,7 +759,9 @@ export default function EmailSurface() {
             recap={`${n} ${n === 1 ? "destinatario" : "destinatarios"} · ${isNow ? "envío inmediato" : MODES.find((m) => m[0] === mode)![1].toLowerCase()}`}
             label={
               sending
-                ? "Enviando…"
+                ? isNow
+                  ? "Enviando…"
+                  : "Guardando…"
                 : gmailState === "expired"
                   ? "Reconecta Gmail"
                   : !connected
@@ -698,17 +780,16 @@ export default function EmailSurface() {
       {tab === "programados" && (
         <ScheduledTab
           queue={queue}
-          onQueueChange={setQueue}
+          loading={scheduled.loading}
+          busyId={scheduled.busyId}
           history={history}
           emptyBody="Responde a las tres preguntas — a quién, qué y cuándo — y tu primer email quedará en cola."
           historyTitle="Historial de emails"
           historyEmpty="Todavía no has enviado ningún email desde aquí."
           onCreateFirst={() => setTab("nuevo")}
-          onEdit={() => {
-            setTab("nuevo");
-            toast.info("Cargado en «Nuevo envío» para editar");
-          }}
-          onCancel={() => toast.success("Envío cancelado")}
+          onEdit={loadIntoForm}
+          onToggle={toggleSchedule}
+          onCancel={cancelSchedule}
         />
       )}
     </div>
