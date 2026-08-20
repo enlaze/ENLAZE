@@ -14,6 +14,7 @@
     "test:n8n-construction": "node --test __tests__/n8n-construction-consolidated.test.mjs",
     "test:construction-webhook": "node --test __tests__/construction-webhook-idempotency.test.mjs",
     "test:budget-realism": "node --import tsx --test __tests__/budget-realism.test.mjs",
+    "test:budget-recalculation": "node --test __tests__/budget-recalculation.test.mjs",
     "test:price-import": "node --import tsx --test __tests__/price-import.test.mjs",
     "test:platform-assistant": "node --import tsx --test __tests__/platform-assistant.test.mjs",
     "test:price-worker": "PYTHONPATH=services/price-worker/src python3 -m unittest discover -s services/price-worker/tests",

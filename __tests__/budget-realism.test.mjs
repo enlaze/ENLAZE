@@ -3,11 +3,15 @@ import assert from "node:assert/strict";
 import {
   adjustToMarket,
   applyMaterialBasketToItems,
+  buildDeterministicBudgetItems,
   buildScopeMaterials,
   getAffectedArea,
   getMarketRange,
+  getRequestedChapters,
+  inferBudgetActions,
   normalizeBudgetItemsToScope,
 } from "../lib/budget-engine.ts";
+import { buildDeterministicBudgetAnalysis } from "../lib/budget-analysis-fallback.ts";
 
 const fullScope = {
   superficie_m2: 145,
@@ -101,4 +105,59 @@ test("market calibration preserves authoritative prices", () => {
   const result = adjustToMarket(fullScope, [authoritative, ...estimated.slice(1)], [], "reforma", 1.2, true);
   assert.equal(result.items[0].unit_price, 999);
   assert.equal(result.items[0].price_source, "technical_bank");
+});
+
+for (const action of ["fontaneria", "iluminacion", "pintura"]) {
+  test(`the deterministic engine creates a detailed and constrained ${action} budget`, () => {
+    const scope = {
+      ...fullScope,
+      estancias: [action === "fontaneria" ? "bano_1" : "salon"],
+      actuaciones: [action],
+      incluye_cocina: false,
+      incluye_ventanas: false,
+      incluye_climatizacion: false,
+    };
+    const requested = getRequestedChapters(scope);
+    const items = buildDeterministicBudgetItems(scope, 1.2);
+    assert.ok(items.length >= 4, `only ${items.length} items were generated`);
+    assert.ok(items.every((item) => requested.has(item.chapter)));
+    assert.ok(items.every((item) => item.quantity > 0 && item.unit_price > 0));
+    assert.ok(buildScopeMaterials(scope).length >= (action === "iluminacion" ? 4 : 5));
+    const range = getMarketRange(scope, action);
+    assert.ok(range.min >= (action === "fontaneria" ? 1_800 : 900));
+    assert.ok(range.max > range.min);
+  });
+}
+
+test("partial actions are inferred when the service type contains the trade", () => {
+  assert.deepEqual(inferBudgetActions("Trabajo de fontanería e iluminación"), ["iluminacion", "fontaneria"]);
+});
+
+test("budget analysis remains available without Claude and includes tracker metadata", () => {
+  const scope = { ...fullScope, actuaciones: ["fontaneria"], incluye_cocina: false };
+  const analysis = buildDeterministicBudgetAnalysis({
+    scope,
+    serviceType: "fontaneria",
+    trackerProductsCount: 1200,
+    reason: "Claude sin saldo",
+  });
+  assert.equal(analysis.analysis_mode, "deterministic_engine");
+  assert.equal(analysis.data_sources.tracker_products_count, 1200);
+  assert.ok(analysis.suggested_items.length >= 5);
+  assert.ok(analysis.suggested_materials.length >= 5);
+  assert.match(analysis.price_warnings[0], /sin saldo/i);
+});
+
+test("every construction action supported by the form produces a budget", () => {
+  const actions = [
+    "demoliciones", "albanileria", "electricidad", "fontaneria", "climatizacion",
+    "alicatados", "pavimentos", "pintura", "carpinteria_interior",
+    "carpinteria_exterior", "cocina_montaje", "banos_sanitarios", "iluminacion",
+    "limpieza_final", "gestion_residuos",
+  ];
+  for (const action of actions) {
+    const items = buildDeterministicBudgetItems({ ...fullScope, actuaciones: [action] }, 1.2);
+    assert.ok(items.length >= 2, `${action} generated ${items.length} items`);
+    assert.ok(items.every((item) => item.subtotal_client > 0), `${action} has an empty amount`);
+  }
 });

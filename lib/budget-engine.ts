@@ -141,6 +141,34 @@ const ACTION_CHAPTERS: Record<string, string[]> = {
   gestion_residuos: ["residuos"],
 };
 
+/** Infer partial construction actions only when the form has no explicit ones. */
+export function inferBudgetActions(text: string): string[] {
+  const normalized = String(text || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  const matchers: Array<[RegExp, string]> = [
+    [/demolic|derribo/, "demoliciones"],
+    [/albanil|tabiquer|pladur/, "albanileria"],
+    [/electric|enchufe|cuadro electrico/, "electricidad"],
+    [/ilumin|luminaria|punto de luz/, "iluminacion"],
+    [/fontaner|tuberia|desague/, "fontaneria"],
+    [/climat|aire acondicionado|calefaccion/, "climatizacion"],
+    [/alicat|revestimiento ceramico/, "alicatados"],
+    [/pavimento|suelo|solado/, "pavimentos"],
+    [/pintur|pintar/, "pintura"],
+    [/carpinteria interior|puertas? interiores?/, "carpinteria_interior"],
+    [/carpinteria exterior|ventanas?/, "carpinteria_exterior"],
+    [/cocina|muebles de cocina|encimera/, "cocina_montaje"],
+    [/sanitario|inodoro|lavabo|plato de ducha|reforma de bano/, "banos_sanitarios"],
+    [/limpieza/, "limpieza_final"],
+    [/residuos|escombros|contenedor/, "gestion_residuos"],
+  ];
+  return Array.from(
+    new Set(matchers.filter(([pattern]) => pattern.test(normalized)).map(([, action]) => action)),
+  );
+}
+
 /**
  * Chapters explicitly selected by the user. A null result means the user did
  * not constrain the scope, so the integral/default flow remains available.
@@ -294,7 +322,9 @@ export function normalizeBudgetItemsToScope(
     } else if (ch === "pintura" && (u === "m2" || u === "m²")) {
       // Painting: walls + ceiling (non-wet areas)
       const concept = item.concept.toLowerCase();
-      if (concept.includes("alisado") || concept.includes("prepar")) {
+      if (concept.includes("techo")) {
+        newQty = q.ceilingArea;
+      } else if (concept.includes("pared") || concept.includes("alisado") || concept.includes("prepar")) {
         newQty = q.wallPaintArea;
       } else {
         newQty = q.wallPaintArea + q.ceilingArea;
@@ -486,6 +516,165 @@ export function normalizeBudgetItemsToScope(
   return [...corrected, ...missing];
 }
 
+/**
+ * Build a complete, deterministic set of budget lines from the structured
+ * scope. Unlike the single-line safety fallback in normalizeBudgetItemsToScope,
+ * this produces enough technical detail for partial trades such as plumbing,
+ * lighting or painting and can be priced against the tracker/technical bank.
+ */
+export function buildDeterministicBudgetItems(
+  scope: BudgetScope,
+  marginMultiplier: number,
+): EnginePartida[] {
+  const actions = Array.from(new Set((scope.actuaciones || []).filter(Boolean)));
+  if (actions.length === 0) {
+    return normalizeBudgetItemsToScope(scope, [], marginMultiplier);
+  }
+
+  const q = buildScopeQuantities(scope);
+  const qualityMultiplier = scope.calidad === "alta" ? 1.22 : scope.calidad === "basica" ? 0.88 : 1;
+  const lightingPoints = Math.max(Math.round(q.floorArea / 6), 4);
+  const waterPoints = Math.max(q.bathroomsCount * 4 + (q.kitchenIncluded ? 3 : 0), 3);
+  const supplyLength = Math.max(Math.round(q.floorArea * 0.55), 15);
+  const drainageLength = Math.max(Math.round(q.floorArea * 0.30), 10);
+  const kitchenLength = Math.max(Math.round(q.floorArea * 0.08 * 0.55), 3);
+  const items: EnginePartida[] = [];
+
+  const add = (
+    chapter: string,
+    concept: string,
+    description: string,
+    quantity: number,
+    unit: string,
+    unitPrice: number,
+    category: string,
+    estimatedHours?: number,
+  ) => {
+    const adjustedPrice = Math.round(
+      unitPrice * (category === "otros" ? 1 : qualityMultiplier) * 100,
+    ) / 100;
+    const safeQuantity = Math.max(Math.round(quantity * 10) / 10, 1);
+    const subtotalCost = safeQuantity * adjustedPrice;
+    items.push({
+      id: `engine-${chapter}-${items.length}`,
+      concept,
+      description,
+      quantity: safeQuantity,
+      unit,
+      category,
+      chapter,
+      unit_price: adjustedPrice,
+      subtotal_cost: subtotalCost,
+      unit_price_client: adjustedPrice * marginMultiplier,
+      subtotal_client: subtotalCost * marginMultiplier,
+      status: "incluida",
+      estimated_hours: estimatedHours,
+      price_source: "engine_scope",
+    });
+  };
+
+  for (const action of actions) {
+    switch (action) {
+      case "demoliciones":
+        add("protecciones", "Protección de zonas afectadas", "Protección de pasos, ascensor y elementos que se conservan.", 1, "PA", Math.max(q.floorArea * 1.6, 140), "otros", 4);
+        add("demoliciones", "Demolición manual de acabados", "Levantado controlado de revestimientos y pavimentos en la superficie afectada.", q.demolitionArea, "m2", 19, "mano_obra", q.demolitionArea * 0.35);
+        add("demoliciones", "Desmontaje de instalaciones y elementos", "Desmontaje selectivo, clasificación y acopio para retirada.", 1, "PA", Math.max(q.floorArea * 7, 320), "mano_obra", Math.max(q.floorArea * 0.18, 6));
+        add("residuos", "Contenedor y transporte a gestor autorizado", "Carga, transporte, tasa y justificante de gestión de residuos.", q.wasteContainersEstimated, "ud", 310, "otros");
+        break;
+      case "albanileria":
+        add("albanileria", "Replanteo de albañilería", "Trazado de particiones, encuentros y pasos de instalaciones.", 1, "PA", 220, "mano_obra", 4);
+        add("albanileria", "Formación y ajuste de tabiquería", "Ejecución de tabiquería y remates según la distribución seleccionada.", q.partitionArea, "m2", 46, "mano_obra", q.partitionArea * 0.55);
+        add("albanileria", "Guarnecido y regularización de paramentos", "Regularización previa a revestimientos y pintura.", Math.max(q.wallPaintArea * 0.25, 8), "m2", 18, "mano_obra");
+        add("albanileria", "Ayudas a instalaciones", "Rozas, pasos, recibido de cajas y posterior tapado.", 1, "PA", Math.max(q.floorArea * 9, 360), "mano_obra");
+        break;
+      case "electricidad":
+        add("electricidad", "Canalizaciones y cableado eléctrico", "Renovación de circuitos y conductores conforme al REBT.", q.electricalPointsEstimated, "punto", 52, "mano_obra", q.electricalPointsEstimated * 0.65);
+        add("electricidad", "Mecanismos eléctricos", "Suministro e instalación de enchufes, interruptores y cajas.", q.electricalPointsEstimated, "ud", 24, "material");
+        add("electricidad", "Cuadro eléctrico y protecciones", "Cuadro, diferenciales, magnetotérmicos, sobretensiones y rotulación.", 1, "ud", 760, "material", 7);
+        add("electricidad", "Comprobaciones y certificado", "Mediciones, pruebas de seguridad y documentación final.", 1, "PA", 320, "mano_obra", 4);
+        break;
+      case "iluminacion":
+        add("electricidad", "Puntos de iluminación", "Canalización, cableado y conexión de los puntos de luz seleccionados.", lightingPoints, "punto", 48, "mano_obra", lightingPoints * 0.75);
+        add("electricidad", "Interruptores y mecanismos de iluminación", "Mecanismos, cajas y conexiones para el control de las luminarias.", Math.max(Math.ceil(lightingPoints * 0.65), 2), "ud", 31, "material");
+        add("electricidad", "Luminarias LED", "Suministro de luminarias LED de la calidad seleccionada.", lightingPoints, "ud", 62, "material");
+        add("electricidad", "Montaje, regulación y pruebas", "Instalación, orientación y comprobación final de todos los puntos.", 1, "PA", Math.max(lightingPoints * 28, 160), "mano_obra", Math.max(lightingPoints * 0.4, 3));
+        break;
+      case "fontaneria":
+        add("fontaneria", "Red de suministro de agua", "Tubería multicapa, aislamiento, accesorios y fijaciones.", supplyLength, "ml", 27, "mano_obra", supplyLength * 0.45);
+        add("fontaneria", "Red de evacuación", "Tubería de PVC, piezas especiales, soportes y conexión a bajantes.", drainageLength, "ml", 34, "mano_obra", drainageLength * 0.5);
+        add("fontaneria", "Puntos de consumo y desagüe", "Conexiones completas para aparatos, sanitarios y cocina incluidos.", waterPoints, "ud", 118, "mano_obra", waterPoints * 1.2);
+        add("fontaneria", "Llaves de corte y accesorios", "Llaves, colectores, sifones, válvulas y pequeños accesorios.", Math.max(q.bathroomsCount + (q.kitchenIncluded ? 1 : 0), 1), "lote", 185, "material");
+        add("fontaneria", "Prueba de presión y estanqueidad", "Llenado, purgado, prueba de presión y comprobación de evacuación.", 1, "PA", 240, "mano_obra", 4);
+        add("fontaneria", "Ayudas de albañilería para fontanería", "Rozas, pasos y reposición básica de paramentos afectados.", 1, "PA", Math.max(q.floorArea * 5, 260), "mano_obra");
+        break;
+      case "climatizacion": {
+        const clima = inferClimaSystem(scope);
+        const units = clima.system === "conductos" ? 1 : Math.max(clima.unitsNeeded, 1);
+        add("climatizacion", `Equipos de climatización — ${clima.label}`, clima.description, units, clima.system === "conductos" ? "PA" : "ud", clima.system === "conductos" ? Math.max(q.floorArea * 48, 5200) : 1450, "material");
+        add("climatizacion", "Líneas frigoríficas y eléctricas", "Tuberías, aislamiento, interconexión y soportación.", Math.max(Math.round(q.floorArea * 0.35), 12), "ml", 38, "mano_obra");
+        add("climatizacion", "Evacuación de condensados", "Desagüe de condensados con pendiente y prueba de funcionamiento.", Math.max(units * 5, 5), "ml", 24, "mano_obra");
+        add("climatizacion", "Puesta en marcha y pruebas", "Vacío, carga si procede, regulación y comprobación de rendimiento.", 1, "PA", 360, "mano_obra", 5);
+        break;
+      }
+      case "alicatados":
+        add("revestimientos", "Preparación de soportes para alicatado", "Limpieza, saneado y regularización del soporte.", q.wetWallArea, "m2", 13, "mano_obra");
+        add("impermeabilizacion", "Impermeabilización de zonas húmedas", "Sistema impermeable continuo en duchas y encuentros críticos.", Math.max(q.wetWallArea * 0.4, 5), "m2", 29, "material");
+        add("revestimientos", "Colocación de revestimiento cerámico", "Colocación con adhesivo flexible, nivelación y cortes.", q.wetWallArea, "m2", 44, "mano_obra");
+        add("revestimientos", "Rejuntado y sellado", "Rejuntado, juntas elásticas y limpieza final del revestimiento.", q.wetWallArea, "m2", 9, "mano_obra");
+        break;
+      case "pavimentos":
+        add("pavimentos", "Preparación y nivelación del soporte", "Saneado, reparación y regularización previa del soporte.", q.pavementArea, "m2", 14, "mano_obra");
+        add("pavimentos", "Suministro de pavimento", "Pavimento de la calidad seleccionada con merma incluida.", q.pavementArea, "m2", 29, "material");
+        add("pavimentos", "Colocación de pavimento", "Instalación, cortes, encuentros y juntas.", q.pavementArea, "m2", 34, "mano_obra");
+        add("rodapie", "Rodapié y remates perimetrales", "Suministro, corte, colocación y sellado de rodapié.", q.baseboardMlEstimated, "ml", 13, "mano_obra");
+        break;
+      case "pintura":
+        add("pintura", "Protección de superficies y mobiliario", "Enmascarado de suelos, carpinterías y elementos conservados.", 1, "PA", Math.max(q.floorArea * 2.2, 160), "otros", 4);
+        add("pintura", "Preparación y reparación de paredes", "Lijado, sellado de fisuras y masillado puntual de paramentos.", q.wallPaintArea, "m2", 5.5, "mano_obra", q.wallPaintArea * 0.12);
+        add("pintura", "Imprimación de paredes y techos", "Aplicación de imprimación compatible según absorción del soporte.", q.wallPaintArea + q.ceilingArea, "m2", 3.4, "material");
+        add("pintura", "Pintura plástica en paredes", "Dos manos de pintura plástica lavable en el color seleccionado.", q.wallPaintArea, "m2", 9.5, "mano_obra", q.wallPaintArea * 0.13);
+        add("pintura", "Pintura de techos", "Dos manos de pintura transpirable y acabado uniforme.", q.ceilingArea, "m2", 10.5, "mano_obra", q.ceilingArea * 0.14);
+        break;
+      case "carpinteria_interior":
+        add("carpinteria_interior", "Desmontaje de carpintería interior", "Desmontaje cuidadoso de hojas, tapetas y cercos existentes.", q.doorsEstimated, "ud", 48, "mano_obra");
+        add("carpinteria_interior", "Puertas interiores y herrajes", "Suministro de puertas, cercos, tapetas, manillas y herrajes.", q.doorsEstimated, "ud", 295, "material");
+        add("carpinteria_interior", "Montaje y ajuste de puertas", "Colocación, aplomado, ajuste de herrajes y sellado.", q.doorsEstimated, "ud", 125, "mano_obra");
+        break;
+      case "carpinteria_exterior":
+        add("carpinteria_exterior", "Desmontaje de ventanas existentes", "Desmontaje, acopio y retirada de carpinterías existentes.", q.windowsCountEstimated, "ud", 85, "mano_obra");
+        add("carpinteria_exterior", "Ventanas con aislamiento térmico", "Suministro de carpintería con RPT/PVC y doble acristalamiento.", q.windowsCountEstimated, "ud", 590, "material");
+        add("carpinteria_exterior", "Instalación, sellado y remates", "Colocación, anclajes, espuma, sellado y remate interior.", q.windowsCountEstimated, "ud", 210, "mano_obra");
+        break;
+      case "cocina_montaje":
+        add("cocina", "Mobiliario de cocina", "Muebles altos y bajos, herrajes y frentes de la calidad seleccionada.", kitchenLength, "ml", 720, "material");
+        add("cocina", "Encimera y copete", "Suministro y mecanizado de encimera con huecos y remates.", kitchenLength, "ml", 285, "material");
+        add("cocina", "Montaje y ajuste de mobiliario", "Montaje, nivelación, fijación y regulación de herrajes.", 1, "PA", Math.max(kitchenLength * 240, 900), "mano_obra");
+        add("cocina", "Fregadero, grifería y conexiones", "Suministro básico, instalación y conexión a redes existentes.", 1, "lote", 690, "material");
+        break;
+      case "banos_sanitarios":
+        add("impermeabilizacion", "Impermeabilización de duchas", "Impermeabilización de zonas de ducha y encuentros con paramentos.", Math.max(q.bathroomsCount * 6, 6), "m2", 31, "material");
+        add("sanitarios", "Aparatos sanitarios y griferías", "Inodoro, lavabo, ducha y griferías de la calidad seleccionada.", q.bathroomsCount, "lote", 1850, "material");
+        add("sanitarios", "Instalación de sanitarios", "Montaje, conexiones, sellados y pruebas de los aparatos.", q.bathroomsCount, "lote", 620, "mano_obra", q.bathroomsCount * 12);
+        add("sanitarios", "Mamparas y accesorios", "Suministro e instalación de mampara, espejo y accesorios básicos.", q.bathroomsCount, "lote", 620, "material");
+        break;
+      case "limpieza_final":
+        add("limpieza", "Limpieza fina de obra", "Eliminación de polvo, adhesivos y restos en todas las superficies afectadas.", q.floorArea, "m2", 5.2, "mano_obra");
+        add("limpieza", "Limpieza de vidrios y repasos", "Limpieza de vidrios, carpinterías, sanitarios y repaso final.", 1, "PA", Math.max(q.floorArea * 1.8, 120), "mano_obra");
+        break;
+      case "gestion_residuos":
+        add("residuos", "Contenedores y transporte", "Contenedor, retirada y transporte a gestor autorizado.", q.wasteContainersEstimated, "ud", 310, "otros");
+        add("residuos", "Tasas y documentación de residuos", "Tasas, pesaje y justificantes de entrega al gestor.", 1, "PA", Math.max(q.wasteContainersEstimated * 95, 120), "otros");
+        break;
+      default: {
+        const chapter = ACTION_CHAPTERS[action]?.[0] || action;
+        add(chapter, `Trabajos de ${action.replace(/_/g, " ")}`, "Partida dimensionada según el alcance seleccionado.", 1, "PA", Math.max(q.floorArea * 45, 450), "mano_obra");
+      }
+    }
+  }
+
+  return normalizeBudgetItemsToScope(scope, items, marginMultiplier);
+}
+
 // ─── C. Cost Breakdown ──────────────────────────────────────────────────────
 
 export function calculateItemCostBreakdown(
@@ -578,10 +767,14 @@ const MATERIAL_SPECS: MaterialSpec[] = [
   // Fontaneria
   { name: "Tuberia multicapa 16mm (rollo 50m)", unit: "rollos", unit_price: 42.0, provider_id: "saltoki", qtyFn: q => Math.ceil((q.bathroomsCount + (q.kitchenIncluded ? 1 : 0)) * 1.2), chapter: "fontaneria" },
   { name: "Tuberia PVC evacuacion 110mm (3m)", unit: "ud", unit_price: 8.50, provider_id: "saltoki", qtyFn: q => Math.ceil(q.bathroomsCount * 3 + (q.kitchenIncluded ? 2 : 0)), chapter: "fontaneria" },
+  { name: "Racores y accesorios multicapa", unit: "lotes", unit_price: 95.0, provider_id: "saltoki", qtyFn: q => Math.max(q.bathroomsCount + (q.kitchenIncluded ? 1 : 0), 1), chapter: "fontaneria" },
+  { name: "Llaves de corte y colectores", unit: "lotes", unit_price: 78.0, provider_id: "saltoki", qtyFn: q => Math.max(q.bathroomsCount + (q.kitchenIncluded ? 1 : 0), 1), chapter: "fontaneria" },
+  { name: "Sifones y valvulas de desague", unit: "ud", unit_price: 18.0, provider_id: "leroy-merlin", qtyFn: q => Math.max(q.bathroomsCount * 2 + (q.kitchenIncluded ? 1 : 0), 2), chapter: "fontaneria" },
   // Electricidad
   { name: "Cable H07V-K 2.5mm2 (rollo 100m)", unit: "rollos", unit_price: 32.0, provider_id: "leroy-merlin", qtyFn: q => Math.ceil(q.electricalPointsEstimated / 30), chapter: "electricidad" },
   { name: "Cuadro electrico + protecciones", unit: "ud", unit_price: 220.0, provider_id: "saltoki", qtyFn: () => 1, chapter: "electricidad" },
   { name: "Mecanismos electricos (enchufes + interruptores)", unit: "ud", unit_price: 8.50, provider_id: "leroy-merlin", qtyFn: q => q.electricalPointsEstimated, chapter: "electricidad" },
+  { name: "Luminaria LED de superficie", unit: "ud", unit_price: 38.0, provider_id: "leroy-merlin", qtyFn: q => Math.max(Math.round(q.floorArea / 6), 4), chapter: "electricidad" },
   // Revestimientos / Pavimentos
   { name: "Azulejo porcelanico 60x60cm", unit: "m2", unit_price: 18.50, provider_id: "leroy-merlin", qtyFn: q => Math.ceil(q.wetWallArea * 1.1), chapter: "revestimientos" },
   { name: "Cemento cola porcelanico flexible (saco 25kg)", unit: "sacos", unit_price: 12.0, provider_id: "obramat", qtyFn: q => Math.ceil((q.wetWallArea + q.pavementArea) / 5), chapter: "revestimientos" },
@@ -590,6 +783,9 @@ const MATERIAL_SPECS: MaterialSpec[] = [
   // Pintura
   { name: "Pintura plastica blanca mate (cubo 15L)", unit: "cubos", unit_price: 35.0, provider_id: "leroy-merlin", qtyFn: q => Math.ceil((q.wallPaintArea + q.ceilingArea) / 80), chapter: "pintura" },
   { name: "Imprimacion fijadora (cubo 15L)", unit: "cubos", unit_price: 28.0, provider_id: "leroy-merlin", qtyFn: q => Math.ceil((q.wallPaintArea + q.ceilingArea) / 120), chapter: "pintura" },
+  { name: "Masilla de reparacion interior (saco 15kg)", unit: "sacos", unit_price: 18.0, provider_id: "obramat", qtyFn: q => Math.max(Math.ceil(q.wallPaintArea / 100), 1), chapter: "pintura" },
+  { name: "Cinta de enmascarar y plastico protector", unit: "lotes", unit_price: 32.0, provider_id: "leroy-merlin", qtyFn: q => Math.max(Math.ceil(q.floorArea / 80), 1), chapter: "pintura" },
+  { name: "Rodillos, brochas y cubetas", unit: "lotes", unit_price: 42.0, provider_id: "leroy-merlin", qtyFn: q => Math.max(Math.ceil(q.floorArea / 100), 1), chapter: "pintura" },
   // Sanitarios
   { name: "Inodoro compacto salida dual", unit: "ud", unit_price: 155.0, provider_id: "leroy-merlin", qtyFn: q => q.bathroomsCount, chapter: "sanitarios" },
   { name: "Lavabo sobre encimera + monomando", unit: "ud", unit_price: 130.0, provider_id: "leroy-merlin", qtyFn: q => q.bathroomsCount, chapter: "sanitarios" },
@@ -747,8 +943,28 @@ export function getMarketRange(
     limpieza_final: [8, 25],
     gestion_residuos: [15, 50],
   };
+  const quantities = buildScopeQuantities(scope);
+  const actionFixedRanges: Record<string, [number, number]> = {
+    demoliciones: [900, 4200],
+    albanileria: [1200, 6500],
+    electricidad: [2600, 12000],
+    iluminacion: [900, 5200],
+    fontaneria: [1800, 8200],
+    climatizacion: [1800, 9500],
+    alicatados: [1400, 7200],
+    pavimentos: [1500, 8500],
+    pintura: [900, 5200],
+    carpinteria_interior: [900, 6500],
+    carpinteria_exterior: [1200, 9500],
+    cocina_montaje: [4500, 18000],
+    banos_sanitarios: [2800 * quantities.bathroomsCount, 8500 * quantities.bathroomsCount],
+    limpieza_final: [350, 1800],
+    gestion_residuos: [450, 2400],
+  };
 
   const selectedActions = Array.from(new Set((scope.actuaciones || []).filter(Boolean)));
+  let fixedMin = 0;
+  let fixedMax = 0;
   if (selectedActions.length > 0) {
     const actionRange = selectedActions.reduce(
       (range, action) => {
@@ -759,6 +975,11 @@ export function getMarketRange(
     );
     minPerM2 = Math.max(actionRange.min, 25);
     maxPerM2 = Math.max(actionRange.max, minPerM2 * 1.35);
+    for (const action of selectedActions) {
+      const fixed = actionFixedRanges[action] || [500, 3000];
+      fixedMin += fixed[0];
+      fixedMax += fixed[1];
+    }
   } else if (st.includes("obra nueva")) {
     minPerM2 = 1300; maxPerM2 = 2600;
   } else if (st.includes("integral") || st.includes("completa") || st === "reforma") {
@@ -783,9 +1004,14 @@ export function getMarketRange(
   minPerM2 = Math.round(minPerM2 * qualityMult * locationMult);
   maxPerM2 = Math.round(maxPerM2 * qualityMult * locationMult);
 
+  const perAreaMin = minPerM2 * affectedArea;
+  const perAreaMax = maxPerM2 * affectedArea;
+  const adjustedFixedMin = fixedMin * qualityMult * locationMult;
+  const adjustedFixedMax = fixedMax * qualityMult * locationMult;
+
   return {
-    min: minPerM2 * affectedArea,
-    max: maxPerM2 * affectedArea,
+    min: Math.round(Math.max(perAreaMin, adjustedFixedMin)),
+    max: Math.round(Math.max(perAreaMax, adjustedFixedMax)),
   };
 }
 

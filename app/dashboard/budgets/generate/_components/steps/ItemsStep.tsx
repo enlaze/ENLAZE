@@ -58,6 +58,11 @@ export function ItemsStep() {
                 <span>
                   Resultado: <strong>{state.realismAudit.pricePerM2.toFixed(0)} EUR/m2</strong>
                 </span>
+                {state.realismAudit.recalculatedAt && (
+                  <span>
+                    Actualizado: <strong>{new Date(state.realismAudit.recalculatedAt).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</strong>
+                  </span>
+                )}
               </div>
             )}
           </div>

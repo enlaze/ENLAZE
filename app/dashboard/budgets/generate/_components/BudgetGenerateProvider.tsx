@@ -12,6 +12,8 @@ import {
   type BudgetClientView,
   type BudgetInternalView,
   buildScopeQuantities,
+  buildDeterministicBudgetItems,
+  inferBudgetActions,
   normalizeBudgetItemsToScope,
   calculateItemCostBreakdown,
   buildScopeMaterials,
@@ -23,6 +25,7 @@ import {
   buildClientView,
   buildInternalView,
 } from "@/lib/budget-engine";
+import { buildDeterministicBudgetAnalysis } from "@/lib/budget-analysis-fallback";
 import {
   resolveMarketPrices,
   type QualityTier,
@@ -792,7 +795,9 @@ export function BudgetGenerateProvider({
       incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
       incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,
       estancias: state.sectorData.estancias || [],
-      actuaciones: state.sectorData.actuaciones || [],
+      actuaciones: (state.sectorData.actuaciones || []).length > 0
+        ? state.sectorData.actuaciones || []
+        : inferBudgetActions(`${state.serviceType || ""} ${state.description || ""}`),
       calidad: state.sectorData.calidad || "media",
       ubicacion: state.sectorData.ubicacion || "",
     };
@@ -1274,9 +1279,15 @@ export function BudgetGenerateProvider({
   };
 
   const analyzeWithAI = async (forceRegenerate = false): Promise<boolean> => {
+    const explicitActions = state.sectorData.actuaciones || [];
+    const resolvedActions = explicitActions.length > 0
+      ? explicitActions
+      : inferBudgetActions(`${state.serviceType || ""} ${state.description || ""}`);
     const hasStructuredScope =
-      Number(state.sectorData.superficie_m2) > 0 &&
-      (state.serviceType || (state.sectorData.actuaciones || []).length > 0);
+      Number(state.sectorData.superficie_m2) > 0 ||
+      Boolean(state.serviceType) ||
+      resolvedActions.length > 0 ||
+      (state.sectorData.estancias || []).length > 0;
     if (!hasStructuredScope && (!state.description || state.description.trim().length < 5)) {
       setState((prev) => ({
         ...prev,
@@ -1288,7 +1299,7 @@ export function BudgetGenerateProvider({
     // Include scope data in hash so changes to estancias/calidad/superficie trigger re-analysis
     const scopeStr = JSON.stringify({
       s: state.sectorData.estancias,
-      a: state.sectorData.actuaciones,
+      a: resolvedActions,
       c: state.sectorData.calidad,
       m2: state.sectorData.superficie_m2,
       nb: state.sectorData.num_banos,
@@ -1321,35 +1332,46 @@ export function BudgetGenerateProvider({
     }));
 
     try {
-      const res = await fetch("/api/agent/budget-analysis", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const requestScope: BudgetScope = {
+        ubicacion: state.sectorData.ubicacion || "",
+        estancias: state.sectorData.estancias || [],
+        actuaciones: resolvedActions,
+        calidad: (state.sectorData.calidad as "basica" | "media" | "alta") || "media",
+        superficie_m2: state.sectorData.superficie_m2 || 80,
+        num_banos: state.sectorData.num_banos || 1,
+        incluye_cocina: state.sectorData.incluye_cocina ?? true,
+        incluye_ventanas: state.sectorData.incluye_ventanas ?? resolvedActions.includes("carpinteria_exterior"),
+        incluye_climatizacion: state.sectorData.incluye_climatizacion ?? resolvedActions.includes("climatizacion"),
+      };
+      let data: any;
+      try {
+        const res = await fetch("/api/agent/budget-analysis", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sector: state.sector,
+            description: state.description || "Presupuesto definido mediante las selecciones estructuradas del formulario.",
+            service_type: state.serviceType,
+            project_id: state.projectId,
+            technical_document_ids: state.sectorData.technical_document_ids || [],
+            scope: requestScope,
+          })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || "Error al analizar la petición");
+        }
+        data = await res.json();
+      } catch (requestError: unknown) {
+        if (state.sector !== "construccion") throw requestError;
+        data = buildDeterministicBudgetAnalysis({
           sector: state.sector,
-          description: state.description || "Presupuesto definido mediante las selecciones estructuradas del formulario.",
-          service_type: state.serviceType,
-          project_id: state.projectId,
-          technical_document_ids: state.sectorData.technical_document_ids || [],
-          scope: {
-            ubicacion: state.sectorData.ubicacion || "",
-            estancias: state.sectorData.estancias || [],
-            actuaciones: state.sectorData.actuaciones || [],
-            calidad: state.sectorData.calidad || "media",
-            superficie_m2: state.sectorData.superficie_m2 || null,
-            num_banos: state.sectorData.num_banos || 1,
-            incluye_cocina: state.sectorData.incluye_cocina ?? true,
-            incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
-            incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,
-          },
-        })
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "Error al analizar la petición");
+          serviceType: state.serviceType || "reforma",
+          scope: requestScope,
+          reason: "El servicio de IA no respondió; cálculo realizado por el motor técnico ENLAZE.",
+        });
       }
-
-      const data = await res.json();
       const marginMultiplier = 1 + (state.marginPercent / 100);
 
       // Map suggested_items to Partidas
@@ -1446,15 +1468,8 @@ export function BudgetGenerateProvider({
 
       // Build scope from user data (user scope always takes priority)
       const engineScope: BudgetScope = {
-        superficie_m2: detectedArea || 80,
-        num_banos: state.sectorData.num_banos || 1,
-        incluye_cocina: state.sectorData.incluye_cocina ?? true,
-        incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
-        incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,
-        estancias: state.sectorData.estancias || [],
-        actuaciones: state.sectorData.actuaciones || [],
-        calidad: (state.sectorData.calidad as "basica" | "media" | "alta") || "media",
-        ubicacion: state.sectorData.ubicacion || "",
+        ...requestScope,
+        superficie_m2: detectedArea || requestScope.superficie_m2,
       };
 
       let finalPartidas: Partida[] = newPartidas;
@@ -1540,18 +1555,8 @@ export function BudgetGenerateProvider({
       // --- Fallback partidas for construction if AI returned too few ---
       if (state.sector === "construccion" && finalPartidas.length < 5) {
         // Use engine to build from scratch based on scope
-        const fallbackScope: BudgetScope = {
-          superficie_m2: detectedArea || 80,
-          num_banos: state.sectorData.num_banos || 1,
-          incluye_cocina: state.sectorData.incluye_cocina ?? true,
-          incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
-          incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,
-          estancias: state.sectorData.estancias || [],
-          actuaciones: state.sectorData.actuaciones || [],
-          calidad: (state.sectorData.calidad as "basica" | "media" | "alta") || "media",
-          ubicacion: state.sectorData.ubicacion || "",
-        };
-        const built = normalizeBudgetItemsToScope(fallbackScope, [], marginMultiplier);
+        const fallbackScope: BudgetScope = engineScope;
+        const built = buildDeterministicBudgetItems(fallbackScope, marginMultiplier);
         finalPartidas = built.map(ep => ({
           id: ep.id, concept: ep.concept, description: ep.description,
           quantity: ep.quantity, unit: ep.unit, category: ep.category,
@@ -1571,16 +1576,7 @@ export function BudgetGenerateProvider({
 
       // --- Fallback materials if still empty ---
       if (finalMaterials.length === 0 && state.sector === "construccion") {
-        const matScope: BudgetScope = {
-          superficie_m2: detectedArea || 80,
-          num_banos: state.sectorData.num_banos || 1,
-          incluye_cocina: state.sectorData.incluye_cocina ?? true,
-          incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
-          incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,
-          estancias: [], actuaciones: [],
-          calidad: (state.sectorData.calidad as "basica" | "media" | "alta") || "media",
-          ubicacion: "",
-        };
+        const matScope: BudgetScope = engineScope;
         finalMaterials = buildScopeMaterials(matScope).map(em => ({
           id: em.id, name: em.name, quantity: em.quantity, unit: em.unit,
           unit_price: em.unit_price, subtotal: em.subtotal, included: em.included,
@@ -1838,17 +1834,7 @@ export function BudgetGenerateProvider({
       };
 
       // --- Timeline via engine ---
-      const engineTimelineScope: BudgetScope = {
-        superficie_m2: detectedArea || 80,
-        num_banos: state.sectorData.num_banos || 1,
-        incluye_cocina: state.sectorData.incluye_cocina ?? true,
-        incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
-        incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,
-        estancias: state.sectorData.estancias || [],
-        actuaciones: state.sectorData.actuaciones || [],
-        calidad: (state.sectorData.calidad as "basica" | "media" | "alta") || "media",
-        ubicacion: state.sectorData.ubicacion || "",
-      };
+      const engineTimelineScope: BudgetScope = engineScope;
       const engineTimeline = state.sector === "construccion"
         ? estimateRealisticTimeline(engineTimelineScope, finalPartidas.map(p => ({
             ...p, chapter: p.chapter || "", status: (p.status || "incluida") as "incluida" | "estimada" | "opcional",
@@ -1902,17 +1888,7 @@ export function BudgetGenerateProvider({
       let computedInternalView: BudgetInternalView | null = null;
 
       if (state.sector === "construccion" && finalPartidas.length > 0) {
-        const viewScope: BudgetScope = {
-          superficie_m2: detectedArea || 80,
-          num_banos: state.sectorData.num_banos || 1,
-          incluye_cocina: state.sectorData.incluye_cocina ?? true,
-          incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
-          incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,
-          estancias: state.sectorData.estancias || [],
-          actuaciones: state.sectorData.actuaciones || [],
-          calidad: (state.sectorData.calidad as "basica" | "media" | "alta") || "media",
-          ubicacion: state.sectorData.ubicacion || "",
-        };
+        const viewScope: BudgetScope = engineScope;
 
         // Convert partidas to EnginePartida for view builders
         const viewItems: EnginePartida[] = finalPartidas.map(p => ({
@@ -1995,6 +1971,11 @@ export function BudgetGenerateProvider({
           data_sources: data.data_sources,
         },
       }));
+      if (forceRegenerate) {
+        toast.success("Presupuesto recalculado", {
+          description: `${priceVerification.verified}/${priceVerification.total} materiales verificados · ${verifiedPartidaCount}/${finalPartidas.length} partidas contrastadas.`,
+        });
+      }
       return true;
 
     } catch (error: any) {
@@ -2025,8 +2006,6 @@ export function BudgetGenerateProvider({
 
         // If AI failed or returned nothing, and we're in construction, inject engine fallback
         if (!success && (state.sector === "construccion" || !state.sector)) {
-          const isReforma = state.serviceType?.toLowerCase().includes("reforma") || !state.serviceType;
-          if (isReforma) {
             toast.info("Aviso", {
               description: "Usando motor de presupuestos local porque el análisis IA no ha respondido."
             });
@@ -2037,12 +2016,14 @@ export function BudgetGenerateProvider({
               incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
               incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,
               estancias: state.sectorData.estancias || [],
-              actuaciones: state.sectorData.actuaciones || [],
+              actuaciones: (state.sectorData.actuaciones || []).length > 0
+                ? state.sectorData.actuaciones || []
+                : inferBudgetActions(`${state.serviceType || ""} ${state.description || ""}`),
               calidad: (state.sectorData.calidad as "basica" | "media" | "alta") || "media",
               ubicacion: state.sectorData.ubicacion || "",
             };
             const mm = 1 + (state.marginPercent / 100);
-            const builtItems = normalizeBudgetItemsToScope(fbScope, [], mm);
+            const builtItems = buildDeterministicBudgetItems(fbScope, mm);
             const builtMats = buildScopeMaterials(fbScope);
             const fallbackMaterialsList = builtMats.map(em => ({
               id: em.id, name: em.name, quantity: em.quantity, unit: em.unit,
@@ -2077,7 +2058,6 @@ export function BudgetGenerateProvider({
             }));
             saveDraft(false);
             return;
-          }
         }
       }
     }
@@ -2097,8 +2077,6 @@ export function BudgetGenerateProvider({
          if (isDefaultPartidas) {
            const success = await analyzeWithAI();
            if (!success && (state.sector === "construccion" || !state.sector)) {
-              const isReforma = state.serviceType?.toLowerCase().includes("reforma") || !state.serviceType;
-              if (isReforma) {
                 toast.info("Aviso", {
                   description: "Usando motor de presupuestos local porque el análisis IA no ha respondido."
                 });
@@ -2109,12 +2087,14 @@ export function BudgetGenerateProvider({
                   incluye_ventanas: state.sectorData.incluye_ventanas ?? false,
                   incluye_climatizacion: state.sectorData.incluye_climatizacion ?? false,
                   estancias: state.sectorData.estancias || [],
-                  actuaciones: state.sectorData.actuaciones || [],
+                  actuaciones: (state.sectorData.actuaciones || []).length > 0
+                    ? state.sectorData.actuaciones || []
+                    : inferBudgetActions(`${state.serviceType || ""} ${state.description || ""}`),
                   calidad: (state.sectorData.calidad as "basica" | "media" | "alta") || "media",
                   ubicacion: state.sectorData.ubicacion || "",
                 };
                 const gMM = 1 + (state.marginPercent / 100);
-                const gItems = normalizeBudgetItemsToScope(gScope, [], gMM);
+                const gItems = buildDeterministicBudgetItems(gScope, gMM);
                 const gMaterials = buildScopeMaterials(gScope).map((material) => ({
                   id: material.id,
                   name: material.name,
@@ -2150,7 +2130,6 @@ export function BudgetGenerateProvider({
                   priceVerification: verifiedFallback.verification,
                   materialsFromAI: true,
                 }));
-              }
            }
          }
       }

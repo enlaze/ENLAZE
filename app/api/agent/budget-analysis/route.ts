@@ -5,8 +5,12 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { getSectorConfig } from "@/lib/agent-prompts";
 import { normalizeSector } from "@/lib/sector-config";
+import { inferBudgetActions, type BudgetScope } from "@/lib/budget-engine";
+import { buildDeterministicBudgetAnalysis } from "@/lib/budget-analysis-fallback";
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const anthropic = process.env.ANTHROPIC_API_KEY
+  ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  : null;
 
 function stripCodeFences(text: string) {
   let cleaned = text.trim();
@@ -66,8 +70,10 @@ export async function POST(request: Request) {
     } = body;
 
     const hasStructuredScope =
-      Number(scope?.superficie_m2) > 0 &&
-      (Boolean(service_type) || (Array.isArray(scope?.actuaciones) && scope.actuaciones.length > 0));
+      Number(scope?.superficie_m2) > 0 ||
+      Boolean(service_type) ||
+      (Array.isArray(scope?.actuaciones) && scope.actuaciones.length > 0) ||
+      (Array.isArray(scope?.estancias) && scope.estancias.length > 0);
     if (!hasStructuredScope && (!description || description.trim().length < 5)) {
       return NextResponse.json(
         { error: "Indica superficie y tipo de obra, o añade una descripción breve" },
@@ -77,6 +83,23 @@ export async function POST(request: Request) {
 
     const activeSector = normalizeSector(sector || "construccion");
     const sectorConfig = getSectorConfig(activeSector);
+    const explicitActions = Array.isArray(scope?.actuaciones)
+      ? scope.actuaciones.filter((action: unknown): action is string => typeof action === "string" && action.length > 0)
+      : [];
+    const inferredActions = explicitActions.length > 0
+      ? explicitActions
+      : inferBudgetActions(`${service_type || ""} ${description || ""}`);
+    const engineScope: BudgetScope = {
+      superficie_m2: Math.max(Number(scope?.superficie_m2) || 80, 1),
+      num_banos: Math.max(Number(scope?.num_banos) || 1, 1),
+      incluye_cocina: scope?.incluye_cocina ?? inferredActions.includes("cocina_montaje"),
+      incluye_ventanas: scope?.incluye_ventanas ?? inferredActions.includes("carpinteria_exterior"),
+      incluye_climatizacion: scope?.incluye_climatizacion ?? inferredActions.includes("climatizacion"),
+      estancias: Array.isArray(scope?.estancias) ? scope.estancias.filter((room: unknown): room is string => typeof room === "string") : [],
+      actuaciones: inferredActions,
+      calidad: ["basica", "media", "alta"].includes(scope?.calidad) ? scope.calidad : "media",
+      ubicacion: String(scope?.ubicacion || ""),
+    };
 
     const selectedTechnicalDocumentIds = Array.isArray(technical_document_ids)
       ? technical_document_ids.filter((id): id is string => typeof id === "string" && id.length > 0)
@@ -451,30 +474,50 @@ Para construccion necesito MINIMO 20 partidas y 15 materiales. Los precios de pr
     }
     messageContent.push({ type: "text", text: userPrompt });
 
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 8192,
-      system: systemPrompt,
-      messages: [
-        {
-          role: "user",
-          content: messageContent,
-        }
-      ]
-    });
-
-    const responseText = message.content
-      .filter((block): block is Anthropic.TextBlock => block.type === "text")
-      .map(block => block.text)
-      .join("");
-
-    let result;
+    let result: any;
+    let aiFallbackReason = "";
     try {
-      result = JSON.parse(extractJson(responseText));
-    } catch {
-      console.error("[budget-analysis] Failed to parse JSON. Raw response length:", responseText.length);
-      console.error("[budget-analysis] First 500 chars:", responseText.slice(0, 500));
-      throw new Error("El agente devolvio un formato invalido. Intenta de nuevo.");
+      if (!anthropic) throw new Error("ANTHROPIC_API_KEY no configurada");
+      const message = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 8192,
+        system: systemPrompt,
+        messages: [
+          {
+            role: "user",
+            content: messageContent,
+          }
+        ]
+      });
+
+      const responseText = message.content
+        .filter((block): block is Anthropic.TextBlock => block.type === "text")
+        .map(block => block.text)
+        .join("");
+      try {
+        result = JSON.parse(extractJson(responseText));
+      } catch {
+        console.error("[budget-analysis] Failed to parse JSON. Raw response length:", responseText.length);
+        throw new Error("El agente devolvió un formato inválido");
+      }
+    } catch (analysisError: unknown) {
+      if (activeSector !== "construccion") throw analysisError;
+      const rawMessage = analysisError instanceof Error ? analysisError.message : String(analysisError);
+      aiFallbackReason = /credit balance|credits|billing/i.test(rawMessage)
+        ? "Claude no tiene saldo disponible; cálculo realizado por el motor técnico ENLAZE."
+        : "Claude no está disponible; cálculo realizado por el motor técnico ENLAZE.";
+      console.warn("[budget-analysis] usando motor determinista", {
+        status: analysisError && typeof analysisError === "object" && "status" in analysisError
+          ? (analysisError as { status?: unknown }).status
+          : null,
+      });
+      result = buildDeterministicBudgetAnalysis({
+        sector: activeSector,
+        serviceType: service_type || "reforma",
+        scope: engineScope,
+        trackerProductsCount: trackerProductsCount ?? 0,
+        reason: aiFallbackReason,
+      });
     }
 
     // Post-processing: ensure arrays exist
@@ -506,6 +549,7 @@ Para construccion necesito MINIMO 20 partidas y 15 materiales. Los precios de pr
     const realSuppliers = Array.from(new Set(priceItems.map(p => p.supplier_name).filter(s => s === "Leroy Merlin" || s === "OBRAMAT")));
 
     result.data_sources = {
+      ...(result.data_sources || {}),
       price_items_count: priceItems.length,
       n8n_items_count: n8nItemsCount,
       tracker_products_count: trackerProductsCount ?? 0,
@@ -514,6 +558,9 @@ Para construccion necesito MINIMO 20 partidas y 15 materiales. Los precios de pr
       sector_regulation_count: regulations.length,
       real_suppliers: realSuppliers,
       documents_used: technicalDocuments.map((doc: any) => ({ id: doc.id, name: doc.name })),
+      analysis_mode: result.analysis_mode || "claude",
+      using_ai_fallback: result.analysis_mode === "deterministic_engine",
+      ai_fallback_reason: aiFallbackReason || result.data_sources?.ai_fallback_reason || "",
       using_fallback: (trackerProductsCount ?? 0) === 0,
       fallback_reason: (trackerProductsCount ?? 0) === 0
         ? "No hay productos activos con precio en el rastreador"
