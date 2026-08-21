@@ -29,6 +29,7 @@ import {
 import { buildDeterministicBudgetAnalysis } from "@/lib/budget-analysis-fallback";
 import {
   resolveMarketPrices,
+  type PriceAlternative,
   type QualityTier,
   type ResolvedPrice,
 } from "@/lib/price-resolver";
@@ -43,6 +44,7 @@ import {
 } from "@/lib/geographic-costs";
 import { isTraceableCommercialPrice } from "@/lib/price-traceability";
 import { normalizeBudgetItemUnit } from "@/lib/budget-units";
+import { canonicalProviderName, providerIdentitySlug } from "@/lib/provider-identity";
 
 // The v2 price resolver (/api/prices/resolve, resolver_used: "v2") can
 // return several low-confidence "estimate" source types — market_estimate,
@@ -156,6 +158,9 @@ export interface Material {
   sourceUrl?: string;
   priceCheckedAt?: string;
   confidenceScore?: number;
+  isAvailable?: boolean;
+  deliveryDays?: number;
+  priceAlternatives?: PriceAlternative[];
   /** Budget chapter this material is consumed by */
   linkedChapter?: string;
   /** True when the selected provider does not carry this material */
@@ -341,16 +346,15 @@ async function verifyMaterialsAgainstTracker(
         sourceName: "Estimación pendiente de coincidencia exacta",
         matchedProductName: resolved?.selectedProductName,
         sourceUrl: resolved?.sourceUrl || undefined,
+        priceCheckedAt: resolved?.capturedAt || undefined,
         confidenceScore: resolved?.confidenceScore ?? material.confidenceScore ?? 0.2,
+        isAvailable: resolved?.isAvailable,
+        deliveryDays: resolved?.deliveryDays,
+        priceAlternatives: resolved?.alternatives || [],
       };
     }
 
-    const providerId = (resolved.selectedSupplier || "rastreador-enlaze")
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "");
+    const providerId = providerIdentitySlug(resolved.selectedSupplier, resolved.sourceUrl);
 
     return {
       ...material,
@@ -364,6 +368,9 @@ async function verifyMaterialsAgainstTracker(
       sourceUrl: resolved.sourceUrl || undefined,
       priceCheckedAt: resolved.capturedAt || undefined,
       confidenceScore: resolved.confidenceScore,
+      isAvailable: resolved.isAvailable,
+      deliveryDays: resolved.deliveryDays,
+      priceAlternatives: resolved.alternatives || [],
     };
   });
 
@@ -394,12 +401,13 @@ function buildTrackerProviderOptions(materials: Material[]): ProviderOption[] {
   >();
 
   materials.filter((material) => material.included).forEach((material) => {
+    const canonicalName = canonicalProviderName(material.sourceName, material.sourceUrl);
     const id = material.isRealData
-      ? material.provider_id || "rastreador-enlaze"
+      ? providerIdentitySlug(canonicalName, material.sourceUrl)
       : "referencia-tecnica-enlaze";
     const current = providers.get(id) || {
       name: material.isRealData
-        ? material.sourceName || "Rastreador ENLAZE"
+        ? canonicalName
         : "Referencia técnica ENLAZE",
       count: 0,
       total: 0,
@@ -915,11 +923,38 @@ export function BudgetGenerateProvider({
       selectedSupplier: material.sourceName || material.provider_id || "Sin proveedor verificado",
       confidenceScore: material.confidenceScore || (material.isRealData ? 0.8 : 0.2),
     }));
+    const includedMaterials = state.materials.filter((material) => material.included);
+    const knownDeliveryDays = includedMaterials
+      .map((material) => material.deliveryDays)
+      .filter((days): days is number => typeof days === "number" && Number.isFinite(days));
+    const realisticTimeline = estimateRealisticTimeline(scope, items, {
+      total_materials: includedMaterials.length,
+      verified_materials: includedMaterials.filter((material) => material.isRealData).length,
+      max_delivery_days: knownDeliveryDays.length > 0 ? Math.max(...knownDeliveryDays) : 0,
+      unavailable_materials: includedMaterials.filter((material) => material.isAvailable === false).length,
+      unknown_delivery_materials: includedMaterials.filter((material) => typeof material.deliveryDays !== "number").length,
+    });
+    let recalculatedEndDate: string | null = null;
+    if (state.startDate) {
+      const endDate = new Date(state.startDate);
+      if (!Number.isNaN(endDate.getTime())) {
+        let remainingWorkingDays = Math.round(
+          ((realisticTimeline.total_weeks_min + realisticTimeline.total_weeks_max) / 2) * 5,
+        );
+        while (remainingWorkingDays > 0) {
+          endDate.setDate(endDate.getDate() + 1);
+          if (endDate.getDay() !== 0 && endDate.getDay() !== 6) remainingWorkingDays--;
+        }
+        recalculatedEndDate = endDate.toISOString().slice(0, 10);
+      }
+    }
 
     setState((previous) => ({
       ...previous,
       clientView: buildClientView(scope, items, previous.ivaPercent),
       internalView: buildInternalView(scope, items, materials, previous.ivaPercent, evidence),
+      realisticTimeline,
+      ...(recalculatedEndDate ? { endDate: recalculatedEndDate } : {}),
     }));
   }, [
     state.partidas,
@@ -928,6 +963,7 @@ export function BudgetGenerateProvider({
     state.sector,
     state.sectorData,
     state.aiInsights?.detected_area_m2,
+    state.startDate,
   ]);
 
   const SCOPE_FIELDS = new Set(["description", "serviceType", "startDate"]);
@@ -1055,9 +1091,27 @@ export function BudgetGenerateProvider({
         updated.subtotal = updated.quantity * updated.unit_price;
         return updated;
       });
+      const baseAIMaterials = prev.baseAIMaterials.map((material) => {
+        if (material.id !== id) return material;
+        const updated = { ...material, ...updates };
+        updated.subtotal = updated.quantity * updated.unit_price;
+        return updated;
+      });
+      const included = materials.filter((material) => material.included);
+      const verified = included.filter((material) => material.isRealData).length;
       return {
         ...prev,
         materials,
+        baseAIMaterials,
+        providerOptions: buildTrackerProviderOptions(materials),
+        priceVerification: {
+          ...prev.priceVerification,
+          status: verified === included.length ? "complete" : "partial",
+          total: included.length,
+          verified,
+          estimated: included.length - verified,
+          lastVerifiedAt: new Date().toISOString(),
+        },
         partidas: integrateMaterialBasket(prev.partidas, materials, prev.marginPercent),
       };
     });
@@ -1833,16 +1887,15 @@ export function BudgetGenerateProvider({
                 sourceName: "Estimación pendiente de coincidencia exacta",
                 matchedProductName: resolved?.selectedProductName,
                 sourceUrl: resolved?.sourceUrl || undefined,
+                priceCheckedAt: resolved?.capturedAt || undefined,
                 confidenceScore: resolved?.confidenceScore ?? material.confidenceScore ?? 0.2,
+                isAvailable: resolved?.isAvailable,
+                deliveryDays: resolved?.deliveryDays,
+                priceAlternatives: resolved?.alternatives || [],
               };
             }
 
-            const providerId = (resolved.selectedSupplier || "rastreador-enlaze")
-              .toLowerCase()
-              .normalize("NFD")
-              .replace(/[\u0300-\u036f]/g, "")
-              .replace(/[^a-z0-9]+/g, "-")
-              .replace(/^-|-$/g, "");
+            const providerId = providerIdentitySlug(resolved.selectedSupplier, resolved.sourceUrl);
             return {
               ...material,
               unit_price: resolved.selectedPrice,
@@ -1854,6 +1907,9 @@ export function BudgetGenerateProvider({
               sourceUrl: resolved.sourceUrl || undefined,
               priceCheckedAt: resolved.capturedAt || undefined,
               confidenceScore: resolved.confidenceScore,
+              isAvailable: resolved.isAvailable,
+              deliveryDays: resolved.deliveryDays,
+              priceAlternatives: resolved.alternatives || [],
             };
           });
 
@@ -2014,10 +2070,20 @@ export function BudgetGenerateProvider({
 
       // --- Timeline via engine ---
       const engineTimelineScope: BudgetScope = engineScope;
+      const timelineMaterials = finalMaterials.filter((material) => material.included);
+      const knownDeliveryDays = timelineMaterials
+        .map((material) => material.deliveryDays)
+        .filter((days): days is number => typeof days === "number" && Number.isFinite(days));
       const engineTimeline = state.sector === "construccion"
         ? estimateRealisticTimeline(engineTimelineScope, finalPartidas.map(p => ({
             ...p, chapter: p.chapter || "", status: (p.status || "incluida") as "incluida" | "estimada" | "opcional",
-          })))
+          })), {
+            total_materials: timelineMaterials.length,
+            verified_materials: timelineMaterials.filter((material) => material.isRealData).length,
+            max_delivery_days: knownDeliveryDays.length > 0 ? Math.max(...knownDeliveryDays) : 0,
+            unavailable_materials: timelineMaterials.filter((material) => material.isAvailable === false).length,
+            unknown_delivery_materials: timelineMaterials.filter((material) => typeof material.deliveryDays !== "number").length,
+          })
         : null;
 
       const calendarPhases = engineTimeline
@@ -2027,13 +2093,16 @@ export function BudgetGenerateProvider({
             description: ph.description,
           }))
         : data.calendar_phases || [];
-      const totalDays = engineTimeline
+      const executionDays = engineTimeline
         ? Math.round((engineTimeline.execution_working_days_min + engineTimeline.execution_working_days_max) / 2)
         : calendarPhases.reduce((s: number, p: any) => s + (p.duration_days || 0), 0);
+      const totalDays = engineTimeline
+        ? Math.round(((engineTimeline.total_weeks_min + engineTimeline.total_weeks_max) / 2) * 5)
+        : executionDays;
       const estimatedTimeline = engineTimeline ? {
         total_duration_days: totalDays,
-        total_duration_weeks: Math.ceil(totalDays / 5),
-        confidence: 0.8,
+        total_duration_weeks: Math.round((engineTimeline.total_weeks_min + engineTimeline.total_weeks_max) / 2),
+        confidence: engineTimeline.confidence_percent / 100,
         notes: `Preparacion y suministros ${engineTimeline.preparation_weeks_min}-${engineTimeline.preparation_weeks_max} semanas. Ejecucion ${engineTimeline.execution_weeks_min}-${engineTimeline.execution_weeks_max} semanas. Plazo total ${engineTimeline.total_weeks_min}-${engineTimeline.total_weeks_max} semanas.`,
       } : data.estimated_timeline || (totalDays > 0 ? {
         total_duration_days: totalDays,

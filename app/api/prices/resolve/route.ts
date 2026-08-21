@@ -22,6 +22,7 @@ import {
   type EnlazePriceRow,
 } from "@/lib/price-resolver-v2";
 import { buildUniqueCatalogTokenGroups } from "@/lib/price-catalog-search";
+import { canonicalProviderName, providerIdentitySlug } from "@/lib/provider-identity";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -224,13 +225,18 @@ export async function POST(request: Request) {
           const prod = row.pb_products as Record<string, unknown> | null;
           const prov = row.pb_providers as Record<string, unknown> | null;
           const concept = prod?.pb_normalized_concepts as Record<string, unknown> | null;
+          const sourceUrl = prod?.source_url
+            ? String(prod.source_url)
+            : prod?.url
+              ? String(prod.url)
+              : null;
           return {
             product_id: String(prod?.id ?? ""),
             product_name: String(prod?.commercial_name ?? ""),
             concept_id: concept?.id ? String(concept.id) : null,
             concept_name: concept?.canonical_name ? String(concept.canonical_name) : null,
             provider_id: String(prov?.id ?? ""),
-            provider_name: String(prov?.name ?? ""),
+            provider_name: canonicalProviderName(String(prov?.name ?? ""), sourceUrl),
             provider_province: prov?.province ? String(prov.province) : null,
             provider_supply_zones: Array.isArray(prov?.supply_zones) ? prov.supply_zones as string[] : [],
             is_preferred: Boolean(prov?.is_preferred),
@@ -247,11 +253,7 @@ export async function POST(request: Request) {
             is_available: Boolean(row.is_available),
             confidence_score: Number(row.confidence_score) || 0.5,
             source_type: String(row.source_type ?? "provider_catalog"),
-            source_url: prod?.source_url
-              ? String(prod.source_url)
-              : prod?.url
-                ? String(prod.url)
-                : null,
+            source_url: sourceUrl,
             checked_at: row.checked_at ? String(row.checked_at) : null,
             price_changed_at: null,
             is_private_tariff:
@@ -267,13 +269,18 @@ export async function POST(request: Request) {
       const mappedTrackerRows = (pbTrackerRows || []).map((row: Record<string, unknown>): CurrentPriceRow => {
         const providerValue = row.pb_providers;
         const prov = (Array.isArray(providerValue) ? providerValue[0] : providerValue) as Record<string, unknown> | null;
+        const sourceUrl = row.source_url
+          ? String(row.source_url)
+          : row.url
+            ? String(row.url)
+            : null;
         return {
           product_id: String(row.id ?? ""),
           product_name: String(row.commercial_name ?? ""),
           concept_id: row.concept_id ? String(row.concept_id) : null,
           concept_name: null,
           provider_id: String(prov?.id ?? ""),
-          provider_name: String(prov?.name ?? "Rastreador ENLAZE"),
+          provider_name: canonicalProviderName(String(prov?.name ?? "Rastreador ENLAZE"), sourceUrl),
           provider_province: prov?.province ? String(prov.province) : null,
           provider_supply_zones: Array.isArray(prov?.supply_zones) ? prov.supply_zones as string[] : [],
           is_preferred: Boolean(prov?.is_preferred),
@@ -290,11 +297,7 @@ export async function POST(request: Request) {
           is_available: Boolean(row.is_available),
           confidence_score: 0.82,
           source_type: "n8n_market",
-          source_url: row.source_url
-            ? String(row.source_url)
-            : row.url
-              ? String(row.url)
-              : null,
+          source_url: sourceUrl,
           checked_at: row.checked_at ? String(row.checked_at) : null,
           price_changed_at: null,
           is_private_tariff: String(prov?.company_id || "") === companyScopeId,
@@ -390,6 +393,9 @@ export async function POST(request: Request) {
         const trackerMetadata = r.product_id
           ? trackerMetadataByProduct.get(String(r.product_id))
           : undefined;
+        const selectedAlternative = r.alternatives.find((alternative) => alternative.product_id === r.product_id);
+        const selectedUrl = trackerMetadata?.url || selectedAlternative?.source_url || "";
+        const selectedSupplier = canonicalProviderName(r.provider_name || "", selectedUrl);
         return {
           materialName: materials[idx].materialName,
           normalizedName: normalizeMaterialName(materials[idx].materialName),
@@ -402,18 +408,29 @@ export async function POST(request: Request) {
           priceMin: r.unit_price,
           priceMedian: r.unit_price,
           priceMax: r.unit_price,
-          selectedSupplier: r.provider_name || "",
-          sourceUrl: trackerMetadata?.url || "",
+          selectedSupplier,
+          sourceUrl: selectedUrl,
           sourceType: r.source_type as ResolvedPrice["sourceType"],
           confidenceScore: r.confidence_score,
           capturedAt: trackerMetadata?.checkedAt || r.checked_at || new Date().toISOString(),
+          providerId: providerIdentitySlug(selectedSupplier, selectedUrl),
+          isAvailable: selectedAlternative?.is_available,
+          deliveryDays: selectedAlternative?.delivery_days ?? undefined,
           alternatives: r.alternatives.map((a): PriceAlternative => ({
-            supplier: a.provider_name,
+            supplier: canonicalProviderName(a.provider_name, a.source_url),
             title: a.product_name,
             price: a.unit_price,
             unit: materials[idx]?.unit || "ud",
             qualityTier,
-            url: "",
+            url: a.source_url || "",
+            productId: a.product_id,
+            providerId: providerIdentitySlug(a.provider_name, a.source_url),
+            effectivePrice: a.effective_price ?? undefined,
+            isAvailable: a.is_available,
+            deliveryDays: a.delivery_days ?? undefined,
+            confidenceScore: a.confidence_score,
+            sourceType: a.source_type,
+            checkedAt: a.checked_at || undefined,
           })),
         };
       });

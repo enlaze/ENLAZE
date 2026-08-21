@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
-import { Store, Package } from "lucide-react";
+import React, { useState, useCallback, useMemo } from "react";
+import { Store, Package, ChevronDown, ExternalLink, ShieldCheck, Clock3, AlertTriangle } from "lucide-react";
 import {
   calculateBudgetFinancials,
   useBudgetGenerate,
@@ -9,6 +9,11 @@ import {
 } from "../BudgetGenerateProvider";
 import { Card } from "@/components/ui/card";
 import type { PDFBudget } from "@/lib/pdf-generator";
+import {
+  buildProviderBasketCoverage,
+  getComparableOffers,
+  type ComparableOffer,
+} from "@/lib/basket-price-comparison";
 
 const SECTOR_REFERENCE_PROVIDERS = [
   { name: "Leroy Merlin", specialty: "Materiales, equipamiento y reforma" },
@@ -95,9 +100,10 @@ function buildLegacyPDFItems(state: BudgetState, mode: "client" | "internal") {
 }
 
 export function ProvidersStep() {
-  const { state, setSelectedProvider, updateMaterial, setUseSuggestedMaterials, analyzeWithAI } = useBudgetGenerate();
-  const { providerOptions, selectedProviderId, materials, useSuggestedMaterials } = state;
+  const { state, updateMaterial, setUseSuggestedMaterials, analyzeWithAI } = useBudgetGenerate();
+  const { providerOptions, materials, useSuggestedMaterials } = state;
   const [showCompare, setShowCompare] = useState(false);
+  const [expandedMaterialId, setExpandedMaterialId] = useState<string | null>(null);
   const [isRefreshingPrices, setIsRefreshingPrices] = useState(false);
   const [priceRefreshResult, setPriceRefreshResult] = useState<{
     ok: boolean;
@@ -169,6 +175,40 @@ export function ProvidersStep() {
   const providerMatchCount = materials.filter(m => (m as any).provider_adjustment?.applied === true).length;
   const providerMissingCount = materials.filter(m => (m as any).missing_in_selected_provider === true).length;
   const hasProviderEnrichment = providerMatchCount > 0 || providerMissingCount > 0;
+  const includedMaterials = materials.filter((material) => material.included);
+  const verifiedMaterials = includedMaterials.filter((material) => material.isRealData).length;
+  const coveragePercent = includedMaterials.length > 0
+    ? Math.round((verifiedMaterials / includedMaterials.length) * 100)
+    : 0;
+  const basketProviderCoverage = useMemo(
+    () => buildProviderBasketCoverage(materials),
+    [materials],
+  );
+  const comparableOffersCount = useMemo(
+    () => materials.reduce((sum, material) => sum + getComparableOffers(material, 15).length, 0),
+    [materials],
+  );
+
+  const selectOffer = (materialId: string, offer: ComparableOffer) => {
+    const traceable = offer.isTraceable;
+    updateMaterial(materialId, {
+      unit_price: offer.displayPrice,
+      provider_id: offer.supplierId,
+      isRealData: traceable,
+      sourceType: offer.sourceType || "provider_updated",
+      sourceName: offer.canonicalSupplier,
+      matchedProductName: offer.title,
+      sourceUrl: offer.url || undefined,
+      priceCheckedAt: offer.checkedAt || new Date().toISOString(),
+      confidenceScore: offer.confidenceScore ?? (traceable ? 0.75 : 0.5),
+      isAvailable: offer.isAvailable,
+      deliveryDays: offer.deliveryDays,
+      missing_in_selected_provider: false,
+      provider_fallback_reason: undefined,
+      provider_adjustment: undefined,
+    });
+    setExpandedMaterialId(null);
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -188,42 +228,81 @@ export function ProvidersStep() {
           </button>
         </div>
 
+        {includedMaterials.length > 0 && (
+          <div className={`mb-6 rounded-xl border p-4 ${
+            coveragePercent >= 90
+              ? "border-green-200 bg-green-50 dark:border-green-900/40 dark:bg-green-950/20"
+              : coveragePercent >= 70
+                ? "border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20"
+                : "border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-950/20"
+          }`}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  {coveragePercent >= 90
+                    ? <ShieldCheck className="h-5 w-5 text-green-600" />
+                    : <AlertTriangle className={`h-5 w-5 ${coveragePercent >= 70 ? "text-amber-600" : "text-red-600"}`} />}
+                  <h3 className="font-bold text-navy-900 dark:text-white">
+                    Cobertura comercial: {verifiedMaterials}/{includedMaterials.length} ({coveragePercent}%)
+                  </h3>
+                </div>
+                <p className="mt-1 text-xs text-navy-600 dark:text-zinc-400">
+                  {coveragePercent >= 90
+                    ? "La cesta alcanza el objetivo de trazabilidad. Revisa únicamente disponibilidad y entrega antes de comprar."
+                    : `Objetivo operativo: 90%. Faltan ${Math.max(includedMaterials.length - verifiedMaterials, 0)} equivalencias por confirmar para reducir incertidumbre antes del inicio.`}
+                </p>
+              </div>
+              <div className="flex gap-2 text-xs">
+                <span className="rounded-lg border border-white/60 bg-white/70 px-2.5 py-1.5 font-semibold text-navy-700 dark:border-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-300">
+                  {comparableOffersCount} ofertas comparables
+                </span>
+                <span className="rounded-lg border border-white/60 bg-white/70 px-2.5 py-1.5 font-semibold text-navy-700 dark:border-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-300">
+                  {basketProviderCoverage.length} proveedores
+                </span>
+              </div>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/80 dark:bg-zinc-800">
+              <div
+                className={`h-full rounded-full ${coveragePercent >= 90 ? "bg-green-500" : coveragePercent >= 70 ? "bg-amber-500" : "bg-red-500"}`}
+                style={{ width: `${coveragePercent}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         {showCompare && (
           <div className="mb-8 bg-navy-50 dark:bg-zinc-800/50 rounded-xl p-5 border border-navy-200 dark:border-zinc-700 animate-in fade-in slide-in-from-top-4">
             <h3 className="font-bold text-navy-900 dark:text-white mb-4 flex items-center gap-2">
               <svg className="w-5 h-5 text-brand-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
               Comparativa de cobertura
             </h3>
-            {providerOptions.length <= 1 ? (
+            {basketProviderCoverage.length === 0 ? (
               <p className="text-sm text-navy-600 dark:text-zinc-400">
-                Todavía no hay dos cestas verificadas completas para comparar. La base técnica se mantiene identificada hasta encontrar equivalencias reales.
+                Todavía no hay ofertas comerciales trazables para comparar. La base técnica se mantiene identificada hasta encontrar equivalencias reales.
               </p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {providerOptions.map(p => (
-                  <div key={p.id} className={`bg-white dark:bg-zinc-900 p-4 rounded-lg border ${selectedProviderId === p.id ? 'border-brand-green' : 'border-navy-100 dark:border-zinc-800'}`}>
+                {basketProviderCoverage.map((provider) => (
+                  <div key={provider.id} className={`bg-white dark:bg-zinc-900 p-4 rounded-lg border ${provider.isRecommended ? 'border-brand-green' : 'border-navy-100 dark:border-zinc-800'}`}>
                     <div className="flex justify-between items-start mb-2">
-                      <h4 className="font-bold text-navy-900 dark:text-white">{p.name}</h4>
-                      <span className={`${getBadgeProps(p.sourceType, p.isRealData).className} text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider`}>{getBadgeProps(p.sourceType, p.isRealData).label}</span>
+                      <h4 className="font-bold text-navy-900 dark:text-white">{provider.name}</h4>
+                      {provider.isRecommended && (
+                        <span className="rounded bg-green-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-green-700 dark:bg-green-900/30 dark:text-green-400">Mayor cobertura</span>
+                      )}
                     </div>
                     <ul className="text-sm text-navy-600 dark:text-zinc-400 mb-4 space-y-1">
-                      <li><strong>Materiales:</strong> {p.materialsCount || 0} disponibles</li>
-                      <li><strong>Plazo:</strong> {p.deliveryTime}</li>
-                      <li><strong>Origen:</strong> {p.description}</li>
+                      <li><strong>Cobertura:</strong> {provider.matchedMaterials}/{provider.totalMaterials} ({provider.coveragePercent}%)</li>
+                      <li><strong>Ofertas trazables:</strong> {provider.traceableMaterials}</li>
+                      <li><strong>Fiabilidad media:</strong> {Math.round(provider.averageConfidence * 100)}%</li>
+                      <li><strong>Entrega máxima conocida:</strong> {provider.maxDeliveryDays ? `${provider.maxDeliveryDays} días` : "A confirmar"}</li>
                     </ul>
-                    <div className="flex justify-between items-center mt-auto">
-                      <div className="font-bold text-navy-900 dark:text-white">
-                        {p.estimatedPrice > 0 ? `${p.estimatedPrice.toFixed(2)} €` : 'Calculando...'}
+                    <div className="mt-auto flex items-end justify-between border-t border-navy-100 pt-3 dark:border-zinc-800">
+                      <div>
+                        <div className="text-[10px] uppercase tracking-wider text-navy-400">Subtotal cubierto</div>
+                        <div className="font-bold text-navy-900 dark:text-white">{provider.partialBasketTotal.toFixed(2)} €</div>
                       </div>
-                      {selectedProviderId !== p.id ? (
-                        <button 
-                          onClick={() => { setSelectedProvider(p.id); setShowCompare(false); }}
-                          className="text-xs bg-navy-100 hover:bg-brand-green hover:text-navy-900 dark:bg-zinc-800 text-navy-700 dark:text-white font-medium px-3 py-1.5 rounded transition"
-                        >
-                          Usar este
-                        </button>
-                      ) : (
-                        <span className="text-xs font-bold text-brand-green bg-brand-green/10 px-3 py-1.5 rounded">Seleccionado</span>
+                      {provider.coveragePercent < 100 && (
+                        <span className="max-w-28 text-right text-[10px] leading-4 text-amber-600 dark:text-amber-400">No representa la cesta completa</span>
                       )}
                     </div>
                   </div>
@@ -278,29 +357,21 @@ export function ProvidersStep() {
           </div>
         )}
         <div className="mb-3">
-          <h3 className="text-sm font-bold text-navy-900 dark:text-white">Fuentes disponibles para esta cesta</h3>
+          <h3 className="text-sm font-bold text-navy-900 dark:text-white">Fuentes aplicadas a la cesta actual</h3>
+          <p className="text-xs text-navy-500 dark:text-zinc-400">
+            Este resumen muestra el precio elegido para cada material. Las demás ofertas se consultan y seleccionan dentro de cada fila.
+          </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           {providerOptions.map(provider => {
-            const isSelected = selectedProviderId === provider.id;
             return (
               <div 
                 key={provider.id}
-                onClick={() => setSelectedProvider(provider.id)}
-                className={`relative rounded-xl p-4 cursor-pointer transition-all ${
-                  isSelected 
-                    ? "border-2 border-brand-green bg-brand-green/5 shadow-sm" 
-                    : "border border-navy-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:border-brand-green/50"
-                }`}
+                className="relative rounded-xl border border-navy-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900"
               >
                 {provider.isRecommended && (
                   <div className="absolute -top-3 -right-3 bg-brand-green text-navy-900 text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-full shadow-sm">
-                    Recomendado
-                  </div>
-                )}
-                {isSelected && (
-                  <div className="absolute top-3 right-3 text-brand-green">
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path></svg>
+                    Fuente principal
                   </div>
                 )}
                 <div className="flex items-center gap-2 mb-1">
@@ -400,68 +471,143 @@ export function ProvidersStep() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-navy-100 dark:divide-zinc-800 bg-white dark:bg-zinc-900">
-                  {materials.map((m) => (
-                    <tr key={m.id} className={`hover:bg-navy-50/50 dark:hover:bg-zinc-800/50 transition-colors ${!m.included ? 'opacity-50' : ''}`}>
-                      <td className="p-3 text-center">
-                        <input
-                          type="checkbox"
-                          checked={m.included}
-                          onChange={(e) => updateMaterial(m.id, { included: e.target.checked })}
-                          className="rounded border-navy-300 text-brand-green focus:ring-brand-green/20"
-                        />
-                      </td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium text-navy-900 dark:text-white">{m.name}</p>
-                          <span
-                            className={`${getBadgeProps(m.sourceType, m.isRealData, m).className} border text-[9px] px-1 rounded-sm uppercase tracking-wider font-semibold`}
-                            title={(m as any).provider_fallback_reason || "Fuente de datos"}
-                          >
-                            {getBadgeProps(m.sourceType, m.isRealData, m).label}
-                          </span>
-                        </div>
-                        <div className="mt-1 text-[10px] text-navy-400 dark:text-zinc-500 flex flex-wrap gap-x-3 gap-y-1">
-                          <span>{m.sourceName || "Sin proveedor verificado"}</span>
-                          {m.matchedProductName && (
-                            <span className="basis-full text-navy-500 dark:text-zinc-400">
-                              Coincidencia: {m.matchedProductName}
-                            </span>
-                          )}
-                          {m.priceCheckedAt && (
-                            <span>Comprobado: {new Date(m.priceCheckedAt).toLocaleDateString("es-ES")}</span>
-                          )}
-                          {typeof m.confidenceScore === "number" && (
-                            <span>Fiabilidad: {Math.round(m.confidenceScore * 100)}%</span>
-                          )}
-                          {m.sourceUrl && (
-                            <a href={m.sourceUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
-                              Ver fuente
-                            </a>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <input
-                          type="number"
-                          min="0"
-                          step="1"
-                          value={m.quantity}
-                          onChange={(e) => updateMaterial(m.id, { quantity: parseFloat(e.target.value) || 0 })}
-                          disabled={!m.included}
-                          className="w-full text-right font-medium text-navy-900 dark:text-white bg-transparent border border-transparent hover:border-navy-200 dark:hover:border-zinc-700 rounded p-1 focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green text-sm disabled:opacity-50"
-                        />
-                      </td>
-                      <td className="p-3 text-sm text-navy-600 dark:text-zinc-400">
-                        {m.unit}
-                      </td>
-                      <td className="p-3 text-right text-sm text-navy-600 dark:text-zinc-400">
-                        {m.unit_price.toFixed(2)} EUR
-                      </td>
-                      <td className="p-3 text-right font-bold text-navy-900 dark:text-white text-sm">
-                        {m.subtotal.toFixed(2)} EUR
-                      </td>
-                    </tr>
-                  ))}
+                  {materials.map((m) => {
+                    const offers = getComparableOffers(m, 5);
+                    const isExpanded = expandedMaterialId === m.id;
+                    return (
+                      <React.Fragment key={m.id}>
+                        <tr className={`hover:bg-navy-50/50 dark:hover:bg-zinc-800/50 transition-colors ${!m.included ? 'opacity-50' : ''}`}>
+                          <td className="p-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={m.included}
+                              onChange={(e) => updateMaterial(m.id, { included: e.target.checked })}
+                              className="rounded border-navy-300 text-brand-green focus:ring-brand-green/20"
+                            />
+                          </td>
+                          <td className="p-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-medium text-navy-900 dark:text-white">{m.name}</p>
+                              <span
+                                className={`${getBadgeProps(m.sourceType, m.isRealData, m).className} border text-[9px] px-1 rounded-sm uppercase tracking-wider font-semibold`}
+                                title={(m as any).provider_fallback_reason || "Fuente de datos"}
+                              >
+                                {getBadgeProps(m.sourceType, m.isRealData, m).label}
+                              </span>
+                              {offers.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedMaterialId(isExpanded ? null : m.id)}
+                                  className="inline-flex items-center gap-1 rounded border border-navy-200 px-2 py-0.5 text-[10px] font-semibold text-navy-700 hover:border-brand-green hover:text-navy-900 dark:border-zinc-700 dark:text-zinc-300"
+                                >
+                                  {offers.length} alternativas
+                                  <ChevronDown className={`h-3 w-3 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                                </button>
+                              )}
+                            </div>
+                            <div className="mt-1 text-[10px] text-navy-400 dark:text-zinc-500 flex flex-wrap gap-x-3 gap-y-1">
+                              <span>{m.sourceName || "Sin proveedor verificado"}</span>
+                              {m.matchedProductName && (
+                                <span className="basis-full text-navy-500 dark:text-zinc-400">
+                                  Coincidencia: {m.matchedProductName}
+                                </span>
+                              )}
+                              {m.priceCheckedAt && (
+                                <span>Comprobado: {new Date(m.priceCheckedAt).toLocaleDateString("es-ES")}</span>
+                              )}
+                              {typeof m.confidenceScore === "number" && (
+                                <span>Fiabilidad: {Math.round(m.confidenceScore * 100)}%</span>
+                              )}
+                              {typeof m.deliveryDays === "number" && (
+                                <span>Entrega: hasta {m.deliveryDays} días</span>
+                              )}
+                              {m.isAvailable === false && <span className="font-semibold text-red-600">Sin disponibilidad</span>}
+                              {m.sourceUrl && (
+                                <a href={m.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline">
+                                  Ver producto <ExternalLink className="h-3 w-3" />
+                                </a>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={m.quantity}
+                              onChange={(e) => updateMaterial(m.id, { quantity: parseFloat(e.target.value) || 0 })}
+                              disabled={!m.included}
+                              className="w-full text-right font-medium text-navy-900 dark:text-white bg-transparent border border-transparent hover:border-navy-200 dark:hover:border-zinc-700 rounded p-1 focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green text-sm disabled:opacity-50"
+                            />
+                          </td>
+                          <td className="p-3 text-sm text-navy-600 dark:text-zinc-400">{m.unit}</td>
+                          <td className="p-3 text-right text-sm text-navy-600 dark:text-zinc-400">{m.unit_price.toFixed(2)} EUR</td>
+                          <td className="p-3 text-right font-bold text-navy-900 dark:text-white text-sm">{m.subtotal.toFixed(2)} EUR</td>
+                        </tr>
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan={6} className="bg-navy-50/70 p-3 dark:bg-zinc-800/40">
+                              <div className="mb-2 flex items-center justify-between">
+                                <div>
+                                  <div className="text-xs font-bold text-navy-900 dark:text-white">Ofertas equivalentes encontradas</div>
+                                  <div className="text-[10px] text-navy-500 dark:text-zinc-400">Ordenadas por disponibilidad, trazabilidad, fiabilidad y coste efectivo.</div>
+                                </div>
+                              </div>
+                              <div className="grid gap-2 lg:grid-cols-2">
+                                {offers.map((offer) => {
+                                  const isCurrent = Boolean(m.sourceUrl && offer.url && m.sourceUrl === offer.url) || (
+                                    m.sourceName === offer.canonicalSupplier &&
+                                    m.matchedProductName === offer.title &&
+                                    Math.abs(m.unit_price - offer.displayPrice) < 0.001
+                                  );
+                                  return (
+                                    <div key={`${offer.supplierId}-${offer.productId || offer.title}-${offer.displayPrice}`} className="rounded-lg border border-navy-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                          <div className="flex flex-wrap items-center gap-1.5">
+                                            <span className="text-xs font-bold text-navy-900 dark:text-white">{offer.canonicalSupplier}</span>
+                                            <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${offer.isTraceable ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
+                                              {offer.isTraceable ? "Trazable" : "Por validar"}
+                                            </span>
+                                          </div>
+                                          <p className="mt-1 line-clamp-2 text-[11px] text-navy-600 dark:text-zinc-400">{offer.title}</p>
+                                        </div>
+                                        <div className="shrink-0 text-right">
+                                          <div className="text-sm font-black text-navy-900 dark:text-white">{offer.displayPrice.toFixed(2)} €</div>
+                                          <div className="text-[9px] text-navy-400">/{offer.unit}</div>
+                                        </div>
+                                      </div>
+                                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-navy-500 dark:text-zinc-400">
+                                        <span className="inline-flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> {Math.round((offer.confidenceScore ?? 0) * 100)}%</span>
+                                        <span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" /> {offer.deliveryDays ? `hasta ${offer.deliveryDays} días` : "plazo a confirmar"}</span>
+                                        <span>{offer.isAvailable === false ? "Sin disponibilidad" : "Disponible"}</span>
+                                        {offer.checkedAt && <span>{new Date(offer.checkedAt).toLocaleDateString("es-ES")}</span>}
+                                      </div>
+                                      <div className="mt-3 flex items-center justify-between gap-2">
+                                        {offer.url ? (
+                                          <a href={offer.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 hover:underline">
+                                            Página oficial <ExternalLink className="h-3 w-3" />
+                                          </a>
+                                        ) : <span className="text-[10px] text-amber-600">Sin enlace verificable</span>}
+                                        <button
+                                          type="button"
+                                          disabled={isCurrent || offer.isAvailable === false}
+                                          onClick={() => selectOffer(m.id, offer)}
+                                          className={`rounded px-2.5 py-1.5 text-[10px] font-bold ${isCurrent ? "bg-green-100 text-green-700" : offer.isAvailable === false ? "cursor-not-allowed bg-navy-100 text-navy-400 dark:bg-zinc-800" : "bg-navy-900 text-white hover:bg-brand-green hover:text-navy-900 dark:bg-white dark:text-navy-900"}`}
+                                        >
+                                          {isCurrent ? "Precio actual" : offer.isAvailable === false ? "No disponible" : "Usar esta oferta"}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

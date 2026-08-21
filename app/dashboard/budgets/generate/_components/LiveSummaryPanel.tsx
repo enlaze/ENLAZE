@@ -12,6 +12,10 @@ export function LiveSummaryPanel() {
   const totalWithIva = totals.clientPrice * (1 + state.ivaPercent / 100);
 
   const activeProvider = providerOptions?.find(p => p.id === selectedProviderId);
+  const appliedCommercialProviders = providerOptions?.filter((provider) => provider.isRealData) || [];
+  const providerSummaryName = appliedCommercialProviders.length > 1
+    ? `Cesta multiproveedor (${appliedCommercialProviders.length})`
+    : activeProvider?.name || "Referencia técnica ENLAZE";
   const includedMaterialsCount = materials?.filter(m => m.included).length || 0;
 
   // Real data check
@@ -119,12 +123,12 @@ export function LiveSummaryPanel() {
               </div>
               <div className="flex-1">
                 <div className="flex justify-between items-center">
-                  <div className="text-[10px] text-navy-500 dark:text-zinc-400 uppercase tracking-wider font-bold">Proveedor activo</div>
+                  <div className="text-[10px] text-navy-500 dark:text-zinc-400 uppercase tracking-wider font-bold">Origen de la cesta</div>
                   {isMaterialBasketReal && (
                     <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 px-1.5 rounded">Catalogo Real</span>
                   )}
                 </div>
-                <div className="text-sm font-bold text-navy-900 dark:text-white">{activeProvider.name}</div>
+                <div className="text-sm font-bold text-navy-900 dark:text-white">{providerSummaryName}</div>
               </div>
             </div>
             {hasEnrichment && (
@@ -291,6 +295,25 @@ export function LiveSummaryPanel() {
                     {realisticTimeline.total_weeks_min}-{realisticTimeline.total_weeks_max} semanas
                   </span>
                 </div>
+                {typeof realisticTimeline.confidence_percent === "number" && (
+                  <div className="mt-2 rounded-lg border border-navy-200 bg-white/70 p-2 dark:border-zinc-700 dark:bg-zinc-900/50">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="font-bold uppercase tracking-wider text-navy-500 dark:text-zinc-400">Confianza del plazo</span>
+                      <span className={`font-bold ${
+                        realisticTimeline.uncertainty_level === "baja"
+                          ? "text-green-600"
+                          : realisticTimeline.uncertainty_level === "media"
+                            ? "text-amber-600"
+                            : "text-red-600"
+                      }`}>
+                        {realisticTimeline.confidence_percent}% · incertidumbre {realisticTimeline.uncertainty_level}
+                      </span>
+                    </div>
+                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-navy-100 dark:bg-zinc-800">
+                      <div className="h-full rounded-full bg-brand-green" style={{ width: `${realisticTimeline.confidence_percent}%` }} />
+                    </div>
+                  </div>
+                )}
                 {realisticTimeline.phase_breakdown.length > 0 && (
                   <div className="mt-2 space-y-1">
                     <div className="text-[10px] text-navy-500 dark:text-zinc-400 font-bold uppercase">Ruta critica ({realisticTimeline.phase_breakdown.length} fases)</div>
@@ -305,6 +328,16 @@ export function LiveSummaryPanel() {
                     {realisticTimeline.phase_breakdown.length > 6 && (
                       <div className="text-[10px] text-navy-400 dark:text-zinc-500">+{realisticTimeline.phase_breakdown.length - 6} fases mas</div>
                     )}
+                  </div>
+                )}
+                {realisticTimeline.optimization_actions?.length > 0 && (
+                  <div className="mt-3 border-t border-navy-200 pt-2 dark:border-zinc-700">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-brand-green">Cómo reducir el plazo</div>
+                    <ul className="mt-1 space-y-1 text-[10px] leading-4 text-navy-500 dark:text-zinc-400">
+                      {realisticTimeline.optimization_actions.slice(0, 3).map((action, index) => (
+                        <li key={index}>• {action}</li>
+                      ))}
+                    </ul>
                   </div>
                 )}
               </>
@@ -336,6 +369,12 @@ export function LiveSummaryPanel() {
               <span>Materiales verificados en este presupuesto:</span>
               <span className="font-bold text-navy-900 dark:text-white">
                 {verifiedMaterials}/{totalMaterialsToVerify}
+              </span>
+            </li>
+            <li className="flex justify-between">
+              <span>Cobertura comercial:</span>
+              <span className={`font-bold ${totalMaterialsToVerify > 0 && verifiedMaterials / totalMaterialsToVerify >= 0.9 ? "text-brand-green" : "text-amber-600"}`}>
+                {totalMaterialsToVerify > 0 ? Math.round((verifiedMaterials / totalMaterialsToVerify) * 100) : 0}% (objetivo 90%)
               </span>
             </li>
             <li className="flex justify-between">

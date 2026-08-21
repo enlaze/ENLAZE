@@ -313,4 +313,6 @@ export interface PriceAlternativeV2 {
   confidence_score: number;
   source_type: string;
   checked_at: string | null;
+  source_url?: string | null;
+  delivery_days_min?: number | null;
 }

@@ -74,6 +74,19 @@ export interface RealisticTimeline {
   phase_breakdown: TimelinePhase[];
   critical_path: string[];
   assumptions: string[];
+  supply_readiness_percent: number;
+  confidence_percent: number;
+  uncertainty_level: "baja" | "media" | "alta";
+  schedule_risks: string[];
+  optimization_actions: string[];
+}
+
+export interface TimelineSupplyContext {
+  total_materials?: number;
+  verified_materials?: number;
+  max_delivery_days?: number;
+  unavailable_materials?: number;
+  unknown_delivery_materials?: number;
 }
 
 export interface MarketAdjustmentMeta {
@@ -1288,7 +1301,8 @@ export function adjustToMarket(
 
 export function estimateRealisticTimeline(
   scope: BudgetScope,
-  items: EnginePartida[]
+  items: EnginePartida[],
+  supplyContext: TimelineSupplyContext = {},
 ): RealisticTimeline {
   const area = getAffectedArea(scope);
   const quantities = buildScopeQuantities({ ...scope, superficie_m2: area });
@@ -1528,6 +1542,32 @@ export function estimateRealisticTimeline(
     preparationDaysMin = Math.max(preparationDaysMin, 25);
     preparationDaysMax = Math.max(preparationDaysMax, 45);
   }
+
+  const totalMaterials = Math.max(0, Math.floor(Number(supplyContext.total_materials) || 0));
+  const verifiedMaterials = Math.min(
+    totalMaterials,
+    Math.max(0, Math.floor(Number(supplyContext.verified_materials) || 0)),
+  );
+  const pendingMaterials = Math.max(totalMaterials - verifiedMaterials, 0);
+  const supplyReadinessPercent = totalMaterials > 0
+    ? Math.round((verifiedMaterials / totalMaterials) * 100)
+    : 100;
+  const maxDeliveryDays = Math.max(0, Math.ceil(Number(supplyContext.max_delivery_days) || 0));
+  const unavailableMaterials = Math.max(0, Math.floor(Number(supplyContext.unavailable_materials) || 0));
+  const unknownDeliveryMaterials = Math.max(0, Math.floor(Number(supplyContext.unknown_delivery_materials) || 0));
+
+  if (maxDeliveryDays > 0) {
+    preparationDaysMin = Math.max(preparationDaysMin, Math.ceil(maxDeliveryDays * 0.7));
+    preparationDaysMax = Math.max(preparationDaysMax, maxDeliveryDays);
+  }
+  if (pendingMaterials > 0) {
+    // Only the adverse end grows: pending equivalences are uncertainty, not
+    // work that should be silently added to the optimistic commitment.
+    preparationDaysMax += Math.min(12, Math.ceil(pendingMaterials / 3) * 2);
+  }
+  if (unavailableMaterials > 0) {
+    preparationDaysMax += Math.min(15, unavailableMaterials * 3);
+  }
   const preparationWeeksMin = Math.ceil(preparationDaysMin / 5);
   const preparationWeeksMax = Math.ceil(preparationDaysMax / 5);
   const canOverlapSupplies = phases.length >= 4;
@@ -1544,11 +1584,43 @@ export function estimateRealisticTimeline(
   const totalWeeksMin = executionWeeksMin + nonOverlappingPreparationMin + contingencyMin;
   const totalWeeksMax = executionWeeksMax + nonOverlappingPreparationMax + contingencyMax;
 
+  const confidencePenalty =
+    Math.round((100 - supplyReadinessPercent) * 0.32) +
+    Math.min(15, unknownDeliveryMaterials * 2) +
+    Math.min(20, unavailableMaterials * 5);
+  const confidencePercent = Math.max(35, Math.min(95, 94 - confidencePenalty));
+  const uncertaintyLevel: RealisticTimeline["uncertainty_level"] =
+    confidencePercent >= 82 ? "baja" : confidencePercent >= 65 ? "media" : "alta";
+  const scheduleRisks: string[] = [];
+  const optimizationActions: string[] = [];
+  if (pendingMaterials > 0) {
+    scheduleRisks.push(`${pendingMaterials} materiales aún no tienen equivalencia comercial confirmada.`);
+    optimizationActions.push(`Cerrar las ${pendingMaterials} referencias pendientes antes de fijar la fecha contractual.`);
+  }
+  if (unknownDeliveryMaterials > 0) {
+    scheduleRisks.push(`${unknownDeliveryMaterials} materiales no tienen plazo de entrega confirmado.`);
+    optimizationActions.push("Confirmar stock y entrega de la ruta crítica en una única ronda de compras.");
+  }
+  if (unavailableMaterials > 0) {
+    scheduleRisks.push(`${unavailableMaterials} materiales seleccionados figuran sin disponibilidad.`);
+    optimizationActions.push("Sustituir inmediatamente las referencias sin stock por alternativas equivalentes trazables.");
+  }
+  if (hasKitchen || hasExteriorCarpentry) {
+    optimizationActions.push("Medir y encargar los elementos fabricados a medida antes de iniciar demoliciones.");
+  }
+  if (phases.length >= 4) {
+    optimizationActions.push("Reservar gremios por fase y validar semanalmente la ruta crítica para evitar esperas entre oficios.");
+  }
+  if (optimizationActions.length === 0) {
+    optimizationActions.push("Confirmar materiales y cuadrilla antes del inicio para mantener el plazo calculado.");
+  }
+
   const assumptions: string[] = [
     "Calendario calculado por ruta critica; los solapes solo se aplican entre gremios y zonas compatibles.",
     "Jornadas de 8 horas, 5 dias por semana, con cuadrillas especializadas de 1-2 operarios por gremio.",
     `Alcance considerado: ${Math.round(area)} m2 y ${banos} bano(s).`,
     `Preparacion, validacion tecnica y aprovisionamiento: ${preparationWeeksMin}-${preparationWeeksMax} semanas; parte puede solaparse con la ejecucion.`,
+    `Cobertura comercial de materiales: ${supplyReadinessPercent}%; confianza del plazo: ${confidencePercent}%.`,
     "El plazo total incluye coordinacion, secados, suministros habituales y una contingencia de obra razonable.",
     "No incluye paralizaciones extraordinarias, amianto, vicios ocultos ni cambios de alcance posteriores.",
   ];
@@ -1568,6 +1640,11 @@ export function estimateRealisticTimeline(
     phase_breakdown: phases,
     critical_path: phases.map((phase) => phase.title),
     assumptions,
+    supply_readiness_percent: supplyReadinessPercent,
+    confidence_percent: confidencePercent,
+    uncertainty_level: uncertaintyLevel,
+    schedule_risks: scheduleRisks,
+    optimization_actions: optimizationActions,
   };
 }
 

@@ -79,6 +79,24 @@ test("made-to-measure windows expose procurement as the dominant lead time", () 
   assert.match(timeline.assumptions.join(" "), /fabricadas a medida/i);
 });
 
+test("schedule confidence reflects unverified materials and known supplier lead time", () => {
+  const items = buildDeterministicBudgetItems(integralScope, 1.2);
+  const timeline = estimateRealisticTimeline(integralScope, items, {
+    total_materials: 30,
+    verified_materials: 20,
+    max_delivery_days: 35,
+    unavailable_materials: 1,
+    unknown_delivery_materials: 8,
+  });
+
+  assert.equal(timeline.supply_readiness_percent, 67);
+  assert.equal(timeline.uncertainty_level, "alta");
+  assert.ok(timeline.confidence_percent < 65, JSON.stringify(timeline));
+  assert.ok(timeline.preparation_weeks_max >= 9, JSON.stringify(timeline));
+  assert.match(timeline.schedule_risks.join(" "), /10 materiales|sin disponibilidad/i);
+  assert.match(timeline.optimization_actions.join(" "), /referencias pendientes|stock/i);
+});
+
 test("client and internal PDFs disclose preparation, execution and total term", () => {
   const budget = {
     budget_number: "PRE-TEST",

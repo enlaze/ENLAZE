@@ -42,6 +42,14 @@ export interface PriceAlternative {
   unit: string;
   qualityTier: QualityTier;
   url?: string;
+  productId?: string;
+  providerId?: string;
+  effectivePrice?: number;
+  isAvailable?: boolean;
+  deliveryDays?: number;
+  confidenceScore?: number;
+  sourceType?: string;
+  checkedAt?: string;
 }
 
 export interface ResolvedPrice {
@@ -61,6 +69,9 @@ export interface ResolvedPrice {
   sourceType: PriceSourceType;
   confidenceScore: number;
   capturedAt: string;
+  providerId?: string;
+  isAvailable?: boolean;
+  deliveryDays?: number;
   alternatives: PriceAlternative[];
 }
 

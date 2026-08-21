@@ -594,9 +594,12 @@ function collectAlternatives(
   input: ResolveConceptInput, context: PriceResolutionContext,
   data: PrefetchedPriceData, alternatives: PriceAlternativeV2[]
 ): void {
+  const seenProducts = new Set<string>();
   for (const p of data.current_prices) {
     if (!fuzzyMatch(p.product_name, input.concept_name)) continue;
     if (!providerServesProvince(p.provider_province, p.provider_supply_zones, context.province)) continue;
+    if (!p.product_id || seenProducts.has(p.product_id)) continue;
+    seenProducts.add(p.product_id);
 
     const breakdown = buildEffectiveCost(p.price_excl_vat, input.quantity, p.units_per_package, p.shipping_cost, p.minimum_order);
     alternatives.push({
@@ -606,9 +609,17 @@ function collectAlternatives(
       effective_price: breakdown.effective_per_unit, is_available: p.is_available,
       delivery_days: p.delivery_days_max, confidence_score: p.confidence_score,
       source_type: p.source_type, checked_at: p.checked_at,
+      source_url: p.source_url || null,
+      delivery_days_min: p.delivery_days_min,
     });
   }
-  alternatives.sort((a, b) => (a.effective_price ?? 999999) - (b.effective_price ?? 999999));
+  alternatives.sort((a, b) =>
+    Number(b.is_available) - Number(a.is_available) ||
+    Number(Boolean(b.source_url)) - Number(Boolean(a.source_url)) ||
+    b.confidence_score - a.confidence_score ||
+    (a.effective_price ?? 999999) - (b.effective_price ?? 999999)
+  );
+  alternatives.splice(15);
 }
 
 // ─── Batch resolution ─────────────────────────────────────────────────────
