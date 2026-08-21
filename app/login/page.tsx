@@ -1,11 +1,11 @@
 "use client";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AuthShell, { authLabel, authInput, authButton } from "@/components/AuthShell";
 import { analytics, identifyUser } from "@/lib/analytics";
 import { setSentryUser } from "@/lib/sentry";
+import { resolveSafeAuthRedirect } from "@/lib/auth-redirect";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -13,33 +13,55 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const supabase = createClient();
-  const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-    } else {
-      // Identify user in analytics + error tracking
-      identifyUser(data.user.id, { email: data.user.email, name: data.user.user_metadata?.full_name });
-      setSentryUser({ id: data.user.id, email: data.user.email ?? undefined, name: data.user.user_metadata?.full_name });
-      analytics.userLoggedIn("email");
+    try {
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (authError) throw authError;
 
-      // Comprobar si hizo onboarding
-      const { data: profile } = await supabase
+      // La telemetría nunca debe bloquear el acceso del usuario.
+      try {
+        identifyUser(data.user.id, {
+          email: data.user.email,
+          name: data.user.user_metadata?.full_name,
+        });
+        setSentryUser({
+          id: data.user.id,
+          email: data.user.email ?? undefined,
+          name: data.user.user_metadata?.full_name,
+        });
+        analytics.userLoggedIn("email");
+      } catch {}
+
+      const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("onboarding_completed")
         .eq("id", data.user.id)
-        .single();
-      if (profile && profile.onboarding_completed) {
-        router.push("/dashboard");
-      } else {
-        router.push("/onboarding");
-      }
+        .maybeSingle();
+
+      const fallback = !profileError && profile && !profile.onboarding_completed
+        ? "/onboarding"
+        : "/dashboard";
+      const destination = fallback === "/onboarding"
+        ? fallback
+        : resolveSafeAuthRedirect(window.location.search, fallback);
+
+      // Una navegación completa garantiza que el servidor recibe las nuevas cookies.
+      window.location.assign(destination);
+    } catch (loginError) {
+      const message = loginError instanceof Error ? loginError.message : "";
+      setError(
+        /invalid login credentials/i.test(message)
+          ? "El email o la contraseña no son correctos."
+          : "No hemos podido iniciar la sesión. Inténtalo de nuevo."
+      );
+      setLoading(false);
     }
   };
 
