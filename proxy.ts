@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 /* ─────────────────────────────────────────────────────────
- * Security middleware for Enlaze
+ * Security proxy for Enlaze
  * - Protects /dashboard and /api routes (requires auth)
  * - Adds security headers to ALL responses
  * - Allows public routes to pass through
@@ -98,7 +98,7 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
   return response;
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Create response to modify
