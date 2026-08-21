@@ -77,8 +77,8 @@ const CONCEPT_GROUPS: ConceptGroup[] = [
 
 const ACCESSORY_WORDS = new Set([
   "adaptador", "broca", "codo", "espátula", "espatula", "herramienta",
-  "llana", "paleta", "punta", "recambio", "repuesto", "soporte", "tee",
-  "tes", "tornillo", "tornillos",
+  "llana", "malla", "paleta", "punta", "recambio", "refuerzo", "repuesto",
+  "soporte", "te", "tee", "tes", "tornillo", "tornillos",
 ]);
 
 const TOKEN_STOP_WORDS = new Set([
@@ -207,6 +207,13 @@ function extractMortarGrade(value: string): number | null {
   return Number.isFinite(grade) ? grade : null;
 }
 
+function hasRequiredFinish(requestedName: string, candidateName: string) {
+  const requested = normalizeCommercialMatchText(requestedName);
+  const candidate = normalizeCommercialMatchText(candidateName);
+  if (/\blacad[oa]\b/.test(requested) && !/\blacad[oa]\b/.test(candidate)) return false;
+  return true;
+}
+
 function measurementEquals(left: Measurement, right: Measurement) {
   if (left.kind !== right.kind) return false;
   if (typeof left.value === "string" || typeof right.value === "string") {
@@ -314,15 +321,21 @@ export function evaluateCommercialProductMatch(
     candidateMortarGrade !== null
     && Math.abs(candidateMortarGrade - requestedMortarGrade) <= 0.01
   );
+  // A slash in a technical line denotes an unresolved choice (for example,
+  // ceramic/laminate flooring), not an exact commercial specification.
+  const requestVariantIsDefined = !input.requestedName.includes("/");
+  const finishCompatible = hasRequiredFinish(input.requestedName, input.candidateName);
   const groupIdentity = (requiredGroups.length > 0
     ? requiredGroups.every((group) => candidateGroupIds.has(group.id))
     : compactRequested.includes(compactCandidate) || compactCandidate.includes(compactRequested) || tokenCoverage >= 0.6)
     && !hasConflictingPrimary
-    && mortarGradeCompatible;
+    && mortarGradeCompatible
+    && requestVariantIsDefined
+    && finishCompatible;
   const identityCompatible = groupIdentity && (tokenCoverage >= 0.2 || requiredGroups.length > 0);
   if (!identityCompatible) {
     reasons.push(
-      hasConflictingPrimary || !mortarGradeCompatible
+      hasConflictingPrimary || !mortarGradeCompatible || !requestVariantIsDefined || !finishCompatible
         ? "La variante o resistencia del producto no coincide con la solicitada"
         : "El producto no corresponde al concepto solicitado",
     );

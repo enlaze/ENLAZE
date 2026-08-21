@@ -75,6 +75,41 @@ test("tools and accessories cannot impersonate the requested construction produc
   assert.equal(pipe.accessoryCompatible, false);
 });
 
+test("fittings and reinforcement mesh cannot impersonate drainage or flooring", () => {
+  const drainage = evaluateCommercialProductMatch({
+    requestedName: "Sifones y valvulas de desague",
+    candidateName: "TE PRESS 16X2MM ARCO",
+    requestedUnit: "ud",
+    candidateUnit: "ud",
+    referenceUnitPrice: 18,
+    candidateUnitPrice: 4.22,
+  });
+  const flooring = evaluateCommercialProductMatch({
+    requestedName: "Pavimento ceramico/laminado",
+    candidateName: "Malla de fibra de vidrio de refuerzo para pavimentos 145 gr/m2",
+    requestedUnit: "m2",
+    candidateUnit: "m2",
+    referenceUnitPrice: 28,
+    candidateUnitPrice: 98,
+  });
+  assert.equal(drainage.isExact, false);
+  assert.equal(drainage.accessoryCompatible, false);
+  assert.equal(flooring.isExact, false);
+});
+
+test("a melamine door is not presented as the requested lacquered finish", () => {
+  const result = evaluateCommercialProductMatch({
+    requestedName: "Puerta interior ciega lacada blanca",
+    candidateName: "Puerta abatible en block melamina blanca ciega izquierda",
+    requestedUnit: "ud",
+    candidateUnit: "ud",
+    referenceUnitPrice: 155,
+    candidateUnitPrice: 58,
+  });
+  assert.equal(result.identityCompatible, false);
+  assert.equal(result.isExact, false);
+});
+
 test("a component price cannot replace a complete electrical panel or bathroom set", () => {
   const panel = evaluateCommercialProductMatch({
     requestedName: "Cuadro electrico + protecciones",
