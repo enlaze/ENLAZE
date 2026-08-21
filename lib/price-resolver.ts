@@ -30,6 +30,8 @@ export interface PriceRequest {
   category: string;
   unit: string;
   quantity: number;
+  /** Current technical/base price used only to reject unit/format outliers. */
+  referenceUnitPrice?: number;
   qualityTier: QualityTier;
   location: string;
   preferredSuppliers?: string[];
@@ -51,6 +53,10 @@ export interface PriceAlternative {
   sourceType?: string;
   checkedAt?: string;
   matchScore?: number;
+  matchIssues?: string[];
+  evidenceVerified?: boolean;
+  evidenceType?: string;
+  evidenceVerification?: string;
 }
 
 export interface ResolvedPrice {
@@ -59,6 +65,7 @@ export interface ResolvedPrice {
   selectedProductName?: string;
   category: string;
   unit: string;
+  sourceUnit?: string;
   quantity: number;
   qualityTier: QualityTier;
   selectedPrice: number;
@@ -74,6 +81,11 @@ export interface ResolvedPrice {
   isAvailable?: boolean;
   deliveryDays?: number;
   alternatives: PriceAlternative[];
+  matchScore?: number;
+  matchIssues?: string[];
+  evidenceVerified?: boolean;
+  evidenceType?: string;
+  evidenceVerification?: string;
 }
 
 export interface PriceCacheEntry {

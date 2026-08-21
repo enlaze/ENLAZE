@@ -57,6 +57,21 @@ function isEstimateSourceType(sourceType: string | null | undefined): boolean {
   return ESTIMATE_SOURCE_TYPES.has(String(sourceType || ""));
 }
 
+const AUTHORITATIVE_NON_COMMERCIAL_SOURCES = new Set([
+  "user_catalog", "manual_locked", "private_tariff", "negotiated",
+  "historical_approved", "private_bc3", "technical_bank", "enlaze_base",
+]);
+
+function canAdoptResolvedPrice(resolved: ResolvedPrice | null | undefined): boolean {
+  if (!resolved || Number(resolved.selectedPrice) <= 0 || isEstimateSourceType(resolved.sourceType)) {
+    return false;
+  }
+  if (AUTHORITATIVE_NON_COMMERCIAL_SOURCES.has(String(resolved.sourceType))) {
+    return true;
+  }
+  return isTraceableCommercialPrice(resolved);
+}
+
 export const DEFAULT_BUDGET_CONDITIONS =
   "Presupuesto válido durante 30 días desde su fecha de emisión. Los trabajos no incluidos expresamente se presupuestarán aparte. Cualquier modificación del alcance deberá aprobarse por escrito antes de ejecutarse.";
 
@@ -308,6 +323,7 @@ async function verifyMaterialsAgainstTracker(
       category: "material",
       unit: material.unit,
       quantity: material.quantity,
+      referenceUnitPrice: material.unit_price,
       qualityTier,
       location,
     })),
@@ -337,9 +353,8 @@ async function verifyMaterialsAgainstTracker(
     // are real, authoritative sources the user set or imported — just not
     // independently traceable commercial evidence — so their price should
     // still be adopted instead of silently reverting to the old estimate.
-    const hasUsablePrice =
-      resolved && Number(resolved.selectedPrice) > 0 && !isEstimateSourceType(resolved.sourceType);
-    if (!hasUsablePrice) {
+    const hasUsablePrice = canAdoptResolvedPrice(resolved);
+    if (!resolved || !hasUsablePrice) {
       return {
         ...material,
         isRealData: false,
@@ -1895,6 +1910,7 @@ export function BudgetGenerateProvider({
             category: "material",
             unit: material.unit,
             quantity: material.quantity,
+            referenceUnitPrice: material.unit_price,
             qualityTier,
             location: engineScope.ubicacion,
           })),
@@ -1913,9 +1929,8 @@ export function BudgetGenerateProvider({
             const resolved = resolvedByMaterialId.get(material.id);
             // Adoption of the resolved price is separate from the
             // isRealData label — see the equivalent gate above.
-            const hasUsablePrice =
-              resolved && Number(resolved.selectedPrice) > 0 && !isEstimateSourceType(resolved.sourceType);
-            if (!hasUsablePrice) {
+            const hasUsablePrice = canAdoptResolvedPrice(resolved);
+            if (!resolved || !hasUsablePrice) {
               return {
                 ...material,
                 isRealData: false,
@@ -1987,6 +2002,7 @@ export function BudgetGenerateProvider({
             category: partida.chapter || partida.category || "otros",
             unit: partida.unit,
             quantity: partida.quantity,
+            referenceUnitPrice: partida.unit_price,
             qualityTier,
             location: engineScope.ubicacion,
           })),
@@ -1995,11 +2011,6 @@ export function BudgetGenerateProvider({
         });
 
         if (partidasPriceResult.ok) {
-          const technicalSources = new Set([
-            "user_catalog", "manual_locked", "private_tariff", "negotiated",
-            "historical_approved", "private_bc3", "technical_bank", "enlaze_base",
-          ]);
-
           finalPartidas = finalPartidas.map((partida, index) => {
             const resolved = partidasPriceResult.resolved[index];
             const isSupplyLine = partida.category === "material";
@@ -2007,7 +2018,10 @@ export function BudgetGenerateProvider({
               resolved &&
               resolved.selectedPrice > 0 &&
               !isEstimateSourceType(resolved.sourceType) &&
-              (isSupplyLine || technicalSources.has(String(resolved.sourceType)));
+              (
+                AUTHORITATIVE_NON_COMMERCIAL_SOURCES.has(String(resolved.sourceType)) ||
+                (isSupplyLine && isTraceableCommercialPrice(resolved))
+              );
 
             if (!canUseResolved) return partida;
             verifiedPartidaCount += 1;

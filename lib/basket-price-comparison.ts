@@ -5,6 +5,7 @@ import { isTraceableCommercialPrice } from "./price-traceability";
 export interface BasketMaterialForComparison {
   id: string;
   name: string;
+  unit?: string;
   quantity: number;
   included: boolean;
   sourceName?: string;
@@ -41,7 +42,10 @@ export interface ProviderBasketCoverage {
   isRecommended: boolean;
 }
 
-function asComparableOffer(alternative: PriceAlternative): ComparableOffer | null {
+function asComparableOffer(
+  alternative: PriceAlternative,
+  material: BasketMaterialForComparison,
+): ComparableOffer | null {
   const displayPrice = Number(alternative.effectivePrice ?? alternative.price);
   if (!Number.isFinite(displayPrice) || displayPrice <= 0 || !alternative.supplier) return null;
   const canonicalSupplier = canonicalProviderName(alternative.supplier, alternative.url);
@@ -55,13 +59,22 @@ function asComparableOffer(alternative: PriceAlternative): ComparableOffer | nul
       sourceType: alternative.sourceType,
       sourceUrl: alternative.url,
       confidenceScore: alternative.confidenceScore,
+      materialName: material.name,
+      selectedProductName: alternative.title,
+      requestedUnit: material.unit,
+      sourceUnit: alternative.unit,
+      referenceUnitPrice: material.unit_price,
+      matchScore: alternative.matchScore,
+      evidenceVerified: alternative.evidenceVerified,
+      evidenceType: alternative.evidenceType,
+      evidenceVerification: alternative.evidenceVerification,
     }),
   };
 }
 
 export function getComparableOffers(material: BasketMaterialForComparison, limit = 5) {
   const offers = (material.priceAlternatives || [])
-    .map(asComparableOffer)
+    .map((alternative) => asComparableOffer(alternative, material))
     .filter((offer): offer is ComparableOffer => Boolean(offer));
   const unique = new Map<string, ComparableOffer>();
 

@@ -318,4 +318,5 @@ export interface PriceAlternativeV2 {
   unit?: string;
   units_per_package?: number;
   match_score?: number;
+  match_issues?: string[];
 }

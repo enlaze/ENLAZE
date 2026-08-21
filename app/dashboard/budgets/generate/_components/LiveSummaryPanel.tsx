@@ -31,6 +31,7 @@ export function LiveSummaryPanel() {
     if (match) detectedArea = parseInt(match[1], 10);
   }
   const pricePerM2 = detectedArea && detectedArea > 0 ? totals.clientPrice / detectedArea : null;
+  const pvpPerM2 = detectedArea && detectedArea > 0 ? totalWithIva / detectedArea : null;
 
   let priceRange = state.realismAudit.recalculatedAt && detectedArea
     ? {
@@ -204,7 +205,7 @@ export function LiveSummaryPanel() {
         {isConstruction && pricePerM2 !== null && (
           <div className="bg-navy-50 dark:bg-zinc-800/50 p-3 rounded-xl mt-1">
             <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-navy-600 dark:text-zinc-400 uppercase tracking-wider">Importe estimado / m2</span>
+              <span className="text-xs font-bold text-navy-600 dark:text-zinc-400 uppercase tracking-wider">Precio sin IVA / m2</span>
               <span className={`text-sm font-bold ${
                 priceRange && pricePerM2 < (priceRange.min / (detectedArea || 1)) ? 'text-red-500' :
                 priceRange && pricePerM2 > (priceRange.max / (detectedArea || 1)) ? 'text-amber-500' :
@@ -213,18 +214,17 @@ export function LiveSummaryPanel() {
                 {pricePerM2.toFixed(0)} EUR/m2
               </span>
             </div>
-            {priceRange && detectedArea && (
-              <div className="flex justify-between items-center mt-1">
-                <span className="text-[10px] text-navy-400 dark:text-zinc-500">Rango para alcance afectado ({detectedArea}m2)</span>
-                <span className="text-[10px] text-navy-400 dark:text-zinc-500">
-                  {(priceRange.min / detectedArea).toFixed(0)}-{(priceRange.max / detectedArea).toFixed(0)} EUR/m2
-                </span>
+            {pvpPerM2 !== null && (
+              <div className="mt-1 flex items-center justify-between">
+                <span className="text-[10px] font-semibold text-navy-500 dark:text-zinc-400">PVP con IVA / m2</span>
+                <span className="text-xs font-bold text-navy-900 dark:text-white">{pvpPerM2.toFixed(0)} EUR/m2</span>
               </div>
             )}
-            {priceRange && (
-              <div className="flex justify-between items-center mt-0.5">
-                <span className="text-[10px] text-navy-400 dark:text-zinc-500">Rango total</span>
+            {priceRange && detectedArea && (
+              <div className="flex justify-between items-center mt-1">
+                <span className="text-[10px] text-navy-400 dark:text-zinc-500">Rango de referencia sin IVA ({detectedArea}m2)</span>
                 <span className="text-[10px] text-navy-400 dark:text-zinc-500">
+                  {(priceRange.min / detectedArea).toFixed(0)}-{(priceRange.max / detectedArea).toFixed(0)} EUR/m2
                 </span>
               </div>
             )}

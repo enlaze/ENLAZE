@@ -31,7 +31,8 @@ import type {
   ResolutionPriorityLevel,
 } from "./types/price-bank";
 import { calculateEffectiveCost } from "./effective-cost";
-import { normalizeMaterialName, normalizeUnit } from "./price-resolver";
+import { normalizeMaterialName } from "./price-resolver";
+import { evaluateCommercialProductMatch } from "./commercial-product-match";
 
 export { DEFAULT_PRIORITY_ORDER } from "./types/price-bank";
 
@@ -126,6 +127,7 @@ export interface ResolveConceptInput {
   category: string;
   unit: string;
   quantity: number;
+  reference_unit_price?: number;
 }
 
 /**
@@ -202,7 +204,7 @@ function tryLevel(
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
-function materialMatchScore(a: string, b: string): number {
+function technicalMaterialMatchScore(a: string, b: string): number {
   const materialAliases = [
     { canonical: "placayeso", aliases: ["placa yeso laminado", "carton yeso", "pladur"] },
     { canonical: "adhesivoceramico", aliases: ["cemento cola", "adhesivo ceramico", "adhesivo porcelanico"] },
@@ -264,47 +266,26 @@ function materialMatchScore(a: string, b: string): number {
 }
 
 function fuzzyMatch(a: string, b: string): boolean {
-  return materialMatchScore(a, b) >= 0.5;
+  return technicalMaterialMatchScore(a, b) >= 0.5;
+}
+
+function commercialProductMatchEvaluation(
+  product: CurrentPriceRow,
+  input: ResolveConceptInput,
+) {
+  return evaluateCommercialProductMatch({
+    requestedName: input.concept_name,
+    candidateName: product.product_name,
+    requestedUnit: input.unit,
+    candidateUnit: product.unit,
+    unitsPerPackage: product.units_per_package,
+    referenceUnitPrice: input.reference_unit_price,
+    candidateUnitPrice: product.price_excl_vat,
+  });
 }
 
 function commercialProductMatch(product: CurrentPriceRow, input: ResolveConceptInput): boolean {
-  const score = materialMatchScore(product.product_name, input.concept_name);
-  if (score < 0.68) return false;
-
-  const requestedUnit = normalizeUnit(input.unit || "ud");
-  const productUnit = normalizeUnit(product.unit || "ud");
-  if (requestedUnit === productUnit) return true;
-
-  const dimensionalUnits = new Set(["m2", "m3", "ml", "kg", "l"]);
-  if (dimensionalUnits.has(requestedUnit) || dimensionalUnits.has(productUnit)) {
-    // A packaged product is comparable only when the catalogue exposes the
-    // package yield used to calculate an effective price for the requested unit.
-    return product.units_per_package > 1 && (requestedUnit === "ud" || productUnit === "ud");
-  }
-
-  // Sack/roll/bucket/kit catalogues are frequently stored as generic units;
-  // the stronger semantic match above remains mandatory.
-  return requestedUnit === "ud" || productUnit === "ud";
-}
-
-function referencePriceForInput(
-  input: ResolveConceptInput,
-  data: PrefetchedPriceData
-): number | null {
-  const candidates = [
-    ...data.technical_prices
-      .filter((price) => fuzzyMatch(price.name, input.concept_name))
-      .map((price) => price.unit_price),
-    ...data.enlaze_prices
-      .filter((price) => fuzzyMatch(price.name, input.concept_name))
-      .map((price) => price.unit_price),
-    ...data.manual_prices
-      .filter((price) => fuzzyMatch(price.name, input.concept_name))
-      .map((price) => price.unit_price),
-  ].filter((price) => Number.isFinite(price) && price > 0);
-  if (candidates.length === 0) return null;
-  candidates.sort((left, right) => left - right);
-  return candidates[Math.floor(candidates.length / 2)];
+  return commercialProductMatchEvaluation(product, input).isExact;
 }
 
 function providerServesProvince(
@@ -385,6 +366,7 @@ function tryPrivateTariff(
       providerServesProvince(p.provider_province, p.provider_supply_zones, context.province)
   );
   if (!match) return null;
+  const evaluation = commercialProductMatchEvaluation(match, input);
   const breakdown = buildEffectiveCost(match.price_excl_vat, input.quantity, match.units_per_package, match.shipping_cost, match.minimum_order);
   return {
     concept_id: match.concept_id, concept_name: match.concept_name || input.concept_name,
@@ -392,7 +374,7 @@ function tryPrivateTariff(
     provider_id: match.provider_id, provider_name: match.provider_name,
     source_id: null, unit_price: match.price_excl_vat,
     effective_price: breakdown.effective_per_unit, effective_cost_breakdown: breakdown,
-    source_type: "private_tariff", confidence_score: 0.95,
+    source_type: "private_tariff", confidence_score: Math.min(0.95, evaluation.score),
     selection_reason: "Tarifa privada importada", checked_at: match.checked_at || now,
   };
 }
@@ -408,6 +390,7 @@ function tryNegotiated(
       providerServesProvince(p.provider_province, p.provider_supply_zones, context.province)
   );
   if (!match) return null;
+  const evaluation = commercialProductMatchEvaluation(match, input);
   const breakdown = buildEffectiveCost(match.price_excl_vat, input.quantity, match.units_per_package, match.shipping_cost, match.minimum_order);
   return {
     concept_id: match.concept_id, concept_name: match.concept_name || input.concept_name,
@@ -415,7 +398,7 @@ function tryNegotiated(
     provider_id: match.provider_id, provider_name: match.provider_name,
     source_id: null, unit_price: match.price_excl_vat,
     effective_price: breakdown.effective_per_unit, effective_cost_breakdown: breakdown,
-    source_type: "negotiated", confidence_score: 0.93,
+    source_type: "negotiated", confidence_score: Math.min(0.93, evaluation.score),
     selection_reason: "Precio negociado con proveedor", checked_at: match.checked_at || now,
   };
 }
@@ -460,20 +443,21 @@ function tryPreferredSupplier(
       commercialProductMatch(p, input) &&
       providerServesProvince(p.provider_province, p.provider_supply_zones, context.province)
   ).sort((left, right) =>
-    materialMatchScore(right.product_name, input.concept_name)
-      - materialMatchScore(left.product_name, input.concept_name)
+    commercialProductMatchEvaluation(right, input).score
+      - commercialProductMatchEvaluation(left, input).score
     || Number(Boolean(right.source_url)) - Number(Boolean(left.source_url))
     || (right.confidence_score || 0) - (left.confidence_score || 0)
   )[0];
   if (!match) return null;
   const breakdown = buildEffectiveCost(match.price_excl_vat, input.quantity, match.units_per_package, match.shipping_cost, match.minimum_order);
+  const evaluation = commercialProductMatchEvaluation(match, input);
   return {
     concept_id: match.concept_id, concept_name: match.concept_name || input.concept_name,
     product_id: match.product_id, product_name: match.product_name,
     provider_id: match.provider_id, provider_name: match.provider_name,
     source_id: null, unit_price: match.price_excl_vat,
     effective_price: breakdown.effective_per_unit, effective_cost_breakdown: breakdown,
-    source_type: "preferred_supplier", confidence_score: match.confidence_score || 0.85,
+    source_type: "preferred_supplier", confidence_score: Math.min(match.confidence_score || 0.85, evaluation.score),
     selection_reason: `Proveedor preferido: ${match.provider_name}`,
     checked_at: match.checked_at || now,
   };
@@ -492,16 +476,11 @@ function tryProviderUpdated(
   );
   if (matches.length === 0) return null;
 
-  const referencePrice = referencePriceForInput(input, data);
   const withCost = matches.map((m) => ({
     match: m,
-    matchScore: materialMatchScore(m.product_name, input.concept_name),
+    matchScore: commercialProductMatchEvaluation(m, input).score,
     breakdown: buildEffectiveCost(m.price_excl_vat, input.quantity, m.units_per_package, m.shipping_cost, m.minimum_order),
-  })).filter(({ breakdown }) => {
-    if (!referencePrice) return true;
-    const ratio = breakdown.effective_per_unit / referencePrice;
-    return ratio >= 0.45 && ratio <= 2.5;
-  });
+  }));
   if (withCost.length === 0) return null;
   withCost.sort(
     (a, b) =>
@@ -616,7 +595,8 @@ function collectAlternatives(
 ): void {
   const seenProducts = new Set<string>();
   for (const p of data.current_prices) {
-    if (!commercialProductMatch(p, input)) continue;
+    const evaluation = commercialProductMatchEvaluation(p, input);
+    if (!evaluation.isExact) continue;
     if (!providerServesProvince(p.provider_province, p.provider_supply_zones, context.province)) continue;
     if (!p.product_id || seenProducts.has(p.product_id)) continue;
     seenProducts.add(p.product_id);
@@ -627,13 +607,14 @@ function collectAlternatives(
       provider_id: p.provider_id, provider_name: p.provider_name,
       brand: p.brand, unit_price: p.price_excl_vat,
       effective_price: breakdown.effective_per_unit, is_available: p.is_available,
-      delivery_days: p.delivery_days_max, confidence_score: p.confidence_score,
+      delivery_days: p.delivery_days_max, confidence_score: Math.min(p.confidence_score, evaluation.score),
       source_type: p.source_type, checked_at: p.checked_at,
       source_url: p.source_url || null,
       delivery_days_min: p.delivery_days_min,
       unit: p.unit,
       units_per_package: p.units_per_package,
-      match_score: materialMatchScore(p.product_name, input.concept_name),
+      match_score: evaluation.score,
+      match_issues: evaluation.reasons,
     });
   }
   alternatives.sort((a, b) =>

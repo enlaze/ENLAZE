@@ -62,15 +62,13 @@ test("only traceable commercial observations are presented as verified", () => {
   assert.equal(isTraceableCommercialPrice({ ...valid, selectedPrice: 0 }), false);
 });
 
-test("both budget-generation paths use the shared traceability gate", () => {
+test("budget generation uses the shared traceability and adoption gates", () => {
   const provider = readFileSync(
     "app/dashboard/budgets/generate/_components/BudgetGenerateProvider.tsx",
     "utf8"
   );
-  assert.equal(
-    provider.match(/isTraceableCommercialPrice\(resolved\)/g)?.length,
-    2
-  );
+  assert.ok((provider.match(/isTraceableCommercialPrice\(resolved\)/g) || []).length >= 2);
+  assert.equal((provider.match(/canAdoptResolvedPrice\(resolved\)/g) || []).length, 2);
 });
 
 test("V2 price queries include shared and company-owned providers", () => {
@@ -1192,12 +1190,14 @@ test("auth/google/callback upserts the connection via the atomic RPC, not a dire
   assert.doesNotMatch(route, /\.from\("agent_connections"\)\s*\n?\s*\.insert\(payload\)/);
 });
 
-test("resolved prices are adopted whenever usable, independent of the isRealData traceability label", () => {
+test("commercial prices require strict traceability before replacing the technical estimate", () => {
   const provider = readFileSync(
     "app/dashboard/budgets/generate/_components/BudgetGenerateProvider.tsx",
     "utf8"
   );
   assert.equal((provider.match(/hasUsablePrice/g) || []).length, 4);
+  assert.match(provider, /function canAdoptResolvedPrice/);
+  assert.match(provider, /AUTHORITATIVE_NON_COMMERCIAL_SOURCES/);
   assert.equal(
     (provider.match(/isRealData: isTraceableCommercialPrice\(resolved\)/g) || []).length,
     2

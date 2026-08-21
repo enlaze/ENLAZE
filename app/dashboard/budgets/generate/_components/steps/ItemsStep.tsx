@@ -63,7 +63,7 @@ export function ItemsStep() {
                   Materiales verificados: <strong>{state.priceVerification.verified}/{state.priceVerification.total}</strong>
                 </span>
                 <span>
-                  Importe estimado: <strong>{state.realismAudit.pricePerM2.toFixed(0)} EUR/m2</strong>
+                  Precio sin IVA: <strong>{state.realismAudit.pricePerM2.toFixed(0)} EUR/m2</strong>
                   {state.marketAdjustMessage && <em className="ml-1 font-normal not-italic text-amber-600">(umbral inferior calibrado)</em>}
                 </span>
                 {state.realismAudit.recalculatedAt && (

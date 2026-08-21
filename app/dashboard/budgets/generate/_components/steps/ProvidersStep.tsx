@@ -161,8 +161,14 @@ export function ProvidersStep() {
       return { label: "PROVEEDOR", className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800" };
     }
     // Original logic
-    if (["n8n_sync", "n8n_market", "provider_updated", "preferred_supplier", "private_tariff", "negotiated"].includes(sourceType || "")) {
+    if (
+      isRealData &&
+      ["n8n_sync", "n8n_market", "provider_updated", "preferred_supplier", "private_tariff", "negotiated"].includes(sourceType || "")
+    ) {
       return { label: "RASTREADOR", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800" };
+    }
+    if (["n8n_sync", "n8n_market", "provider_updated", "preferred_supplier", "private_tariff", "negotiated"].includes(sourceType || "")) {
+      return { label: "POR VALIDAR", className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800" };
     }
     if (sourceType === "default") return { label: "BASE", className: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700" };
     if (sourceType === "market_reference") return { label: "REFERENCIA", className: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800" };
@@ -518,7 +524,7 @@ export function ProvidersStep() {
                                 <span>Comprobado: {new Date(m.priceCheckedAt).toLocaleDateString("es-ES")}</span>
                               )}
                               {typeof m.confidenceScore === "number" && (
-                                <span>Fiabilidad: {Math.round(m.confidenceScore * 100)}%</span>
+                                <span>{m.isRealData ? "Coincidencia verificada" : "Confianza provisional"}: {Math.round(m.confidenceScore * 100)}%</span>
                               )}
                               {typeof m.deliveryDays === "number" && (
                                 <span>Entrega: hasta {m.deliveryDays} días</span>
@@ -526,7 +532,7 @@ export function ProvidersStep() {
                               {m.isAvailable === false && <span className="font-semibold text-red-600">Sin disponibilidad</span>}
                               {m.sourceUrl && (
                                 <a href={m.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline">
-                                  Ver producto <ExternalLink className="h-3 w-3" />
+                                  {m.isRealData ? "Abrir fuente oficial" : "Revisar candidato"} <ExternalLink className="h-3 w-3" />
                                 </a>
                               )}
                             </div>
@@ -588,7 +594,7 @@ export function ProvidersStep() {
                                       <div className="mt-3 flex items-center justify-between gap-2">
                                         {offer.url ? (
                                           <a href={offer.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 hover:underline">
-                                            Página oficial <ExternalLink className="h-3 w-3" />
+                                            {offer.isTraceable ? "Abrir fuente oficial" : "Fuente del candidato"} <ExternalLink className="h-3 w-3" />
                                           </a>
                                         ) : <span className="text-[10px] text-amber-600">Sin enlace verificable</span>}
                                         <button
@@ -597,7 +603,7 @@ export function ProvidersStep() {
                                           onClick={() => selectOffer(m.id, offer)}
                                           className={`rounded px-2.5 py-1.5 text-[10px] font-bold ${isCurrent ? "bg-green-100 text-green-700" : offer.isAvailable === false ? "cursor-not-allowed bg-navy-100 text-navy-400 dark:bg-zinc-800" : "bg-navy-900 text-white hover:bg-brand-green hover:text-navy-900 dark:bg-white dark:text-navy-900"}`}
                                         >
-                                          {isCurrent ? "Precio actual" : offer.isAvailable === false ? "No disponible" : "Usar esta oferta"}
+                                          {isCurrent ? "Precio actual" : offer.isAvailable === false ? "No disponible" : offer.isTraceable ? "Usar esta oferta" : "Usar como provisional"}
                                         </button>
                                       </div>
                                     </div>

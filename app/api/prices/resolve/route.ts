@@ -1,5 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
@@ -23,6 +23,8 @@ import {
 } from "@/lib/price-resolver-v2";
 import { buildUniqueCatalogTokenGroups } from "@/lib/price-catalog-search";
 import { canonicalProviderName, providerIdentitySlug } from "@/lib/provider-identity";
+import { isProductSpecificSourceUrl } from "@/lib/commercial-product-match";
+import { hasVerifiedCatalogEvidence } from "@/lib/price-traceability";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -50,6 +52,75 @@ interface CachedRow {
   captured_at: string | null;
   expires_at: string | null;
   material_name: string;
+}
+
+interface StoredProductEvidence {
+  verified: boolean;
+  evidenceType: string | null;
+  verification: string | null;
+  sourceUrl: string | null;
+  observedAt: string | null;
+}
+
+async function fetchLatestProductEvidence(
+  database: SupabaseClient,
+  productIds: string[],
+): Promise<Map<string, StoredProductEvidence>> {
+  const evidenceByProduct = new Map<string, StoredProductEvidence>();
+  const uniqueIds = Array.from(new Set(productIds.filter(Boolean)));
+
+  for (let start = 0; start < uniqueIds.length; start += 100) {
+    let pending = uniqueIds.slice(start, start + 100);
+
+    // Removing products as soon as their latest observation is found avoids
+    // an old, frequently-synchronised product hiding quieter products behind
+    // PostgREST's row limit.
+    while (pending.length > 0) {
+      const { data, error } = await database
+        .from("pb_price_observations")
+        .select("product_id, source_url, metadata, observed_at")
+        .in("product_id", pending)
+        .order("observed_at", { ascending: false })
+        .limit(1000);
+
+      if (error) {
+        console.error("[PriceResolve] Evidence query failed:", error.message);
+        break;
+      }
+
+      for (const row of data || []) {
+        const productId = String(row.product_id || "");
+        if (!productId || evidenceByProduct.has(productId)) continue;
+        const metadata = row.metadata && typeof row.metadata === "object"
+          ? row.metadata as Record<string, unknown>
+          : {};
+        const evidenceType = metadata.evidence_type
+          ? String(metadata.evidence_type)
+          : null;
+        const verification = metadata.verification
+          ? String(metadata.verification)
+          : null;
+        const verified = hasVerifiedCatalogEvidence({
+          evidenceVerified: true,
+          evidenceType,
+          evidenceVerification: verification,
+        });
+        evidenceByProduct.set(productId, {
+          verified,
+          evidenceType,
+          verification,
+          sourceUrl: row.source_url ? String(row.source_url) : null,
+          observedAt: row.observed_at ? String(row.observed_at) : null,
+        });
+      }
+
+      const unresolved = pending.filter((id) => !evidenceByProduct.has(id));
+      if (!data?.length || unresolved.length === pending.length) break;
+      pending = unresolved;
+    }
+  }
+
+  return evidenceByProduct;
 }
 
 // ─── POST /api/prices/resolve ───────────────────────────────────────────────
@@ -295,7 +366,10 @@ export async function POST(request: Request) {
           delivery_days_min: Number(prov?.delivery_days_min) || 1,
           delivery_days_max: Number(prov?.delivery_days_max) || 7,
           is_available: Boolean(row.is_available),
-          confidence_score: 0.82,
+          // A raw tracker row has not passed the material equivalence check
+          // yet. Direct product evidence starts above the verification floor;
+          // generic catalogues and files remain provisional.
+          confidence_score: isProductSpecificSourceUrl(sourceUrl) ? 0.78 : 0.60,
           source_type: "n8n_market",
           source_url: sourceUrl,
           checked_at: row.checked_at ? String(row.checked_at) : null,
@@ -378,6 +452,7 @@ export async function POST(request: Request) {
           category: m.category || "",
           unit: m.unit,
           quantity: m.quantity,
+          reference_unit_price: m.referenceUnitPrice,
         })),
         context: {
           company_id: companyScopeId,
@@ -387,6 +462,14 @@ export async function POST(request: Request) {
         data: v2Data,
       });
 
+      const evidenceByProduct = await fetchLatestProductEvidence(
+        trackerDb,
+        v2Result.results.flatMap((result) => [
+          result.product_id || "",
+          ...result.alternatives.map((alternative) => alternative.product_id),
+        ]),
+      );
+
       // Convert V2 results to ResolvedPrice format for backwards compatibility
       const qualityTier = materials[0]?.qualityTier ?? "media";
       const resolved: ResolvedPrice[] = v2Result.results.map((r, idx) => {
@@ -394,14 +477,21 @@ export async function POST(request: Request) {
           ? trackerMetadataByProduct.get(String(r.product_id))
           : undefined;
         const selectedAlternative = r.alternatives.find((alternative) => alternative.product_id === r.product_id);
-        const selectedUrl = trackerMetadata?.url || selectedAlternative?.source_url || "";
+        const selectedEvidence = r.product_id
+          ? evidenceByProduct.get(String(r.product_id))
+          : undefined;
+        const selectedUrl = trackerMetadata?.url || selectedAlternative?.source_url || selectedEvidence?.sourceUrl || "";
         const selectedSupplier = canonicalProviderName(r.provider_name || "", selectedUrl);
+        const selectedConfidence = selectedEvidence?.verified
+          ? Math.max(r.confidence_score, 0.82)
+          : r.confidence_score;
         return {
           materialName: materials[idx].materialName,
           normalizedName: normalizeMaterialName(materials[idx].materialName),
           selectedProductName: r.product_name || undefined,
           category: materials[idx].category || "",
           unit: materials[idx].unit,
+          sourceUnit: selectedAlternative?.unit || materials[idx].unit,
           quantity: materials[idx].quantity,
           qualityTier: materials[idx].qualityTier,
           selectedPrice: r.effective_price > 0 ? r.effective_price : r.unit_price,
@@ -411,28 +501,43 @@ export async function POST(request: Request) {
           selectedSupplier,
           sourceUrl: selectedUrl,
           sourceType: r.source_type as ResolvedPrice["sourceType"],
-          confidenceScore: r.confidence_score,
-          capturedAt: trackerMetadata?.checkedAt || r.checked_at || new Date().toISOString(),
+          confidenceScore: selectedConfidence,
+          capturedAt: trackerMetadata?.checkedAt || selectedEvidence?.observedAt || r.checked_at || new Date().toISOString(),
           providerId: providerIdentitySlug(selectedSupplier, selectedUrl),
           isAvailable: selectedAlternative?.is_available,
           deliveryDays: selectedAlternative?.delivery_days ?? undefined,
-          alternatives: r.alternatives.map((a): PriceAlternative => ({
-            supplier: canonicalProviderName(a.provider_name, a.source_url),
-            title: a.product_name,
-            price: a.unit_price,
-            unit: a.unit || materials[idx]?.unit || "ud",
-            qualityTier,
-            url: a.source_url || "",
-            productId: a.product_id,
-            providerId: providerIdentitySlug(a.provider_name, a.source_url),
-            effectivePrice: a.effective_price ?? undefined,
-            isAvailable: a.is_available,
-            deliveryDays: a.delivery_days ?? undefined,
-            confidenceScore: a.confidence_score,
-            sourceType: a.source_type,
-            checkedAt: a.checked_at || undefined,
-            matchScore: a.match_score,
-          })),
+          matchScore: selectedAlternative?.match_score,
+          matchIssues: selectedAlternative?.match_issues || [],
+          evidenceVerified: selectedEvidence?.verified || false,
+          evidenceType: selectedEvidence?.evidenceType || undefined,
+          evidenceVerification: selectedEvidence?.verification || undefined,
+          alternatives: r.alternatives.map((a): PriceAlternative => {
+            const evidence = evidenceByProduct.get(a.product_id);
+            const sourceUrl = a.source_url || evidence?.sourceUrl || "";
+            return {
+              supplier: canonicalProviderName(a.provider_name, sourceUrl),
+              title: a.product_name,
+              price: a.unit_price,
+              unit: a.unit || materials[idx]?.unit || "ud",
+              qualityTier,
+              url: sourceUrl,
+              productId: a.product_id,
+              providerId: providerIdentitySlug(a.provider_name, sourceUrl),
+              effectivePrice: a.effective_price ?? undefined,
+              isAvailable: a.is_available,
+              deliveryDays: a.delivery_days ?? undefined,
+              confidenceScore: evidence?.verified
+                ? Math.max(a.confidence_score, 0.82)
+                : a.confidence_score,
+              sourceType: a.source_type,
+              checkedAt: a.checked_at || evidence?.observedAt || undefined,
+              matchScore: a.match_score,
+              matchIssues: a.match_issues || [],
+              evidenceVerified: evidence?.verified || false,
+              evidenceType: evidence?.evidenceType || undefined,
+              evidenceVerification: evidence?.verification || undefined,
+            };
+          }),
         };
       });
 
