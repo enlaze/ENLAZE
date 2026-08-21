@@ -5,6 +5,7 @@ import {
   getMarketRange,
   type BudgetScope,
 } from "./budget-engine";
+import { TECHNICAL_ENGINE_SUMMARY } from "./ai-usage-policy";
 
 interface DeterministicAnalysisInput {
   sector?: string;
@@ -20,7 +21,7 @@ export function buildDeterministicBudgetAnalysis({
   serviceType = "reforma",
   scope,
   trackerProductsCount = 0,
-  reason = "La IA externa no está disponible; se usa el motor técnico ENLAZE.",
+  reason = "external_enhancement_unavailable",
 }: DeterministicAnalysisInput) {
   const items = buildDeterministicBudgetItems(scope, 1);
   const materials = buildScopeMaterials(scope);
@@ -46,7 +47,7 @@ export function buildDeterministicBudgetAnalysis({
   );
 
   return {
-    summary: "Presupuesto calculado por el motor técnico ENLAZE y preparado para contrastar con el rastreador.",
+    summary: TECHNICAL_ENGINE_SUMMARY,
     confidence_score: trackerProductsCount > 0 ? 78 : 68,
     source: "enlaze_deterministic_engine",
     analysis_mode: "deterministic_engine",
@@ -97,7 +98,7 @@ export function buildDeterministicBudgetAnalysis({
     },
     estimated_price_range: marketRange,
     pricing_confidence: trackerProductsCount > 0 ? 76 : 65,
-    price_warnings: [reason],
+    price_warnings: [],
     missing_questions: scope.superficie_m2 > 0
       ? []
       : ["Indica la superficie afectada para afinar cantidades e importe."],

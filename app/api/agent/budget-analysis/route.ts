@@ -7,6 +7,13 @@ import { getSectorConfig } from "@/lib/agent-prompts";
 import { normalizeSector } from "@/lib/sector-config";
 import { inferBudgetActions, normalizeBathroomCount, type BudgetScope } from "@/lib/budget-engine";
 import { buildDeterministicBudgetAnalysis } from "@/lib/budget-analysis-fallback";
+import { hashText, logAiRun } from "@/lib/ai-logger";
+import {
+  canUseExternalAi,
+  getAiUsagePolicy,
+  startOfUtcDay,
+  sumAiTokens,
+} from "@/lib/ai-usage-policy";
 
 const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -476,11 +483,50 @@ Para construccion necesito MINIMO 20 partidas y 15 materiales. Los precios de pr
 
     let result: any;
     let aiFallbackReason = "";
+    const aiPolicy = getAiUsagePolicy();
+    let externalAiAllowed = Boolean(anthropic);
+    let internalExternalAiStatus = anthropic ? "available" : "not_configured";
+
+    if (externalAiAllowed) {
+      const usageStart = startOfUtcDay();
+      const [userUsage, globalUsage] = await Promise.all([
+        trackerDb
+          .from("ai_runs")
+          .select("tokens_in, tokens_out")
+          .eq("user_id", user.id)
+          .eq("run_type", "budget_generation")
+          .gte("created_at", usageStart)
+          .limit(1000),
+        trackerDb
+          .from("ai_runs")
+          .select("tokens_in, tokens_out")
+          .eq("run_type", "budget_generation")
+          .gte("created_at", usageStart)
+          .limit(1000),
+      ]);
+      if (userUsage.error || globalUsage.error) {
+        externalAiAllowed = false;
+        internalExternalAiStatus = "usage_meter_unavailable";
+        console.error("[budget-analysis] AI usage meter unavailable", {
+          user: userUsage.error?.message,
+          global: globalUsage.error?.message,
+        });
+      } else if (!canUseExternalAi({
+        userTokens: sumAiTokens(userUsage.data),
+        globalTokens: sumAiTokens(globalUsage.data),
+        policy: aiPolicy,
+      })) {
+        externalAiAllowed = false;
+        internalExternalAiStatus = "daily_budget_reached";
+      }
+    }
+
     try {
-      if (!anthropic) throw new Error("ANTHROPIC_API_KEY no configurada");
+      if (!anthropic || !externalAiAllowed) throw new Error(internalExternalAiStatus);
+      const startedAt = Date.now();
       const message = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
-        max_tokens: 8192,
+        max_tokens: aiPolicy.maxOutputTokens,
         system: systemPrompt,
         messages: [
           {
@@ -494,6 +540,22 @@ Para construccion necesito MINIMO 20 partidas y 15 materiales. Los precios de pr
         .filter((block): block is Anthropic.TextBlock => block.type === "text")
         .map(block => block.text)
         .join("");
+      const [inputHash, outputHash] = await Promise.all([
+        hashText(`${systemPrompt}\n${userPrompt}`),
+        hashText(responseText),
+      ]);
+      await logAiRun(supabase, {
+        run_type: "budget_generation",
+        model: "claude-sonnet-4-6",
+        prompt_version: "budget-analysis-v3",
+        input_hash: inputHash,
+        output_hash: outputHash,
+        tokens_in: message.usage.input_tokens,
+        tokens_out: message.usage.output_tokens,
+        duration_ms: Date.now() - startedAt,
+        entity_type: project_id ? "project" : "budget_draft",
+        entity_id: project_id || undefined,
+      });
       try {
         result = JSON.parse(extractJson(responseText));
       } catch {
@@ -503,9 +565,11 @@ Para construccion necesito MINIMO 20 partidas y 15 materiales. Los precios de pr
     } catch (analysisError: unknown) {
       if (activeSector !== "construccion") throw analysisError;
       const rawMessage = analysisError instanceof Error ? analysisError.message : String(analysisError);
-      aiFallbackReason = /credit balance|credits|billing/i.test(rawMessage)
-        ? "Claude no tiene saldo disponible; cálculo realizado por el motor técnico ENLAZE."
-        : "Claude no está disponible; cálculo realizado por el motor técnico ENLAZE.";
+      aiFallbackReason = internalExternalAiStatus !== "available"
+        ? internalExternalAiStatus
+        : /credit balance|credits|billing/i.test(rawMessage)
+          ? "provider_billing_unavailable"
+          : "provider_temporarily_unavailable";
       console.warn("[budget-analysis] usando motor determinista", {
         status: analysisError && typeof analysisError === "object" && "status" in analysisError
           ? (analysisError as { status?: unknown }).status
@@ -558,7 +622,7 @@ Para construccion necesito MINIMO 20 partidas y 15 materiales. Los precios de pr
       sector_regulation_count: regulations.length,
       real_suppliers: realSuppliers,
       documents_used: technicalDocuments.map((doc: any) => ({ id: doc.id, name: doc.name })),
-      analysis_mode: result.analysis_mode || "claude",
+      analysis_mode: result.analysis_mode || "external_enhanced",
       using_ai_fallback: result.analysis_mode === "deterministic_engine",
       ai_fallback_reason: aiFallbackReason || result.data_sources?.ai_fallback_reason || "",
       using_fallback: (trackerProductsCount ?? 0) === 0,

@@ -2,7 +2,11 @@
 
 import React, { useState, useCallback } from "react";
 import { Store, Package } from "lucide-react";
-import { useBudgetGenerate, type BudgetState } from "../BudgetGenerateProvider";
+import {
+  calculateBudgetFinancials,
+  useBudgetGenerate,
+  type BudgetState,
+} from "../BudgetGenerateProvider";
 import { Card } from "@/components/ui/card";
 import type { PDFBudget } from "@/lib/pdf-generator";
 
@@ -26,6 +30,13 @@ function normalizeProviderName(value: string) {
 function buildBudgetMeta(state: BudgetState): PDFBudget {
   const subtotal = state.clientView?.subtotal
     ?? state.partidas.filter(p => p.status !== "opcional").reduce((s, p) => s + p.subtotal_client, 0);
+  const financials = calculateBudgetFinancials(
+    subtotal,
+    state.ivaPercent,
+    state.discountType,
+    state.discountPercent,
+    state.discountAmount,
+  );
   return {
     budget_number: state.draftId ? `PRE-${new Date().getFullYear()}` : `BORRADOR-${new Date().getFullYear()}`,
     title: state.title || "Presupuesto Generado",
@@ -35,11 +46,22 @@ function buildBudgetMeta(state: BudgetState): PDFBudget {
     service_type: state.serviceType || state.sector,
     status: "pendiente",
     created_at: new Date().toISOString(),
-    subtotal,
+    valid_until: state.validUntil || null,
+    subtotal: financials.subtotal,
     iva_percent: state.ivaPercent,
-    iva_amount: subtotal * (state.ivaPercent / 100),
-    total: subtotal * (1 + state.ivaPercent / 100),
+    iva_amount: financials.ivaAmount,
+    total: financials.total,
     notes: state.internalNotes,
+    deposit_percent: state.depositPercent,
+    payment_method: state.paymentMethod,
+    payment_iban: state.paymentIban,
+    discount_type: state.discountType,
+    discount_percent: state.discountPercent,
+    discount_amount: financials.discountValue,
+    payment_schedule: state.paymentSchedule,
+    warranty_text: state.warrantyText,
+    execution_deadline_text: state.executionDeadlineText,
+    observations: state.observations,
     conditions_text: state.conditionsText,
     location: state.sectorData.ubicacion || null,
     geographic_profile: state.partidas.find((partida) => partida.geographic_profile)?.geographic_profile || "Media nacional",

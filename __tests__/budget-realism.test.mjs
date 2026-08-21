@@ -175,19 +175,21 @@ test("partial actions are inferred when the service type contains the trade", ()
   assert.deepEqual(inferBudgetActions("Trabajo de fontanería e iluminación"), ["iluminacion", "fontaneria"]);
 });
 
-test("budget analysis remains available without Claude and includes tracker metadata", () => {
+test("budget analysis remains available without external AI and hides provider billing details", () => {
   const scope = { ...fullScope, actuaciones: ["fontaneria"], incluye_cocina: false };
   const analysis = buildDeterministicBudgetAnalysis({
     scope,
     serviceType: "fontaneria",
     trackerProductsCount: 1200,
-    reason: "Claude sin saldo",
+    reason: "provider_billing_unavailable",
   });
   assert.equal(analysis.analysis_mode, "deterministic_engine");
   assert.equal(analysis.data_sources.tracker_products_count, 1200);
   assert.ok(analysis.suggested_items.length >= 5);
   assert.ok(analysis.suggested_materials.length >= 5);
-  assert.match(analysis.price_warnings[0], /sin saldo/i);
+  assert.deepEqual(analysis.price_warnings, []);
+  assert.equal(analysis.data_sources.ai_fallback_reason, "provider_billing_unavailable");
+  assert.doesNotMatch(analysis.summary, /claude|saldo|token/i);
 });
 
 test("every construction action supported by the form produces a budget", () => {

@@ -59,15 +59,30 @@ test("el generador IA guarda la ficha del cliente, condiciones y notas", async (
     new URL("../app/dashboard/budgets/generate/_components/steps/ScopeStep.tsx", import.meta.url),
     "utf8",
   );
+  const terms = await readFile(
+    new URL("../app/dashboard/budgets/generate/_components/BudgetTermsFields.tsx", import.meta.url),
+    "utf8",
+  );
+  const providers = await readFile(
+    new URL("../app/dashboard/budgets/generate/_components/steps/ProvidersStep.tsx", import.meta.url),
+    "utf8",
+  );
 
   assert.match(provider, /client_name: clientSnapshot\.name/);
   assert.match(provider, /client_email: clientSnapshot\.email/);
   assert.match(provider, /client_phone: clientSnapshot\.phone/);
   assert.match(provider, /conditions_text: state\.conditionsText/);
   assert.match(provider, /notes: state\.internalNotes/);
-  assert.match(scope, /Condiciones del presupuesto/);
-  assert.match(scope, /Notas internas/);
-  assert.match(scope, /nunca aparecerán en el PDF del cliente/);
+  assert.match(scope, /BudgetTermsFields/);
+  assert.match(terms, /Condiciones del presupuesto/);
+  assert.match(terms, /Fases de pago/);
+  assert.match(terms, /Garantía/);
+  assert.match(terms, /Notas internas/);
+  assert.match(terms, /nunca aparecerán en el PDF del cliente/);
+  assert.match(provider, /payment_schedule: state\.paymentSchedule/);
+  assert.match(provider, /execution_deadline_text: state\.executionDeadlineText/);
+  assert.match(providers, /payment_iban: state\.paymentIban/);
+  assert.match(providers, /observations: state\.observations/);
 });
 
 test("la pantalla final y la API ofrecen las dos variantes de PDF", async () => {

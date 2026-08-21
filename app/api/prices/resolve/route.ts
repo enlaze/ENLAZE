@@ -21,6 +21,7 @@ import {
   type TechnicalPriceRow,
   type EnlazePriceRow,
 } from "@/lib/price-resolver-v2";
+import { buildUniqueCatalogTokenGroups } from "@/lib/price-catalog-search";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -132,19 +133,9 @@ export async function POST(request: Request) {
     const useV2 = (pbCount ?? 0) > 0;
 
     if (useV2) {
-      const genericSearchWords = new Set([
-        "para", "con", "sin", "tipo", "color", "blanco", "blanca", "negro",
-        "negra", "pack", "unidad", "unidades", "material", "suministro",
-        "instalacion", "colocacion", "completo", "completa",
-      ]);
-      const trackerSearchTokens = Array.from(new Set(
-        materials.flatMap((material) =>
-          normalizeMaterialName(material.materialName)
-            .split(" ")
-            .filter((word) => word.length >= 4 && !genericSearchWords.has(word))
-            .slice(0, 2)
-        )
-      )).slice(0, 40);
+      const trackerTokenGroups = buildUniqueCatalogTokenGroups(
+        materials.map((material) => material.materialName),
+      );
 
       // ── V2 Path: resolve via 11-level cascade ──
       const [
@@ -161,7 +152,7 @@ export async function POST(request: Request) {
             source_type, is_available, checked_at,
             pb_products!inner (
               id, commercial_name, concept_id, brand, sku, sale_unit,
-              units_per_package, unit_price,
+              units_per_package, unit_price, url, source_url, checked_at,
               pb_normalized_concepts ( id, canonical_name )
             ),
             pb_providers!inner (
@@ -172,27 +163,46 @@ export async function POST(request: Request) {
           `)
           .eq("pb_products.sector", "construccion")
           .or(visibleProviderFilter, { referencedTable: "pb_providers" }),
-        trackerSearchTokens.length > 0
-          ? trackerDb
-              .from("pb_products")
-              .select(`
-                id, commercial_name, concept_id, brand, sku, sale_unit,
-                units_per_package, unit_price, url, source_url, checked_at, is_available,
-                pb_providers!inner (
-                  id, name, province, supply_zones, is_preferred,
-                  shipping_cost_flat, minimum_order, delivery_days_min, delivery_days_max,
-                  company_id
-                )
-              `)
-              .eq("sector", "construccion")
-              .eq("is_active", true)
-              .eq("is_available", true)
-              .or(visibleProviderFilter, { referencedTable: "pb_providers" })
-              .gt("unit_price", 0)
-              .or(trackerSearchTokens.map((token) => `commercial_name.ilike.%${token}%`).join(","))
-              .order("checked_at", { ascending: false })
-              .limit(1000)
-          : Promise.resolve({ data: [] }),
+        (async () => {
+          const rowsById = new Map<string, Record<string, unknown>>();
+          // Keep database concurrency bounded while ensuring every requested
+          // material searches the complete shared catalogue independently.
+          for (let start = 0; start < trackerTokenGroups.length; start += 6) {
+            const groupResults = await Promise.all(
+              trackerTokenGroups.slice(start, start + 6).map((tokens) =>
+                trackerDb
+                  .from("pb_products")
+                  .select(`
+                    id, commercial_name, concept_id, brand, sku, sale_unit,
+                    units_per_package, unit_price, url, source_url, checked_at, is_available,
+                    pb_providers!inner (
+                      id, name, province, supply_zones, is_preferred,
+                      shipping_cost_flat, minimum_order, delivery_days_min, delivery_days_max,
+                      company_id
+                    )
+                  `)
+                  .eq("sector", "construccion")
+                  .eq("is_active", true)
+                  .eq("is_available", true)
+                  .or(visibleProviderFilter, { referencedTable: "pb_providers" })
+                  .gt("unit_price", 0)
+                  .or(tokens.map((token) => `commercial_name.ilike.%${token}%`).join(","))
+                  .order("checked_at", { ascending: false })
+                  .limit(80)
+              ),
+            );
+            for (const result of groupResults) {
+              if (result.error) {
+                console.error("[PriceResolve] Candidate query failed:", result.error.message);
+                continue;
+              }
+              for (const row of result.data || []) {
+                rowsById.set(String(row.id), row as Record<string, unknown>);
+              }
+            }
+          }
+          return { data: Array.from(rowsById.values()) };
+        })(),
         supabase
           .from("price_items")
           .select("name, unit_price, unit, supplier_name, source_type, is_locked")
@@ -237,6 +247,11 @@ export async function POST(request: Request) {
             is_available: Boolean(row.is_available),
             confidence_score: Number(row.confidence_score) || 0.5,
             source_type: String(row.source_type ?? "provider_catalog"),
+            source_url: prod?.source_url
+              ? String(prod.source_url)
+              : prod?.url
+                ? String(prod.url)
+                : null,
             checked_at: row.checked_at ? String(row.checked_at) : null,
             price_changed_at: null,
             is_private_tariff:
@@ -275,6 +290,11 @@ export async function POST(request: Request) {
           is_available: Boolean(row.is_available),
           confidence_score: 0.82,
           source_type: "n8n_market",
+          source_url: row.source_url
+            ? String(row.source_url)
+            : row.url
+              ? String(row.url)
+              : null,
           checked_at: row.checked_at ? String(row.checked_at) : null,
           price_changed_at: null,
           is_private_tariff: String(prov?.company_id || "") === companyScopeId,
@@ -287,8 +307,26 @@ export async function POST(request: Request) {
         if (row.product_id && row.price_excl_vat > 0) currentRowsByProduct.set(row.product_id, row);
       }
 
-      const trackerMetadataByProduct = new Map(
-        (pbTrackerRows || []).map((row: Record<string, unknown>) => [
+      const trackerMetadataByProduct = new Map([
+        ...(pbCurrentRows || []).map((row: Record<string, unknown>) => {
+          const product = row.pb_products as Record<string, unknown> | null;
+          return [
+            String(product?.id ?? ""),
+            {
+              url: product?.source_url
+                ? String(product.source_url)
+                : product?.url
+                  ? String(product.url)
+                  : "",
+              checkedAt: product?.checked_at
+                ? String(product.checked_at)
+                : row.checked_at
+                  ? String(row.checked_at)
+                  : null,
+            },
+          ] as const;
+        }),
+        ...(pbTrackerRows || []).map((row: Record<string, unknown>) => [
           String(row.id ?? ""),
           {
             url: row.source_url
@@ -298,8 +336,8 @@ export async function POST(request: Request) {
                 : "",
             checkedAt: row.checked_at ? String(row.checked_at) : null,
           },
-        ])
-      );
+        ] as const),
+      ]);
 
       const v2Data: PrefetchedPriceData = {
         current_prices: Array.from(currentRowsByProduct.values()),

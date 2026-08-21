@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/toast";
 import { FileText, Ruler, UploadCloud } from "lucide-react";
 import { getGeographicCostProfile } from "@/lib/geographic-costs";
 import { normalizeBathroomCount } from "@/lib/budget-engine";
+import { BudgetTermsFields } from "../BudgetTermsFields";
 
 interface ClientOption {
   id: string;
@@ -482,33 +483,6 @@ export function ScopeStep() {
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label className={labelCls}>Condiciones del presupuesto</label>
-              <textarea
-                className={`${inputCls} min-h-[120px] resize-y`}
-                value={state.conditionsText}
-                onChange={(e) => updateState({ conditionsText: e.target.value })}
-                placeholder="Validez, exclusiones, modificaciones del alcance y otras condiciones para el cliente..."
-              />
-              <p className="mt-1 text-xs text-navy-400 dark:text-zinc-500">
-                Se mostrarán en el PDF del cliente y en la copia interna.
-              </p>
-            </div>
-            <div>
-              <label className={labelCls}>Notas internas</label>
-              <textarea
-                className={`${inputCls} min-h-[120px] resize-y`}
-                value={state.internalNotes}
-                onChange={(e) => updateState({ internalNotes: e.target.value })}
-                placeholder="Riesgos, acuerdos, accesos, comprobaciones o recordatorios para el equipo..."
-              />
-              <p className="mt-1 text-xs text-navy-400 dark:text-zinc-500">
-                Son privadas: nunca aparecerán en el PDF del cliente.
-              </p>
-            </div>
-          </div>
-
           {state.validationError && (
             <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm font-medium">
               {state.validationError}
@@ -516,6 +490,8 @@ export function ScopeStep() {
           )}
         </div>
       </Card>
+
+      <BudgetTermsFields />
 
       {isConstruction && (
         <Card>

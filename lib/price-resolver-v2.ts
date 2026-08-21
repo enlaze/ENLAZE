@@ -75,6 +75,7 @@ export interface CurrentPriceRow {
   is_available: boolean;
   confidence_score: number;
   source_type: string;
+  source_url?: string | null;
   checked_at: string | null;
   price_changed_at: string | null;
   is_private_tariff: boolean;
@@ -434,11 +435,16 @@ function tryPreferredSupplier(
   input: ResolveConceptInput, context: PriceResolutionContext,
   data: PrefetchedPriceData, now: string
 ): Omit<PriceResolutionResult, "alternatives" | "warnings"> | null {
-  const match = data.current_prices.find(
+  const match = data.current_prices.filter(
     (p) => p.is_preferred && p.is_available &&
       fuzzyMatch(p.product_name, input.concept_name) &&
       providerServesProvince(p.provider_province, p.provider_supply_zones, context.province)
-  );
+  ).sort((left, right) =>
+    materialMatchScore(right.product_name, input.concept_name)
+      - materialMatchScore(left.product_name, input.concept_name)
+    || Number(Boolean(right.source_url)) - Number(Boolean(left.source_url))
+    || (right.confidence_score || 0) - (left.confidence_score || 0)
+  )[0];
   if (!match) return null;
   const breakdown = buildEffectiveCost(match.price_excl_vat, input.quantity, match.units_per_package, match.shipping_cost, match.minimum_order);
   return {
@@ -480,6 +486,8 @@ function tryProviderUpdated(
   withCost.sort(
     (a, b) =>
       b.matchScore - a.matchScore ||
+      Number(Boolean(b.match.source_url)) - Number(Boolean(a.match.source_url)) ||
+      (b.match.confidence_score || 0) - (a.match.confidence_score || 0) ||
       a.breakdown.effective_per_unit - b.breakdown.effective_per_unit
   );
   const best = withCost[0];

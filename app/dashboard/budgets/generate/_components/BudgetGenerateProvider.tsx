@@ -57,6 +57,50 @@ function isEstimateSourceType(sourceType: string | null | undefined): boolean {
 export const DEFAULT_BUDGET_CONDITIONS =
   "Presupuesto válido durante 30 días desde su fecha de emisión. Los trabajos no incluidos expresamente se presupuestarán aparte. Cualquier modificación del alcance deberá aprobarse por escrito antes de ejecutarse.";
 
+export interface PaymentPhase {
+  percent: number;
+  concept: string;
+  moment: string;
+}
+
+export function defaultPaymentSchedule(depositPercent = 30): PaymentPhase[] {
+  const deposit = Math.max(0, Math.min(100, depositPercent));
+  return [
+    { percent: deposit, concept: "Anticipo", moment: "Al aceptar el presupuesto" },
+    { percent: 100 - deposit, concept: "Resto", moment: "A la finalización" },
+  ];
+}
+
+function defaultValidUntil() {
+  const date = new Date();
+  date.setDate(date.getDate() + 30);
+  return date.toISOString().slice(0, 10);
+}
+
+export function calculateBudgetFinancials(
+  subtotal: number,
+  ivaPercent: number,
+  discountType: "percent" | "amount",
+  discountPercent: number,
+  discountAmount: number,
+) {
+  const safeSubtotal = Math.max(0, Number(subtotal) || 0);
+  const discountValue = discountType === "amount"
+    ? Math.min(safeSubtotal, Math.max(0, Number(discountAmount) || 0))
+    : Math.round(
+        safeSubtotal * (Math.max(0, Math.min(100, Number(discountPercent) || 0)) / 100) * 100,
+      ) / 100;
+  const taxableBase = Math.max(0, safeSubtotal - discountValue);
+  const ivaAmount = taxableBase * (Math.max(0, Number(ivaPercent) || 0) / 100);
+  return {
+    subtotal: safeSubtotal,
+    discountValue,
+    taxableBase,
+    ivaAmount,
+    total: taxableBase + ivaAmount,
+  };
+}
+
 export interface Partida {
   id: string;
   concept: string;
@@ -436,6 +480,17 @@ export interface BudgetState {
   startDate: string | null;
   endDate: string | null;
   description: string;
+  validUntil: string;
+  depositPercent: number;
+  paymentMethod: string;
+  paymentIban: string;
+  discountType: "percent" | "amount";
+  discountPercent: number;
+  discountAmount: number;
+  paymentSchedule: PaymentPhase[];
+  warrantyText: string;
+  executionDeadlineText: string;
+  observations: string;
   conditionsText: string;
   internalNotes: string;
   ivaPercent: number;
@@ -580,6 +635,17 @@ export function BudgetGenerateProvider({
     startDate: null,
     endDate: null,
     description: "",
+    validUntil: defaultValidUntil(),
+    depositPercent: 30,
+    paymentMethod: "Transferencia bancaria",
+    paymentIban: "",
+    discountType: "percent",
+    discountPercent: 0,
+    discountAmount: 0,
+    paymentSchedule: defaultPaymentSchedule(30),
+    warrantyText: "",
+    executionDeadlineText: "",
+    observations: "",
     conditionsText: DEFAULT_BUDGET_CONDITIONS,
     internalNotes: "",
     ivaPercent: 21,
@@ -1054,6 +1120,13 @@ export function BudgetGenerateProvider({
         saveError: null,
         finalizeError: null,
       };
+      const financials = calculateBudgetFinancials(
+        state.totals.clientPrice,
+        state.ivaPercent,
+        state.discountType,
+        state.discountPercent,
+        state.discountAmount,
+      );
 
       let draftId = state.draftId;
 
@@ -1077,11 +1150,22 @@ export function BudgetGenerateProvider({
           client_phone: clientSnapshot.phone,
           project_id: state.projectId || null,
           service_type: state.serviceType || state.sector || "general",
-          subtotal: state.totals.clientPrice,
+          subtotal: financials.subtotal,
           iva_percent: state.ivaPercent,
-          iva_amount: state.totals.clientPrice * (state.ivaPercent / 100),
-          total: state.totals.clientPrice * (1 + state.ivaPercent / 100),
+          iva_amount: financials.ivaAmount,
+          total: financials.total,
           notes: state.internalNotes,
+          valid_until: state.validUntil || null,
+          deposit_percent: state.depositPercent,
+          payment_method: state.paymentMethod,
+          payment_iban: state.paymentIban,
+          discount_type: state.discountType,
+          discount_percent: state.discountPercent,
+          discount_amount: financials.discountValue,
+          payment_schedule: state.paymentSchedule,
+          warranty_text: state.warrantyText,
+          execution_deadline_text: state.executionDeadlineText,
+          observations: state.observations,
           conditions_text: state.conditionsText,
           wizard_state: snapshot
         }).select("id").single();
@@ -1105,10 +1189,22 @@ export function BudgetGenerateProvider({
           client_phone: clientSnapshot.phone,
           project_id: state.projectId || null,
           service_type: state.serviceType || state.sector || "general",
-          subtotal: state.totals.clientPrice,
-          iva_amount: state.totals.clientPrice * (state.ivaPercent / 100),
-          total: state.totals.clientPrice * (1 + state.ivaPercent / 100),
+          subtotal: financials.subtotal,
+          iva_percent: state.ivaPercent,
+          iva_amount: financials.ivaAmount,
+          total: financials.total,
           notes: state.internalNotes,
+          valid_until: state.validUntil || null,
+          deposit_percent: state.depositPercent,
+          payment_method: state.paymentMethod,
+          payment_iban: state.paymentIban,
+          discount_type: state.discountType,
+          discount_percent: state.discountPercent,
+          discount_amount: financials.discountValue,
+          payment_schedule: state.paymentSchedule,
+          warranty_text: state.warrantyText,
+          execution_deadline_text: state.executionDeadlineText,
+          observations: state.observations,
           conditions_text: state.conditionsText,
           wizard_state: snapshot,
           updated_at: new Date().toISOString()
@@ -1188,6 +1284,13 @@ export function BudgetGenerateProvider({
       const supabase = createClient();
       const budgetId = currentDraftId || state.draftId;
       if (!budgetId) throw new Error("No hay borrador para finalizar. Guarda un borrador primero.");
+      const financials = calculateBudgetFinancials(
+        state.totals.clientPrice,
+        state.ivaPercent,
+        state.discountType,
+        state.discountPercent,
+        state.discountAmount,
+      );
 
       // 1. Obtener la siguiente versión (si ya existía y lo abrieron, o si es la 1)
       const nextVer = await getNextVersion(supabase, "budget", budgetId);
@@ -1237,7 +1340,22 @@ export function BudgetGenerateProvider({
         client_id: state.clientId || null,
         project_id: state.projectId || null,
         service_type: state.serviceType || state.sector || "general",
+        subtotal: financials.subtotal,
+        iva_percent: state.ivaPercent,
+        iva_amount: financials.ivaAmount,
+        total: financials.total,
         notes: state.internalNotes,
+        valid_until: state.validUntil || null,
+        deposit_percent: state.depositPercent,
+        payment_method: state.paymentMethod,
+        payment_iban: state.paymentIban,
+        discount_type: state.discountType,
+        discount_percent: state.discountPercent,
+        discount_amount: financials.discountValue,
+        payment_schedule: state.paymentSchedule,
+        warranty_text: state.warrantyText,
+        execution_deadline_text: state.executionDeadlineText,
+        observations: state.observations,
         conditions_text: state.conditionsText,
         updated_at: new Date().toISOString()
       }).eq("id", budgetId);
@@ -1517,7 +1635,11 @@ export function BudgetGenerateProvider({
       // ─── ENGINE-BASED NORMALIZATION (idempotent) ───
       const detectedArea = state.sectorData.superficie_m2 || data.detected_scope?.area_m2 || null;
       const serviceType = (state.serviceType || state.description || "").toLowerCase();
-      let priceWarnings: string[] = data.price_warnings || [];
+      const priceWarnings: string[] = (data.price_warnings || []).filter(
+        (warning: unknown): warning is string =>
+          typeof warning === "string"
+          && !/claude|anthropic|tokens?|saldo|credit balance|billing/i.test(warning),
+      );
       let pricingConfidence = data.pricing_confidence || data.confidence_score || 75;
       let priceRange = data.estimated_price_range || null;
       let isUndervalued = false;
@@ -2011,6 +2133,9 @@ export function BudgetGenerateProvider({
         providerOptions: finalProviders.length > 0 ? finalProviders : prev.providerOptions,
         selectedProviderId: finalProviders.length > 0 ? finalProviders[0].id : prev.selectedProviderId,
         endDate: calculatedEndDate || prev.endDate,
+        executionDeadlineText: prev.executionDeadlineText || (engineTimeline
+          ? `${engineTimeline.execution_weeks_min}-${engineTimeline.execution_weeks_max} semanas de ejecución. Plazo total recomendado: ${engineTimeline.total_weeks_min}-${engineTimeline.total_weeks_max} semanas, sujeto a disponibilidad de materiales y coordinación de gremios.`
+          : ""),
         isUndervalued,
         marketAdjustMessage,
         realisticTimeline: engineTimeline,
