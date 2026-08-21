@@ -25,6 +25,7 @@ import {
   buildClientView,
   buildInternalView,
   normalizeBathroomCount,
+  resolveProjectContext,
 } from "@/lib/budget-engine";
 import { buildDeterministicBudgetAnalysis } from "@/lib/budget-analysis-fallback";
 import {
@@ -612,7 +613,7 @@ interface BudgetContextProps {
   updateMaterial: (id: string, updates: Partial<Material>) => void;
   setUseSuggestedMaterials: (val: boolean) => void;
   saveDraft: (manual?: boolean) => Promise<string | null>;
-  loadDraft: (statePayload: BudgetState) => void;
+  loadDraft: (statePayload: Partial<BudgetState>) => void;
   finalizeBudget: () => Promise<string | null>;
   analyzeWithAI: (force?: boolean) => Promise<boolean>;
 }
@@ -825,14 +826,19 @@ export function BudgetGenerateProvider({
         // allFetchedMaterials es el snapshot base inmutable.
         // Siempre se clona para evitar que mutaciones en `materials`
         // contaminen el array de referencia.
-        setState(prev => ({
-          ...prev,
-          providerOptions: newProviderOptions,
-          selectedProviderId: activeId,
-          allFetchedMaterials: realMaterials.map(m => ({ ...m })),
-          materials: visibleMaterials.map(m => ({ ...m })),
-          isRealDataMode: true
-        }));
+        setState(prev => {
+          // Reopening a generated budget must restore its exact basket and
+          // selections. The catalogue hydration must not replace that snapshot.
+          if (prev.draftId || prev.materialsFromAI || prev.partidas.length > 0) return prev;
+          return {
+            ...prev,
+            providerOptions: newProviderOptions,
+            selectedProviderId: activeId,
+            allFetchedMaterials: realMaterials.map(m => ({ ...m })),
+            materials: visibleMaterials.map(m => ({ ...m })),
+            isRealDataMode: true
+          };
+        });
 
       } catch (err) {
         console.error("[BudgetGenerateProvider] Error fetching real prices:", err);
@@ -891,6 +897,11 @@ export function BudgetGenerateProvider({
         : inferBudgetActions(`${state.serviceType || ""} ${state.description || ""}`),
       calidad: state.sectorData.calidad || "media",
       ubicacion: state.sectorData.ubicacion || "",
+      project_context: resolveProjectContext(state.serviceType, state.sectorData.project_context),
+      existing_condition: state.sectorData.existing_condition || "unknown",
+      conservation_strategy: state.sectorData.conservation_strategy || "balanced",
+      occupied_during_works: state.sectorData.occupied_during_works ?? false,
+      building_age_band: state.sectorData.building_age_band || "unknown",
     };
     const items: EnginePartida[] = state.partidas.map((partida) => ({
       ...partida,
@@ -1226,6 +1237,13 @@ export function BudgetGenerateProvider({
 
         if (error) throw error;
         draftId = data.id;
+        // The first snapshot is built before Supabase returns the id. Persist it
+        // immediately so recovering or reopening this budget updates the same row.
+        const { error: snapshotError } = await supabase
+          .from("budgets")
+          .update({ wizard_state: { ...snapshot, draftId } })
+          .eq("id", draftId);
+        if (snapshotError) throw snapshotError;
         setState(prev => ({
           ...prev,
           draftId,
@@ -1260,7 +1278,7 @@ export function BudgetGenerateProvider({
           execution_deadline_text: state.executionDeadlineText,
           observations: state.observations,
           conditions_text: state.conditionsText,
-          wizard_state: snapshot,
+          wizard_state: { ...snapshot, draftId },
           updated_at: new Date().toISOString()
         }).eq("id", draftId);
 
@@ -1411,6 +1429,14 @@ export function BudgetGenerateProvider({
         execution_deadline_text: state.executionDeadlineText,
         observations: state.observations,
         conditions_text: state.conditionsText,
+        wizard_state: {
+          ...state,
+          draftId: budgetId,
+          isSavingDraft: false,
+          isFinalizing: false,
+          saveError: null,
+          finalizeError: null,
+        },
         updated_at: new Date().toISOString()
       }).eq("id", budgetId);
       if (upErr) throw upErr;
@@ -1447,7 +1473,7 @@ export function BudgetGenerateProvider({
     }
   };
 
-  const loadDraft = (savedState: BudgetState) => {
+  const loadDraft = useCallback((savedState: Partial<BudgetState>) => {
     setState(prev => ({
       ...prev,
       ...savedState,
@@ -1461,7 +1487,7 @@ export function BudgetGenerateProvider({
         ...(savedState.realismAudit || {}),
       },
     }));
-  };
+  }, []);
 
   // Debounced Autosave (1.5s)
   const isFirstRender = useRef(true);
@@ -1537,6 +1563,11 @@ export function BudgetGenerateProvider({
       cc: state.sectorData.incluye_climatizacion,
       u: state.sectorData.ubicacion,
       docs: state.sectorData.technical_document_ids || [],
+      pc: state.sectorData.project_context,
+      ec: state.sectorData.existing_condition,
+      cs: state.sectorData.conservation_strategy,
+      ow: state.sectorData.occupied_during_works,
+      ba: state.sectorData.building_age_band,
     });
     const currentHash = `${state.sector}-${state.serviceType}-${state.description}-${scopeStr}`.trim();
     if (!forceRegenerate && state.lastAnalysisHash === currentHash && !state.analysisError) {
@@ -1571,6 +1602,11 @@ export function BudgetGenerateProvider({
         incluye_cocina: state.sectorData.incluye_cocina ?? true,
         incluye_ventanas: state.sectorData.incluye_ventanas ?? resolvedActions.includes("carpinteria_exterior"),
         incluye_climatizacion: state.sectorData.incluye_climatizacion ?? resolvedActions.includes("climatizacion"),
+        project_context: resolveProjectContext(state.serviceType, state.sectorData.project_context),
+        existing_condition: state.sectorData.existing_condition || "unknown",
+        conservation_strategy: state.sectorData.conservation_strategy || "balanced",
+        occupied_during_works: state.sectorData.occupied_during_works ?? false,
+        building_age_band: state.sectorData.building_age_band || "unknown",
       };
       let data: any;
       try {
@@ -2274,6 +2310,11 @@ export function BudgetGenerateProvider({
                 : inferBudgetActions(`${state.serviceType || ""} ${state.description || ""}`),
               calidad: (state.sectorData.calidad as "basica" | "media" | "alta") || "media",
               ubicacion: state.sectorData.ubicacion || "",
+              project_context: resolveProjectContext(state.serviceType, state.sectorData.project_context),
+              existing_condition: state.sectorData.existing_condition || "unknown",
+              conservation_strategy: state.sectorData.conservation_strategy || "balanced",
+              occupied_during_works: state.sectorData.occupied_during_works ?? false,
+              building_age_band: state.sectorData.building_age_band || "unknown",
             };
             const mm = 1 + (state.marginPercent / 100);
             const builtItems = buildDeterministicBudgetItems(fbScope, mm);
@@ -2345,6 +2386,11 @@ export function BudgetGenerateProvider({
                     : inferBudgetActions(`${state.serviceType || ""} ${state.description || ""}`),
                   calidad: (state.sectorData.calidad as "basica" | "media" | "alta") || "media",
                   ubicacion: state.sectorData.ubicacion || "",
+                  project_context: resolveProjectContext(state.serviceType, state.sectorData.project_context),
+                  existing_condition: state.sectorData.existing_condition || "unknown",
+                  conservation_strategy: state.sectorData.conservation_strategy || "balanced",
+                  occupied_during_works: state.sectorData.occupied_during_works ?? false,
+                  building_age_band: state.sectorData.building_age_band || "unknown",
                 };
                 const gMM = 1 + (state.marginPercent / 100);
                 const gItems = buildDeterministicBudgetItems(gScope, gMM);

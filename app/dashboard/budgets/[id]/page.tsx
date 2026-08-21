@@ -69,6 +69,7 @@ interface Budget {
   discount_percent?: number;
   discount_amount?: number;
   payment_schedule?: Array<{ percent?: number; concept?: string; moment?: string }>;
+  wizard_state?: Record<string, unknown> | null;
 }
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
@@ -404,6 +405,14 @@ export default function BudgetDetailPage() {
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {budget.wizard_state && Object.keys(budget.wizard_state).length > 0 && (
+            <Link
+              href={`/dashboard/budgets/generate?budgetId=${budget.id}`}
+              className="inline-flex items-center justify-center rounded-lg bg-brand-green px-4 py-2 text-sm font-bold text-navy-900 transition hover:bg-brand-green/90"
+            >
+              Abrir en Presupuesto inteligente
+            </Link>
+          )}
           <Link
             href={`/dashboard/budgets/${budget.id}/edit`}
             className="inline-flex items-center justify-center rounded-lg border border-navy-200 bg-white px-4 py-2 text-sm font-medium text-navy-700 transition hover:bg-navy-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"

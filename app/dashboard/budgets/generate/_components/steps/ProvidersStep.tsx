@@ -291,14 +291,16 @@ export function ProvidersStep() {
                       )}
                     </div>
                     <ul className="text-sm text-navy-600 dark:text-zinc-400 mb-4 space-y-1">
-                      <li><strong>Cobertura:</strong> {provider.matchedMaterials}/{provider.totalMaterials} ({provider.coveragePercent}%)</li>
-                      <li><strong>Ofertas trazables:</strong> {provider.traceableMaterials}</li>
-                      <li><strong>Fiabilidad media:</strong> {Math.round(provider.averageConfidence * 100)}%</li>
+                      <li><strong>Cobertura verificada:</strong> {provider.traceableMaterials}/{provider.totalMaterials} ({provider.coveragePercent}%)</li>
+                      {provider.matchedMaterials > provider.traceableMaterials && (
+                        <li><strong>Candidatos sin validar:</strong> {provider.matchedMaterials - provider.traceableMaterials}</li>
+                      )}
+                      <li><strong>Confianza de coincidencia:</strong> {provider.averageConfidence === null ? "No calculable" : `${Math.round(provider.averageConfidence * 100)}%`}</li>
                       <li><strong>Entrega máxima conocida:</strong> {provider.maxDeliveryDays ? `${provider.maxDeliveryDays} días` : "A confirmar"}</li>
                     </ul>
                     <div className="mt-auto flex items-end justify-between border-t border-navy-100 pt-3 dark:border-zinc-800">
                       <div>
-                        <div className="text-[10px] uppercase tracking-wider text-navy-400">Subtotal cubierto</div>
+                        <div className="text-[10px] uppercase tracking-wider text-navy-400">Subtotal verificado cubierto</div>
                         <div className="font-bold text-navy-900 dark:text-white">{provider.partialBasketTotal.toFixed(2)} €</div>
                       </div>
                       {provider.coveragePercent < 100 && (

@@ -31,7 +31,7 @@ import type {
   ResolutionPriorityLevel,
 } from "./types/price-bank";
 import { calculateEffectiveCost } from "./effective-cost";
-import { normalizeMaterialName } from "./price-resolver";
+import { normalizeMaterialName, normalizeUnit } from "./price-resolver";
 
 export { DEFAULT_PRIORITY_ORDER } from "./types/price-bank";
 
@@ -267,6 +267,26 @@ function fuzzyMatch(a: string, b: string): boolean {
   return materialMatchScore(a, b) >= 0.5;
 }
 
+function commercialProductMatch(product: CurrentPriceRow, input: ResolveConceptInput): boolean {
+  const score = materialMatchScore(product.product_name, input.concept_name);
+  if (score < 0.68) return false;
+
+  const requestedUnit = normalizeUnit(input.unit || "ud");
+  const productUnit = normalizeUnit(product.unit || "ud");
+  if (requestedUnit === productUnit) return true;
+
+  const dimensionalUnits = new Set(["m2", "m3", "ml", "kg", "l"]);
+  if (dimensionalUnits.has(requestedUnit) || dimensionalUnits.has(productUnit)) {
+    // A packaged product is comparable only when the catalogue exposes the
+    // package yield used to calculate an effective price for the requested unit.
+    return product.units_per_package > 1 && (requestedUnit === "ud" || productUnit === "ud");
+  }
+
+  // Sack/roll/bucket/kit catalogues are frequently stored as generic units;
+  // the stronger semantic match above remains mandatory.
+  return requestedUnit === "ud" || productUnit === "ud";
+}
+
 function referencePriceForInput(
   input: ResolveConceptInput,
   data: PrefetchedPriceData
@@ -361,7 +381,7 @@ function tryPrivateTariff(
   data: PrefetchedPriceData, now: string
 ): Omit<PriceResolutionResult, "alternatives" | "warnings"> | null {
   const match = data.current_prices.find(
-    (p) => p.is_private_tariff && fuzzyMatch(p.product_name, input.concept_name) &&
+    (p) => p.is_private_tariff && commercialProductMatch(p, input) &&
       providerServesProvince(p.provider_province, p.provider_supply_zones, context.province)
   );
   if (!match) return null;
@@ -384,7 +404,7 @@ function tryNegotiated(
   data: PrefetchedPriceData, now: string
 ): Omit<PriceResolutionResult, "alternatives" | "warnings"> | null {
   const match = data.current_prices.find(
-    (p) => p.is_negotiated && fuzzyMatch(p.product_name, input.concept_name) &&
+    (p) => p.is_negotiated && commercialProductMatch(p, input) &&
       providerServesProvince(p.provider_province, p.provider_supply_zones, context.province)
   );
   if (!match) return null;
@@ -437,7 +457,7 @@ function tryPreferredSupplier(
 ): Omit<PriceResolutionResult, "alternatives" | "warnings"> | null {
   const match = data.current_prices.filter(
     (p) => p.is_preferred && p.is_available &&
-      fuzzyMatch(p.product_name, input.concept_name) &&
+      commercialProductMatch(p, input) &&
       providerServesProvince(p.provider_province, p.provider_supply_zones, context.province)
   ).sort((left, right) =>
     materialMatchScore(right.product_name, input.concept_name)
@@ -467,7 +487,7 @@ function tryProviderUpdated(
 ): Omit<PriceResolutionResult, "alternatives" | "warnings"> | null {
   const matches = data.current_prices.filter(
     (p) => !p.is_private_tariff && !p.is_negotiated && p.is_available &&
-      fuzzyMatch(p.product_name, input.concept_name) &&
+      commercialProductMatch(p, input) &&
       providerServesProvince(p.provider_province, p.provider_supply_zones, context.province)
   );
   if (matches.length === 0) return null;
@@ -596,7 +616,7 @@ function collectAlternatives(
 ): void {
   const seenProducts = new Set<string>();
   for (const p of data.current_prices) {
-    if (!fuzzyMatch(p.product_name, input.concept_name)) continue;
+    if (!commercialProductMatch(p, input)) continue;
     if (!providerServesProvince(p.provider_province, p.provider_supply_zones, context.province)) continue;
     if (!p.product_id || seenProducts.has(p.product_id)) continue;
     seenProducts.add(p.product_id);
@@ -611,6 +631,9 @@ function collectAlternatives(
       source_type: p.source_type, checked_at: p.checked_at,
       source_url: p.source_url || null,
       delivery_days_min: p.delivery_days_min,
+      unit: p.unit,
+      units_per_package: p.units_per_package,
+      match_score: materialMatchScore(p.product_name, input.concept_name),
     });
   }
   alternatives.sort((a, b) =>

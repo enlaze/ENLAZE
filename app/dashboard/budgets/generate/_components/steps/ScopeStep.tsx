@@ -74,6 +74,30 @@ const CALIDADES = [
   { value: "alta", label: "Alta", description: "Materiales premium, acabados de alta calidad" },
 ];
 
+const PROJECT_CONTEXTS = [
+  {
+    value: "existing_renovation",
+    label: "Reforma de edificio existente",
+    description: "Se parte de lo construido y se conserva lo que no se haya marcado para sustituir.",
+  },
+  {
+    value: "rehabilitation",
+    label: "Rehabilitación",
+    description: "Edificio existente con patologías, envolvente o instalaciones que requieren diagnóstico.",
+  },
+  {
+    value: "new_build",
+    label: "Obra nueva",
+    description: "Construcción desde proyecto, sin elementos existentes que desmontar o conservar.",
+  },
+] as const;
+
+const CONSERVATION_STRATEGIES = [
+  { value: "preserve", label: "Conservar al máximo", description: "Reparar antes de sustituir" },
+  { value: "balanced", label: "Reforma equilibrada", description: "Conservar lo válido y renovar lo necesario" },
+  { value: "replace", label: "Sustitución amplia", description: "Renovar todos los elementos seleccionados" },
+] as const;
+
 export function ScopeStep() {
   const { state, updateState, updateSectorData } = useBudgetGenerate();
   const { serviceTypes } = useSector();
@@ -104,6 +128,12 @@ export function ScopeStep() {
   const ubicacion: string = scopeData.ubicacion || "";
   const selectedTechnicalDocumentIds: string[] = scopeData.technical_document_ids || [];
   const selectedTechnicalDocumentNames: string[] = scopeData.technical_document_names || [];
+  const projectContext: "existing_renovation" | "new_build" | "rehabilitation" =
+    scopeData.project_context || (/obra[ _-]?nueva/i.test(state.serviceType || "") ? "new_build" : "existing_renovation");
+  const existingCondition: "good" | "fair" | "poor" | "unknown" = scopeData.existing_condition || "unknown";
+  const conservationStrategy: "preserve" | "balanced" | "replace" = scopeData.conservation_strategy || "balanced";
+  const buildingAgeBand: string = scopeData.building_age_band || "unknown";
+  const occupiedDuringWorks: boolean = scopeData.occupied_during_works ?? false;
   const geographicProfile = getGeographicCostProfile(ubicacion);
 
   useEffect(() => {
@@ -445,7 +475,17 @@ export function ScopeStep() {
               <label className={labelCls}>Tipo de obra</label>
               <select
                 value={state.serviceType || state.sector || ""}
-                onChange={(e) => updateState({ serviceType: e.target.value })}
+                onChange={(e) => {
+                  const serviceType = e.target.value;
+                  updateState({ serviceType });
+                  if (/obra[ _-]?nueva/i.test(serviceType)) {
+                    updateSectorData("project_context", "new_build");
+                  } else if (/rehabilit/i.test(serviceType)) {
+                    updateSectorData("project_context", "rehabilitation");
+                  } else if (projectContext === "new_build") {
+                    updateSectorData("project_context", "existing_renovation");
+                  }
+                }}
                 className={inputCls}
               >
                 {(() => {
@@ -588,6 +628,84 @@ export function ScopeStep() {
           <p className="text-sm text-navy-500 dark:text-zinc-400 mb-5">
             Selecciona las estancias, actuaciones y calidad. Esto alimenta al análisis IA para generar partidas más precisas.
           </p>
+
+          <div className="mb-6 rounded-xl border border-navy-200 bg-navy-50/70 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
+            <h3 className="text-sm font-bold text-navy-900 dark:text-white">Punto de partida real de la obra</h3>
+            <p className="mt-1 text-xs text-navy-500 dark:text-zinc-400">
+              Esta selección evita calcular una reforma como si la vivienda se construyera desde cero.
+            </p>
+            <div className="mt-3 grid gap-2 lg:grid-cols-3">
+              {PROJECT_CONTEXTS.map((context) => {
+                const active = projectContext === context.value;
+                return (
+                  <button
+                    key={context.value}
+                    type="button"
+                    onClick={() => updateSectorData("project_context", context.value)}
+                    className={`rounded-lg border p-3 text-left transition ${active
+                      ? "border-brand-green bg-white shadow-sm dark:bg-zinc-900"
+                      : "border-navy-200 bg-white/60 hover:border-brand-green/40 dark:border-zinc-700 dark:bg-zinc-900/40"
+                    }`}
+                  >
+                    <span className={`block text-sm font-bold ${active ? "text-brand-green" : "text-navy-900 dark:text-white"}`}>{context.label}</span>
+                    <span className="mt-1 block text-[11px] leading-4 text-navy-500 dark:text-zinc-400">{context.description}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {projectContext !== "new_build" && (
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <div>
+                  <label className={labelCls}>Estado actual comprobado</label>
+                  <select value={existingCondition} onChange={(event) => updateSectorData("existing_condition", event.target.value)} className={inputCls}>
+                    <option value="unknown">Pendiente de visita / inspección</option>
+                    <option value="good">Bueno · reparaciones puntuales</option>
+                    <option value="fair">Medio · desgaste habitual</option>
+                    <option value="poor">Deficiente · patologías o instalaciones antiguas</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Antigüedad aproximada</label>
+                  <select value={buildingAgeBand} onChange={(event) => updateSectorData("building_age_band", event.target.value)} className={inputCls}>
+                    <option value="unknown">Sin confirmar</option>
+                    <option value="pre_1940">Anterior a 1940</option>
+                    <option value="1940_1979">1940–1979</option>
+                    <option value="1980_2006">1980–2006</option>
+                    <option value="post_2006">Posterior a 2006</option>
+                  </select>
+                </div>
+                <div className="lg:col-span-2">
+                  <label className={labelCls}>Criterio de intervención</label>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {CONSERVATION_STRATEGIES.map((strategy) => {
+                      const active = conservationStrategy === strategy.value;
+                      return (
+                        <button
+                          key={strategy.value}
+                          type="button"
+                          onClick={() => updateSectorData("conservation_strategy", strategy.value)}
+                          className={`rounded-lg border px-3 py-2 text-left ${active ? "border-brand-green bg-brand-green/10" : "border-navy-200 bg-white dark:border-zinc-700 dark:bg-zinc-900"}`}
+                        >
+                          <span className="block text-xs font-bold text-navy-900 dark:text-white">{strategy.label}</span>
+                          <span className="block text-[10px] text-navy-500 dark:text-zinc-400">{strategy.description}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-navy-700 dark:text-zinc-300">
+                  <input
+                    type="checkbox"
+                    checked={occupiedDuringWorks}
+                    onChange={(event) => updateSectorData("occupied_during_works", event.target.checked)}
+                    className="rounded border-navy-300 text-brand-green focus:ring-brand-green/20"
+                  />
+                  La vivienda estará ocupada durante la obra
+                </label>
+              </div>
+            )}
+          </div>
 
           {/* Ubicacion y superficie */}
           <div className="mb-6">

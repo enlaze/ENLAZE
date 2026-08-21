@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { getSectorConfig } from "@/lib/agent-prompts";
 import { normalizeSector } from "@/lib/sector-config";
-import { inferBudgetActions, normalizeBathroomCount, type BudgetScope } from "@/lib/budget-engine";
+import { inferBudgetActions, normalizeBathroomCount, resolveProjectContext, type BudgetScope } from "@/lib/budget-engine";
 import { buildDeterministicBudgetAnalysis } from "@/lib/budget-analysis-fallback";
 import { hashText, logAiRun } from "@/lib/ai-logger";
 import {
@@ -106,6 +106,11 @@ export async function POST(request: Request) {
       actuaciones: inferredActions,
       calidad: ["basica", "media", "alta"].includes(scope?.calidad) ? scope.calidad : "media",
       ubicacion: String(scope?.ubicacion || ""),
+      project_context: resolveProjectContext(service_type, scope?.project_context),
+      existing_condition: ["good", "fair", "poor", "unknown"].includes(scope?.existing_condition) ? scope.existing_condition : "unknown",
+      conservation_strategy: ["preserve", "balanced", "replace"].includes(scope?.conservation_strategy) ? scope.conservation_strategy : "balanced",
+      occupied_during_works: Boolean(scope?.occupied_during_works),
+      building_age_band: ["pre_1940", "1940_1979", "1980_2006", "post_2006", "unknown"].includes(scope?.building_age_band) ? scope.building_age_band : "unknown",
     };
 
     const selectedTechnicalDocumentIds = Array.isArray(technical_document_ids)
@@ -268,6 +273,15 @@ INSTRUCCIONES CRITICAS PARA CONSTRUCCION:
 - Si solo se seleccionan algunas estancias, calcula cantidades para esas estancias, no para toda la vivienda.
 - Si hay actuaciones seleccionadas, genera exclusivamente esas actuaciones y sus auxiliares tecnicamente imprescindibles.
 - Los unit_cost son provisionales: no los presentes como precios comprobados. ENLAZE los contrastara despues con tarifas, BC3 y rastreador.
+
+PUNTO DE PARTIDA VINCULANTE:
+- Contexto: ${engineScope.project_context === "new_build" ? "OBRA NUEVA" : engineScope.project_context === "rehabilitation" ? "REHABILITACION DE EDIFICIO EXISTENTE" : "REFORMA DE EDIFICIO EXISTENTE"}.
+- Estado actual: ${engineScope.existing_condition || "unknown"}. Estrategia: ${engineScope.conservation_strategy || "balanced"}. Antiguedad: ${engineScope.building_age_band || "unknown"}.
+- Si es reforma o rehabilitacion, NO presupuestes cimentacion, estructura, cerramientos o instalaciones completas como si partieses de un solar vacio.
+- En reforma, identifica primero las preexistencias; conserva todo elemento no seleccionado y diferencia inspeccion, proteccion, reparacion, desmontaje selectivo y sustitucion.
+- Solo considera una renovacion completa de un sistema cuando la actuacion correspondiente y la estrategia de sustitucion lo justifiquen.
+- Si el estado figura como pendiente de inspeccion, incluye la comprobacion previa y declara la incertidumbre en missing_questions; no inventes patologias.
+- Si es obra nueva, no incluyas demoliciones de acabados, sanitarios, ventanas o instalaciones existentes.
 
 NIVEL DE DETALLE OBLIGATORIO PARA CONSTRUCCION:
 Solo para una reforma integral sin actuaciones limitadas, genera MINIMO 20 partidas (suggested_items) organizadas por capitulos. Ejemplo de capitulos:

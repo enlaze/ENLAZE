@@ -61,3 +61,34 @@ test("provider comparison reports partial coverage instead of presenting a parti
   assert.equal(coverage[0].matchedMaterials, 1);
   assert.equal(coverage[0].totalMaterials, 2);
 });
+
+test("untraceable candidates never create fake provider reliability or delivery promises", () => {
+  const coverage = buildProviderBasketCoverage([
+    {
+      id: "m1", name: "Mortero", quantity: 10, included: true, unit_price: 4,
+      priceAlternatives: [
+        { supplier: "Referencia mercado ES", title: "Estimación", price: 4, unit: "saco", qualityTier: "media", confidenceScore: 0.82, deliveryDays: 7 },
+        { supplier: "OBRAMAT", title: "Mortero oficial", price: 4.2, unit: "saco", qualityTier: "media", confidenceScore: 0.84, sourceType: "provider_updated", url: "https://obramat.es/m", deliveryDays: 3 },
+      ],
+    },
+  ]);
+
+  assert.equal(coverage.length, 1);
+  assert.equal(coverage[0].name, "OBRAMAT");
+  assert.equal(coverage[0].traceableMaterials, 1);
+  assert.equal(coverage[0].averageConfidence, 0.84);
+  assert.equal(coverage[0].maxDeliveryDays, 3);
+});
+
+test("comparison rejects implausible effective-price outliers until their unit conversion is validated", () => {
+  const offers = getComparableOffers({
+    id: "m1", name: "Mortero", quantity: 10, included: true, unit_price: 4,
+    priceAlternatives: [
+      { supplier: "OBRAMAT", title: "Mortero comparable", price: 4.1, unit: "saco", qualityTier: "media", confidenceScore: 0.86, sourceType: "provider_updated", url: "https://obramat.es/m" },
+      { supplier: "Marketplace", title: "Palé sin conversión", price: 120, unit: "saco", qualityTier: "media", confidenceScore: 0.82, sourceType: "provider_updated", url: "https://example.com/pale" },
+    ],
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].canonicalSupplier, "OBRAMAT");
+});

@@ -17,6 +17,72 @@ import { Button, LinkButton } from "@/components/ui/button";
 import { generateBudgetPDFHTML, printPDF } from "@/lib/pdf-generator";
 import { analytics } from "@/lib/analytics";
 
+function budgetIdFromLocation() {
+  if (typeof window === "undefined") return null;
+  return new URLSearchParams(window.location.search).get("budgetId");
+}
+
+function ExistingBudgetLoader() {
+  const { loadDraft } = useBudgetGenerate();
+  const [loadedId, setLoadedId] = useState<string | null>(null);
+  const supabase = createClient();
+
+  React.useEffect(() => {
+    const budgetId = budgetIdFromLocation();
+    if (!budgetId || loadedId === budgetId) return;
+    let active = true;
+
+    async function loadExistingBudget() {
+      const { data: budget, error } = await supabase
+        .from("budgets")
+        .select("*")
+        .eq("id", budgetId)
+        .maybeSingle();
+      if (!active || error || !budget) return;
+
+      const saved = budget.wizard_state && typeof budget.wizard_state === "object"
+        ? budget.wizard_state
+        : {};
+      const requestedStepValue = new URLSearchParams(window.location.search).get("step");
+      const requestedStep = requestedStepValue === null ? null : Number(requestedStepValue);
+      loadDraft({
+        ...saved,
+        draftId: budget.id,
+        currentStep: typeof requestedStep === "number" && Number.isInteger(requestedStep) && requestedStep >= 0 && requestedStep <= 2
+          ? requestedStep
+          : Number(saved.currentStep) || 0,
+        title: saved.title || budget.title || "",
+        clientId: saved.clientId || budget.client_id || "",
+        clientName: saved.clientName || budget.client_name || "",
+        clientEmail: saved.clientEmail || budget.client_email || "",
+        clientPhone: saved.clientPhone || budget.client_phone || "",
+        projectId: saved.projectId || budget.project_id || "",
+        serviceType: saved.serviceType || budget.service_type || "reforma",
+        validUntil: saved.validUntil || budget.valid_until || "",
+        depositPercent: saved.depositPercent ?? budget.deposit_percent ?? 30,
+        paymentMethod: saved.paymentMethod || budget.payment_method || "Transferencia bancaria",
+        paymentIban: saved.paymentIban || budget.payment_iban || "",
+        discountType: saved.discountType || budget.discount_type || "percent",
+        discountPercent: saved.discountPercent ?? budget.discount_percent ?? 0,
+        discountAmount: saved.discountAmount ?? budget.discount_amount ?? 0,
+        paymentSchedule: saved.paymentSchedule || budget.payment_schedule || [],
+        warrantyText: saved.warrantyText || budget.warranty_text || "",
+        executionDeadlineText: saved.executionDeadlineText || budget.execution_deadline_text || "",
+        observations: saved.observations || budget.observations || "",
+        conditionsText: saved.conditionsText || budget.conditions_text || "",
+        internalNotes: saved.internalNotes || budget.notes || "",
+        ivaPercent: saved.ivaPercent ?? budget.iva_percent ?? 21,
+      });
+      setLoadedId(budgetId);
+    }
+
+    void loadExistingBudget();
+    return () => { active = false; };
+  }, [loadDraft, loadedId]);
+
+  return null;
+}
+
 function DraftRecoveryManager() {
   const { loadDraft, saveDraft, state } = useBudgetGenerate();
   const [drafts, setDrafts] = useState<any[]>([]);
@@ -25,6 +91,7 @@ function DraftRecoveryManager() {
 
   React.useEffect(() => {
     async function check() {
+      if (budgetIdFromLocation()) return;
       // Si ya hay un draftId activo en el estado, no mostramos el recovery porque estamos editándolo
       if (state.draftId) return;
 
@@ -61,7 +128,7 @@ function DraftRecoveryManager() {
               key={d.id}
               onClick={() => {
                 // Inyectamos el estado crudo tal cual se guardó
-                loadDraft(d.wizard_state);
+                loadDraft({ ...(d.wizard_state || {}), draftId: d.id });
                 analytics.budgetDraftRecovered();
                 setShowModal(false);
               }}
@@ -187,6 +254,7 @@ function WizardContent() {
 
   return (
     <>
+      <ExistingBudgetLoader />
       <DraftRecoveryManager />
       
       <div className="flex justify-between items-center mb-6">

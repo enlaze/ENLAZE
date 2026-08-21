@@ -420,7 +420,7 @@ export async function POST(request: Request) {
             supplier: canonicalProviderName(a.provider_name, a.source_url),
             title: a.product_name,
             price: a.unit_price,
-            unit: materials[idx]?.unit || "ud",
+            unit: a.unit || materials[idx]?.unit || "ud",
             qualityTier,
             url: a.source_url || "",
             productId: a.product_id,
@@ -431,6 +431,7 @@ export async function POST(request: Request) {
             confidenceScore: a.confidence_score,
             sourceType: a.source_type,
             checkedAt: a.checked_at || undefined,
+            matchScore: a.match_score,
           })),
         };
       });

@@ -204,7 +204,7 @@ export function LiveSummaryPanel() {
         {isConstruction && pricePerM2 !== null && (
           <div className="bg-navy-50 dark:bg-zinc-800/50 p-3 rounded-xl mt-1">
             <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-navy-600 dark:text-zinc-400 uppercase tracking-wider">EUR/m2</span>
+              <span className="text-xs font-bold text-navy-600 dark:text-zinc-400 uppercase tracking-wider">Importe estimado / m2</span>
               <span className={`text-sm font-bold ${
                 priceRange && pricePerM2 < (priceRange.min / (detectedArea || 1)) ? 'text-red-500' :
                 priceRange && pricePerM2 > (priceRange.max / (detectedArea || 1)) ? 'text-amber-500' :
@@ -239,10 +239,10 @@ export function LiveSummaryPanel() {
               </div>
             )}
             {!state.isUndervalued && state.marketAdjustMessage && (
-              <div className="mt-3 p-2 bg-green-50/50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30 rounded-lg">
-                <p className="text-[10px] text-green-700 dark:text-green-400 font-medium flex items-start gap-1">
-                  <span className="text-xs">✓</span>
-                  <span>Presupuesto ajustado al minimo realista de mercado.</span>
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/70 p-2 dark:border-amber-900/30 dark:bg-amber-900/10">
+                <p className="flex items-start gap-1 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                  <span className="text-xs">ℹ</span>
+                  <span>Umbral inferior de referencia aplicado. No es un precio exacto: confirma mediciones, estado existente y ofertas antes de cerrar.</span>
                 </p>
               </div>
             )}

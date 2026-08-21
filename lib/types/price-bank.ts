@@ -315,4 +315,7 @@ export interface PriceAlternativeV2 {
   checked_at: string | null;
   source_url?: string | null;
   delivery_days_min?: number | null;
+  unit?: string;
+  units_per_package?: number;
+  match_score?: number;
 }

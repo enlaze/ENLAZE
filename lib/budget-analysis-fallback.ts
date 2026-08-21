@@ -56,6 +56,9 @@ export function buildDeterministicBudgetAnalysis({
       service_type: serviceType || "general",
       area_m2: scope.superficie_m2,
       location: scope.ubicacion,
+      project_context: scope.project_context || "existing_renovation",
+      existing_condition: scope.existing_condition || "unknown",
+      conservation_strategy: scope.conservation_strategy || "balanced",
     },
     suggested_items: items.map((item) => ({
       concept: item.concept,
@@ -99,9 +102,12 @@ export function buildDeterministicBudgetAnalysis({
     estimated_price_range: marketRange,
     pricing_confidence: trackerProductsCount > 0 ? 76 : 65,
     price_warnings: [],
-    missing_questions: scope.superficie_m2 > 0
-      ? []
-      : ["Indica la superficie afectada para afinar cantidades e importe."],
+    missing_questions: [
+      ...(scope.superficie_m2 > 0 ? [] : ["Indica la superficie afectada para afinar cantidades e importe."]),
+      ...((scope.project_context || "existing_renovation") !== "new_build" && (!scope.existing_condition || scope.existing_condition === "unknown")
+        ? ["Confirma mediante visita el estado de soportes e instalaciones antes de cerrar el presupuesto."]
+        : []),
+    ],
     data_sources: {
       tracker_products_count: trackerProductsCount,
       analysis_mode: "deterministic_engine",

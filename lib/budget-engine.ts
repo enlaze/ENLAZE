@@ -16,6 +16,26 @@ export interface BudgetScope {
   actuaciones: string[];
   calidad: "basica" | "media" | "alta";
   ubicacion: string;
+  /** Physical starting point. A refurbishment never starts from a blank site. */
+  project_context?: "existing_renovation" | "new_build" | "rehabilitation";
+  existing_condition?: "good" | "fair" | "poor" | "unknown";
+  conservation_strategy?: "preserve" | "balanced" | "replace";
+  occupied_during_works?: boolean;
+  building_age_band?: "pre_1940" | "1940_1979" | "1980_2006" | "post_2006" | "unknown";
+}
+
+export function resolveProjectContext(
+  serviceType: string,
+  explicit?: BudgetScope["project_context"],
+): NonNullable<BudgetScope["project_context"]> {
+  if (explicit) return explicit;
+  const normalized = String(serviceType || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (/obra nueva|nueva construccion|new build/.test(normalized)) return "new_build";
+  if (/rehabilit/.test(normalized)) return "rehabilitation";
+  return "existing_renovation";
 }
 
 export function normalizeBathroomCount(value: unknown, fallback = 1): number {
@@ -148,7 +168,7 @@ export interface MarketAdjustResult {
 }
 
 const ACTION_CHAPTERS: Record<string, string[]> = {
-  demoliciones: ["demoliciones", "protecciones", "residuos", "seguridad"],
+  demoliciones: ["diagnostico", "demoliciones", "protecciones", "residuos", "seguridad"],
   albanileria: ["albanileria", "protecciones", "seguridad"],
   electricidad: ["electricidad"],
   iluminacion: ["electricidad"],
@@ -261,10 +281,32 @@ export function buildScopeQuantities(scope: BudgetScope): ScopeQuantities {
   const totalWallArea = perimeter * wallHeight;
   // Wet walls: ~3x floor area of wet zones (3 walls of ~wallHeight)
   const wetWallArea = wetFloorArea * 3;
+  const projectContext = scope.project_context || "existing_renovation";
+  const conservationStrategy = scope.conservation_strategy || "balanced";
+  const conditionFactor = scope.existing_condition === "poor"
+    ? 1.15
+    : scope.existing_condition === "good"
+      ? 0.82
+      : 1;
+  const demolitionRatio = projectContext === "new_build"
+    ? 0
+    : conservationStrategy === "preserve"
+      ? 0.25
+      : conservationStrategy === "replace"
+        ? 0.85
+        : 0.55;
+  const partitionRatio = projectContext === "new_build"
+    ? 0.40
+    : conservationStrategy === "preserve"
+      ? 0.10
+      : conservationStrategy === "replace"
+        ? 0.40
+        : 0.24;
+  const demolitionArea = Math.round(area * demolitionRatio * conditionFactor);
 
   return {
     floorArea: area,
-    demolitionArea: Math.round(area * 0.85),
+    demolitionArea,
     pavementArea: area,
     ceilingArea: area,
     wallPaintArea: Math.round(totalWallArea - wetWallArea),
@@ -273,10 +315,12 @@ export function buildScopeQuantities(scope: BudgetScope): ScopeQuantities {
     kitchenIncluded,
     windowsCountEstimated: scope.incluye_ventanas ? Math.max(Math.ceil(area / 15), 3) : 0,
     electricalPointsEstimated: Math.round(area * 0.7),
-    wasteContainersEstimated: Math.max(Math.ceil(area / 30), 2),
+    wasteContainersEstimated: projectContext === "new_build"
+      ? Math.max(Math.ceil(area / 55), 1)
+      : Math.max(Math.ceil(Math.max(demolitionArea, area * 0.15) / 30), 1),
     baseboardMlEstimated: Math.round(perimeter * 0.85),
     doorsEstimated: Math.max(Math.ceil(area / 14), 3),
-    partitionArea: Math.round(area * 0.4),
+    partitionArea: Math.max(Math.round(area * partitionRatio), projectContext === "new_build" ? 6 : 2),
   };
 }
 
@@ -326,6 +370,9 @@ export function normalizeBudgetItemsToScope(
 ): EnginePartida[] {
   const q = buildScopeQuantities(scope);
   const requestedChapters = getRequestedChapters(scope);
+  const projectContext = scope.project_context || "existing_renovation";
+  const isExistingBuilding = projectContext !== "new_build";
+  const conservationStrategy = scope.conservation_strategy || "balanced";
 
   // 1. Assign chapter to each item
   const tagged = items
@@ -455,38 +502,63 @@ export function normalizeBudgetItemsToScope(
     });
   };
 
-  // Always required for integral reform
-  add("protecciones", "Proteccion de zonas comunes y ascensor",
-    "Forrado de ascensor, pasillos y elementos comunes con carton ondulado y plastico.",
-    1, "PA", Math.max(q.floorArea * 1.5, 150), "otros");
+  // A refurbishment starts from an existing asset. The engine must first
+  // inspect and protect what remains; it must never silently price a blank site.
+  if (isExistingBuilding) {
+    add("diagnostico", "Inspección previa y comprobación de preexistencias",
+      "Levantamiento del estado actual, comprobación de soportes e instalaciones y registro de los elementos que se conservan, reparan o sustituyen.",
+      1, "PA", Math.max(q.floorArea * 3.5, 280), "mano_obra");
+    add("protecciones", "Protección de elementos que se conservan",
+      "Protección de accesos, zonas comunes, carpinterías, instalaciones y acabados que permanecen en la vivienda.",
+      1, "PA", Math.max(q.floorArea * 1.5, 150), "otros");
+    if (q.demolitionArea > 0) {
+      add("demoliciones", "Desmontajes y demoliciones selectivas",
+        `Retirada controlada solo de los elementos definidos para sustitución; estrategia: ${conservationStrategy === "preserve" ? "máxima conservación" : conservationStrategy === "replace" ? "sustitución amplia" : "reforma equilibrada"}.`,
+        q.demolitionArea, "m2", 15, "mano_obra");
+    }
+  } else {
+    add("protecciones", "Implantación y protecciones de obra",
+      "Cerramientos provisionales, protección de accesos y medios auxiliares para la ejecución.",
+      1, "PA", Math.max(q.floorArea * 1.5, 150), "otros");
+  }
 
-  add("demoliciones", "Demoliciones y retirada",
-    "Demolicion de revestimientos, tabiques y pavimentos existentes.",
-    q.demolitionArea, "m2", 15, "mano_obra");
-
-  add("albanileria", "Formacion de tabiqueria",
-    "Suministro e instalacion de nueva tabiqueria interior (Pladur/Ladrillo).",
+  add("albanileria", isExistingBuilding ? "Adaptación de tabiquería existente" : "Formación de tabiquería",
+    isExistingBuilding
+      ? "Aperturas, cierres, reparaciones y nueva tabiquería únicamente donde lo requiere la distribución seleccionada."
+      : "Suministro e instalación de nueva tabiquería interior según proyecto.",
     q.partitionArea, "m2", 38, "mano_obra");
 
-  add("falsos_techos", "Falsos techos continuos",
-    "Formacion de falso techo de placa de yeso laminado.",
-    q.ceilingArea, "m2", 28, "mano_obra");
+  if (!isExistingBuilding || conservationStrategy === "replace" || scope.existing_condition === "poor") {
+    add("falsos_techos", isExistingBuilding ? "Reposición selectiva de falsos techos" : "Falsos techos continuos",
+      isExistingBuilding
+        ? "Reposición en las zonas afectadas por instalaciones o con soporte deteriorado."
+        : "Formación de falso techo de placa de yeso laminado.",
+      q.ceilingArea, "m2", 28, "mano_obra");
+  }
 
-  add("fontaneria", `Instalacion de fontaneria (${q.bathroomsCount} bano${q.bathroomsCount > 1 ? "s" : ""} + ${q.kitchenIncluded ? "cocina" : "sin cocina"})`,
-    `Red de agua fria, caliente y desagues para ${q.bathroomsCount} bano(s)${q.kitchenIncluded ? " y cocina" : ""}.`,
-    1, "PA", (q.bathroomsCount * 950) + (q.kitchenIncluded ? 650 : 0), "mano_obra");
+  if (q.bathroomsCount > 0 || q.kitchenIncluded) {
+    add("fontaneria", `${isExistingBuilding ? "Adecuación" : "Instalación"} de fontanería (${q.bathroomsCount} baño${q.bathroomsCount !== 1 ? "s" : ""}${q.kitchenIncluded ? " + cocina" : ""})`,
+      isExistingBuilding
+        ? `Inspección y adecuación de las redes existentes; sustitución limitada a ${q.bathroomsCount} baño(s)${q.kitchenIncluded ? " y cocina" : ""}.`
+        : `Nueva red de agua fría, caliente y desagües para ${q.bathroomsCount} baño(s)${q.kitchenIncluded ? " y cocina" : ""}.`,
+      1, "PA", (q.bathroomsCount * 950) + (q.kitchenIncluded ? 650 : 0), "mano_obra");
+  }
 
-  add("electricidad", "Instalacion electrica completa",
-    `Cuadro general, ${q.electricalPointsEstimated} puntos de luz/enchufes, mecanismos y protecciones.`,
+  add("electricidad", isExistingBuilding ? "Revisión y adecuación eléctrica" : "Instalación eléctrica completa",
+    isExistingBuilding
+      ? `Comprobación de la instalación existente y adecuación de cuadro, circuitos y ${q.electricalPointsEstimated} puntos conforme al alcance seleccionado.`
+      : `Cuadro general, ${q.electricalPointsEstimated} puntos de luz/enchufes, mecanismos y protecciones.`,
     q.electricalPointsEstimated, "ud", 42, "mano_obra");
 
-  add("impermeabilizacion", "Impermeabilizacion zonas humedas",
-    "Lamina impermeabilizante en banos y cocina.",
-    Math.round(q.wetWallArea * 0.4), "m2", 22, "material");
+  if (q.wetWallArea > 0) {
+    add("impermeabilizacion", "Impermeabilización de zonas húmedas afectadas",
+      "Sistema impermeable en baños y cocina incluidos en el alcance.",
+      Math.round(q.wetWallArea * 0.4), "m2", 22, "material");
 
-  add("revestimientos", "Alicatado de zonas humedas",
-    "Colocacion de revestimiento ceramico en paredes de banos y cocina.",
-    q.wetWallArea, "m2", 38, "mano_obra");
+    add("revestimientos", isExistingBuilding ? "Reposición de revestimientos en zonas afectadas" : "Alicatado de zonas húmedas",
+      "Colocación de revestimiento cerámico exclusivamente en los paramentos incluidos.",
+      q.wetWallArea, "m2", 38, "mano_obra");
+  }
 
   add("pavimentos", "Solado general de vivienda",
     "Colocacion de pavimento ceramico o laminado.",
@@ -510,9 +582,11 @@ export function normalizeBudgetItemsToScope(
       q.windowsCountEstimated, "ud", 650, "material");
   }
 
-  add("sanitarios", `Sanitarios y griferia (${q.bathroomsCount} bano${q.bathroomsCount > 1 ? "s" : ""})`,
-    `Suministro e instalacion de inodoro, lavabo, plato de ducha y griferia para ${q.bathroomsCount} bano(s).`,
-    q.bathroomsCount, "lote", 1800, "material");
+  if (q.bathroomsCount > 0) {
+    add("sanitarios", `Sanitarios y grifería (${q.bathroomsCount} baño${q.bathroomsCount > 1 ? "s" : ""})`,
+      `Suministro e instalación para los ${q.bathroomsCount} baño(s) expresamente incluidos.`,
+      q.bathroomsCount, "lote", 1800, "material");
+  }
 
   if (scope.incluye_cocina) {
     add("cocina", "Cocina completa",
@@ -563,6 +637,8 @@ export function buildDeterministicBudgetItems(
   }
 
   const q = buildScopeQuantities(scope);
+  const isExistingBuilding = (scope.project_context || "existing_renovation") !== "new_build";
+  const conservationStrategy = scope.conservation_strategy || "balanced";
   const qualityMultiplier = scope.calidad === "alta" ? 1.22 : scope.calidad === "basica" ? 0.88 : 1;
   const lightingPoints = Math.max(Math.round(q.floorArea / 6), 4);
   const waterPoints = Math.max(q.bathroomsCount * 4 + (q.kitchenIncluded ? 3 : 0), 3);
@@ -607,19 +683,24 @@ export function buildDeterministicBudgetItems(
   for (const action of actions) {
     switch (action) {
       case "demoliciones":
-        add("protecciones", "Protección de zonas afectadas", "Protección de pasos, ascensor y elementos que se conservan.", 1, "PA", Math.max(q.floorArea * 1.6, 140), "otros", 4);
-        add("demoliciones", "Demolición manual de acabados", "Levantado controlado de revestimientos y pavimentos en la superficie afectada.", q.demolitionArea, "m2", 19, "mano_obra", q.demolitionArea * 0.35);
-        add("demoliciones", "Desmontaje de instalaciones y elementos", "Desmontaje selectivo, clasificación y acopio para retirada.", 1, "PA", Math.max(q.floorArea * 7, 320), "mano_obra", Math.max(q.floorArea * 0.18, 6));
+        if (isExistingBuilding) {
+          add("diagnostico", "Inspección y levantamiento del estado actual", "Comprobación previa de soportes, instalaciones y elementos que se conservan, reparan o sustituyen.", 1, "PA", Math.max(q.floorArea * 3.5, 280), "mano_obra", Math.max(q.floorArea * 0.04, 4));
+        }
+        add("protecciones", isExistingBuilding ? "Protección de elementos que se conservan" : "Implantación y protecciones de obra", "Protección de pasos, accesos y elementos fuera del alcance.", 1, "PA", Math.max(q.floorArea * 1.6, 140), "otros", 4);
+        if (q.demolitionArea > 0) {
+          add("demoliciones", "Demolición selectiva de acabados", `Levantado controlado únicamente en la superficie afectada (${conservationStrategy === "preserve" ? "máxima conservación" : conservationStrategy === "replace" ? "sustitución amplia" : "reforma equilibrada"}).`, q.demolitionArea, "m2", 19, "mano_obra", q.demolitionArea * 0.35);
+          add("demoliciones", "Desmontaje de instalaciones y elementos", "Desmontaje selectivo, clasificación, protección de recuperables y acopio para retirada.", 1, "PA", Math.max(q.demolitionArea * 7, 320), "mano_obra", Math.max(q.demolitionArea * 0.18, 6));
+        }
         add("residuos", "Contenedor y transporte a gestor autorizado", "Carga, transporte, tasa y justificante de gestión de residuos.", q.wasteContainersEstimated, "ud", 310, "otros");
         break;
       case "albanileria":
         add("albanileria", "Replanteo de albañilería", "Trazado de particiones, encuentros y pasos de instalaciones.", 1, "PA", 220, "mano_obra", 4);
-        add("albanileria", "Formación y ajuste de tabiquería", "Ejecución de tabiquería y remates según la distribución seleccionada.", q.partitionArea, "m2", 46, "mano_obra", q.partitionArea * 0.55);
+        add("albanileria", isExistingBuilding ? "Adaptación y reparación de tabiquería" : "Formación de tabiquería", isExistingBuilding ? "Aperturas, cierres y reparaciones solo donde cambia la distribución; se conserva el resto." : "Ejecución de tabiquería y remates según proyecto.", q.partitionArea, "m2", 46, "mano_obra", q.partitionArea * 0.55);
         add("albanileria", "Guarnecido y regularización de paramentos", "Regularización previa a revestimientos y pintura.", Math.max(q.wallPaintArea * 0.25, 8), "m2", 18, "mano_obra");
         add("albanileria", "Ayudas a instalaciones", "Rozas, pasos, recibido de cajas y posterior tapado.", 1, "PA", Math.max(q.floorArea * 9, 360), "mano_obra");
         break;
       case "electricidad":
-        add("electricidad", "Canalizaciones y cableado eléctrico", "Renovación de circuitos y conductores conforme al REBT.", q.electricalPointsEstimated, "punto", 52, "mano_obra", q.electricalPointsEstimated * 0.65);
+        add("electricidad", "Canalizaciones y cableado eléctrico", isExistingBuilding ? "Comprobación y adecuación de circuitos existentes; renovación solo de los conductores y tramos incluidos conforme al REBT." : "Ejecución de circuitos y conductores nuevos conforme al REBT.", q.electricalPointsEstimated, "punto", 52, "mano_obra", q.electricalPointsEstimated * 0.65);
         add("electricidad", "Mecanismos eléctricos", "Suministro e instalación de enchufes, interruptores y cajas.", q.electricalPointsEstimated, "ud", 24, "material");
         add("electricidad", "Cuadro eléctrico y protecciones", "Cuadro, diferenciales, magnetotérmicos, sobretensiones y rotulación.", 1, "ud", 760, "material", 7);
         add("electricidad", "Comprobaciones y certificado", "Mediciones, pruebas de seguridad y documentación final.", 1, "PA", 320, "mano_obra", 4);
@@ -631,7 +712,7 @@ export function buildDeterministicBudgetItems(
         add("electricidad", "Montaje, regulación y pruebas", "Instalación, orientación y comprobación final de todos los puntos.", 1, "PA", Math.max(lightingPoints * 28, 160), "mano_obra", Math.max(lightingPoints * 0.4, 3));
         break;
       case "fontaneria":
-        add("fontaneria", "Red de suministro de agua", "Tubería multicapa, aislamiento, accesorios y fijaciones.", supplyLength, "ml", 27, "mano_obra", supplyLength * 0.45);
+        add("fontaneria", isExistingBuilding ? "Adecuación de la red de suministro de agua" : "Red de suministro de agua", isExistingBuilding ? "Inspección de la red actual y sustitución de los tramos incluidos con tubería multicapa, aislamiento y accesorios." : "Tubería multicapa nueva, aislamiento, accesorios y fijaciones.", supplyLength, "ml", 27, "mano_obra", supplyLength * 0.45);
         add("fontaneria", "Red de evacuación", "Tubería de PVC, piezas especiales, soportes y conexión a bajantes.", drainageLength, "ml", 34, "mano_obra", drainageLength * 0.5);
         add("fontaneria", "Puntos de consumo y desagüe", "Conexiones completas para aparatos, sanitarios y cocina incluidos.", waterPoints, "ud", 118, "mano_obra", waterPoints * 1.2);
         add("fontaneria", "Llaves de corte y accesorios", "Llaves, colectores, sifones, válvulas y pequeños accesorios.", Math.max(q.bathroomsCount + (q.kitchenIncluded ? 1 : 0), 1), "lote", 185, "material");
@@ -859,7 +940,8 @@ export function buildScopeMaterials(scope: BudgetScope): EngineMaterial[] {
       isRealData: false,
       sourceType: "market_reference",
     };
-    });
+    })
+    .filter((material) => material.quantity > 0 && material.subtotal > 0);
 }
 
 /**
@@ -1019,6 +1101,28 @@ export function getMarketRange(
     minPerM2 = 850; maxPerM2 = 2200;
   } else if (st.includes("parcial") || st.includes("pintura")) {
     minPerM2 = 150; maxPerM2 = 650;
+  }
+
+  // A renovation is not a new build with a different label. Its range depends
+  // on how much of the existing asset is retained and on its surveyed state.
+  const projectContext = resolveProjectContext(serviceType, scope.project_context);
+  if (projectContext !== "new_build") {
+    const conservationMultiplier = scope.conservation_strategy === "preserve"
+      ? 0.76
+      : scope.conservation_strategy === "replace"
+        ? 1.08
+        : 0.92;
+    const conditionMultiplier = scope.existing_condition === "good"
+      ? 0.90
+      : scope.existing_condition === "poor"
+        ? 1.16
+        : 1;
+    const rehabilitationMultiplier = projectContext === "rehabilitation" ? 1.12 : 1;
+    const occupancyMultiplier = scope.occupied_during_works ? 1.06 : 1;
+    minPerM2 *= conservationMultiplier * conditionMultiplier * rehabilitationMultiplier * occupancyMultiplier;
+    maxPerM2 *= conservationMultiplier * conditionMultiplier * rehabilitationMultiplier * occupancyMultiplier;
+    fixedMin *= conservationMultiplier * conditionMultiplier * rehabilitationMultiplier * occupancyMultiplier;
+    fixedMax *= conservationMultiplier * conditionMultiplier * rehabilitationMultiplier * occupancyMultiplier;
   }
 
   // Location adjustment
@@ -1210,7 +1314,7 @@ export function adjustToMarket(
   const shortfall = Math.max(targetTotal - currentClientTotal, 0);
   const scaleFactor = 1 + shortfall / scalableTotal;
   const adjustedAt = new Date().toISOString();
-  const reason = "Ajustado al mínimo realista de mercado";
+  const reason = "Calibrado al umbral inferior de referencia";
 
   // Scale items and tag them
   const scaledItems = items.map(p => {
@@ -1289,7 +1393,7 @@ export function adjustToMarket(
     materials: scaledMaterials,
     adjusted: true,
     adjustmentType: "both",
-    message: `Presupuesto ajustado al mínimo realista de mercado (${Math.round(newPerM2)} EUR/m2). Se corrigieron cantidades, se completaron capítulos faltantes y se ajustaron precios unitarios.`,
+    message: `Estimación calibrada al umbral inferior de referencia (${Math.round(newPerM2)} EUR/m2). No equivale a una oferta cerrada: debe confirmarse con mediciones, estado existente y precios trazables.`,
     isUndervalued: false,
     pricePerM2: Math.round(newPerM2),
     marketFloor: Math.round(floorPerM2),
@@ -1340,6 +1444,7 @@ export function estimateRealisticTimeline(
   };
 
   const hasDemolition = hasAny("protecciones", "demoliciones");
+  const hasExistingDiagnosis = chapters.has("diagnostico");
   const hasMasonry = hasAny("albanileria", "falsos_techos");
   const hasPlumbing = chapters.has("fontaneria");
   const hasElectrical = chapters.has("electricidad");
@@ -1352,6 +1457,16 @@ export function estimateRealisticTimeline(
   const hasSanitary = chapters.has("sanitarios");
   const hasCleaning = chapters.has("limpieza");
   const hasWaste = chapters.has("residuos");
+
+  if (hasExistingDiagnosis) {
+    const conditionUnknown = !scope.existing_condition || scope.existing_condition === "unknown";
+    addPhase(
+      "Inspeccion, calas y validacion de preexistencias",
+      conditionUnknown ? 3 : 2,
+      conditionUnknown ? 7 : scope.existing_condition === "poor" ? 6 : 4,
+      "Levantamiento del estado actual, calas no destructivas cuando proceda y validacion de los elementos que se conservan, reparan o sustituyen.",
+    );
+  }
 
   if (hasDemolition) {
     const effort = effortDays(["protecciones", "demoliciones"], 2);

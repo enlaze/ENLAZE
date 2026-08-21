@@ -13,6 +13,7 @@ import {
   inferBudgetActions,
   normalizeBudgetItemsToScope,
   normalizeBathroomCount,
+  resolveProjectContext,
 } from "../lib/budget-engine.ts";
 import { buildDeterministicBudgetAnalysis } from "../lib/budget-analysis-fallback.ts";
 
@@ -32,6 +33,40 @@ test("a 145 m2 integral refurbishment in Barcelona is not benchmarked at 94k", (
   const range = getMarketRange(fullScope, "reforma");
   assert.equal(getAffectedArea(fullScope), 145);
   assert.ok(range.min > 94_000, `minimum was ${range.min}`);
+});
+
+test("refurbishment and new build have different physical starting points", () => {
+  const preserve = buildScopeQuantities({
+    ...fullScope,
+    project_context: "existing_renovation",
+    existing_condition: "fair",
+    conservation_strategy: "preserve",
+  });
+  const replace = buildScopeQuantities({
+    ...fullScope,
+    project_context: "existing_renovation",
+    existing_condition: "fair",
+    conservation_strategy: "replace",
+  });
+  const newBuild = buildScopeQuantities({ ...fullScope, project_context: "new_build" });
+
+  assert.equal(resolveProjectContext("Reforma integral"), "existing_renovation");
+  assert.equal(resolveProjectContext("Obra nueva"), "new_build");
+  assert.ok(preserve.demolitionArea < replace.demolitionArea);
+  assert.equal(newBuild.demolitionArea, 0);
+
+  const renovationItems = normalizeBudgetItemsToScope({
+    ...fullScope,
+    project_context: "existing_renovation",
+    conservation_strategy: "balanced",
+  }, [], 1.2);
+  assert.ok(renovationItems.some((item) => item.chapter === "diagnostico"));
+  assert.ok(renovationItems.some((item) => /conserv|preexist/i.test(`${item.concept} ${item.description}`)));
+  assert.ok(renovationItems.every((item) => !/cimentaci|estructura completa/i.test(`${item.concept} ${item.description}`)));
+
+  const newBuildItems = normalizeBudgetItemsToScope({ ...fullScope, project_context: "new_build" }, [], 1.2);
+  assert.ok(newBuildItems.every((item) => item.chapter !== "demoliciones"));
+  assert.ok(newBuildItems.every((item) => item.chapter !== "diagnostico"));
 });
 
 test("selected rooms and actions constrain area, chapters and materials", () => {
@@ -86,6 +121,23 @@ test("the UI and API preserve zero bathrooms and use the new title", async () =>
   assert.doesNotMatch(scopeSource, /scopeData\.num_banos \|\| 1/);
   assert.doesNotMatch(providerSource, /num_banos: state\.sectorData\.num_banos \|\| 1/);
   assert.match(apiSource, /num_banos: normalizeBathroomCount\(scope\?\.num_banos\)/);
+  assert.match(scopeSource, /Punto de partida real de la obra/);
+  assert.match(scopeSource, /Reforma de edificio existente/);
+  assert.match(apiSource, /NO presupuestes cimentacion, estructura/);
+});
+
+test("a finalized smart budget can be reopened with its complete wizard state", async () => {
+  const [pageSource, providerSource, detailSource, editSource] = await Promise.all([
+    readFile(new URL("../app/dashboard/budgets/generate/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/dashboard/budgets/generate/_components/BudgetGenerateProvider.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/dashboard/budgets/[id]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/dashboard/budgets/[id]/edit/page.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(pageSource, /budgetIdFromLocation/);
+  assert.match(pageSource, /draftId: budget\.id/);
+  assert.match(providerSource, /wizard_state: \{[\s\S]*draftId: budgetId/);
+  assert.match(detailSource, /Abrir en Presupuesto inteligente/);
+  assert.match(editSource, /Editar alcance, partidas y proveedores/);
 });
 
 test("resolved material basket replaces the provisional component instead of being added twice", () => {

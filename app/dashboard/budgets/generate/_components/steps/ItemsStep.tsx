@@ -8,6 +8,13 @@ import { Card } from "@/components/ui/card";
 export function ItemsStep() {
   const { state, addPartida, updatePartida, removePartida, analyzeWithAI } = useBudgetGenerate();
   const { partidas } = state;
+  const materialCoverage = state.priceVerification.total > 0
+    ? Math.round((state.priceVerification.verified / state.priceVerification.total) * 100)
+    : 0;
+  const needsExistingSurvey =
+    (state.sectorData.project_context || "existing_renovation") !== "new_build"
+    && (!state.sectorData.existing_condition || state.sectorData.existing_condition === "unknown");
+  const readyForCommercialClosure = materialCoverage >= 90 && !needsExistingSurvey;
 
   const handleAdd = () => {
     addPartida({ concept: "Nueva partida", quantity: 1, unit_price: 0 });
@@ -56,11 +63,26 @@ export function ItemsStep() {
                   Materiales verificados: <strong>{state.priceVerification.verified}/{state.priceVerification.total}</strong>
                 </span>
                 <span>
-                  Resultado: <strong>{state.realismAudit.pricePerM2.toFixed(0)} EUR/m2</strong>
+                  Importe estimado: <strong>{state.realismAudit.pricePerM2.toFixed(0)} EUR/m2</strong>
+                  {state.marketAdjustMessage && <em className="ml-1 font-normal not-italic text-amber-600">(umbral inferior calibrado)</em>}
                 </span>
                 {state.realismAudit.recalculatedAt && (
                   <span>
                     Actualizado: <strong>{new Date(state.realismAudit.recalculatedAt).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</strong>
+                  </span>
+                )}
+              </div>
+            )}
+            {!state.analysisError && (
+              <div className={`mt-3 rounded-lg border px-3 py-2 text-xs ${readyForCommercialClosure
+                ? "border-green-200 bg-green-50 text-green-800 dark:border-green-900/40 dark:bg-green-950/20 dark:text-green-300"
+                : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300"
+              }`}>
+                <strong>{readyForCommercialClosure ? "Listo para validación comercial." : "Estimación provisional."}</strong>{" "}
+                {!readyForCommercialClosure && (
+                  <span>
+                    {needsExistingSurvey ? "Falta confirmar el estado existente mediante visita. " : ""}
+                    {materialCoverage < 90 ? `La cobertura comercial es ${materialCoverage}%; objetivo mínimo 90%.` : ""}
                   </span>
                 )}
               </div>

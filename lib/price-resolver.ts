@@ -50,6 +50,7 @@ export interface PriceAlternative {
   confidenceScore?: number;
   sourceType?: string;
   checkedAt?: string;
+  matchScore?: number;
 }
 
 export interface ResolvedPrice {
