@@ -1539,10 +1539,8 @@ export function BudgetGenerateProvider({
         setState(prev => ({ ...prev, validationError: "Debes seleccionar un cliente." }));
         return false;
       }
-      if (!state.projectId) {
-        setState(prev => ({ ...prev, validationError: "Selecciona una obra/proyecto o crea una nueva para continuar." }));
-        return false;
-      }
+      // Linking a project adds plans and measurements, but it is optional.
+      // Existing standalone budgets must remain editable and recalculable.
     }
     setState(prev => ({ ...prev, validationError: null }));
     return true;
