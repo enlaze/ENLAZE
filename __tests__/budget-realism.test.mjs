@@ -127,11 +127,12 @@ test("the UI and API preserve zero bathrooms and use the new title", async () =>
 });
 
 test("a finalized smart budget can be reopened with its complete wizard state", async () => {
-  const [pageSource, providerSource, detailSource, editSource] = await Promise.all([
+  const [pageSource, providerSource, detailSource, editSource, summarySource] = await Promise.all([
     readFile(new URL("../app/dashboard/budgets/generate/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/dashboard/budgets/generate/_components/BudgetGenerateProvider.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/dashboard/budgets/[id]/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/dashboard/budgets/[id]/edit/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/dashboard/budgets/generate/_components/LiveSummaryPanel.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(pageSource, /budgetIdFromLocation/);
   assert.match(pageSource, /draftId: budget\.id/);
@@ -139,6 +140,8 @@ test("a finalized smart budget can be reopened with its complete wizard state", 
   assert.doesNotMatch(providerSource, /Selecciona una obra\/proyecto o crea una nueva para continuar/);
   assert.match(detailSource, /Abrir en Presupuesto inteligente/);
   assert.match(editSource, /Editar alcance, partidas y proveedores/);
+  assert.match(summarySource, /lg:max-h-\[calc\(100vh-7rem\)\]/);
+  assert.match(summarySource, /lg:overflow-y-auto/);
 });
 
 test("resolved material basket replaces the provisional component instead of being added twice", () => {

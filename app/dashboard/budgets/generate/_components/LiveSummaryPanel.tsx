@@ -109,7 +109,7 @@ export function LiveSummaryPanel() {
 
 
   return (
-    <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-navy-100 dark:border-zinc-800 shadow-sm p-6 sticky top-24">
+    <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-navy-100 dark:border-zinc-800 shadow-sm p-6 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
       <h3 className="text-lg font-bold text-navy-900 dark:text-white mb-4">Resumen en vivo</h3>
 
       {isConstruction && activeProvider && (() => {
