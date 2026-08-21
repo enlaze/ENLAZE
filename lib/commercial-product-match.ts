@@ -38,6 +38,8 @@ interface ConceptGroup {
 const CONCEPT_GROUPS: ConceptGroup[] = [
   { id: "metal_profile", role: "primary", aliases: ["perfil metalico", "perfil para pladur", "montante metalico", "canal metalico"] },
   { id: "gypsum_board", role: "primary", aliases: ["placa de yeso", "placa yeso", "yeso laminado", "carton yeso", "pladur", "glasroc"] },
+  { id: "tile_adhesive", role: "primary", aliases: ["mortero cola", "cemento cola", "adhesivo ceramico", "adhesivo porcelanico"] },
+  { id: "self_leveling_mortar", role: "primary", aliases: ["mortero autonivelante", "autonivelante"] },
   { id: "mortar", role: "primary", aliases: ["mortero"] },
   { id: "pipe", role: "primary", aliases: ["tuberia", "tubo"] },
   { id: "multilayer", role: "attribute", aliases: ["multicapa", "multicapa reticulada"] },
@@ -55,7 +57,6 @@ const CONCEPT_GROUPS: ConceptGroup[] = [
   { id: "led", role: "attribute", aliases: ["led"] },
   { id: "ceramic_tile", role: "primary", aliases: ["azulejo", "baldosa ceramica", "revestimiento ceramico"] },
   { id: "porcelain", role: "attribute", aliases: ["porcelanico", "porcelanica"] },
-  { id: "tile_adhesive", role: "primary", aliases: ["cemento cola", "adhesivo ceramico", "adhesivo porcelanico"] },
   { id: "flooring", role: "primary", aliases: ["pavimento", "suelo laminado", "suelo ceramico", "tarima"] },
   { id: "skirting", role: "primary", aliases: ["rodapie"] },
   { id: "paint", role: "primary", aliases: ["pintura"] },
@@ -153,6 +154,26 @@ function extractMeasurements(value: string): Measurement[] {
   let normalized = normalizeCommercialMatchText(value);
   const measurements: Measurement[] = [];
   normalized = normalized.replace(
+    /(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(mm|cm|m)\b/g,
+    (_match, firstRaw: string, secondRaw: string, thirdRaw: string, unit: string) => {
+      const rawValues = [firstRaw, secondRaw, thirdRaw];
+      const converted = rawValues.map((raw) => convertScalarMeasurement(Number(raw), unit));
+      const ordered = converted
+        .map((measurement) => measurement.value as number)
+        .sort((left, right) => left - right);
+      measurements.push({
+        kind: "dimensions",
+        value: ordered.join("x"),
+        display: `${firstRaw}x${secondRaw}x${thirdRaw}${unit}`,
+      });
+      // Catalogue titles commonly write width x height x thickness while the
+      // technical requirement only names the thickness. Keep every axis so a
+      // requested 13 mm board can match a 2000 x 1200 x 13 mm product.
+      measurements.push(...converted);
+      return " ";
+    },
+  );
+  normalized = normalized.replace(
     /(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(mm|cm|m)\b/g,
     (_match, firstRaw: string, secondRaw: string, unit: string) => {
       const first = convertScalarMeasurement(Number(firstRaw), unit).value as number;
@@ -163,6 +184,10 @@ function extractMeasurements(value: string): Measurement[] {
         value: `${ordered[0]}x${ordered[1]}`,
         display: `${firstRaw}x${secondRaw}${unit}`,
       });
+      measurements.push(
+        convertScalarMeasurement(Number(firstRaw), unit),
+        convertScalarMeasurement(Number(secondRaw), unit),
+      );
       return " ";
     },
   );
@@ -173,6 +198,13 @@ function extractMeasurements(value: string): Measurement[] {
   }
 
   return measurements;
+}
+
+function extractMortarGrade(value: string): number | null {
+  const match = normalizeCommercialMatchText(value).match(/\bm\s*-?\s*(\d+(?:\.\d+)?)\b/);
+  if (!match) return null;
+  const grade = Number(match[1]);
+  return Number.isFinite(grade) ? grade : null;
 }
 
 function measurementEquals(left: Measurement, right: Measurement) {
@@ -258,7 +290,8 @@ export function evaluateCommercialProductMatch(
 ): CommercialProductMatchResult {
   const reasons: string[] = [];
   const requestedGroups = findConceptGroups(input.requestedName);
-  const candidateGroupIds = new Set(findConceptGroups(input.candidateName).map((group) => group.id));
+  const candidateGroups = findConceptGroups(input.candidateName);
+  const candidateGroupIds = new Set(candidateGroups.map((group) => group.id));
   const requiredPrimary = requestedPrimaryGroups(input.requestedName, requestedGroups);
   const requiredAttributes = requestedGroups.filter((group) => group.role === "attribute");
   const requiredGroups = [...requiredPrimary, ...requiredAttributes];
@@ -271,11 +304,29 @@ export function evaluateCommercialProductMatch(
   const tokenCoverage = requestedTokens.length > 0 ? tokenMatches.length / requestedTokens.length : 0;
   const compactRequested = normalizeCommercialMatchText(input.requestedName).replace(/[^a-z0-9]/g, "");
   const compactCandidate = normalizeCommercialMatchText(input.candidateName).replace(/[^a-z0-9]/g, "");
-  const groupIdentity = requiredGroups.length > 0
+  const requiredPrimaryIds = new Set(requiredPrimary.map((group) => group.id));
+  const hasConflictingPrimary = requiredPrimary.length > 0 && candidateGroups
+    .filter((group) => group.role === "primary")
+    .some((group) => !requiredPrimaryIds.has(group.id));
+  const requestedMortarGrade = extractMortarGrade(input.requestedName);
+  const candidateMortarGrade = extractMortarGrade(input.candidateName);
+  const mortarGradeCompatible = requestedMortarGrade === null || (
+    candidateMortarGrade !== null
+    && Math.abs(candidateMortarGrade - requestedMortarGrade) <= 0.01
+  );
+  const groupIdentity = (requiredGroups.length > 0
     ? requiredGroups.every((group) => candidateGroupIds.has(group.id))
-    : compactRequested.includes(compactCandidate) || compactCandidate.includes(compactRequested) || tokenCoverage >= 0.6;
+    : compactRequested.includes(compactCandidate) || compactCandidate.includes(compactRequested) || tokenCoverage >= 0.6)
+    && !hasConflictingPrimary
+    && mortarGradeCompatible;
   const identityCompatible = groupIdentity && (tokenCoverage >= 0.2 || requiredGroups.length > 0);
-  if (!identityCompatible) reasons.push("El producto no corresponde al concepto solicitado");
+  if (!identityCompatible) {
+    reasons.push(
+      hasConflictingPrimary || !mortarGradeCompatible
+        ? "La variante o resistencia del producto no coincide con la solicitada"
+        : "El producto no corresponde al concepto solicitado",
+    );
+  }
 
   const requestedMeasurements = extractMeasurements(input.requestedName);
   const candidateMeasurements = extractMeasurements(input.candidateName);

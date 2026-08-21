@@ -32,6 +32,27 @@ test("measurements inside parentheses are mandatory and reject a 2kg product for
   assert.match(result.reasons.join(" "), /25kg/i);
 });
 
+test("official M-7.5 mortar is accepted while other grades and mortar variants are rejected", () => {
+  assert.equal(evaluate({ candidateName: "MORTERO SECO M7.5 25 KG GRIS", candidateUnit: "ud", candidateUnitPrice: 1.55 }).isExact, true);
+  assert.equal(evaluate({ candidateName: "Mortero seco M-5 saco 25 kg" }).isExact, false);
+  assert.equal(evaluate({ candidateName: "Mortero seco M-10 saco 25 kg" }).isExact, false);
+  assert.equal(evaluate({ candidateName: "Mortero cola C2TE saco 25 kg" }).isExact, false);
+  assert.equal(evaluate({ candidateName: "Mortero autonivelante saco 25 kg" }).isExact, false);
+});
+
+test("three-dimensional catalogue formats expose their thickness", () => {
+  const result = evaluateCommercialProductMatch({
+    requestedName: "Placa de yeso laminado 13mm (Pladur N)",
+    candidateName: "PLACA DE YESO LAMINADO GLASROC H 2000X1200X13MM",
+    requestedUnit: "ud",
+    candidateUnit: "ud",
+    referenceUnitPrice: 9.8,
+    candidateUnitPrice: 15.95,
+  });
+  assert.equal(result.formatCompatible, true);
+  assert.equal(result.isExact, true);
+});
+
 test("tools and accessories cannot impersonate the requested construction product", () => {
   const profile = evaluateCommercialProductMatch({
     requestedName: "Perfil metalico para Pladur (montante 48mm)",

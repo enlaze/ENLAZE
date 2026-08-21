@@ -84,6 +84,12 @@ test("V2 price queries include shared and company-owned providers", () => {
   assert.doesNotMatch(route, /\.is\("pb_providers\.company_id", null\)/);
 });
 
+test("catalogue candidate search limits before semantic ranking without sorting the full bank", () => {
+  const route = readFileSync("app/api/prices/resolve/route.ts", "utf8");
+  assert.match(route, /\.limit\(300\)/);
+  assert.doesNotMatch(route, /\.or\(tokens[\s\S]{0,250}\.order\("checked_at"/);
+});
+
 test("service-role price reads derive tenant scope only from the authenticated user", () => {
   const route = readFileSync("app/api/prices/resolve/route.ts", "utf8");
   assert.match(route, /const companyScopeId = user\.id/);

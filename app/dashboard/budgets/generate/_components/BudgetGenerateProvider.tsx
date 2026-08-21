@@ -1774,23 +1774,11 @@ export function BudgetGenerateProvider({
           calculateItemCostBreakdown(item, engineScope, state.marginPercent)
         );
 
-        // C) Keep the technical material requirements extracted from the
-        // project/documents. Use the deterministic engine list only as fallback.
-        const engineMats: EngineMaterial[] = newMaterials.length >= 5
-          ? newMaterials.map((material) => ({
-              id: material.id,
-              name: material.name,
-              quantity: material.quantity,
-              unit: material.unit,
-              unit_price: material.unit_price,
-              subtotal: material.subtotal,
-              included: material.included,
-              provider_id: material.provider_id || "pendiente-rastreador",
-              linked_chapter: inferMaterialChapter(material.name),
-              isRealData: false,
-              sourceType: "estimated",
-            }))
-          : buildScopeMaterials(engineScope);
+        // C) Structured scope is the source of truth for quantities, units and
+        // technical reference prices. AI text may suggest partidas, but it must
+        // never silently turn a 50 m roll into a per-metre price or divide an
+        // electrical panel price by ten.
+        const engineMats: EngineMaterial[] = buildScopeMaterials(engineScope);
 
         // D) Keep the normalized base until both technical partidas and
         // commercial materials have been checked. Market calibration happens

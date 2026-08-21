@@ -237,11 +237,12 @@ export async function POST(request: Request) {
           .or(visibleProviderFilter, { referencedTable: "pb_providers" }),
         (async () => {
           const rowsById = new Map<string, Record<string, unknown>>();
-          // Keep database concurrency bounded while ensuring every requested
-          // material searches the complete shared catalogue independently.
-          for (let start = 0; start < trackerTokenGroups.length; start += 6) {
+          // Do not order broad ILIKE searches before limiting them: sorting the
+          // full shared catalogue made valid product searches time out. The
+          // semantic matcher below ranks the bounded candidates afterwards.
+          for (let start = 0; start < trackerTokenGroups.length; start += 10) {
             const groupResults = await Promise.all(
-              trackerTokenGroups.slice(start, start + 6).map((tokens) =>
+              trackerTokenGroups.slice(start, start + 10).map((tokens) =>
                 trackerDb
                   .from("pb_products")
                   .select(`
@@ -259,8 +260,7 @@ export async function POST(request: Request) {
                   .or(visibleProviderFilter, { referencedTable: "pb_providers" })
                   .gt("unit_price", 0)
                   .or(tokens.map((token) => `commercial_name.ilike.%${token}%`).join(","))
-                  .order("checked_at", { ascending: false })
-                  .limit(80)
+                  .limit(300)
               ),
             );
             for (const result of groupResults) {
