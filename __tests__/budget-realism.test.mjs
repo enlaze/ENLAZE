@@ -140,8 +140,7 @@ test("a finalized smart budget can be reopened with its complete wizard state", 
   assert.doesNotMatch(providerSource, /Selecciona una obra\/proyecto o crea una nueva para continuar/);
   assert.match(detailSource, /Abrir en Presupuesto inteligente/);
   assert.match(editSource, /Editar alcance, partidas y proveedores/);
-  assert.match(summarySource, /lg:max-h-\[calc\(100vh-7rem\)\]/);
-  assert.match(summarySource, /lg:overflow-y-auto/);
+  assert.doesNotMatch(summarySource, /sticky top-24/);
 });
 
 test("resolved material basket replaces the provisional component instead of being added twice", () => {
