@@ -208,7 +208,6 @@ export async function POST(request: Request) {
       const trackerTokenGroups = buildUniqueCatalogTokenGroups(
         materials.map((material) => material.materialName),
       );
-      const trackerSearchTokens = Array.from(new Set(trackerTokenGroups.flat()));
 
       // ── V2 Path: resolve via 11-level cascade ──
       const [
@@ -238,12 +237,12 @@ export async function POST(request: Request) {
           .or(visibleProviderFilter, { referencedTable: "pb_providers" }),
         (async () => {
           const rowsById = new Map<string, Record<string, unknown>>();
-          // Search each meaningful term once and merge the bounded result sets.
-          // A single OR over several broad terms is slower and can time out,
-          // which used to make valid matches disappear between recalculations.
-          for (let start = 0; start < trackerSearchTokens.length; start += 6) {
+          // Keep concurrency deliberately low: broad catalogue lookups are
+          // independent, but overloading PostgREST makes valid result sets
+          // disappear intermittently. Semantic ranking happens afterwards.
+          for (let start = 0; start < trackerTokenGroups.length; start += 4) {
             const groupResults = await Promise.all(
-              trackerSearchTokens.slice(start, start + 6).map((token) =>
+              trackerTokenGroups.slice(start, start + 4).map((tokens) =>
                 trackerDb
                   .from("pb_products")
                   .select(`
@@ -260,8 +259,8 @@ export async function POST(request: Request) {
                   .eq("is_available", true)
                   .or(visibleProviderFilter, { referencedTable: "pb_providers" })
                   .gt("unit_price", 0)
-                  .ilike("commercial_name", `%${token}%`)
-                  .limit(200)
+                  .or(tokens.map((token) => `commercial_name.ilike.%${token}%`).join(","))
+                  .limit(300)
               ),
             );
             for (const result of groupResults) {
