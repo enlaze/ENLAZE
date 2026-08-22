@@ -294,6 +294,36 @@ test("BC3 units and quoted plumbing fractions remain comparable", () => {
   assert.equal(rocaValve.isExact, true);
 });
 
+test("a click-clack basin valve is an exact basin waste, not a generic accessory", () => {
+  const basinWaste = evaluateCommercialProductMatch({
+    requestedName: "Válvula de desagüe para lavabo 1 1/4 pulgadas",
+    candidateName: "VÁLVULA CLICK CLACK LAVABO 1 1/4 TAPÓN PEQUEÑO CROMADA",
+    requestedUnit: "ud",
+    candidateUnit: "ud",
+    referenceUnitPrice: 12,
+    candidateUnitPrice: 7.9,
+  });
+
+  assert.equal(basinWaste.identityCompatible, true);
+  assert.equal(basinWaste.formatCompatible, true);
+  assert.equal(basinWaste.isExact, true);
+});
+
+test("supplier wording plaste remains equivalent to the exact repair putty format", () => {
+  const repairPutty = evaluateCommercialProductMatch({
+    requestedName: "Plaste en polvo capa gruesa renovación 2h 15 kg",
+    candidateName: "PLASTE EN POLVO CAPA GRUESA RENOVACION 2H 15KG",
+    requestedUnit: "sacos",
+    candidateUnit: "saco",
+    referenceUnitPrice: 7.03,
+    candidateUnitPrice: 7.03,
+  });
+
+  assert.equal(repairPutty.identityCompatible, true);
+  assert.equal(repairPutty.formatCompatible, true);
+  assert.equal(repairPutty.isExact, true);
+});
+
 test("an exterior shower mixer never resolves to an embedded variant", () => {
   const exterior = evaluateCommercialProductMatch({
     requestedName: "Grifo termostático exterior de ducha cromado",

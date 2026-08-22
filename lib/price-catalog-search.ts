@@ -129,8 +129,8 @@ const CATALOG_SEARCH_RULES: CatalogSearchRule[] = [
     alternatives: [["plastico", "protector"], ["plastico", "pintura"]],
   },
   {
-    matches: (name) => /\bmasilla\b/.test(name),
-    alternatives: [["masilla", "interior"], ["masilla", "reparacion"]],
+    matches: (name) => /\b(?:masilla|plaste)\b/.test(name),
+    alternatives: [["plaste", "renovacion", "15"], ["masilla", "interior"], ["masilla", "reparacion"]],
   },
   {
     matches: (name) => /\b(?:rodillo|brocha|cubeta)\b/.test(name),
