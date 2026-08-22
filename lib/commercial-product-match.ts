@@ -36,14 +36,14 @@ interface ConceptGroup {
 }
 
 const CONCEPT_GROUPS: ConceptGroup[] = [
-  { id: "metal_profile", role: "primary", aliases: ["perfil metalico", "perfil para pladur", "montante metalico", "canal metalico"] },
+  { id: "metal_profile", role: "primary", aliases: ["perfil metalico", "perfil para pladur", "montante metalico", "montante pladur", "montante placo", "montante ega", "canal metalico"] },
   { id: "gypsum_board", role: "primary", aliases: ["placa de yeso", "placa yeso", "yeso laminado", "carton yeso", "pladur", "glasroc"] },
   { id: "tile_adhesive", role: "primary", aliases: ["mortero cola", "cemento cola", "adhesivo ceramico", "adhesivo porcelanico"] },
   { id: "self_leveling_mortar", role: "primary", aliases: ["mortero autonivelante", "autonivelante"] },
   { id: "mortar", role: "primary", aliases: ["mortero"] },
   { id: "pipe", role: "primary", aliases: ["tuberia", "tubo"] },
   { id: "multilayer", role: "attribute", aliases: ["multicapa", "multicapa reticulada"] },
-  { id: "pvc_drain", role: "attribute", aliases: ["pvc evacuacion", "pvc de evacuacion", "desague pvc"] },
+  { id: "pvc_drain", role: "attribute", aliases: ["pvc evacuacion", "pvc de evacuacion", "desague pvc", "pvc compacto"] },
   { id: "fitting", role: "primary", aliases: ["racor", "racores", "accesorio multicapa"] },
   { id: "valve", role: "primary", aliases: ["valvula", "valvulas", "llave de corte", "colector", "colectores"] },
   { id: "siphon", role: "primary", aliases: ["sifon", "sifones"] },
@@ -55,12 +55,12 @@ const CONCEPT_GROUPS: ConceptGroup[] = [
   { id: "switch", role: "primary", aliases: ["interruptor", "interruptores"] },
   { id: "luminaire", role: "primary", aliases: ["luminaria", "lampara", "plafon"] },
   { id: "led", role: "attribute", aliases: ["led"] },
-  { id: "ceramic_tile", role: "primary", aliases: ["azulejo", "baldosa ceramica", "revestimiento ceramico"] },
+  { id: "ceramic_tile", role: "primary", aliases: ["azulejo", "baldosa ceramica", "revestimiento ceramico", "revestimiento porcelanico"] },
   { id: "porcelain", role: "attribute", aliases: ["porcelanico", "porcelanica"] },
   { id: "flooring", role: "primary", aliases: ["pavimento", "suelo laminado", "suelo ceramico", "tarima"] },
   { id: "skirting", role: "primary", aliases: ["rodapie"] },
   { id: "paint", role: "primary", aliases: ["pintura"] },
-  { id: "primer", role: "primary", aliases: ["imprimacion", "fijador", "sellador de paredes"] },
+  { id: "primer", role: "primary", aliases: ["imprimacion", "fondo fijador", "sellador de paredes"] },
   { id: "putty", role: "primary", aliases: ["masilla"] },
   { id: "masking", role: "primary", aliases: ["cinta de enmascarar", "plastico protector"] },
   { id: "painting_tools", role: "primary", aliases: ["rodillo", "rodillos", "brocha", "brochas", "cubeta", "cubetas"] },
@@ -77,8 +77,9 @@ const CONCEPT_GROUPS: ConceptGroup[] = [
 
 const ACCESSORY_WORDS = new Set([
   "adaptador", "broca", "codo", "espátula", "espatula", "herramienta",
-  "llana", "malla", "paleta", "punta", "recambio", "refuerzo", "repuesto",
-  "soporte", "te", "tee", "tes", "tornillo", "tornillos",
+  "elevador", "llana", "malla", "manguito", "paleta", "punta", "recambio",
+  "refuerzo", "repuesto", "soporte", "te", "tee", "tes", "tornillo",
+  "tornillos",
 ]);
 
 const TOKEN_STOP_WORDS = new Set([
@@ -207,10 +208,23 @@ function extractMortarGrade(value: string): number | null {
   return Number.isFinite(grade) ? grade : null;
 }
 
-function hasRequiredFinish(requestedName: string, candidateName: string) {
+function hasRequiredAttributes(requestedName: string, candidateName: string) {
   const requested = normalizeCommercialMatchText(requestedName);
   const candidate = normalizeCommercialMatchText(candidateName);
-  if (/\blacad[oa]\b/.test(requested) && !/\blacad[oa]\b/.test(candidate)) return false;
+  const requirements = [
+    { requested: /\blacad[oa]\b/, candidate: /\blacad[oa]\b/ },
+    { requested: /\bcompact[oa]\b/, candidate: /\bcompact[oa]\b/ },
+    { requested: /\b(?:salida\s+)?dual\b/, candidate: /\b(?:salida\s+)?dual\b/ },
+    { requested: /\bfrontal\b/, candidate: /\bfrontal\b/ },
+    { requested: /\bresina\b/, candidate: /\bresina\b/ },
+    { requested: /\bantideslizante\b/, candidate: /\b(?:antideslizante|antislip)\b/ },
+    { requested: /\bsanitari[oa]\b/, candidate: /\b(?:sanitari[oa]|banos?|cocinas?)\b/ },
+    { requested: /\bmate\b/, candidate: /\bmate\b/ },
+    { requested: /\bblanc[oa]\b/, candidate: /\bblanc[oa]\b/ },
+  ];
+  if (requirements.some((requirement) => requirement.requested.test(requested) && !requirement.candidate.test(candidate))) {
+    return false;
+  }
   return true;
 }
 
@@ -324,18 +338,18 @@ export function evaluateCommercialProductMatch(
   // A slash in a technical line denotes an unresolved choice (for example,
   // ceramic/laminate flooring), not an exact commercial specification.
   const requestVariantIsDefined = !input.requestedName.includes("/");
-  const finishCompatible = hasRequiredFinish(input.requestedName, input.candidateName);
+  const attributesCompatible = hasRequiredAttributes(input.requestedName, input.candidateName);
   const groupIdentity = (requiredGroups.length > 0
     ? requiredGroups.every((group) => candidateGroupIds.has(group.id))
     : compactRequested.includes(compactCandidate) || compactCandidate.includes(compactRequested) || tokenCoverage >= 0.6)
     && !hasConflictingPrimary
     && mortarGradeCompatible
     && requestVariantIsDefined
-    && finishCompatible;
+    && attributesCompatible;
   const identityCompatible = groupIdentity && (tokenCoverage >= 0.2 || requiredGroups.length > 0);
   if (!identityCompatible) {
     reasons.push(
-      hasConflictingPrimary || !mortarGradeCompatible || !requestVariantIsDefined || !finishCompatible
+      hasConflictingPrimary || !mortarGradeCompatible || !requestVariantIsDefined || !attributesCompatible
         ? "La variante o resistencia del producto no coincide con la solicitada"
         : "El producto no corresponde al concepto solicitado",
     );

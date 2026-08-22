@@ -91,6 +91,13 @@ const PROVIDERS = {
         subcategory: "placas_de_yeso",
       },
       {
+        key: "perfiles_yeso",
+        name: "OBRAMAT · Perfiles para placas de yeso",
+        url: "https://www.obramat.es/materiales-de-construccion/tabiques-y-techos-continuos/perfiles-pladur/?p=1",
+        category: "material",
+        subcategory: "perfiles_de_yeso",
+      },
+      {
         key: "aislamiento",
         name: "OBRAMAT · Aislamiento térmico",
         url: "https://www.obramat.es/materiales-de-construccion/aislamientos/aislante-termico/",
@@ -119,11 +126,165 @@ const PROVIDERS = {
         subcategory: "griferia",
       },
       {
+        key: "griferia_ducha",
+        name: "OBRAMAT · Grifería de ducha",
+        url: "https://www.obramat.es/banos/grifos-de-bano/grifos-de-ducha/",
+        category: "fontaneria",
+        subcategory: "griferia",
+      },
+      {
+        key: "lavabos",
+        name: "OBRAMAT · Lavabos",
+        url: "https://www.obramat.es/banos/lavabos/",
+        category: "sanitarios",
+        subcategory: "lavabos",
+      },
+      {
+        key: "inodoros",
+        name: "OBRAMAT · Inodoros",
+        url: "https://www.obramat.es/banos/wc/inodoros/",
+        category: "sanitarios",
+        subcategory: "inodoros",
+      },
+      {
+        key: "platos_ducha",
+        name: "OBRAMAT · Platos de ducha",
+        url: "https://www.obramat.es/banos/platos-de-ducha/",
+        category: "sanitarios",
+        subcategory: "platos_de_ducha",
+      },
+      {
+        key: "mamparas_frontales",
+        name: "OBRAMAT · Mamparas frontales de ducha",
+        url: "https://www.obramat.es/banos/mamparas-de-ducha/mampara-de-ducha-frontal/",
+        category: "sanitarios",
+        subcategory: "mamparas",
+      },
+      {
+        key: "multicapa",
+        name: "OBRAMAT · Tubería y accesorios multicapa",
+        url: "https://www.obramat.es/fontaneria/alimentacion-de-agua/multicapa/?p=1",
+        category: "fontaneria",
+        subcategory: "multicapa",
+      },
+      {
+        key: "colectores",
+        name: "OBRAMAT · Colectores de agua",
+        url: "https://www.obramat.es/fontaneria/alimentacion-de-agua/colectores/?p=1",
+        category: "fontaneria",
+        subcategory: "colectores",
+      },
+      {
+        key: "llaves_paso",
+        name: "OBRAMAT · Llaves de paso y corte",
+        url: "https://www.obramat.es/fontaneria/alimentacion-de-agua/llaves-de-paso/?p=1",
+        category: "fontaneria",
+        subcategory: "llaves_de_paso",
+      },
+      {
+        key: "pvc_evacuacion",
+        name: "OBRAMAT · Tubería PVC de evacuación",
+        url: "https://www.obramat.es/fontaneria/evacuacion-de-agua/tuberia-pvc/",
+        category: "fontaneria",
+        subcategory: "pvc_evacuacion",
+      },
+      {
+        key: "sifones_valvulas",
+        name: "OBRAMAT · Sifones y válvulas",
+        url: "https://www.obramat.es/fontaneria/evacuacion-de-agua/sifones-y-valvulas/",
+        category: "fontaneria",
+        subcategory: "sifones_y_valvulas",
+      },
+      {
+        key: "cables",
+        name: "OBRAMAT · Cables y mangueras",
+        url: "https://www.obramat.es/electricidad/cables-y-mangueras/?page=1",
+        category: "electricidad",
+        subcategory: "cables",
+      },
+      {
+        key: "cuadros_electricos",
+        name: "OBRAMAT · Cuadros eléctricos",
+        url: "https://www.obramat.es/electricidad/cajas-distribucion/cuadros-electricos/",
+        category: "electricidad",
+        subcategory: "cuadros_electricos",
+      },
+      {
+        key: "mecanismos_empotrar",
+        name: "OBRAMAT · Mecanismos eléctricos de empotrar",
+        url: "https://www.obramat.es/electricidad/mecanismos/mecanismos-de-empotrar/",
+        category: "electricidad",
+        subcategory: "mecanismos_electricos",
+      },
+      {
+        key: "cementos_cola",
+        name: "OBRAMAT · Cementos cola",
+        url: "https://www.obramat.es/ceramica/colocacion-y-acabado/cementos-cola/",
+        category: "material",
+        subcategory: "cementos_cola",
+      },
+      {
+        key: "suelos_porcelanicos",
+        name: "OBRAMAT · Suelos porcelánicos",
+        url: "https://www.obramat.es/ceramica/suelos-ceramicos/suelos-porcelanicos/",
+        category: "revestimiento",
+        subcategory: "suelos_porcelanicos",
+      },
+      {
         key: "pintura",
         name: "OBRAMAT · Pintura interior",
         url: "https://www.obramat.es/pintura-y-drogueria/pintura-interior/pinturas-paredes-y-techos/pintura-interior-blanca/",
         category: "material",
         subcategory: "pintura",
+      },
+      {
+        key: "imprimaciones",
+        name: "OBRAMAT · Imprimaciones",
+        url: "https://www.obramat.es/pintura-y-drogueria/preparacion-de-soportes-y-reparacion/imprimaciones/",
+        category: "material",
+        subcategory: "imprimaciones",
+      },
+      {
+        key: "masillas_reparacion",
+        name: "OBRAMAT · Masillas de reparación",
+        url: "https://www.obramat.es/pintura-y-drogueria/preparacion-de-soportes-y-reparacion/soluciones-reparacion/",
+        category: "material",
+        subcategory: "masillas",
+      },
+      {
+        key: "plasticos_protectores",
+        name: "OBRAMAT · Plásticos protectores",
+        url: "https://www.obramat.es/pintura-y-drogueria/proteccion-antes-de-pintar/plasticos-protectores/?p=1",
+        category: "material",
+        subcategory: "proteccion_pintura",
+      },
+      {
+        key: "cintas_pintor",
+        name: "OBRAMAT · Cintas de pintor",
+        url: "https://www.obramat.es/pintura-y-drogueria/proteccion-antes-de-pintar/cintas-de-pintor/",
+        category: "material",
+        subcategory: "proteccion_pintura",
+      },
+      {
+        key: "brochas",
+        name: "OBRAMAT · Brochas",
+        url: "https://www.obramat.es/herramientas/herramientas-de-pintura/brochas/",
+        category: "herramienta",
+        subcategory: "herramientas_de_pintura",
+      },
+      {
+        key: "rodillos",
+        name: "OBRAMAT · Rodillos",
+        url: "https://www.obramat.es/herramientas/herramientas-de-pintura/rodillos/",
+        category: "herramienta",
+        subcategory: "herramientas_de_pintura",
+      },
+      {
+        key: "siliconas",
+        name: "OBRAMAT · Siliconas",
+        url: "https://www.obramat.es/pintura-y-drogueria/espumas-siliconas-y-selladores/siliconas/",
+        category: "material",
+        subcategory: "siliconas_y_selladores",
       },
     ],
   },
@@ -871,11 +1032,21 @@ async function main() {
   );
 
   let results;
+  const blockedProviders = new Set();
   try {
     results = await mapWithConcurrency(
       tasks,
       providerKeys.includes("obramat") ? 1 : options.concurrency,
       async ({ provider, category }) => {
+        if (blockedProviders.has(provider.key)) {
+          return {
+            provider: provider.name,
+            category: category.name,
+            ok: false,
+            skipped: true,
+            error: "Categoría omitida tras el bloqueo previo del proveedor",
+          };
+        }
         try {
           const scraped = await scrapeCategory(
             browser,
@@ -901,6 +1072,9 @@ async function main() {
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);
+          if (/pantalla de bloqueo/i.test(message)) {
+            blockedProviders.add(provider.key);
+          }
           console.error(`[${category.name}] ERROR: ${message}`);
           return {
             provider: provider.name,

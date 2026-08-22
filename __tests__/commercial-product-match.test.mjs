@@ -53,6 +53,39 @@ test("three-dimensional catalogue formats expose their thickness", () => {
   assert.equal(result.isExact, true);
 });
 
+test("recognizes official supplier synonyms while preserving exact dimensions", () => {
+  const profile = evaluateCommercialProductMatch({
+    requestedName: "Perfil metálico para Pladur (montante 48mm)",
+    candidateName: "MONTANTE PLACO 48 MM 2.7M",
+    requestedUnit: "ud",
+    candidateUnit: "ud",
+    referenceUnitPrice: 3.2,
+    candidateUnitPrice: 3.62,
+  });
+  assert.equal(profile.isExact, true);
+
+  const wrongProfile = evaluateCommercialProductMatch({
+    requestedName: "Perfil metálico para Pladur (montante 48mm)",
+    candidateName: "MONTANTE PLACO 70 MM 3 M",
+    requestedUnit: "ud",
+    candidateUnit: "ud",
+    referenceUnitPrice: 3.2,
+    candidateUnitPrice: 3.62,
+  });
+  assert.equal(wrongProfile.isExact, false);
+  assert.equal(wrongProfile.formatCompatible, false);
+
+  const drain = evaluateCommercialProductMatch({
+    requestedName: "Tubería PVC evacuación 110mm (3m)",
+    candidateName: "TUBO 110MM 3M PVC COMPACTO",
+    requestedUnit: "ud",
+    candidateUnit: "ud",
+    referenceUnitPrice: 8.5,
+    candidateUnitPrice: 12.9,
+  });
+  assert.equal(drain.isExact, true);
+});
+
 test("tools and accessories cannot impersonate the requested construction product", () => {
   const profile = evaluateCommercialProductMatch({
     requestedName: "Perfil metalico para Pladur (montante 48mm)",
@@ -108,6 +141,38 @@ test("a melamine door is not presented as the requested lacquered finish", () =>
   });
   assert.equal(result.identityCompatible, false);
   assert.equal(result.isExact, false);
+});
+
+test("critical sanitary attributes must be visible in the commercial product", () => {
+  const elevatedSeat = evaluateCommercialProductMatch({
+    requestedName: "Inodoro compacto salida dual",
+    candidateName: "Elevador inodoro con tapa",
+    requestedUnit: "ud",
+    candidateUnit: "ud",
+    referenceUnitPrice: 155,
+    candidateUnitPrice: 36,
+  });
+  const genericTray = evaluateCommercialProductMatch({
+    requestedName: "Plato de ducha resina antideslizante",
+    candidateName: "Kit plato de ducha Basic Duo",
+    requestedUnit: "ud",
+    candidateUnit: "ud",
+    referenceUnitPrice: 195,
+    candidateUnitPrice: 89,
+  });
+  const genericScreen = evaluateCommercialProductMatch({
+    requestedName: "Mampara de ducha frontal",
+    candidateName: "Mamparas",
+    requestedUnit: "ud",
+    candidateUnit: "ud",
+    referenceUnitPrice: 220,
+    candidateUnitPrice: 140,
+  });
+
+  assert.equal(elevatedSeat.isExact, false);
+  assert.equal(elevatedSeat.accessoryCompatible, false);
+  assert.equal(genericTray.isExact, false);
+  assert.equal(genericScreen.isExact, false);
 });
 
 test("a component price cannot replace a complete electrical panel or bathroom set", () => {

@@ -6,6 +6,58 @@ const GENERIC_SEARCH_WORDS = new Set([
   "instalacion", "colocacion", "completo", "completa", "juego", "varios",
 ]);
 
+interface CatalogSearchRule {
+  matches: (normalizedName: string) => boolean;
+  alternatives: string[][];
+}
+
+// Technical budgets and supplier catalogues frequently name the same product
+// with different trade terms. These groups only broaden candidate retrieval;
+// the strict matcher still has to prove identity, measurements, sale unit and
+// price scale before ENLAZE can mark a price as verified.
+const CATALOG_SEARCH_RULES: CatalogSearchRule[] = [
+  {
+    matches: (name) => /\b(perfil|montante)\b/.test(name) && /\b(pladur|placo|yeso)\b/.test(name),
+    alternatives: [["montante"], ["perfil", "placo"]],
+  },
+  {
+    matches: (name) => /\b(tuberia|tubo)\b/.test(name) && /\bmulticapa\b/.test(name),
+    alternatives: [["tubo", "multicapa"], ["multicapa"]],
+  },
+  {
+    matches: (name) => /\bpvc\b/.test(name) && /\b(evacuacion|desague)\b/.test(name),
+    alternatives: [["tubo", "pvc"], ["pvc", "compacto"]],
+  },
+  {
+    matches: (name) => /\bcable\b/.test(name) && /\bh07/.test(name),
+    alternatives: [["h07v"], ["cable", "h07"]],
+  },
+  {
+    matches: (name) => /\b(azulejo|baldosa|revestimiento)\b/.test(name) && /\bporcelanic/.test(name),
+    alternatives: [["revestimiento", "porcelanico"], ["porcelanico"]],
+  },
+  {
+    matches: (name) => /\bimprimacion\b/.test(name),
+    alternatives: [["imprimacion"], ["fijador"]],
+  },
+  {
+    matches: (name) => /\binodoro\b/.test(name),
+    alternatives: [["inodoro"], ["wc", "compacto"]],
+  },
+  {
+    matches: (name) => /\bplato\b/.test(name) && /\bducha\b/.test(name),
+    alternatives: [["plato", "ducha"], ["plato", "resina"]],
+  },
+  {
+    matches: (name) => /\bmampara\b/.test(name),
+    alternatives: [["mampara"], ["mampara", "frontal"]],
+  },
+  {
+    matches: (name) => /\bsilicona\b/.test(name),
+    alternatives: [["silicona", "neutra"], ["silicona"]],
+  },
+];
+
 /**
  * Produces a small, supplier-agnostic token set for one technical material.
  * Each material gets its own catalogue query so a 40k-row bank is not reduced
@@ -20,11 +72,29 @@ export function buildCatalogSearchTokens(materialName: string, limit = 3) {
   )).slice(0, limit);
 }
 
+export function buildCatalogSearchTokenGroups(materialName: string) {
+  const normalizedName = normalizeMaterialName(materialName);
+  const groups = [buildCatalogSearchTokens(materialName)];
+  for (const rule of CATALOG_SEARCH_RULES) {
+    if (rule.matches(normalizedName)) groups.push(...rule.alternatives);
+  }
+
+  const unique = new Map<string, string[]>();
+  for (const group of groups) {
+    const normalizedGroup = Array.from(new Set(group.filter(Boolean)));
+    if (normalizedGroup.length > 0) {
+      unique.set(normalizedGroup.join("|"), normalizedGroup);
+    }
+  }
+  return Array.from(unique.values());
+}
+
 export function buildUniqueCatalogTokenGroups(materialNames: string[]) {
   const groups = new Map<string, string[]>();
   for (const materialName of materialNames) {
-    const tokens = buildCatalogSearchTokens(materialName);
-    if (tokens.length > 0) groups.set(tokens.join("|"), tokens);
+    for (const tokens of buildCatalogSearchTokenGroups(materialName)) {
+      groups.set(tokens.join("|"), tokens);
+    }
   }
   return Array.from(groups.values());
 }

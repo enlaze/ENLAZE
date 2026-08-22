@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildCatalogSearchTokens,
+  buildCatalogSearchTokenGroups,
   buildUniqueCatalogTokenGroups,
 } from "../lib/price-catalog-search.ts";
 import { resolveForConcept } from "../lib/price-resolver-v2.ts";
@@ -23,9 +24,38 @@ test("catalogue searches remain independent and deduplicate equal requests", () 
     "Placa de yeso laminado 13mm",
     "Tubería PVC evacuación 110mm",
   ]);
-  assert.equal(groups.length, 2);
+  assert.equal(groups.length, 4);
   assert.deepEqual(groups[0], ["placa", "yeso", "laminado"]);
   assert.deepEqual(groups[1], ["tuberia", "evacuacion", "110mm"]);
+  assert.deepEqual(groups[2], ["tubo", "pvc"]);
+  assert.deepEqual(groups[3], ["pvc", "compacto"]);
+});
+
+test("catalogue search adds supplier synonyms without weakening exact validation", () => {
+  assert.deepEqual(
+    buildCatalogSearchTokenGroups("Perfil metálico para Pladur (montante 48mm)"),
+    [
+      ["perfil", "metalico", "pladur"],
+      ["montante"],
+      ["perfil", "placo"],
+    ],
+  );
+  assert.deepEqual(
+    buildCatalogSearchTokenGroups("Imprimación fijadora (15L)"),
+    [
+      ["imprimacion", "fijadora"],
+      ["imprimacion"],
+      ["fijador"],
+    ],
+  );
+  assert.deepEqual(
+    buildCatalogSearchTokenGroups("Silicona neutra sanitaria (cartucho 300ml)"),
+    [
+      ["silicona", "neutra", "sanitaria"],
+      ["silicona", "neutra"],
+      ["silicona"],
+    ],
+  );
 });
 
 test("equivalent commercial matches prefer the traceable supplier product", () => {
