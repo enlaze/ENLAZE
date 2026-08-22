@@ -31,7 +31,7 @@ import type {
   ResolutionPriorityLevel,
 } from "./types/price-bank";
 import { calculateEffectiveCost } from "./effective-cost";
-import { normalizeMaterialName } from "./price-resolver";
+import { normalizeMaterialName, normalizeUnit } from "./price-resolver";
 import { evaluateCommercialProductMatch } from "./commercial-product-match";
 
 export { DEFAULT_PRIORITY_ORDER } from "./types/price-bank";
@@ -267,6 +267,47 @@ function technicalMaterialMatchScore(a: string, b: string): number {
 
 function fuzzyMatch(a: string, b: string): boolean {
   return technicalMaterialMatchScore(a, b) >= 0.5;
+}
+
+function technicalUnitCompatible(requestedUnit: string, candidateUnit: string): boolean {
+  const normalizeTechnicalUnit = (value: string) => {
+    const normalized = normalizeUnit(value);
+    if (normalized === "m") return "ml";
+    if (normalized === "u" || normalized === "un") return "ud";
+    return normalized;
+  };
+  return normalizeTechnicalUnit(requestedUnit) === normalizeTechnicalUnit(candidateUnit);
+}
+
+function technicalPriceCompatible(
+  referenceUnitPrice: number | undefined,
+  candidateUnitPrice: number,
+): boolean {
+  const reference = Number(referenceUnitPrice);
+  const candidate = Number(candidateUnitPrice);
+  if (!(reference > 0) || !(candidate > 0)) return candidate > 0;
+  const ratio = candidate / reference;
+  // A much larger/smaller value nearly always means that the BC3 line uses a
+  // package, assembly or total-price unit that was not represented correctly.
+  return ratio >= 0.25 && ratio <= 4;
+}
+
+function bestTechnicalMatch(
+  input: ResolveConceptInput,
+  candidates: TechnicalPriceRow[],
+  isPrivate: boolean,
+): TechnicalPriceRow | undefined {
+  return candidates
+    .filter((candidate) =>
+      candidate.is_private === isPrivate
+      && technicalUnitCompatible(input.unit, candidate.unit)
+      && technicalPriceCompatible(input.reference_unit_price, candidate.unit_price)
+      && technicalMaterialMatchScore(candidate.name, input.concept_name) >= 0.65
+    )
+    .sort((left, right) =>
+      technicalMaterialMatchScore(right.name, input.concept_name)
+      - technicalMaterialMatchScore(left.name, input.concept_name)
+    )[0];
 }
 
 function commercialProductMatchEvaluation(
@@ -509,9 +550,7 @@ function tryProviderUpdated(
 function tryPrivateBC3(
   input: ResolveConceptInput, data: PrefetchedPriceData, now: string
 ): Omit<PriceResolutionResult, "alternatives" | "warnings"> | null {
-  const match = data.technical_prices.find(
-    (p) => p.is_private && fuzzyMatch(p.name, input.concept_name)
-  );
+  const match = bestTechnicalMatch(input, data.technical_prices, true);
   if (!match) return null;
   return {
     concept_id: null, concept_name: input.concept_name,
@@ -529,9 +568,7 @@ function tryPrivateBC3(
 function tryTechnicalBank(
   input: ResolveConceptInput, data: PrefetchedPriceData, now: string
 ): Omit<PriceResolutionResult, "alternatives" | "warnings"> | null {
-  const match = data.technical_prices.find(
-    (p) => !p.is_private && fuzzyMatch(p.name, input.concept_name)
-  );
+  const match = bestTechnicalMatch(input, data.technical_prices, false);
   if (!match) return null;
   return {
     concept_id: null, concept_name: input.concept_name,
@@ -552,6 +589,8 @@ function tryEnlazeBase(
 ): Omit<PriceResolutionResult, "alternatives" | "warnings"> | null {
   const match = data.enlaze_prices.find((p) =>
     fuzzyMatch(p.name, input.concept_name)
+    && technicalUnitCompatible(input.unit, p.unit)
+    && technicalPriceCompatible(input.reference_unit_price, p.unit_price)
   );
   if (!match) return null;
   return {

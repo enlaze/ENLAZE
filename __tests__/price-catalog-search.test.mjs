@@ -96,3 +96,35 @@ test("commercial matching rejects products whose price unit cannot be compared",
   assert.equal(result.alternatives.length, 0);
   assert.equal(result.source_type, "estimated");
 });
+
+test("technical banks reject incompatible units and implausible unit-price scales", () => {
+  const context = { company_id: "company", province: "", quality_tier: "media" };
+  const baseData = {
+    current_prices: [], manual_prices: [], historical_prices: [], enlaze_prices: [],
+  };
+  const technical = (name, unit, unit_price) => ({
+    name, unit, unit_price, item_code: name, confidence_score: 0.8,
+    source: "enlaze_base", region: "espana", is_private: false,
+  });
+
+  const incompatibleUnit = resolveForConcept(
+    { concept_name: "Mobiliario de cocina", category: "cocina", unit: "ml", quantity: 7, reference_unit_price: 720 },
+    context,
+    { ...baseData, technical_prices: [technical("Mobiliario de cocina", "PA", 5500)] },
+  );
+  assert.equal(incompatibleUnit.source_type, "estimated");
+
+  const implausibleScale = resolveForConcept(
+    { concept_name: "Mecanismos eléctricos", category: "electricidad", unit: "ud", quantity: 112, reference_unit_price: 24 },
+    context,
+    { ...baseData, technical_prices: [technical("Mecanismos eléctricos", "ud", 220)] },
+  );
+  assert.equal(implausibleScale.source_type, "estimated");
+
+  const compatible = resolveForConcept(
+    { concept_name: "Cuadro eléctrico y protecciones", category: "electricidad", unit: "ud", quantity: 1, reference_unit_price: 220 },
+    context,
+    { ...baseData, technical_prices: [technical("Cuadro eléctrico y protecciones", "ud", 220)] },
+  );
+  assert.equal(compatible.source_type, "technical_bank");
+});
