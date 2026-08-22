@@ -25,6 +25,7 @@ import { buildUniqueCatalogTokenGroups } from "@/lib/price-catalog-search";
 import { canonicalProviderName, providerIdentitySlug } from "@/lib/provider-identity";
 import { isProductSpecificSourceUrl } from "@/lib/commercial-product-match";
 import { hasVerifiedCatalogEvidence } from "@/lib/price-traceability";
+import { preferTraceableCommercialAlternative } from "@/lib/price-resolution-selection";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -543,7 +544,7 @@ export async function POST(request: Request) {
         const selectedConfidence = selectedEvidence?.verified
           ? Math.max(r.confidence_score, 0.82)
           : r.confidence_score;
-        return {
+        const rawResolved: ResolvedPrice = {
           materialName: materials[idx].materialName,
           normalizedName: normalizeMaterialName(materials[idx].materialName),
           selectedProductName: r.product_name || undefined,
@@ -566,6 +567,7 @@ export async function POST(request: Request) {
           deliveryDays: selectedAlternative?.delivery_days ?? undefined,
           matchScore: selectedAlternative?.match_score,
           matchIssues: selectedAlternative?.match_issues || [],
+          unitsPerPackage: selectedAlternative?.units_per_package,
           evidenceVerified: selectedEvidence?.verified || false,
           evidenceType: selectedEvidence?.evidenceType || undefined,
           evidenceVerification: selectedEvidence?.verification || undefined,
@@ -591,12 +593,14 @@ export async function POST(request: Request) {
               checkedAt: a.checked_at || evidence?.observedAt || undefined,
               matchScore: a.match_score,
               matchIssues: a.match_issues || [],
+              unitsPerPackage: a.units_per_package,
               evidenceVerified: evidence?.verified || false,
               evidenceType: evidence?.evidenceType || undefined,
               evidenceVerification: evidence?.verification || undefined,
             };
           }),
         };
+        return preferTraceableCommercialAlternative(rawResolved, materials[idx]);
       });
 
       const sourceCounts = v2Result.summary.by_source;

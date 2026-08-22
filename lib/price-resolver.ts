@@ -54,6 +54,7 @@ export interface PriceAlternative {
   checkedAt?: string;
   matchScore?: number;
   matchIssues?: string[];
+  unitsPerPackage?: number;
   evidenceVerified?: boolean;
   evidenceType?: string;
   evidenceVerification?: string;
@@ -83,6 +84,7 @@ export interface ResolvedPrice {
   alternatives: PriceAlternative[];
   matchScore?: number;
   matchIssues?: string[];
+  unitsPerPackage?: number;
   evidenceVerified?: boolean;
   evidenceType?: string;
   evidenceVerification?: string;
