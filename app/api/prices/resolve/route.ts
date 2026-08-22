@@ -240,14 +240,13 @@ export async function POST(request: Request) {
           const rowsById = new Map<string, Record<string, unknown>>();
           const searchController = new AbortController();
           const searchTimeout = setTimeout(() => searchController.abort(), 18_000);
-          // Keep concurrency deliberately low: broad catalogue lookups are
-          // independent, but overloading PostgREST makes valid result sets
-          // disappear intermittently. Semantic ranking happens afterwards.
+          // Full-text AND queries keep candidate sets small enough for strict
+          // semantic validation without scanning/ranking thousands of rows.
           try {
-            for (let start = 0; start < trackerTokenGroups.length; start += 4) {
+            for (let start = 0; start < trackerTokenGroups.length; start += 6) {
               if (searchController.signal.aborted) break;
               const groupResults = await Promise.all(
-                trackerTokenGroups.slice(start, start + 4).map((tokens) =>
+                trackerTokenGroups.slice(start, start + 6).map((tokens) =>
                   trackerDb
                     .from("pb_products")
                     .select(`
@@ -266,11 +265,11 @@ export async function POST(request: Request) {
                     .gt("unit_price", 0)
                     // Uses idx_pb_products_name_fts instead of a leading-wildcard
                     // ILIKE scan over the complete supplier catalogue.
-                    .textSearch("commercial_name", tokens.join(" OR "), {
+                    .textSearch("commercial_name", tokens.join(" "), {
                       config: "spanish",
                       type: "websearch",
                     })
-                    .limit(300)
+                    .limit(80)
                     .abortSignal(searchController.signal)
                 ),
               );
@@ -316,11 +315,11 @@ export async function POST(request: Request) {
                     // schema, which has no company_id column.
                     .select("name, item_code, unit, unit_price, confidence_score, source, region")
                     .eq("is_active", true)
-                    .textSearch("name", tokens.join(" OR "), {
+                    .textSearch("name", tokens.join(" "), {
                       config: "spanish",
                       type: "websearch",
                     })
-                    .limit(120)
+                    .limit(80)
                     .abortSignal(searchController.signal)
                 ),
               );

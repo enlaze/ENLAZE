@@ -87,9 +87,9 @@ test("V2 price queries include shared and company-owned providers", () => {
 
 test("catalogue candidate search limits before semantic ranking without sorting the full bank", () => {
   const route = readFileSync("app/api/prices/resolve/route.ts", "utf8");
-  assert.match(route, /trackerTokenGroups\.length; start \+= 4/);
-  assert.match(route, /\.textSearch\("commercial_name", tokens\.join\(" OR "\)/);
-  assert.match(route, /\.limit\(300\)/);
+  assert.match(route, /trackerTokenGroups\.length; start \+= 6/);
+  assert.match(route, /\.textSearch\("commercial_name", tokens\.join\(" "\)/);
+  assert.match(route, /\.limit\(80\)/);
   assert.doesNotMatch(route, /\.textSearch\("commercial_name"[\s\S]{0,250}\.order\("checked_at"/);
 });
 

@@ -53,9 +53,9 @@ test("recalculation does not load the complete joined current-price table", () =
 });
 
 test("commercial and BC3 candidate searches use their full-text indexes", () => {
-  assert.match(priceRoute, /\.textSearch\("commercial_name", tokens\.join\(" OR "\)/);
-  assert.match(priceRoute, /\.textSearch\("name", tokens\.join\(" OR "\)/);
-  assert.match(priceRoute, /\.limit\(120\)/);
+  assert.match(priceRoute, /\.textSearch\("commercial_name", tokens\.join\(" "\)/);
+  assert.match(priceRoute, /\.textSearch\("name", tokens\.join\(" "\)/);
+  assert.equal((priceRoute.match(/\.limit\(80\)/g) || []).length, 2);
   assert.doesNotMatch(priceRoute, /commercial_name\.ilike/);
   assert.doesNotMatch(priceRoute, /technical_price_items"\)[\s\S]{0,300}\.select\([^)]*company_id/);
 });
