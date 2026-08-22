@@ -18,7 +18,8 @@ interface TrackerRequest {
   error?: string | null;
 }
 
-const POLL_INTERVAL_MS = 5000;
+const ACTIVE_POLL_INTERVAL_MS = 5000;
+const IDLE_POLL_INTERVAL_MS = 60000;
 const TERMINAL_VISIBLE_MS = 12000;
 
 export default function PriceTrackerBackgroundStatus() {
@@ -50,13 +51,18 @@ export default function PriceTrackerBackgroundStatus() {
         if (response.status === 404) {
           activeRequestId.current = null;
           setRequest(null);
-          schedule(poll, POLL_INTERVAL_MS);
+          schedule(poll, IDLE_POLL_INTERVAL_MS);
           return;
         }
 
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || !payload?.request) {
-          schedule(poll, POLL_INTERVAL_MS);
+          activeRequestId.current = null;
+          setRequest(null);
+          schedule(
+            poll,
+            response.ok ? IDLE_POLL_INTERVAL_MS : ACTIVE_POLL_INTERVAL_MS
+          );
           return;
         }
 
@@ -68,7 +74,7 @@ export default function PriceTrackerBackgroundStatus() {
           nextRequest.status === "running"
         ) {
           activeRequestId.current = nextRequest.id;
-          schedule(poll, POLL_INTERVAL_MS);
+          schedule(poll, ACTIVE_POLL_INTERVAL_MS);
           return;
         }
 
@@ -79,7 +85,7 @@ export default function PriceTrackerBackgroundStatus() {
           poll();
         }, TERMINAL_VISIBLE_MS);
       } catch {
-        if (!disposed) schedule(poll, POLL_INTERVAL_MS);
+        if (!disposed) schedule(poll, ACTIVE_POLL_INTERVAL_MS);
       }
     };
 

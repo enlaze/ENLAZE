@@ -593,6 +593,8 @@ export default function PricesPage() {
         return;
       }
 
+      if (!payload?.request) return;
+
       const request = payload.request as N8nSyncRequest;
       if (request.status === "failed") {
         toast.error(request.error || "El último rastreo no pudo completarse");

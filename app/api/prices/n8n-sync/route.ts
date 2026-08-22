@@ -649,10 +649,7 @@ export async function GET(request: Request) {
   );
 
   if (!ownRequest) {
-    return NextResponse.json(
-      { error: "Solicitud no encontrada" },
-      { status: 404 }
-    );
+    return NextResponse.json({ ok: true, request: null });
   }
 
   if (isStaleRequest(ownRequest)) {
