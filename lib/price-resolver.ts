@@ -706,3 +706,90 @@ export async function resolveMarketPrices(
     window.clearTimeout(timeout);
   }
 }
+
+/**
+ * Resolve a large basket without forcing one server request to scan every
+ * technical term. Batches stay sequential to protect small Supabase compute
+ * plans from an IO/concurrency spike, while preserving the original material
+ * order required by the budget engine.
+ */
+export async function resolveMarketPricesBatched(
+  input: ResolveMarketPricesInput,
+  batchSize = 8,
+): Promise<ResolveMarketPricesResult> {
+  const safeBatchSize = Math.max(1, Math.min(20, Math.floor(batchSize) || 8));
+  if (input.materials.length <= safeBatchSize) {
+    return resolveMarketPrices(input);
+  }
+
+  const combined: ResolveMarketPricesResult = {
+    ok: true,
+    resolved: [],
+    summary: {
+      total: 0,
+      fromUserCatalog: 0,
+      fromEnlaze: 0,
+      fromN8n: 0,
+      fromWebSearch: 0,
+      fromCache: 0,
+      estimated: 0,
+      webSearchesPerformed: 0,
+      webSearchesSuccessful: 0,
+      tracker_products_available: 0,
+      tracker_candidates: 0,
+      avg_confidence: 0,
+      by_source: {},
+    },
+    cachedUntil: "",
+  };
+  let weightedConfidence = 0;
+  let confidenceItems = 0;
+
+  for (let start = 0; start < input.materials.length; start += safeBatchSize) {
+    const batch = input.materials.slice(start, start + safeBatchSize);
+    const result = await resolveMarketPrices({
+      ...input,
+      materials: batch,
+      timeoutMs: input.timeoutMs ?? 30_000,
+    });
+
+    if (!result.ok || result.resolved.length !== batch.length) {
+      return {
+        ...combined,
+        ok: false,
+        error: result.error || `El lote ${Math.floor(start / safeBatchSize) + 1} no devolvió todas las referencias.`,
+      };
+    }
+
+    combined.resolved.push(...result.resolved);
+    combined.summary.total += result.summary.total;
+    combined.summary.fromUserCatalog += result.summary.fromUserCatalog;
+    combined.summary.fromEnlaze += result.summary.fromEnlaze;
+    combined.summary.fromN8n += result.summary.fromN8n;
+    combined.summary.fromWebSearch += result.summary.fromWebSearch;
+    combined.summary.fromCache += result.summary.fromCache;
+    combined.summary.estimated += result.summary.estimated;
+    combined.summary.webSearchesPerformed += result.summary.webSearchesPerformed;
+    combined.summary.webSearchesSuccessful += result.summary.webSearchesSuccessful;
+    combined.summary.tracker_products_available = Math.max(
+      combined.summary.tracker_products_available || 0,
+      result.summary.tracker_products_available || 0,
+    );
+    combined.summary.tracker_candidates = (combined.summary.tracker_candidates || 0)
+      + (result.summary.tracker_candidates || 0);
+
+    if (typeof result.summary.avg_confidence === "number") {
+      weightedConfidence += result.summary.avg_confidence * result.summary.total;
+      confidenceItems += result.summary.total;
+    }
+    for (const [source, count] of Object.entries(result.summary.by_source || {})) {
+      combined.summary.by_source![source] = (combined.summary.by_source![source] || 0) + count;
+    }
+    if (result.cachedUntil > combined.cachedUntil) combined.cachedUntil = result.cachedUntil;
+  }
+
+  combined.summary.avg_confidence = confidenceItems > 0
+    ? weightedConfidence / confidenceItems
+    : 0;
+  return combined;
+}

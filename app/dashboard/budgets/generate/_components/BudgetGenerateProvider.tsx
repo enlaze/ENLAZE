@@ -29,7 +29,7 @@ import {
 } from "@/lib/budget-engine";
 import { buildDeterministicBudgetAnalysis } from "@/lib/budget-analysis-fallback";
 import {
-  resolveMarketPrices,
+  resolveMarketPricesBatched,
   type PriceAlternative,
   type QualityTier,
   type ResolvedPrice,
@@ -332,7 +332,7 @@ async function verifyMaterialsAgainstTracker(
     return { materials, verification: baseVerification };
   }
 
-  const priceResult = await resolveMarketPrices({
+  const priceResult = await resolveMarketPricesBatched({
     materials: includedProducts.map((material) => ({
       materialName: material.name,
       category: "material",
@@ -2029,7 +2029,7 @@ export function BudgetGenerateProvider({
       // showing one amount on screen while the background request later changes it.
       if (includedCommercialProducts.length > 0) {
         const qualityTier: QualityTier = (engineScope.calidad as QualityTier) || "media";
-        const priceResult = await resolveMarketPrices({
+        const priceResult = await resolveMarketPricesBatched({
           materials: includedCommercialProducts.map((material) => ({
             materialName: material.name,
             category: "material",
@@ -2134,7 +2134,7 @@ export function BudgetGenerateProvider({
       let verifiedPartidaCount = 0;
       if (finalPartidas.length > 0) {
         const qualityTier: QualityTier = (engineScope.calidad as QualityTier) || "media";
-        const partidasPriceResult = await resolveMarketPrices({
+        const partidasPriceResult = await resolveMarketPricesBatched({
           materials: finalPartidas.map((partida) => ({
             materialName: partida.concept,
             category: partida.chapter || partida.category || "otros",
