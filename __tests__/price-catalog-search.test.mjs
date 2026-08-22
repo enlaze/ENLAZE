@@ -58,6 +58,21 @@ test("catalogue search adds supplier synonyms without weakening exact validation
   );
 });
 
+test("atomic specifications keep compact supplier-language fallback searches", () => {
+  assert.deepEqual(
+    buildCatalogSearchTokenGroups("Mortero seco de cemento M-7.5 gris saco 25 kg").slice(-2),
+    [["mortero", "m7"], ["mortero", "seco"]],
+  );
+  assert.ok(
+    buildCatalogSearchTokenGroups("Suelo laminado AC5 10 mm acabado roble")
+      .some((tokens) => tokens.join(" ") === "laminado ac5 roble"),
+  );
+  assert.ok(
+    buildCatalogSearchTokenGroups("Puerta interior en block lacada blanca ciega 72.5 cm derecha")
+      .some((tokens) => tokens.join(" ") === "puerta 72 derecha"),
+  );
+});
+
 test("equivalent commercial matches prefer the traceable supplier product", () => {
   const base = {
     concept_id: null,
