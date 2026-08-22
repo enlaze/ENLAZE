@@ -49,6 +49,7 @@ const VALID_SECTORS = [
 interface IngestProduct extends ReliablePriceEvidenceProduct {
   name: string;
   unit?: string;
+  units_per_package?: number;
   category?: string;
   subcategory?: string;
   brand?: string;
@@ -396,6 +397,12 @@ export async function POST(request: Request) {
             commercial_name: existing.commercial_name,
             sector,
             unit_price: newPrice,
+            sale_unit: product.unit || "ud",
+            units_per_package:
+              Number.isFinite(Number(product.units_per_package))
+              && Number(product.units_per_package) > 0
+                ? Number(product.units_per_package)
+                : 1,
             vat_rate: product.vat_rate ?? 21,
             sku: product.sku,
             source_url: product.product_url,
@@ -444,6 +451,11 @@ export async function POST(request: Request) {
                     unit_price: product.price,
                     vat_rate: product.vat_rate ?? 21,
                     sale_unit: product.unit || "ud",
+                    units_per_package:
+                      Number.isFinite(Number(product.units_per_package))
+                      && Number(product.units_per_package) > 0
+                        ? Number(product.units_per_package)
+                        : 1,
                     category: product.category || "material",
                     subcategory: product.subcategory || "",
                     brand: product.brand || null,

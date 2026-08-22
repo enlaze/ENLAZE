@@ -231,6 +231,13 @@ const PROVIDERS = {
         subcategory: "suelos_porcelanicos",
       },
       {
+        key: "suelos_laminados",
+        name: "OBRAMAT · Suelos laminados",
+        url: "https://www.obramat.es/suelos-y-revestimientos-de-madera/suelos-laminados/todos-los-suelos-laminados/",
+        category: "revestimiento",
+        subcategory: "suelos_laminados",
+      },
+      {
         key: "pintura",
         name: "OBRAMAT · Pintura interior",
         url: "https://www.obramat.es/pintura-y-drogueria/pintura-interior/pinturas-paredes-y-techos/pintura-interior-blanca/",
@@ -276,6 +283,13 @@ const PROVIDERS = {
         key: "rodillos",
         name: "OBRAMAT · Rodillos",
         url: "https://www.obramat.es/herramientas/herramientas-de-pintura/rodillos/",
+        category: "herramienta",
+        subcategory: "herramientas_de_pintura",
+      },
+      {
+        key: "cubetas_pintor",
+        name: "OBRAMAT · Cubos y cubetas de pintor",
+        url: "https://www.obramat.es/herramientas/herramientas-de-pintura/cubos-y-cubetas-pintor/",
         category: "herramienta",
         subcategory: "herramientas_de_pintura",
       },
@@ -579,7 +593,7 @@ async function extractProducts(page, provider, category) {
         return candidates[0] || "";
       }
 
-      function getPriceEvidence(card) {
+      function getPriceEvidence(card, name) {
         const text = clean(card.innerText || card.textContent);
         const matches = Array.from(
           text.matchAll(
@@ -596,10 +610,23 @@ async function extractProducts(page, provider, category) {
             Math.max(0, match.index - 25),
             match.index + match.raw.length + 35
           );
-          return !/en lugar de|precio anterior|antes/i.test(surrounding);
+          return !/en lugar de|precio anterior|antes|IGIC|sin IVA|excluido/i.test(
+            surrounding
+          );
         });
 
         if (providerKey === "obramat") {
+          const normalizedName = clean(name).toLowerCase();
+          const requiresSquareMetrePrice =
+            /placa de yeso|suelo laminado|suelo porcelanico|revestimiento porcelanico|base aislante/.test(
+              normalizedName.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            );
+          if (requiresSquareMetrePrice) {
+            const squareMetrePrice = eligible.find((match) =>
+              /^(?:m²|m2)$/i.test(match.basis)
+            );
+            if (squareMetrePrice) return squareMetrePrice;
+          }
           return (
             eligible.find((match) => {
               const suffix = text.slice(
@@ -635,7 +662,7 @@ async function extractProducts(page, provider, category) {
         if (!card) continue;
 
         const name = getName(card, link);
-        const evidence = getPriceEvidence(card);
+        const evidence = getPriceEvidence(card, name);
         if (!name || !evidence) continue;
         const cardText = clean(card.innerText || card.textContent);
         const sellerMatch = cardText.match(

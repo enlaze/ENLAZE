@@ -29,7 +29,8 @@
     "import:authorized-supplier": "node scripts/import-authorized-supplier-feed.js",
     "obramat:catalog-check": "node scripts/check-obramat-catalog.js",
     "obramat:catalog-links": "node scripts/obramat-catalog-links.js",
-    "obramat:catalog-import": "node scripts/import-obramat-catalog.js"
+    "obramat:catalog-import": "node scripts/import-obramat-catalog.js",
+    "audit:atomic-coverage": "node --env-file-if-exists=.env.local --import tsx scripts/audit-atomic-material-coverage.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",

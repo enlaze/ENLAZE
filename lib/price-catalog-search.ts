@@ -113,8 +113,8 @@ const CATALOG_SEARCH_RULES: CatalogSearchRule[] = [
     alternatives: [["base", "suelo", "laminado"], ["base", "aislante", "5"]],
   },
   {
-    matches: (name) => /\brodapie\b/.test(name) && /\bmdf\b/.test(name),
-    alternatives: [["rodapie", "mdf"], ["rodapie", "blanco"]],
+    matches: (name) => /\brodapie/.test(name) && /\b(?:mdf|dm)\b/.test(name),
+    alternatives: [["rodapie", "mdf"], ["rodapie", "dm"], ["rodapie", "blanco"]],
   },
   {
     matches: (name) => /\bimprimacion\b/.test(name),

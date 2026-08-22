@@ -864,7 +864,7 @@ export function calculateItemCostBreakdown(
 
 // ─── D. Materials from Partidas ─────────────────────────────────────────────
 
-interface MaterialSpec {
+export interface MaterialSpec {
   id: string;
   name: string;
   specification: string;
@@ -876,10 +876,10 @@ interface MaterialSpec {
   chapter: string;
 }
 
-const MATERIAL_SPECS: MaterialSpec[] = [
+export const MATERIAL_SPECS: MaterialSpec[] = [
   // Albañilería: cada línea representa un formato comprable concreto.
   { id: "mortar-m75-25kg", name: "Mortero seco de cemento M-7.5 gris saco 25 kg", specification: "Clase M-7.5; color gris; envase de 25 kg", unit: "sacos", unit_price: 3.50, provider_id: "obramat", qtyFn: q => Math.ceil(q.partitionArea / 3), chapter: "albanileria" },
-  { id: "gypsum-standard-a-2000-1200-13", name: "Placa de yeso laminado estándar tipo A 2000x1200x13 mm", specification: "Tipo A estándar; 2000x1200 mm; espesor 13 mm", unit: "ud", unit_price: 9.80, provider_id: "obramat", qtyFn: q => Math.ceil(q.partitionArea * 1.1), chapter: "albanileria" },
+  { id: "gypsum-standard-a-2000-1200-13", name: "Placa de yeso laminado BA 2000x1200x13 mm", specification: "Placa BA estándar; 2000x1200 mm; espesor 13 mm; precio normalizado por m²", unit: "m2", unit_price: 2.81, provider_id: "obramat", qtyFn: q => Math.ceil(q.partitionArea * 1.1), chapter: "albanileria" },
   { id: "metal-stud-48-3000", name: "Montante metálico para placa de yeso 48 mm 3 m", specification: "Montante galvanizado; ancho 48 mm; longitud 3 m", unit: "ud", unit_price: 3.20, provider_id: "obramat", qtyFn: q => Math.ceil(q.partitionArea * 0.8), chapter: "albanileria" },
 
   // Fontanería: los antiguos lotes se descomponen en tubo, racores, llaves y desagües.
@@ -907,9 +907,9 @@ const MATERIAL_SPECS: MaterialSpec[] = [
   // Acabados: se elimina la alternativa cerámico/laminado y se define una solución completa.
   { id: "porcelain-wall-60-60", name: "Revestimiento porcelánico rectificado 60x60 cm mate", specification: "Porcelánico rectificado; formato 60x60 cm; acabado mate", unit: "m2", unit_price: 28.0, provider_id: "porcelanosa", qtyFn: q => Math.ceil(q.wetWallArea * 1.1), chapter: "revestimientos" },
   { id: "adhesive-c2te-25", name: "Adhesivo cementoso flexible C2TE gris saco 25 kg", specification: "Clasificación C2TE; color gris; saco de 25 kg", unit: "sacos", unit_price: 12.50, provider_id: "obramat", qtyFn: q => Math.ceil((q.wetWallArea + q.pavementArea) / 5), chapter: "revestimientos" },
-  { id: "laminate-ac5-oak-10", name: "Suelo laminado AC5 10 mm acabado roble", specification: "Clase de uso AC5; espesor 10 mm; acabado roble", unit: "m2", unit_price: 22.31, provider_id: "obramat", qtyFn: q => Math.ceil(q.pavementArea * 1.1), chapter: "pavimentos" },
+  { id: "laminate-ac5-oak-10", name: "Suelo laminado AC5 10 mm acabado roble", specification: "Clase de uso AC5; espesor 10 mm; acabado roble; precio normalizado por m²", unit: "m2", unit_price: 12.90, provider_id: "obramat", qtyFn: q => Math.ceil(q.pavementArea * 1.1), chapter: "pavimentos" },
   { id: "laminate-underlay-5", name: "Base aislante para suelo laminado 5 mm", specification: "Espesor 5 mm; apta para suelo laminado flotante", unit: "m2", unit_price: 3.40, provider_id: "obramat", qtyFn: q => Math.ceil(q.pavementArea * 1.1), chapter: "pavimentos" },
-  { id: "skirting-mdf-white-2200", name: "Rodapié MDF blanco 2200x70x9 mm", specification: "MDF melaminado blanco; longitud 2200 mm; altura 70 mm; espesor 9 mm", unit: "ud", unit_price: 4.20, provider_id: "obramat", qtyFn: q => Math.ceil((q.baseboardMlEstimated * 1.05) / 2.2), chapter: "rodapie" },
+  { id: "skirting-mdf-white-2200", name: "Pack 5 rodapiés DM melamina blanco 2200x70x9 mm", specification: "Pack de 5 piezas; DM melaminado blanco; 11 m lineales por pack; 2200x70x9 mm por pieza", unit: "lote", unit_price: 21.0, provider_id: "obramat", qtyFn: q => Math.ceil((q.baseboardMlEstimated * 1.05) / 11), chapter: "rodapie" },
 
   // Pintura: protección y herramientas dejan de ser lotes genéricos.
   { id: "paint-white-matt-15", name: "Pintura plástica blanca mate interior 15 L", specification: "Interior; color blanco; acabado mate; envase 15 L", unit: "cubos", unit_price: 37.0, provider_id: "obramat", qtyFn: q => Math.ceil((q.wallPaintArea + q.ceilingArea) / 80), chapter: "pintura" },
@@ -927,7 +927,7 @@ const MATERIAL_SPECS: MaterialSpec[] = [
   { id: "basin-mixer-chrome", name: "Grifo monomando de lavabo cromado", specification: "Monomando; instalación sobre lavabo; acabado cromado", unit: "ud", unit_price: 65.0, provider_id: "roca", qtyFn: q => q.bathroomsCount, chapter: "sanitarios" },
   { id: "shower-tray-resin-120-80", name: "Plato de ducha de resina antideslizante 120x80 cm blanco", specification: "Resina; 120x80 cm; antideslizante; color blanco", unit: "ud", unit_price: 295.0, provider_id: "roca", qtyFn: q => q.bathroomsCount, chapter: "sanitarios" },
   { id: "shower-screen-sliding-120", name: "Mampara frontal corredera 120 cm vidrio transparente", specification: "Frontal; corredera; ancho 120 cm; vidrio transparente", unit: "ud", unit_price: 320.0, provider_id: "roca", qtyFn: q => q.bathroomsCount, chapter: "sanitarios" },
-  { id: "shower-thermostatic-chrome", name: "Grifo termostático de ducha cromado", specification: "Termostático; instalación vista; acabado cromado", unit: "ud", unit_price: 185.0, provider_id: "roca", qtyFn: q => q.bathroomsCount, chapter: "sanitarios" },
+  { id: "shower-thermostatic-chrome", name: "Grifo termostático exterior de ducha cromado", specification: "Termostático; instalación vista/exterior; acabado cromado", unit: "ud", unit_price: 185.0, provider_id: "roca", qtyFn: q => q.bathroomsCount, chapter: "sanitarios" },
 
   // Carpintería: la hipótesis de mano se hace explícita y medible.
   { id: "door-block-white-725-left", name: "Puerta interior en block lacada blanca ciega 72.5 cm izquierda", specification: "Block completo; hoja ciega lacada blanca; ancho 72,5 cm; mano izquierda", unit: "ud", unit_price: 109.0, provider_id: "obramat", qtyFn: q => Math.ceil(q.doorsEstimated / 2), chapter: "carpinteria_interior" },

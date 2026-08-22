@@ -105,7 +105,7 @@ const UNIT_ALIASES: Record<string, string> = {
   "m²": "m2", "m2": "m2", "metros cuadrados": "m2", "metro cuadrado": "m2",
   "ml": "ml", "metros lineales": "ml", "metro lineal": "ml",
   "m³": "m3", "m3": "m3", "metros cubicos": "m3",
-  "ud": "ud", "uds": "ud", "unidad": "ud", "unidades": "ud",
+  "u": "ud", "ud": "ud", "uds": "ud", "unidad": "ud", "unidades": "ud",
   "saco": "saco", "sacos": "saco",
   "rollo": "rollo", "rollos": "rollo",
   "cubo": "cubo", "cubos": "cubo", "bote": "cubo", "botes": "cubo", "bidon": "cubo",
@@ -176,6 +176,26 @@ function extractMeasurements(value: string): Measurement[] {
           { kind: "thread", value: roundMeasurement(first), display: `${firstNumerator}/${firstDenominator}\"` },
           { kind: "thread", value: roundMeasurement(second), display: `${secondNumerator}/${secondDenominator}\"` },
         );
+      }
+      return " ";
+    },
+  );
+  // BC3 and product-page titles commonly spell plumbing threads as
+  // `1/2\"-3/8\"` rather than `1/2 x 3/8 pulgadas`. The quote characters are
+  // removed during normalization, so collect each remaining fraction after
+  // the compound form above has been consumed.
+  normalized = normalized.replace(
+    /\b(\d+)\s*\/\s*(\d+)\b/g,
+    (_match, numeratorRaw: string, denominatorRaw: string) => {
+      const numerator = Number(numeratorRaw);
+      const denominator = Number(denominatorRaw);
+      const value = numerator / denominator;
+      if (Number.isFinite(value) && denominator > 0) {
+        measurements.push({
+          kind: "thread",
+          value: roundMeasurement(value),
+          display: `${numeratorRaw}/${denominatorRaw}\"`,
+        });
       }
       return " ";
     },
@@ -268,7 +288,9 @@ function hasRequiredAttributes(requestedName: string, candidateName: string) {
     { requested: /\binterior\b/, candidate: /\binterior\b/ },
     { requested: /\bal\s+agua\b/, candidate: /\b(?:al\s+agua|base\s+agua|acuos[oa])\b/ },
     { requested: /\bplastic[oa]\b/, candidate: /\bplastic[oa]\b/ },
-    { requested: /\bmdf\b/, candidate: /\bmdf\b/ },
+    { requested: /\bmdf\b/, candidate: /\b(?:mdf|dm)\b/ },
+    { requested: /\bba\b/, candidate: /\bba\b/ },
+    { requested: /\b(?:exterior|vista)\b/, candidate: /\b(?:exterior|vista)\b/ },
     { requested: /\blavabo\b/, candidate: /\blavabo\b/ },
     { requested: /\bducha\b/, candidate: /\bducha\b/ },
   ];

@@ -65,6 +65,29 @@ test("three-dimensional catalogue formats expose their thickness without confusi
   assert.equal(specialBoard.isExact, false);
 });
 
+test("a BA gypsum board does not accept fire or moisture variants with the same dimensions", () => {
+  const exactBA = evaluateCommercialProductMatch({
+    requestedName: "Placa de yeso laminado BA 2000x1200x13 mm",
+    candidateName: "PLACA DE YESO LAMINADO BA 2000X1200X13 MM",
+    requestedUnit: "m2",
+    candidateUnit: "m2",
+    referenceUnitPrice: 2.81,
+    candidateUnitPrice: 2.81,
+  });
+  const moistureBoard = evaluateCommercialProductMatch({
+    requestedName: "Placa de yeso laminado BA 2000x1200x13 mm",
+    candidateName: "PLACA DE YESO LAMINADO PPM 2000X1200X13 MM",
+    requestedUnit: "m2",
+    candidateUnit: "m2",
+    referenceUnitPrice: 2.81,
+    candidateUnitPrice: 12.05,
+  });
+
+  assert.equal(exactBA.isExact, true);
+  assert.equal(moistureBoard.identityCompatible, false);
+  assert.equal(moistureBoard.isExact, false);
+});
+
 test("recognizes official supplier synonyms while preserving exact dimensions", () => {
   const profile = evaluateCommercialProductMatch({
     requestedName: "Perfil metálico para Pladur (montante 48mm)",
@@ -254,6 +277,44 @@ test("plumbing thread fractions are mandatory and cannot be replaced by metric p
   assert.equal(wrongMetricStopValve.formatCompatible, false);
   assert.equal(wrongMetricStopValve.isExact, false);
   assert.match(wrongMetricStopValve.reasons.join(" "), /1\/2|3\/8/);
+});
+
+test("BC3 units and quoted plumbing fractions remain comparable", () => {
+  const rocaValve = evaluateCommercialProductMatch({
+    requestedName: "Llave de corte escuadra 1/2 x 3/8 pulgadas",
+    candidateName: 'Llave de corte Aqua SQUARE 1/2\"-3/8\" válvula cerámica',
+    requestedUnit: "ud",
+    candidateUnit: "u",
+    referenceUnitPrice: 18,
+    candidateUnitPrice: 18,
+  });
+
+  assert.equal(rocaValve.formatCompatible, true);
+  assert.equal(rocaValve.unitCompatible, true);
+  assert.equal(rocaValve.isExact, true);
+});
+
+test("an exterior shower mixer never resolves to an embedded variant", () => {
+  const exterior = evaluateCommercialProductMatch({
+    requestedName: "Grifo termostático exterior de ducha cromado",
+    candidateName: "Grifería termostática exterior T-2000 ducha cromado",
+    requestedUnit: "ud",
+    candidateUnit: "u",
+    referenceUnitPrice: 185,
+    candidateUnitPrice: 400,
+  });
+  const embedded = evaluateCommercialProductMatch({
+    requestedName: "Grifo termostático exterior de ducha cromado",
+    candidateName: "Grifería termostática empotrable T-500 ducha cromado",
+    requestedUnit: "ud",
+    candidateUnit: "u",
+    referenceUnitPrice: 185,
+    candidateUnitPrice: 281,
+  });
+
+  assert.equal(exterior.isExact, true);
+  assert.equal(embedded.identityCompatible, false);
+  assert.equal(embedded.isExact, false);
 });
 
 test("electrical protections require the exact function, poles and ratings", () => {
