@@ -153,8 +153,8 @@ const CATALOG_SEARCH_RULES: CatalogSearchRule[] = [
     alternatives: [["inodoro"], ["wc", "compacto"]],
   },
   {
-    matches: (name) => /\blavabo\b/.test(name) && /\bencimera\b/.test(name),
-    alternatives: [["lavabo", "sobre", "encimera"], ["lavabo", "redondo", "400"]],
+    matches: (name) => /\blavabo\b/.test(name) && /\b(?:encimera|sobreponer)\b/.test(name),
+    alternatives: [["lavabo", "sobreponer"], ["lavabo", "sobre", "encimera"], ["lavabo", "redondo", "40"]],
   },
   {
     matches: (name) => /\bplato\b/.test(name) && /\bducha\b/.test(name),

@@ -338,6 +338,10 @@ test("official OBRAMAT wording remains exact for the new atomic product wave", (
     ["Rodillo superficies lisas microfibra seda 22 cm", "RODILLO SUPERFICIES LISAS MICROFIBRA SEDA 22CM", "ud", "ud", 5.2],
     ["Brocha prensada fibra sintética nº10", "BROCHA PRENSADA FIBRA SINTÉTICA Nº10", "ud", "ud", 4.1],
     ["Cubeta de plástico 16 L con rejilla", "CUBETA DE PLASTICO 16L + REJILLA", "ud", "ud", 3.54],
+    ["Pack WC compacto salida dual", "PACK WC COMPACTO SALIDA DUAL", "ud", "ud", 93],
+    ["Lavabo sobreponer redondo 40 cm blanco", "LAVABO SOBREPONER REDONDO 40CM BLANCO", "ud", "ud", 43],
+    ["Plato de ducha resina rectangular blanco 80x120x3 cm", "PLATO DE DUCHA RESINA RECTANGULAR BLANCO 80X120X3CM", "ud", "ud", 105],
+    ["Mampara de ducha frontal corredera Denver Pro 120 cm cromo", "MAMPARA DE DUCHA FRONTAL CORREDERA DENVER PRO 120CM CROMO", "ud", "ud", 160],
   ];
 
   for (const [requestedName, candidateName, requestedUnit, candidateUnit, price] of cases) {

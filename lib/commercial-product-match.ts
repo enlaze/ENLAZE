@@ -82,6 +82,7 @@ const CONCEPT_GROUPS: ConceptGroup[] = [
     role: "primary",
     aliases: [
       "lavabo sobre encimera",
+      "lavabo sobreponer",
       "lavabo mural",
       "lavabo suspendido",
       "lavabo de pedestal",
