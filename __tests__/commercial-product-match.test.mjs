@@ -232,6 +232,61 @@ test("atomic plumbing components cannot impersonate one another", () => {
   assert.equal(basinTrap.isExact, false);
 });
 
+test("plumbing thread fractions are mandatory and cannot be replaced by metric pipe sizes", () => {
+  const exactStopValve = evaluateCommercialProductMatch({
+    requestedName: "Llave de corte escuadra 1/2 x 3/8 pulgadas",
+    candidateName: "Llave de escuadra cromada 1/2 x 3/8 pulgadas",
+    requestedUnit: "ud",
+    candidateUnit: "ud",
+    referenceUnitPrice: 7.5,
+    candidateUnitPrice: 8.2,
+  });
+  const wrongMetricStopValve = evaluateCommercialProductMatch({
+    requestedName: "Llave de corte escuadra 1/2 x 3/8 pulgadas",
+    candidateName: "Llave de corte Q&E UPONOR medidas 20x20 mm",
+    requestedUnit: "ud",
+    candidateUnit: "ud",
+    referenceUnitPrice: 7.5,
+    candidateUnitPrice: 25.16,
+  });
+
+  assert.equal(exactStopValve.isExact, true);
+  assert.equal(wrongMetricStopValve.formatCompatible, false);
+  assert.equal(wrongMetricStopValve.isExact, false);
+  assert.match(wrongMetricStopValve.reasons.join(" "), /1\/2|3\/8/);
+});
+
+test("electrical protections require the exact function, poles and ratings", () => {
+  const exactDifferential = evaluateCommercialProductMatch({
+    requestedName: "Interruptor diferencial 2P 40A 30mA",
+    candidateName: "Interruptor diferencial 2P 40A 30mA",
+    requestedUnit: "ud",
+    candidateUnit: "ud",
+    referenceUnitPrice: 38,
+    candidateUnitPrice: 42,
+  });
+  const wrongDifferentialPoles = evaluateCommercialProductMatch({
+    requestedName: "Interruptor diferencial 2P 40A 30mA",
+    candidateName: "Interruptor diferencial 4P 40A 30mA",
+    requestedUnit: "ud",
+    candidateUnit: "ud",
+    referenceUnitPrice: 38,
+    candidateUnitPrice: 42,
+  });
+  const breakerInsteadOfSurgeProtector = evaluateCommercialProductMatch({
+    requestedName: "Protector de sobretensiones transitorias 2P",
+    candidateName: "Magnetotérmico 1P+N 16A curva C",
+    requestedUnit: "ud",
+    candidateUnit: "ud",
+    referenceUnitPrice: 52,
+    candidateUnitPrice: 18,
+  });
+
+  assert.equal(exactDifferential.isExact, true);
+  assert.equal(wrongDifferentialPoles.isExact, false);
+  assert.equal(breakerInsteadOfSurgeProtector.isExact, false);
+});
+
 test("installation side, room use and component role remain mandatory", () => {
   const wrongDoorHand = evaluateCommercialProductMatch({
     requestedName: "Puerta interior en block lacada blanca ciega 72.5 cm izquierda",

@@ -47,7 +47,7 @@ const CONCEPT_GROUPS: ConceptGroup[] = [
   { id: "multilayer", role: "attribute", aliases: ["multicapa", "multicapa reticulada"] },
   { id: "pvc_drain", role: "attribute", aliases: ["pvc evacuacion", "pvc de evacuacion", "desague pvc", "pvc compacto"] },
   { id: "fitting", role: "primary", aliases: ["racor", "racores", "accesorio multicapa"] },
-  { id: "angle_stop_valve", role: "primary", aliases: ["llave de corte", "llave escuadra"] },
+  { id: "angle_stop_valve", role: "primary", aliases: ["llave de corte", "llave escuadra", "llave de escuadra"] },
   { id: "plumbing_manifold", role: "primary", aliases: ["colector de fontaneria", "colector multicapa"] },
   { id: "basin_waste", role: "primary", aliases: ["valvula de desague para lavabo", "valvula lavabo"] },
   { id: "sink_basket_waste", role: "primary", aliases: ["valvula cesta para fregadero", "valvula cesta"] },
@@ -55,10 +55,13 @@ const CONCEPT_GROUPS: ConceptGroup[] = [
   { id: "sink_trap", role: "primary", aliases: ["sifon para fregadero", "sifon fregadero"] },
   { id: "electric_cable", role: "primary", aliases: ["cable electrico", "cable h07", "h07v k", "h07vk"] },
   { id: "electric_panel", role: "primary", aliases: ["cuadro electrico", "cuadro de proteccion", "cuadro premontado"] },
-  { id: "electric_protection", role: "attribute", aliases: ["protecciones", "magnetotermico", "diferencial", "sobretensiones"] },
+  { id: "electric_protection", role: "attribute", aliases: ["protecciones electricas", "protecciones"] },
+  { id: "circuit_breaker", role: "primary", aliases: ["interruptor magnetotermico", "magnetotermico"] },
+  { id: "residual_current_device", role: "primary", aliases: ["interruptor diferencial", "diferencial"] },
+  { id: "surge_protector", role: "primary", aliases: ["protector de sobretensiones", "sobretensiones transitorias"] },
   { id: "mechanism", role: "primary", aliases: ["mecanismo electrico", "mecanismos electricos"] },
   { id: "socket", role: "primary", aliases: ["enchufe", "enchufes", "toma electrica"] },
-  { id: "switch", role: "primary", aliases: ["interruptor", "interruptores"] },
+  { id: "switch", role: "primary", aliases: ["interruptor unipolar", "interruptor de luz", "interruptores de luz"] },
   { id: "luminaire", role: "primary", aliases: ["luminaria", "lampara", "plafon"] },
   { id: "led", role: "attribute", aliases: ["led"] },
   { id: "ceramic_tile", role: "primary", aliases: ["azulejo", "baldosa ceramica", "revestimiento ceramico", "revestimiento porcelanico"] },
@@ -126,7 +129,7 @@ export function normalizeCommercialMatchText(value: string): string {
     .replace(/³/g, "3")
     .replace(/,/g, ".")
     .replace(/[‐‑–—]/g, "-")
-    .replace(/[^a-z0-9.+×x\-]+/g, " ")
+    .replace(/[^a-z0-9.+×x\/\-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -163,6 +166,20 @@ function convertScalarMeasurement(value: number, unit: string): Measurement {
 function extractMeasurements(value: string): Measurement[] {
   let normalized = normalizeCommercialMatchText(value);
   const measurements: Measurement[] = [];
+  normalized = normalized.replace(
+    /(\d+)\s*\/\s*(\d+)\s*[x×]\s*(\d+)\s*\/\s*(\d+)\s*(?:pulgadas?)?/g,
+    (_match, firstNumerator: string, firstDenominator: string, secondNumerator: string, secondDenominator: string) => {
+      const first = Number(firstNumerator) / Number(firstDenominator);
+      const second = Number(secondNumerator) / Number(secondDenominator);
+      if (Number.isFinite(first) && Number.isFinite(second)) {
+        measurements.push(
+          { kind: "thread", value: roundMeasurement(first), display: `${firstNumerator}/${firstDenominator}\"` },
+          { kind: "thread", value: roundMeasurement(second), display: `${secondNumerator}/${secondDenominator}\"` },
+        );
+      }
+      return " ";
+    },
+  );
   normalized = normalized.replace(
     /(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(mm|cm|m)\b/g,
     (_match, firstRaw: string, secondRaw: string, thirdRaw: string, unit: string) => {
@@ -270,6 +287,30 @@ function hasCompatibleGypsumBoardClass(requestedName: string, candidateName: str
   const conflictingSpecialBoard = /\b(?:glasroc\s*h|pph|fk|tipo\s*(?:h1?|f|i|r|e)|hidrofug[oa]|ignifug[oa]|fuego)\b/.test(candidate);
   if (conflictingSpecialBoard) return false;
   return /\b(?:tipo\s*a|estandar)\b/.test(candidate);
+}
+
+function extractElectricalRating(value: string, pattern: RegExp): number | null {
+  const match = normalizeCommercialMatchText(value).match(pattern);
+  if (!match) return null;
+  const rating = Number(match[1]);
+  return Number.isFinite(rating) ? rating : null;
+}
+
+function hasCompatibleElectricalRatings(requestedName: string, candidateName: string) {
+  const requested = normalizeCommercialMatchText(requestedName);
+  const candidate = normalizeCommercialMatchText(candidateName);
+  const ratingPatterns = [
+    /\b(\d+)\s*p(?:\s*\+\s*n)?\b/,
+    /\b(\d+(?:\.\d+)?)\s*a\b/,
+    /\b(\d+(?:\.\d+)?)\s*ma\b/,
+  ];
+
+  return ratingPatterns.every((pattern) => {
+    const requestedRating = extractElectricalRating(requested, pattern);
+    if (requestedRating === null) return true;
+    const candidateRating = extractElectricalRating(candidate, pattern);
+    return candidateRating !== null && Math.abs(candidateRating - requestedRating) <= 0.001;
+  });
 }
 
 function measurementEquals(left: Measurement, right: Measurement) {
@@ -381,7 +422,8 @@ export function evaluateCommercialProductMatch(
     && Math.abs(candidateMortarGrade - requestedMortarGrade) <= 0.01
   );
   const attributesCompatible = hasRequiredAttributes(input.requestedName, input.candidateName)
-    && hasCompatibleGypsumBoardClass(input.requestedName, input.candidateName);
+    && hasCompatibleGypsumBoardClass(input.requestedName, input.candidateName)
+    && hasCompatibleElectricalRatings(input.requestedName, input.candidateName);
   const groupIdentity = (requiredGroups.length > 0
     ? requiredGroups.every((group) => candidateGroupIds.has(group.id))
     : compactRequested.includes(compactCandidate) || compactCandidate.includes(compactRequested) || tokenCoverage >= 0.6)
