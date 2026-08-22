@@ -208,6 +208,27 @@ test("rejects an OBRAMAT catalogue row without its store scope", () => {
   );
 });
 
+test("direct OBRAMAT evidence requires the URL reference to match the SKU", () => {
+  const directProduct = {
+    price: 58,
+    sku: "OB-25025820",
+    product_url:
+      "https://www.obramat.es/productos/tubo-multicapa-azul-con-aislamiento-16mm-rollo-50m-25025820.html",
+    raw_price: "58 €",
+    currency: "EUR",
+  };
+
+  assert.equal(hasReliableProviderEvidence("OBRAMAT", directProduct), true);
+  assert.equal(
+    hasReliableProviderEvidence("OBRAMAT", {
+      ...directProduct,
+      product_url:
+        "https://www.obramat.es/productos/otro-producto-25025821.html",
+    }),
+    false
+  );
+});
+
 const validIkeaProduct = {
   price: 7.99,
   sku: "IKEA-605.800.77",

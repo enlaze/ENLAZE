@@ -324,6 +324,31 @@ test("supplier wording plaste remains equivalent to the exact repair putty forma
   assert.equal(repairPutty.isExact, true);
 });
 
+test("official OBRAMAT wording remains exact for the new atomic product wave", () => {
+  const cases = [
+    ["Tubo multicapa azul con aislamiento 16 mm rollo 50 m", "TUBO MULTICAPA AZUL CON AISLAMIENTO 16MM ROLLO 50M", "rollos", "ud", 58],
+    ["Sifón lavabo botella extensible 1 1/4 pulgadas blanco", 'SIFÓN LAVABO BOTELLA EXTENSIBLE 1 1/4" BLANCO', "ud", "ud", 3.54],
+    ["Hilo PVC H07V-K 2.5 mm2 gris 100 m", "HILO PVC H07V-K 2,5mm2 GRIS 100M", "rollos", "ud", 30.25],
+    ["Cuadro eléctrico para empotrar en vivienda de 12 módulos Schneider", "CUADRO ELÉCTRICO PARA EMPOTRAR EN VIVIENDA DE 12 MÓDULOS SCHNEIDER", "ud", "ud", 14.52],
+    ["Diferencial 2P 40A 30mA Schneider", "DIFERENCIAL 2P 40A 30MA SCHNEIDER", "ud", "ud", 21],
+    ["Automático magnetotérmico 1P+N 1 módulo 16A Solera", "AUTOMATICO MAGNETOTERMICO 1 P+N 1 MODU 16A SOLERA", "ud", "ud", 6.06],
+    ["Downlight LED superficie circular blanco 20W luz neutra", "DOWNLIGHT LED SUPERFICIE CIRCULAR BLANCO 20W LUZ NEUTRA", "ud", "ud", 4.74],
+    ["Fondo fijador acrílico 15 L blanco", "FONDO FIJADOR ACRILICO 15L BLANCO", "cubos", "ud", 34],
+  ];
+
+  for (const [requestedName, candidateName, requestedUnit, candidateUnit, price] of cases) {
+    const result = evaluateCommercialProductMatch({
+      requestedName,
+      candidateName,
+      requestedUnit,
+      candidateUnit,
+      referenceUnitPrice: price,
+      candidateUnitPrice: price,
+    });
+    assert.equal(result.isExact, true, `${requestedName}: ${result.reasons.join("; ")}`);
+  }
+});
+
 test("an exterior shower mixer never resolves to an embedded variant", () => {
   const exterior = evaluateCommercialProductMatch({
     requestedName: "Grifo termostático exterior de ducha cromado",

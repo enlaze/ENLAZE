@@ -236,8 +236,14 @@ export function hasReliableProviderEvidence(
     const expectedReference = source.skuPrefix
       ? product.sku.slice(source.skuPrefix.length)
       : null;
+    const obramatReference =
+      normalizeProviderName(providerName) === "obramat"
+        ? product.sku.replace(/^OB-/, "")
+        : null;
     return (
       evidenceUrl.origin === source.origin &&
+      (!obramatReference ||
+        evidenceUrl.pathname.endsWith(`-${obramatReference}.html`)) &&
       (!source.pathPattern || source.pathPattern.test(evidenceUrl.pathname)) &&
       (!source.evidenceType || product.evidence_type === source.evidenceType) &&
       (!source.seller ||

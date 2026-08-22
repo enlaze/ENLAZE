@@ -62,7 +62,7 @@ const CONCEPT_GROUPS: ConceptGroup[] = [
   { id: "mechanism", role: "primary", aliases: ["mecanismo electrico", "mecanismos electricos"] },
   { id: "socket", role: "primary", aliases: ["enchufe", "enchufes", "toma electrica"] },
   { id: "switch", role: "primary", aliases: ["interruptor unipolar", "interruptor de luz", "interruptores de luz"] },
-  { id: "luminaire", role: "primary", aliases: ["luminaria", "lampara", "plafon"] },
+  { id: "luminaire", role: "primary", aliases: ["luminaria", "lampara", "plafon", "downlight"] },
   { id: "led", role: "attribute", aliases: ["led"] },
   { id: "ceramic_tile", role: "primary", aliases: ["azulejo", "baldosa ceramica", "revestimiento ceramico", "revestimiento porcelanico"] },
   { id: "porcelain", role: "attribute", aliases: ["porcelanico", "porcelanica"] },

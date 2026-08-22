@@ -69,11 +69,11 @@ const CATALOG_SEARCH_RULES: CatalogSearchRule[] = [
     alternatives: [["tubo", "pvc"], ["pvc", "compacto"]],
   },
   {
-    matches: (name) => /\bcable\b/.test(name) && /\bh07/.test(name),
-    alternatives: [["h07v"], ["cable", "h07"]],
+    matches: (name) => /\b(?:cable|hilo)\b/.test(name) && /\bh07/.test(name),
+    alternatives: [["h07v"], ["cable", "h07"], ["hilo", "h07"]],
   },
   {
-    matches: (name) => /\bcaja\b/.test(name) && /\bcuadro\b/.test(name),
+    matches: (name) => /\bcuadro\b/.test(name) && /\b(?:caja|empotrar|modulos)\b/.test(name),
     alternatives: [["caja", "cuadro", "12"], ["cuadro", "12", "modulos"]],
   },
   {
@@ -117,8 +117,12 @@ const CATALOG_SEARCH_RULES: CatalogSearchRule[] = [
     alternatives: [["rodapie", "mdf"], ["rodapie", "dm"], ["rodapie", "blanco"]],
   },
   {
-    matches: (name) => /\bimprimacion\b/.test(name),
-    alternatives: [["imprimacion"], ["fijador"]],
+    matches: (name) => /\b(?:imprimacion|fondo fijador)\b/.test(name),
+    alternatives: [["imprimacion"], ["fondo", "fijador"], ["fijador"]],
+  },
+  {
+    matches: (name) => /\b(?:downlight|luminaria|plafon)\b/.test(name) && /\bled\b/.test(name),
+    alternatives: [["downlight", "led", "superficie"], ["downlight", "20w"], ["luminaria", "led"]],
   },
   {
     matches: (name) => /\bcinta\b/.test(name) && /\benmascarar\b/.test(name),
