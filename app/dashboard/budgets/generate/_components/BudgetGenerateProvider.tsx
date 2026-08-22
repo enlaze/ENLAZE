@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from "react";
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useMemo, useRef } from "react";
 import { normalizeSector } from "@/lib/sector-config";
 import { createClient } from "@/lib/supabase-browser";
 import { useToast } from "@/components/ui/toast";
@@ -635,6 +635,37 @@ interface BudgetContextProps {
 
 const BudgetContext = createContext<BudgetContextProps | undefined>(undefined);
 
+/**
+ * Transient fields that saveDraft() writes back into state on every run.
+ * They must NOT be part of the autosave signature: including them makes the
+ * autosave effect retrigger itself forever (save -> setState -> save -> ...),
+ * which is what saturated the database's disk IO budget.
+ */
+const AUTOSAVE_IGNORED_KEYS = new Set<string>([
+  "draftId",
+  "lastSavedAt",
+  "isSavingDraft",
+  "isFinalizing",
+  "saveError",
+  "finalizeError",
+  "validationError",
+]);
+
+/** Stable fingerprint of the user-meaningful parts of the wizard state. */
+function buildAutosaveSignature(state: BudgetState): string {
+  const relevant: Record<string, unknown> = {};
+  for (const key of Object.keys(state).sort()) {
+    if (AUTOSAVE_IGNORED_KEYS.has(key)) continue;
+    relevant[key] = (state as unknown as Record<string, unknown>)[key];
+  }
+  try {
+    return JSON.stringify(relevant);
+  } catch {
+    // Never fall back to a always-changing value: that would restart the loop.
+    return "__unserializable__";
+  }
+}
+
 export function BudgetGenerateProvider({
   children,
   initialSector = "construccion"
@@ -1148,6 +1179,10 @@ export function BudgetGenerateProvider({
   };
 
   /* ─── Persistencia y Borradores ─── */
+  // Fingerprint of the budget_items rows last written to the database, so an
+  // unchanged item list never triggers another DELETE + INSERT cycle.
+  const lastSyncedItemsSignature = useRef<string | null>(null);
+
   const saveDraft = async (manual = false): Promise<string | null> => {
     // Don't autosave if there's no meaningful data yet
     if (!manual && !state.title && !state.description && state.partidas.length <= 2) {
@@ -1309,9 +1344,6 @@ export function BudgetGenerateProvider({
 
       // Also sync budget_items so the detail page shows partidas
       if (draftId && (state.partidas.length > 0 || state.materials.some(m => m.included))) {
-        // Delete old items and re-insert
-        await supabase.from("budget_items").delete().eq("budget_id", draftId);
-
         const marginMultiplier = 1 + (state.marginPercent / 100);
 
         const partidasToInsert = state.partidas.filter(p => p.status !== "opcional").map(p => ({
@@ -1339,9 +1371,22 @@ export function BudgetGenerateProvider({
         }));
 
         const itemsToInsert = [...partidasToInsert, ...materialsToInsert];
-        if (itemsToInsert.length > 0) {
-          const { error: itemsError } = await supabase.from("budget_items").insert(itemsToInsert);
-          if (itemsError) throw itemsError;
+
+        // Rewriting identical rows is the single most disk-expensive thing this
+        // wizard does (a full DELETE + INSERT churns dead tuples and WAL), so
+        // skip it entirely when nothing changed.
+        // Include the destination budget: two drafts may legitimately contain
+        // identical rows, but both still need their own budget_items records.
+        const itemsSignature = `${draftId}:${JSON.stringify(itemsToInsert)}`;
+        if (itemsSignature !== lastSyncedItemsSignature.current) {
+          await supabase.from("budget_items").delete().eq("budget_id", draftId);
+
+          if (itemsToInsert.length > 0) {
+            const { error: itemsError } = await supabase.from("budget_items").insert(itemsToInsert);
+            if (itemsError) throw itemsError;
+          }
+
+          lastSyncedItemsSignature.current = itemsSignature;
         }
       }
 
@@ -1505,29 +1550,62 @@ export function BudgetGenerateProvider({
   }, []);
 
   // Debounced Autosave (1.5s)
+  //
+  // IMPORTANT: this effect must depend on `autosaveSignature`, never on `state`.
+  // saveDraft() calls setState() to record lastSavedAt/isSavingDraft, which
+  // produces a brand new state object on every save. Depending on `state` made
+  // the effect retrigger itself every 1.5s indefinitely, rewriting the same rows
+  // (DELETE + INSERT of every budget_item) until the database ran out of disk IO.
   const isFirstRender = useRef(true);
   const saveTimeout = useRef<NodeJS.Timeout | null>(null);
+  const lastSavedSignature = useRef<string | null>(null);
+  const isAutosaving = useRef(false);
+
+  const autosaveSignature = useMemo(() => buildAutosaveSignature(state), [state]);
 
   useEffect(() => {
+    // First render: record the baseline, don't save what we just loaded.
     if (isFirstRender.current) {
       isFirstRender.current = false;
+      lastSavedSignature.current = autosaveSignature;
       return;
     }
 
+    // Nothing the user cares about changed since the last successful save.
+    if (autosaveSignature === lastSavedSignature.current) return;
+
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
 
-    saveTimeout.current = setTimeout(() => {
-      // Solo hacer autosave silencioso si ya hay un draftId (fue creado manualmente antes o en un paso previo)
-      // Opcional: Descomentar para forzar creación en la primera pulsación.
-      // if (state.draftId) {
-      saveDraft(false);
-      // }
-    }, 1500);
+    const runAutosave = async () => {
+      // Re-entrancy guard: never overlap two autosaves. If one is already in
+      // flight, retry shortly instead of dropping this edit on the floor.
+      if (isAutosaving.current) {
+        saveTimeout.current = setTimeout(runAutosave, 500);
+        return;
+      }
+      isAutosaving.current = true;
+
+      const signatureBeingSaved = autosaveSignature;
+      try {
+        await saveDraft(false);
+        // Only mark as saved on success, so a failed save retries on next edit.
+        lastSavedSignature.current = signatureBeingSaved;
+      } finally {
+        isAutosaving.current = false;
+      }
+    };
+
+    saveTimeout.current = setTimeout(runAutosave, 1500);
 
     return () => {
       if (saveTimeout.current) clearTimeout(saveTimeout.current);
     };
-  }, [state]);
+    // `saveDraft` is deliberately omitted: it is recreated on every render, so
+    // adding it here would retrigger the effect on every render and restore the
+    // runaway save loop this code exists to prevent. Do not "fix" this warning
+    // by adding it to the dependency array.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autosaveSignature]);
 
   const validateStep = (stepIndex: number): boolean => {
     if (stepIndex === 0) {
@@ -1994,6 +2072,10 @@ export function BudgetGenerateProvider({
           })),
           location: engineScope.ubicacion,
           forceRefresh: forceRegenerate,
+          // Labour and service lines only use technical/user-controlled banks.
+          // Searching 59 descriptions in the retail catalogue was both
+          // semantically unsafe and unnecessarily expensive for Supabase.
+          includeCommercialCatalog: false,
         });
 
         if (partidasPriceResult.ok) {

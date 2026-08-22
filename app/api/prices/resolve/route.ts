@@ -32,6 +32,7 @@ interface ResolveRequestBody {
   materials: PriceRequest[];
   location: string;
   forceRefresh?: boolean; // Skip cache, re-search everything
+  includeCommercialCatalog?: boolean;
 }
 
 interface CachedRow {
@@ -166,7 +167,12 @@ export async function POST(request: Request) {
 
   try {
     const body: ResolveRequestBody = await request.json();
-    const { materials, location, forceRefresh } = body;
+    const {
+      materials,
+      location,
+      forceRefresh,
+      includeCommercialCatalog = true,
+    } = body;
 
     if (!materials || !Array.isArray(materials) || materials.length === 0) {
       return NextResponse.json({ error: "Falta la lista de materiales" }, { status: 400 });
@@ -190,19 +196,24 @@ export async function POST(request: Request) {
 
     // The tracker writes the authoritative price on pb_products. A row in
     // pb_price_current is useful, but it must not be required to use the bank.
-    const { count: pbCount, error: pbCountError } = await trackerDb
-      .from("pb_products")
-      .select("id, pb_providers!inner(company_id)", { count: "exact", head: true })
-      .eq("sector", "construccion")
-      .eq("is_active", true)
-      .eq("is_available", true)
-      .or(visibleProviderFilter, { referencedTable: "pb_providers" })
-      .gt("unit_price", 0);
-    if (pbCountError) {
-      console.error("[PriceResolve] Shared tracker count failed:", pbCountError.message);
+    let pbCount = 0;
+    if (includeCommercialCatalog) {
+      const { count, error: pbCountError } = await trackerDb
+        .from("pb_products")
+        .select("id, pb_providers!inner(company_id)", { count: "exact", head: true })
+        .eq("sector", "construccion")
+        .eq("is_active", true)
+        .eq("is_available", true)
+        .or(visibleProviderFilter, { referencedTable: "pb_providers" })
+        .gt("unit_price", 0);
+      pbCount = count ?? 0;
+      if (pbCountError) {
+        console.error("[PriceResolve] Shared tracker count failed:", pbCountError.message);
+      }
     }
 
-    const useV2 = (pbCount ?? 0) > 0;
+    // Technical budget lines still use V2, but never scan the retail bank.
+    const useV2 = !includeCommercialCatalog || pbCount > 0;
 
     if (useV2) {
       const trackerTokenGroups = buildUniqueCatalogTokenGroups(
@@ -217,61 +228,61 @@ export async function POST(request: Request) {
         { data: pbTechnicalRows },
         { data: pbEnlazeRows },
       ] = await Promise.all([
-        trackerDb
-          .from("pb_price_current")
-          .select(`
-            product_id, price_excl_vat, effective_price, confidence_score,
-            source_type, is_available, checked_at,
-            pb_products!inner (
-              id, commercial_name, concept_id, brand, sku, sale_unit,
-              units_per_package, unit_price, url, source_url, checked_at,
-              pb_normalized_concepts ( id, canonical_name )
-            ),
-            pb_providers!inner (
-              id, name, province, supply_zones, is_preferred,
-              shipping_cost_flat, minimum_order, delivery_days_min, delivery_days_max,
-              company_id
-            )
-          `)
-          .eq("pb_products.sector", "construccion")
-          .or(visibleProviderFilter, { referencedTable: "pb_providers" }),
+        // pb_products already stores the latest authoritative tracker price.
+        // Loading the complete pb_price_current table on every recalculation
+        // scanned tens of thousands of joined rows and exhausted Disk IO.
+        Promise.resolve({ data: [] as Record<string, unknown>[] }),
         (async () => {
+          if (!includeCommercialCatalog) {
+            return { data: [] as Record<string, unknown>[] };
+          }
+
           const rowsById = new Map<string, Record<string, unknown>>();
+          const searchController = new AbortController();
+          const searchTimeout = setTimeout(() => searchController.abort(), 18_000);
           // Keep concurrency deliberately low: broad catalogue lookups are
           // independent, but overloading PostgREST makes valid result sets
           // disappear intermittently. Semantic ranking happens afterwards.
-          for (let start = 0; start < trackerTokenGroups.length; start += 4) {
-            const groupResults = await Promise.all(
-              trackerTokenGroups.slice(start, start + 4).map((tokens) =>
-                trackerDb
-                  .from("pb_products")
-                  .select(`
-                    id, commercial_name, concept_id, brand, sku, sale_unit,
-                    units_per_package, unit_price, url, source_url, checked_at, is_available,
-                    pb_providers!inner (
-                      id, name, province, supply_zones, is_preferred,
-                      shipping_cost_flat, minimum_order, delivery_days_min, delivery_days_max,
-                      company_id
-                    )
-                  `)
-                  .eq("sector", "construccion")
-                  .eq("is_active", true)
-                  .eq("is_available", true)
-                  .or(visibleProviderFilter, { referencedTable: "pb_providers" })
-                  .gt("unit_price", 0)
-                  .or(tokens.map((token) => `commercial_name.ilike.%${token}%`).join(","))
-                  .limit(300)
-              ),
-            );
-            for (const result of groupResults) {
-              if (result.error) {
-                console.error("[PriceResolve] Candidate query failed:", result.error.message);
-                continue;
-              }
-              for (const row of result.data || []) {
-                rowsById.set(String(row.id), row as Record<string, unknown>);
+          try {
+            for (let start = 0; start < trackerTokenGroups.length; start += 4) {
+              if (searchController.signal.aborted) break;
+              const groupResults = await Promise.all(
+                trackerTokenGroups.slice(start, start + 4).map((tokens) =>
+                  trackerDb
+                    .from("pb_products")
+                    .select(`
+                      id, commercial_name, concept_id, brand, sku, sale_unit,
+                      units_per_package, unit_price, url, source_url, checked_at, is_available,
+                      pb_providers!inner (
+                        id, name, province, supply_zones, is_preferred,
+                        shipping_cost_flat, minimum_order, delivery_days_min, delivery_days_max,
+                        company_id
+                      )
+                    `)
+                    .eq("sector", "construccion")
+                    .eq("is_active", true)
+                    .eq("is_available", true)
+                    .or(visibleProviderFilter, { referencedTable: "pb_providers" })
+                    .gt("unit_price", 0)
+                    .or(tokens.map((token) => `commercial_name.ilike.%${token}%`).join(","))
+                    .limit(300)
+                    .abortSignal(searchController.signal)
+                ),
+              );
+              for (const result of groupResults) {
+                if (result.error) {
+                  if (!searchController.signal.aborted) {
+                    console.error("[PriceResolve] Candidate query failed:", result.error.message);
+                  }
+                  continue;
+                }
+                for (const row of result.data || []) {
+                  rowsById.set(String(row.id), row as Record<string, unknown>);
+                }
               }
             }
+          } finally {
+            clearTimeout(searchTimeout);
           }
           return { data: Array.from(rowsById.values()) };
         })(),
@@ -567,7 +578,7 @@ export async function POST(request: Request) {
           estimated,
           webSearchesPerformed: 0,
           webSearchesSuccessful: 0,
-          tracker_products_available: pbCount ?? 0,
+          tracker_products_available: pbCount,
           tracker_candidates: mappedTrackerRows.length,
           avg_confidence: v2Result.summary.avg_confidence,
           by_source: sourceCounts,

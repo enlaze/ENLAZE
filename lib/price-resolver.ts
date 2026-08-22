@@ -607,6 +607,10 @@ export interface ResolveMarketPricesInput {
   materials: PriceRequest[];
   location: string;
   forceRefresh?: boolean;
+  /** False for labour/service lines that must never search retail products. */
+  includeCommercialCatalog?: boolean;
+  /** Maximum time the UI waits before keeping the technical estimate. */
+  timeoutMs?: number;
 }
 
 export interface ResolveMarketPricesResult {
@@ -645,14 +649,21 @@ export interface ResolveMarketPricesResult {
 export async function resolveMarketPrices(
   input: ResolveMarketPricesInput
 ): Promise<ResolveMarketPricesResult> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(
+    () => controller.abort(),
+    input.timeoutMs ?? 25_000,
+  );
   try {
     const response = await fetch("/api/prices/resolve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
       body: JSON.stringify({
         materials: input.materials,
         location: input.location,
         forceRefresh: input.forceRefresh || false,
+        includeCommercialCatalog: input.includeCommercialCatalog !== false,
       }),
     });
 
@@ -672,7 +683,8 @@ export async function resolveMarketPrices(
     }
 
     return await response.json();
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const aborted = err instanceof DOMException && err.name === "AbortError";
     return {
       ok: false,
       resolved: [],
@@ -682,7 +694,13 @@ export async function resolveMarketPrices(
         webSearchesPerformed: 0, webSearchesSuccessful: 0,
       },
       cachedUntil: "",
-      error: err.message || "Error de conexion",
+      error: aborted
+        ? "La consulta de mercado superó el tiempo seguro; se mantienen los precios técnicos provisionales."
+        : err instanceof Error
+          ? err.message
+          : "Error de conexion",
     };
+  } finally {
+    window.clearTimeout(timeout);
   }
 }

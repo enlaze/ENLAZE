@@ -79,8 +79,9 @@ test("V2 price queries include shared and company-owned providers", () => {
   );
   assert.equal(
     (route.match(/\.or\(visibleProviderFilter, \{ referencedTable: "pb_providers" \}\)/g) || []).length,
-    3
+    2
   );
+  assert.doesNotMatch(route, /\.from\("pb_price_current"\)/);
   assert.doesNotMatch(route, /\.is\("pb_providers\.company_id", null\)/);
 });
 
