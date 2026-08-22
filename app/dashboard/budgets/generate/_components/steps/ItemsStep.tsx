@@ -14,7 +14,11 @@ export function ItemsStep() {
   const needsExistingSurvey =
     (state.sectorData.project_context || "existing_renovation") !== "new_build"
     && (!state.sectorData.existing_condition || state.sectorData.existing_condition === "unknown");
-  const readyForCommercialClosure = materialCoverage >= 90 && !needsExistingSurvey;
+  const readyForCommercialClosure = materialCoverage === 100 && !needsExistingSurvey;
+  const pendingServiceQuotes = Math.max(
+    (state.priceVerification.servicesTotal || 0) - (state.priceVerification.servicesQuoted || 0),
+    0,
+  );
 
   const handleAdd = () => {
     addPartida({ concept: "Nueva partida", quantity: 1, unit_price: 0 });
@@ -60,8 +64,13 @@ export function ItemsStep() {
                   Alcance calculado: <strong>{state.realismAudit.effectiveAreaM2.toFixed(1)} m2</strong>
                 </span>
                 <span>
-                  Materiales verificados: <strong>{state.priceVerification.verified}/{state.priceVerification.total}</strong>
+                  Productos verificados: <strong>{state.priceVerification.verified}/{state.priceVerification.total}</strong>
                 </span>
+                {(state.priceVerification.servicesTotal || 0) > 0 && (
+                  <span>
+                    Servicios cotizados: <strong>{state.priceVerification.servicesQuoted || 0}/{state.priceVerification.servicesTotal}</strong>
+                  </span>
+                )}
                 <span>
                   Precio sin IVA: <strong>{state.realismAudit.pricePerM2.toFixed(0)} EUR/m2</strong>
                   {state.marketAdjustMessage && <em className="ml-1 font-normal not-italic text-amber-600">(umbral inferior calibrado)</em>}
@@ -82,7 +91,8 @@ export function ItemsStep() {
                 {!readyForCommercialClosure && (
                   <span>
                     {needsExistingSurvey ? "Falta confirmar el estado existente mediante visita. " : ""}
-                    {materialCoverage < 90 ? `La cobertura comercial es ${materialCoverage}%; objetivo mínimo 90%.` : ""}
+                    {materialCoverage < 100 ? `La cobertura comercial de productos es ${materialCoverage}%; objetivo obligatorio 100%. ` : ""}
+                    {pendingServiceQuotes > 0 ? `Faltan ${pendingServiceQuotes} servicios locales por cotizar.` : ""}
                   </span>
                 )}
               </div>

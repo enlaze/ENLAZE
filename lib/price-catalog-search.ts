@@ -33,12 +33,48 @@ const CATALOG_SEARCH_RULES: CatalogSearchRule[] = [
     alternatives: [["h07v"], ["cable", "h07"]],
   },
   {
+    matches: (name) => /\bmagnetotermic/.test(name),
+    alternatives: [["magnetotermico"], ["interruptor", "magnetotermico"]],
+  },
+  {
+    matches: (name) => /\bdiferencial\b/.test(name),
+    alternatives: [["diferencial"], ["interruptor", "diferencial"]],
+  },
+  {
+    matches: (name) => /\bsobretension/.test(name),
+    alternatives: [["sobretension"], ["sobretension", "transitoria"]],
+  },
+  {
+    matches: (name) => /\benchufe\b/.test(name),
+    alternatives: [["base", "enchufe"], ["mecanismo", "enchufe"]],
+  },
+  {
+    matches: (name) => /\binterruptor\b/.test(name) && !/\b(?:diferencial|magnetotermic)/.test(name),
+    alternatives: [["mecanismo", "interruptor"], ["interruptor", "empotrar"]],
+  },
+  {
     matches: (name) => /\b(azulejo|baldosa|revestimiento)\b/.test(name) && /\bporcelanic/.test(name),
     alternatives: [["revestimiento", "porcelanico"], ["porcelanico"]],
   },
   {
     matches: (name) => /\bimprimacion\b/.test(name),
     alternatives: [["imprimacion"], ["fijador"]],
+  },
+  {
+    matches: (name) => /\bmasilla\b/.test(name),
+    alternatives: [["masilla", "interior"], ["masilla", "reparacion"]],
+  },
+  {
+    matches: (name) => /\b(?:rodillo|brocha|cubeta)\b/.test(name),
+    alternatives: [["rodillo", "pintura"], ["brocha", "pintura"], ["cubeta", "pintura"]],
+  },
+  {
+    matches: (name) => /\blavabo\b/.test(name) && /\b(?:grifo|monomando)\b/.test(name),
+    alternatives: [["grifo", "lavabo"], ["monomando", "lavabo"]],
+  },
+  {
+    matches: (name) => /\bducha\b/.test(name) && /\b(?:grifo|termostatic)/.test(name),
+    alternatives: [["grifo", "ducha"], ["termostatico", "ducha"]],
   },
   {
     matches: (name) => /\binodoro\b/.test(name),

@@ -7,6 +7,8 @@
  * parentheses: they are often the most important part of the match.
  */
 
+import { auditAtomicMaterialName } from "./material-procurement";
+
 export interface CommercialProductMatchInput {
   requestedName: string;
   candidateName: string;
@@ -45,8 +47,12 @@ const CONCEPT_GROUPS: ConceptGroup[] = [
   { id: "multilayer", role: "attribute", aliases: ["multicapa", "multicapa reticulada"] },
   { id: "pvc_drain", role: "attribute", aliases: ["pvc evacuacion", "pvc de evacuacion", "desague pvc", "pvc compacto"] },
   { id: "fitting", role: "primary", aliases: ["racor", "racores", "accesorio multicapa"] },
-  { id: "valve", role: "primary", aliases: ["valvula", "valvulas", "llave de corte", "colector", "colectores"] },
-  { id: "siphon", role: "primary", aliases: ["sifon", "sifones"] },
+  { id: "angle_stop_valve", role: "primary", aliases: ["llave de corte", "llave escuadra"] },
+  { id: "plumbing_manifold", role: "primary", aliases: ["colector de fontaneria", "colector multicapa"] },
+  { id: "basin_waste", role: "primary", aliases: ["valvula de desague para lavabo", "valvula lavabo"] },
+  { id: "sink_basket_waste", role: "primary", aliases: ["valvula cesta para fregadero", "valvula cesta"] },
+  { id: "basin_trap", role: "primary", aliases: ["sifon botella para lavabo", "sifon para lavabo"] },
+  { id: "sink_trap", role: "primary", aliases: ["sifon para fregadero", "sifon fregadero"] },
   { id: "electric_cable", role: "primary", aliases: ["cable electrico", "cable h07", "h07v k", "h07vk"] },
   { id: "electric_panel", role: "primary", aliases: ["cuadro electrico", "cuadro de proteccion", "cuadro premontado"] },
   { id: "electric_protection", role: "attribute", aliases: ["protecciones", "magnetotermico", "diferencial", "sobretensiones"] },
@@ -57,13 +63,16 @@ const CONCEPT_GROUPS: ConceptGroup[] = [
   { id: "led", role: "attribute", aliases: ["led"] },
   { id: "ceramic_tile", role: "primary", aliases: ["azulejo", "baldosa ceramica", "revestimiento ceramico", "revestimiento porcelanico"] },
   { id: "porcelain", role: "attribute", aliases: ["porcelanico", "porcelanica"] },
+  { id: "laminate_underlay", role: "primary", aliases: ["base aislante para suelo laminado", "base para suelo laminado", "subsuelo laminado"] },
   { id: "flooring", role: "primary", aliases: ["pavimento", "suelo laminado", "suelo ceramico", "tarima"] },
   { id: "skirting", role: "primary", aliases: ["rodapie"] },
   { id: "paint", role: "primary", aliases: ["pintura"] },
   { id: "primer", role: "primary", aliases: ["imprimacion", "fondo fijador", "sellador de paredes"] },
   { id: "putty", role: "primary", aliases: ["masilla"] },
   { id: "masking", role: "primary", aliases: ["cinta de enmascarar", "plastico protector"] },
-  { id: "painting_tools", role: "primary", aliases: ["rodillo", "rodillos", "brocha", "brochas", "cubeta", "cubetas"] },
+  { id: "paint_roller", role: "primary", aliases: ["rodillo", "rodillos"] },
+  { id: "paint_brush", role: "primary", aliases: ["brocha", "brochas"] },
+  { id: "paint_tray", role: "primary", aliases: ["cubeta", "cubetas"] },
   { id: "toilet", role: "primary", aliases: ["inodoro", "wc"] },
   { id: "basin", role: "primary", aliases: ["lavabo"] },
   { id: "faucet", role: "primary", aliases: ["griferia", "grifo", "monomando"] },
@@ -221,11 +230,46 @@ function hasRequiredAttributes(requestedName: string, candidateName: string) {
     { requested: /\bsanitari[oa]\b/, candidate: /\b(?:sanitari[oa]|banos?|cocinas?)\b/ },
     { requested: /\bmate\b/, candidate: /\bmate\b/ },
     { requested: /\bblanc[oa]\b/, candidate: /\bblanc[oa]\b/ },
+    { requested: /\brectificad[oa]\b/, candidate: /\brectificad[oa]\b/ },
+    { requested: /\bcorredera\b/, candidate: /\bcorredera\b/ },
+    { requested: /\btransparente\b/, candidate: /\btransparente\b/ },
+    { requested: /\btermostatic[oa]\b/, candidate: /\btermostatic[oa]\b/ },
+    { requested: /\bcromad[oa]\b/, candidate: /\bcromad[oa]\b/ },
+    { requested: /\bempotrable\b/, candidate: /\b(?:empotrable|empotrar)\b/ },
+    { requested: /\bschuko\b/, candidate: /\bschuko\b/ },
+    { requested: /\bac5\b/, candidate: /\bac5\b/ },
+    { requested: /\broble\b/, candidate: /\broble\b/ },
+    { requested: /\bpex\s*-?\s*al\s*-?\s*pex\b/, candidate: /\bpex\s*\/?\s*al\s*\/?\s*pex\b/ },
+    { requested: /\b4000\s*k\b/, candidate: /\b4000\s*(?:k|ºk)\b/ },
+    { requested: /\bip20\b/, candidate: /\bip20\b/ },
+    { requested: /\bcurva\s*c\b/, candidate: /\bcurva\s*c\b/ },
+    { requested: /\bizquierda\b/, candidate: /\bizquierda\b/ },
+    { requested: /\bderecha\b/, candidate: /\bderecha\b/ },
+    { requested: /\bredond[oa]\b/, candidate: /\bredond[oa]\b/ },
+    { requested: /\bsobre\s+encimera\b/, candidate: /\b(?:sobre\s+encimera|encimera)\b/ },
+    { requested: /\badosad[oa]\s+a\s+pared\b/, candidate: /\badosad[oa]\s+a\s+pared\b/ },
+    { requested: /\binterior\b/, candidate: /\binterior\b/ },
+    { requested: /\bal\s+agua\b/, candidate: /\b(?:al\s+agua|base\s+agua|acuos[oa])\b/ },
+    { requested: /\bplastic[oa]\b/, candidate: /\bplastic[oa]\b/ },
+    { requested: /\bmdf\b/, candidate: /\bmdf\b/ },
+    { requested: /\blavabo\b/, candidate: /\blavabo\b/ },
+    { requested: /\bducha\b/, candidate: /\bducha\b/ },
   ];
   if (requirements.some((requirement) => requirement.requested.test(requested) && !requirement.candidate.test(candidate))) {
     return false;
   }
   return true;
+}
+
+function hasCompatibleGypsumBoardClass(requestedName: string, candidateName: string) {
+  const requested = normalizeCommercialMatchText(requestedName);
+  const candidate = normalizeCommercialMatchText(candidateName);
+  const asksForStandardTypeA = /\b(?:tipo\s*a|estandar)\b/.test(requested);
+  if (!asksForStandardTypeA) return true;
+
+  const conflictingSpecialBoard = /\b(?:glasroc\s*h|pph|fk|tipo\s*(?:h1?|f|i|r|e)|hidrofug[oa]|ignifug[oa]|fuego)\b/.test(candidate);
+  if (conflictingSpecialBoard) return false;
+  return /\b(?:tipo\s*a|estandar)\b/.test(candidate);
 }
 
 function measurementEquals(left: Measurement, right: Measurement) {
@@ -310,6 +354,7 @@ export function evaluateCommercialProductMatch(
   input: CommercialProductMatchInput,
 ): CommercialProductMatchResult {
   const reasons: string[] = [];
+  const atomicAudit = auditAtomicMaterialName(input.requestedName);
   const requestedGroups = findConceptGroups(input.requestedName);
   const candidateGroups = findConceptGroups(input.candidateName);
   const candidateGroupIds = new Set(candidateGroups.map((group) => group.id));
@@ -335,25 +380,24 @@ export function evaluateCommercialProductMatch(
     candidateMortarGrade !== null
     && Math.abs(candidateMortarGrade - requestedMortarGrade) <= 0.01
   );
-  // A slash in a technical line denotes an unresolved choice (for example,
-  // ceramic/laminate flooring), not an exact commercial specification.
-  const requestVariantIsDefined = !input.requestedName.includes("/");
-  const attributesCompatible = hasRequiredAttributes(input.requestedName, input.candidateName);
+  const attributesCompatible = hasRequiredAttributes(input.requestedName, input.candidateName)
+    && hasCompatibleGypsumBoardClass(input.requestedName, input.candidateName);
   const groupIdentity = (requiredGroups.length > 0
     ? requiredGroups.every((group) => candidateGroupIds.has(group.id))
     : compactRequested.includes(compactCandidate) || compactCandidate.includes(compactRequested) || tokenCoverage >= 0.6)
     && !hasConflictingPrimary
     && mortarGradeCompatible
-    && requestVariantIsDefined
+    && atomicAudit.isAtomic
     && attributesCompatible;
   const identityCompatible = groupIdentity && (tokenCoverage >= 0.2 || requiredGroups.length > 0);
   if (!identityCompatible) {
     reasons.push(
-      hasConflictingPrimary || !mortarGradeCompatible || !requestVariantIsDefined || !attributesCompatible
+      hasConflictingPrimary || !mortarGradeCompatible || !attributesCompatible
         ? "La variante o resistencia del producto no coincide con la solicitada"
         : "El producto no corresponde al concepto solicitado",
     );
   }
+  if (!atomicAudit.isAtomic) reasons.push(...atomicAudit.reasons);
 
   const requestedMeasurements = extractMeasurements(input.requestedName);
   const candidateMeasurements = extractMeasurements(input.candidateName);

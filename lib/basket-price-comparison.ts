@@ -1,6 +1,7 @@
 import type { PriceAlternative } from "./price-resolver";
 import { canonicalProviderName, providerIdentitySlug } from "./provider-identity";
 import { isTraceableCommercialPrice } from "./price-traceability";
+import { isCommercialProductMaterial, type ProcurementKind } from "./material-procurement";
 
 export interface BasketMaterialForComparison {
   id: string;
@@ -8,6 +9,7 @@ export interface BasketMaterialForComparison {
   unit?: string;
   quantity: number;
   included: boolean;
+  procurementKind?: ProcurementKind;
   sourceName?: string;
   sourceUrl?: string;
   matchedProductName?: string;
@@ -73,6 +75,7 @@ function asComparableOffer(
 }
 
 export function getComparableOffers(material: BasketMaterialForComparison, limit = 5) {
+  if (!isCommercialProductMaterial(material)) return [];
   const offers = (material.priceAlternatives || [])
     .map((alternative) => asComparableOffer(alternative, material))
     .filter((offer): offer is ComparableOffer => Boolean(offer));
@@ -115,7 +118,9 @@ export function getComparableOffers(material: BasketMaterialForComparison, limit
 }
 
 export function buildProviderBasketCoverage(materials: BasketMaterialForComparison[]) {
-  const included = materials.filter((material) => material.included);
+  const included = materials.filter(
+    (material) => material.included && isCommercialProductMaterial(material)
+  );
   const providers = new Map<string, {
     name: string;
     lines: Map<string, ComparableOffer>;

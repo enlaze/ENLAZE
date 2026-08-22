@@ -46,6 +46,12 @@ import {
 import { isTraceableCommercialPrice } from "@/lib/price-traceability";
 import { normalizeBudgetItemUnit } from "@/lib/budget-units";
 import { canonicalProviderName, providerIdentitySlug } from "@/lib/provider-identity";
+import {
+  auditAtomicMaterialName,
+  isCommercialProductMaterial,
+  isServiceMaterial,
+  type ProcurementKind,
+} from "@/lib/material-procurement";
 
 // The v2 price resolver (/api/prices/resolve, resolver_used: "v2") can
 // return several low-confidence "estimate" source types — market_estimate,
@@ -161,6 +167,8 @@ export interface ProviderOption {
 export interface Material {
   id: string;
   name: string;
+  specification?: string;
+  procurementKind?: ProcurementKind;
   quantity: number;
   unit: string;
   unit_price: number;
@@ -303,22 +311,29 @@ async function verifyMaterialsAgainstTracker(
   warning?: string;
 }> {
   const includedMaterials = materials.filter((material) => material.included);
+  const includedProducts = includedMaterials.filter(isCommercialProductMaterial);
+  const includedServices = includedMaterials.filter(isServiceMaterial);
+  const quotedServices = includedServices.filter((material) =>
+    material.isRealData && Number(material.unit_price) > 0
+  ).length;
   const baseVerification: BudgetState["priceVerification"] = {
-    status: includedMaterials.length > 0 ? "partial" : "complete",
-    total: includedMaterials.length,
+    status: includedProducts.length > 0 ? "partial" : "complete",
+    total: includedProducts.length,
     verified: 0,
-    estimated: includedMaterials.length,
+    estimated: includedProducts.length,
     trackerProductsAvailable: trackerFallbackCount,
     lastVerifiedAt: null,
     location,
+    servicesTotal: includedServices.length,
+    servicesQuoted: quotedServices,
   };
 
-  if (includedMaterials.length === 0) {
+  if (includedProducts.length === 0) {
     return { materials, verification: baseVerification };
   }
 
   const priceResult = await resolveMarketPrices({
-    materials: includedMaterials.map((material) => ({
+    materials: includedProducts.map((material) => ({
       materialName: material.name,
       category: "material",
       unit: material.unit,
@@ -341,12 +356,19 @@ async function verifyMaterialsAgainstTracker(
   }
 
   const resolvedByMaterialId = new Map<string, ResolvedPrice>();
-  includedMaterials.forEach((material, index) => {
+  includedProducts.forEach((material, index) => {
     const resolved = priceResult.resolved[index];
     if (resolved) resolvedByMaterialId.set(material.id, resolved);
   });
 
   const updatedMaterials = materials.map((material) => {
+    if (isServiceMaterial(material)) {
+      return {
+        ...material,
+        sourceType: material.isRealData ? material.sourceType : "service_quote_required",
+        sourceName: material.isRealData ? material.sourceName : "Oferta local pendiente",
+      };
+    }
     const resolved = resolvedByMaterialId.get(material.id);
     // Adoption of the resolved price is separate from the isRealData label:
     // manual_locked, technical_bank, private_bc3 and URL-less private_tariff
@@ -391,9 +413,11 @@ async function verifyMaterialsAgainstTracker(
   });
 
   const verified = updatedMaterials.filter(
-    (material) => material.included && material.isRealData
+    (material) => material.included && isCommercialProductMaterial(material) && material.isRealData
   ).length;
-  const total = updatedMaterials.filter((material) => material.included).length;
+  const total = updatedMaterials.filter(
+    (material) => material.included && isCommercialProductMaterial(material)
+  ).length;
 
   return {
     materials: updatedMaterials,
@@ -406,6 +430,8 @@ async function verifyMaterialsAgainstTracker(
         priceResult.summary.tracker_products_available || trackerFallbackCount,
       lastVerifiedAt: new Date().toISOString(),
       location,
+      servicesTotal: includedServices.length,
+      servicesQuoted: quotedServices,
     },
   };
 }
@@ -416,7 +442,9 @@ function buildTrackerProviderOptions(materials: Material[]): ProviderOption[] {
     { name: string; count: number; total: number; isReal: boolean; sourceType: string }
   >();
 
-  materials.filter((material) => material.included).forEach((material) => {
+  materials
+    .filter((material) => material.included && isCommercialProductMaterial(material))
+    .forEach((material) => {
     const canonicalName = canonicalProviderName(material.sourceName, material.sourceUrl);
     const id = material.isRealData
       ? providerIdentitySlug(canonicalName, material.sourceUrl)
@@ -435,7 +463,7 @@ function buildTrackerProviderOptions(materials: Material[]): ProviderOption[] {
     current.isReal = current.isReal || Boolean(material.isRealData);
     if (material.isRealData) current.sourceType = material.sourceType || "n8n_market";
     providers.set(id, current);
-  });
+    });
 
   const options = Array.from(providers.entries()).map(([id, provider]) => ({
     id,
@@ -473,6 +501,8 @@ function integrateMaterialBasket(
     materials.map((material) => ({
       id: material.id,
       name: material.name,
+      specification: material.specification || material.name,
+      procurementKind: material.procurementKind || "product",
       quantity: material.quantity,
       unit: material.unit,
       unit_price: material.unit_price,
@@ -583,6 +613,8 @@ export interface BudgetState {
     trackerProductsAvailable: number;
     lastVerifiedAt: string | null;
     location: string;
+    servicesTotal?: number;
+    servicesQuoted?: number;
   };
   realismAudit: {
     effectiveAreaM2: number;
@@ -958,6 +990,8 @@ export function BudgetGenerateProvider({
     const materials: EngineMaterial[] = state.materials.map((material, index) => ({
       id: material.id,
       name: material.name,
+      specification: material.specification || material.name,
+      procurementKind: material.procurementKind || "product",
       quantity: material.quantity,
       unit: material.unit,
       unit_price: material.unit_price,
@@ -1154,7 +1188,12 @@ export function BudgetGenerateProvider({
         updated.subtotal = updated.quantity * updated.unit_price;
         return updated;
       });
-      const included = materials.filter((material) => material.included);
+      const included = materials.filter(
+        (material) => material.included && isCommercialProductMaterial(material)
+      );
+      const services = materials.filter(
+        (material) => material.included && isServiceMaterial(material)
+      );
       const verified = included.filter((material) => material.isRealData).length;
       return {
         ...prev,
@@ -1168,6 +1207,8 @@ export function BudgetGenerateProvider({
           verified,
           estimated: included.length - verified,
           lastVerifiedAt: new Date().toISOString(),
+          servicesTotal: services.length,
+          servicesQuoted: services.filter((material) => material.isRealData).length,
         },
         partidas: integrateMaterialBasket(prev.partidas, materials, prev.marginPercent),
       };
@@ -1534,6 +1575,14 @@ export function BudgetGenerateProvider({
   };
 
   const loadDraft = useCallback((savedState: Partial<BudgetState>) => {
+    const savedMaterials = savedState.materials || [];
+    const requiresAtomicRecalculation = savedMaterials.some((material) =>
+      isCommercialProductMaterial(material) && (
+        !material.specification ||
+        /^mat-\d+$/.test(material.id) ||
+        !auditAtomicMaterialName(material.name).isAtomic
+      )
+    );
     setState(prev => ({
       ...prev,
       ...savedState,
@@ -1546,6 +1595,7 @@ export function BudgetGenerateProvider({
         ...prev.realismAudit,
         ...(savedState.realismAudit || {}),
       },
+      analysisDirty: Boolean(savedState.analysisDirty || requiresAtomicRecalculation),
     }));
   }, []);
 
@@ -1884,6 +1934,8 @@ export function BudgetGenerateProvider({
         finalMaterials = adjustResult.materials.map(em => ({
           id: em.id,
           name: em.name,
+          specification: em.specification,
+          procurementKind: em.procurementKind,
           quantity: em.quantity,
           unit: em.unit,
           unit_price: em.unit_price,
@@ -1916,6 +1968,7 @@ export function BudgetGenerateProvider({
         }));
         finalMaterials = buildScopeMaterials(fallbackScope).map(em => ({
           id: em.id, name: em.name, quantity: em.quantity, unit: em.unit,
+          specification: em.specification, procurementKind: em.procurementKind,
           unit_price: em.unit_price, subtotal: em.subtotal, included: em.included,
           provider_id: em.provider_id, isRealData: em.isRealData, sourceType: em.sourceType,
           linkedChapter: em.linked_chapter,
@@ -1927,6 +1980,7 @@ export function BudgetGenerateProvider({
         const matScope: BudgetScope = engineScope;
         finalMaterials = buildScopeMaterials(matScope).map(em => ({
           id: em.id, name: em.name, quantity: em.quantity, unit: em.unit,
+          specification: em.specification, procurementKind: em.procurementKind,
           unit_price: em.unit_price, subtotal: em.subtotal, included: em.included,
           provider_id: em.provider_id, isRealData: em.isRealData, sourceType: em.sourceType,
           linkedChapter: em.linked_chapter,
@@ -1953,23 +2007,30 @@ export function BudgetGenerateProvider({
         };
       });
 
+      const includedCommercialProducts = finalMaterials.filter(
+        (material) => material.included && isCommercialProductMaterial(material)
+      );
+      const includedServices = finalMaterials.filter(
+        (material) => material.included && isServiceMaterial(material)
+      );
       let priceVerification: BudgetState["priceVerification"] = {
-        status: finalMaterials.length > 0 ? "partial" : "complete",
-        total: finalMaterials.filter((material) => material.included).length,
+        status: includedCommercialProducts.length > 0 ? "partial" : "complete",
+        total: includedCommercialProducts.length,
         verified: 0,
-        estimated: finalMaterials.filter((material) => material.included).length,
+        estimated: includedCommercialProducts.length,
         trackerProductsAvailable: data.data_sources?.tracker_products_count || 0,
         lastVerifiedAt: null,
         location: engineScope.ubicacion,
+        servicesTotal: includedServices.length,
+        servicesQuoted: includedServices.filter((material) => material.isRealData).length,
       };
 
       // Resolve every material before totals and PDFs are built. This avoids
       // showing one amount on screen while the background request later changes it.
-      if (finalMaterials.some((material) => material.included)) {
+      if (includedCommercialProducts.length > 0) {
         const qualityTier: QualityTier = (engineScope.calidad as QualityTier) || "media";
-        const includedMaterials = finalMaterials.filter((material) => material.included);
         const priceResult = await resolveMarketPrices({
-          materials: includedMaterials.map((material) => ({
+          materials: includedCommercialProducts.map((material) => ({
             materialName: material.name,
             category: "material",
             unit: material.unit,
@@ -1984,12 +2045,19 @@ export function BudgetGenerateProvider({
 
         if (priceResult.ok) {
           const resolvedByMaterialId = new Map<string, ResolvedPrice>();
-          includedMaterials.forEach((material, index) => {
+          includedCommercialProducts.forEach((material, index) => {
             const resolved = priceResult.resolved[index];
             if (resolved) resolvedByMaterialId.set(material.id, resolved);
           });
 
           finalMaterials = finalMaterials.map((material) => {
+            if (isServiceMaterial(material)) {
+              return {
+                ...material,
+                sourceType: material.isRealData ? material.sourceType : "service_quote_required",
+                sourceName: material.isRealData ? material.sourceName : "Oferta local pendiente",
+              };
+            }
             const resolved = resolvedByMaterialId.get(material.id);
             // Adoption of the resolved price is separate from the
             // isRealData label — see the equivalent gate above.
@@ -2028,8 +2096,12 @@ export function BudgetGenerateProvider({
             };
           });
 
-          const verified = finalMaterials.filter((material) => material.included && material.isRealData).length;
-          const total = finalMaterials.filter((material) => material.included).length;
+          const verified = finalMaterials.filter(
+            (material) => material.included && isCommercialProductMaterial(material) && material.isRealData
+          ).length;
+          const total = finalMaterials.filter(
+            (material) => material.included && isCommercialProductMaterial(material)
+          ).length;
           priceVerification = {
             status: verified === total ? "complete" : "partial",
             total,
@@ -2041,6 +2113,8 @@ export function BudgetGenerateProvider({
               0,
             lastVerifiedAt: new Date().toISOString(),
             location: engineScope.ubicacion,
+            servicesTotal: includedServices.length,
+            servicesQuoted: includedServices.filter((material) => material.isRealData).length,
           };
         } else {
           priceVerification = {
@@ -2120,6 +2194,8 @@ export function BudgetGenerateProvider({
       const engineMaterialsForBasket: EngineMaterial[] = finalMaterials.map((material) => ({
         id: material.id,
         name: material.name,
+        specification: material.specification || material.name,
+        procurementKind: material.procurementKind || "product",
         quantity: material.quantity,
         unit: material.unit,
         unit_price: material.unit_price,
@@ -2267,6 +2343,8 @@ export function BudgetGenerateProvider({
         const viewMaterials: EngineMaterial[] = finalMaterials.map(m => ({
           id: m.id,
           name: m.name,
+          specification: m.specification || m.name,
+          procurementKind: m.procurementKind || "product",
           quantity: m.quantity,
           unit: m.unit,
           unit_price: m.unit_price,
@@ -2344,7 +2422,7 @@ export function BudgetGenerateProvider({
       }));
       if (forceRegenerate) {
         toast.success("Presupuesto recalculado", {
-          description: `${priceVerification.verified}/${priceVerification.total} materiales verificados · ${verifiedPartidaCount}/${finalPartidas.length} partidas contrastadas.`,
+          description: `${priceVerification.verified}/${priceVerification.total} productos verificados · ${verifiedPartidaCount}/${finalPartidas.length} partidas contrastadas.`,
         });
       }
       return true;
@@ -2403,6 +2481,7 @@ export function BudgetGenerateProvider({
             const builtMats = buildScopeMaterials(fbScope);
             const fallbackMaterialsList = builtMats.map(em => ({
               id: em.id, name: em.name, quantity: em.quantity, unit: em.unit,
+              specification: em.specification, procurementKind: em.procurementKind,
               unit_price: em.unit_price, subtotal: em.subtotal, included: em.included,
               provider_id: em.provider_id, isRealData: em.isRealData, sourceType: em.sourceType,
               linkedChapter: em.linked_chapter,
@@ -2479,6 +2558,8 @@ export function BudgetGenerateProvider({
                 const gMaterials = buildScopeMaterials(gScope).map((material) => ({
                   id: material.id,
                   name: material.name,
+                  specification: material.specification,
+                  procurementKind: material.procurementKind,
                   quantity: material.quantity,
                   unit: material.unit,
                   unit_price: material.unit_price,

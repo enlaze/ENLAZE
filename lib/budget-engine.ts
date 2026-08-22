@@ -143,6 +143,8 @@ export interface EnginePartida {
 export interface EngineMaterial {
   id: string;
   name: string;
+  specification: string;
+  procurementKind: "product" | "service";
   quantity: number;
   unit: string;
   unit_price: number;
@@ -863,7 +865,10 @@ export function calculateItemCostBreakdown(
 // ─── D. Materials from Partidas ─────────────────────────────────────────────
 
 interface MaterialSpec {
+  id: string;
   name: string;
+  specification: string;
+  procurementKind?: "product" | "service";
   unit: string;
   unit_price: number;
   provider_id: string;
@@ -872,45 +877,68 @@ interface MaterialSpec {
 }
 
 const MATERIAL_SPECS: MaterialSpec[] = [
-  // Albanileria
-  { name: "Mortero de cemento M-7.5 (saco 25kg)", unit: "sacos", unit_price: 3.50, provider_id: "leroy-merlin", qtyFn: q => Math.ceil(q.partitionArea / 3), chapter: "albanileria" },
-  { name: "Placa de yeso laminado 13mm (Pladur N)", unit: "ud", unit_price: 5.80, provider_id: "leroy-merlin", qtyFn: q => Math.ceil(q.partitionArea * 1.1), chapter: "albanileria" },
-  { name: "Perfil metalico para Pladur (montante 48mm)", unit: "ud", unit_price: 3.20, provider_id: "obramat", qtyFn: q => Math.ceil(q.partitionArea * 0.8), chapter: "albanileria" },
-  // Fontaneria
-  { name: "Tuberia multicapa 16mm (rollo 50m)", unit: "rollos", unit_price: 42.0, provider_id: "saltoki", qtyFn: q => Math.ceil((q.bathroomsCount + (q.kitchenIncluded ? 1 : 0)) * 1.2), chapter: "fontaneria" },
-  { name: "Tuberia PVC evacuacion 110mm (3m)", unit: "ud", unit_price: 8.50, provider_id: "saltoki", qtyFn: q => Math.ceil(q.bathroomsCount * 3 + (q.kitchenIncluded ? 2 : 0)), chapter: "fontaneria" },
-  { name: "Racores y accesorios multicapa", unit: "lote", unit_price: 95.0, provider_id: "saltoki", qtyFn: q => Math.max(q.bathroomsCount + (q.kitchenIncluded ? 1 : 0), 1), chapter: "fontaneria" },
-  { name: "Llaves de corte y colectores", unit: "lote", unit_price: 78.0, provider_id: "saltoki", qtyFn: q => Math.max(q.bathroomsCount + (q.kitchenIncluded ? 1 : 0), 1), chapter: "fontaneria" },
-  { name: "Sifones y valvulas de desague", unit: "ud", unit_price: 18.0, provider_id: "leroy-merlin", qtyFn: q => Math.max(q.bathroomsCount * 2 + (q.kitchenIncluded ? 1 : 0), 2), chapter: "fontaneria" },
-  // Electricidad
-  { name: "Cable H07V-K 2.5mm2 (rollo 100m)", unit: "rollos", unit_price: 32.0, provider_id: "leroy-merlin", qtyFn: q => Math.ceil(q.electricalPointsEstimated / 30), chapter: "electricidad" },
-  { name: "Cuadro electrico + protecciones", unit: "ud", unit_price: 220.0, provider_id: "saltoki", qtyFn: () => 1, chapter: "electricidad" },
-  { name: "Mecanismos electricos (enchufes + interruptores)", unit: "ud", unit_price: 8.50, provider_id: "leroy-merlin", qtyFn: q => q.electricalPointsEstimated, chapter: "electricidad" },
-  { name: "Luminaria LED de superficie", unit: "ud", unit_price: 38.0, provider_id: "leroy-merlin", qtyFn: q => Math.max(Math.round(q.floorArea / 6), 4), chapter: "electricidad" },
-  // Revestimientos / Pavimentos
-  { name: "Azulejo porcelanico 60x60cm", unit: "m2", unit_price: 18.50, provider_id: "leroy-merlin", qtyFn: q => Math.ceil(q.wetWallArea * 1.1), chapter: "revestimientos" },
-  { name: "Cemento cola porcelanico flexible (saco 25kg)", unit: "sacos", unit_price: 12.0, provider_id: "obramat", qtyFn: q => Math.ceil((q.wetWallArea + q.pavementArea) / 5), chapter: "revestimientos" },
-  { name: "Pavimento ceramico/laminado", unit: "m2", unit_price: 22.0, provider_id: "leroy-merlin", qtyFn: q => Math.ceil(q.pavementArea * 1.1), chapter: "pavimentos" },
-  { name: "Rodapie a juego", unit: "ml", unit_price: 4.50, provider_id: "leroy-merlin", qtyFn: q => Math.ceil(q.baseboardMlEstimated * 1.05), chapter: "rodapie" },
-  // Pintura
-  { name: "Pintura plastica blanca mate (cubo 15L)", unit: "cubos", unit_price: 35.0, provider_id: "leroy-merlin", qtyFn: q => Math.ceil((q.wallPaintArea + q.ceilingArea) / 80), chapter: "pintura" },
-  { name: "Imprimacion fijadora (cubo 15L)", unit: "cubos", unit_price: 28.0, provider_id: "leroy-merlin", qtyFn: q => Math.ceil((q.wallPaintArea + q.ceilingArea) / 120), chapter: "pintura" },
-  { name: "Masilla de reparacion interior (saco 15kg)", unit: "sacos", unit_price: 18.0, provider_id: "obramat", qtyFn: q => Math.max(Math.ceil(q.wallPaintArea / 100), 1), chapter: "pintura" },
-  { name: "Cinta de enmascarar y plastico protector", unit: "lote", unit_price: 32.0, provider_id: "leroy-merlin", qtyFn: q => Math.max(Math.ceil(q.floorArea / 80), 1), chapter: "pintura" },
-  { name: "Rodillos, brochas y cubetas", unit: "lote", unit_price: 42.0, provider_id: "leroy-merlin", qtyFn: q => Math.max(Math.ceil(q.floorArea / 100), 1), chapter: "pintura" },
-  // Sanitarios
-  { name: "Inodoro compacto salida dual", unit: "ud", unit_price: 155.0, provider_id: "leroy-merlin", qtyFn: q => q.bathroomsCount, chapter: "sanitarios" },
-  { name: "Lavabo sobre encimera + monomando", unit: "ud", unit_price: 130.0, provider_id: "leroy-merlin", qtyFn: q => q.bathroomsCount, chapter: "sanitarios" },
-  { name: "Plato de ducha resina antideslizante", unit: "ud", unit_price: 195.0, provider_id: "obramat", qtyFn: q => q.bathroomsCount, chapter: "sanitarios" },
-  { name: "Mampara de ducha frontal", unit: "ud", unit_price: 220.0, provider_id: "leroy-merlin", qtyFn: q => q.bathroomsCount, chapter: "sanitarios" },
-  { name: "Griferia monomando (lavabo + ducha)", unit: "ud", unit_price: 85.0, provider_id: "leroy-merlin", qtyFn: q => q.bathroomsCount * 2, chapter: "sanitarios" },
-  // Carpinteria
-  { name: "Puerta interior ciega lacada blanca", unit: "ud", unit_price: 155.0, provider_id: "leroy-merlin", qtyFn: q => q.doorsEstimated, chapter: "carpinteria_interior" },
-  // Impermeabilizacion
-  { name: "Lamina impermeabilizante zonas humedas (rollo 20m2)", unit: "rollos", unit_price: 42.0, provider_id: "obramat", qtyFn: q => Math.max(Math.ceil(q.wetWallArea * 0.4 / 20), 1), chapter: "impermeabilizacion" },
-  // Auxiliares
-  { name: "Silicona neutra sanitaria (cartucho 300ml)", unit: "ud", unit_price: 5.50, provider_id: "leroy-merlin", qtyFn: q => Math.max(q.bathroomsCount * 3, 4), chapter: "sanitarios" },
-  { name: "Contenedor de escombros 6m3 (alquiler+transporte)", unit: "ud", unit_price: 290.0, provider_id: "referencia-mercado", qtyFn: q => q.wasteContainersEstimated, chapter: "residuos" },
+  // Albañilería: cada línea representa un formato comprable concreto.
+  { id: "mortar-m75-25kg", name: "Mortero seco de cemento M-7.5 gris saco 25 kg", specification: "Clase M-7.5; color gris; envase de 25 kg", unit: "sacos", unit_price: 3.50, provider_id: "obramat", qtyFn: q => Math.ceil(q.partitionArea / 3), chapter: "albanileria" },
+  { id: "gypsum-standard-a-2000-1200-13", name: "Placa de yeso laminado estándar tipo A 2000x1200x13 mm", specification: "Tipo A estándar; 2000x1200 mm; espesor 13 mm", unit: "ud", unit_price: 9.80, provider_id: "obramat", qtyFn: q => Math.ceil(q.partitionArea * 1.1), chapter: "albanileria" },
+  { id: "metal-stud-48-3000", name: "Montante metálico para placa de yeso 48 mm 3 m", specification: "Montante galvanizado; ancho 48 mm; longitud 3 m", unit: "ud", unit_price: 3.20, provider_id: "obramat", qtyFn: q => Math.ceil(q.partitionArea * 0.8), chapter: "albanileria" },
+
+  // Fontanería: los antiguos lotes se descomponen en tubo, racores, llaves y desagües.
+  { id: "multilayer-pipe-16-50", name: "Tubo multicapa PEX-AL-PEX 16 mm rollo 50 m", specification: "Diámetro 16 mm; rollo de 50 m; uso agua fría y caliente", unit: "rollos", unit_price: 42.0, provider_id: "saltoki", qtyFn: q => Math.ceil((q.bathroomsCount + (q.kitchenIncluded ? 1 : 0)) * 1.2), chapter: "fontaneria" },
+  { id: "pvc-drain-110-3", name: "Tubo PVC evacuación 110 mm longitud 3 m", specification: "PVC evacuación; diámetro 110 mm; barra de 3 m", unit: "ud", unit_price: 12.90, provider_id: "bauhaus", qtyFn: q => Math.ceil(q.bathroomsCount * 3 + (q.kitchenIncluded ? 2 : 0)), chapter: "fontaneria" },
+  { id: "multilayer-straight-fitting-16", name: "Racor recto para tubo multicapa 16 mm", specification: "Racor recto; conexión para tubo multicapa de 16 mm", unit: "ud", unit_price: 3.14, provider_id: "manomano", qtyFn: q => Math.max((q.bathroomsCount * 8) + (q.kitchenIncluded ? 4 : 0), 2), chapter: "fontaneria" },
+  { id: "multilayer-elbow-16", name: "Codo 90 grados para tubo multicapa 16 mm", specification: "Codo de 90°; conexión para tubo multicapa de 16 mm", unit: "ud", unit_price: 4.91, provider_id: "manomano", qtyFn: q => Math.max((q.bathroomsCount * 6) + (q.kitchenIncluded ? 3 : 0), 2), chapter: "fontaneria" },
+  { id: "angle-stop-valve-half-three-eighth", name: "Llave de corte escuadra 1/2 x 3/8 pulgadas", specification: "Entrada 1/2; salida 3/8; cierre individual de aparato", unit: "ud", unit_price: 7.50, provider_id: "obramat", qtyFn: q => Math.max((q.bathroomsCount * 2) + (q.kitchenIncluded ? 2 : 0), 1), chapter: "fontaneria" },
+  { id: "multilayer-manifold-four-16", name: "Colector de fontanería 4 salidas para tubo 16 mm", specification: "Colector de 4 salidas; conexiones de 16 mm", unit: "ud", unit_price: 35.0, provider_id: "saltoki", qtyFn: q => Math.max(q.bathroomsCount + (q.kitchenIncluded ? 1 : 0), 1), chapter: "fontaneria" },
+  { id: "basin-bottle-trap-32", name: "Sifón botella para lavabo salida 32 mm", specification: "Sifón botella; salida de 32 mm; conexión de lavabo", unit: "ud", unit_price: 12.0, provider_id: "obramat", qtyFn: q => q.bathroomsCount, chapter: "fontaneria" },
+  { id: "basin-waste-valve-32", name: "Válvula de desagüe para lavabo 1 1/4 pulgadas", specification: "Válvula de lavabo; rosca 1 1/4; acabado cromado", unit: "ud", unit_price: 10.0, provider_id: "obramat", qtyFn: q => q.bathroomsCount, chapter: "fontaneria" },
+  { id: "sink-trap-40", name: "Sifón para fregadero salida 40 mm", specification: "Sifón para fregadero; salida de 40 mm", unit: "ud", unit_price: 15.0, provider_id: "obramat", qtyFn: q => q.kitchenIncluded ? 1 : 0, chapter: "fontaneria" },
+  { id: "sink-basket-waste", name: "Válvula cesta para fregadero 3 1/2 pulgadas", specification: "Válvula cesta; diámetro 3 1/2; acero inoxidable", unit: "ud", unit_price: 12.0, provider_id: "obramat", qtyFn: q => q.kitchenIncluded ? 1 : 0, chapter: "fontaneria" },
+
+  // Electricidad: cuadro, protecciones y mecanismos se verifican por separado.
+  { id: "cable-h07vk-25-100", name: "Cable H07V-K 2.5 mm2 rollo 100 m", specification: "Sección 2,5 mm²; rollo 100 m; conductor flexible", unit: "rollos", unit_price: 28.0, provider_id: "obramat", qtyFn: q => Math.ceil(q.electricalPointsEstimated / 30), chapter: "electricidad" },
+  { id: "panel-box-12-flush", name: "Caja para cuadro eléctrico empotrable 12 módulos", specification: "Instalación empotrada; capacidad 12 módulos DIN", unit: "ud", unit_price: 22.0, provider_id: "obramat", qtyFn: () => 1, chapter: "electricidad" },
+  { id: "rcd-2p-40a-30ma", name: "Interruptor diferencial 2P 40A 30mA", specification: "2 polos; intensidad 40 A; sensibilidad 30 mA", unit: "ud", unit_price: 45.0, provider_id: "obramat", qtyFn: () => 1, chapter: "electricidad" },
+  { id: "mcb-1pn-16a-c", name: "Magnetotérmico 1P+N 16A curva C", specification: "1P+N; intensidad 16 A; curva C", unit: "ud", unit_price: 12.50, provider_id: "obramat", qtyFn: q => Math.max(Math.ceil(q.electricalPointsEstimated / 14), 3), chapter: "electricidad" },
+  { id: "surge-protection-2p", name: "Protector de sobretensiones transitorias 2P", specification: "Protección transitoria; 2 polos; montaje en carril DIN", unit: "ud", unit_price: 64.0, provider_id: "obramat", qtyFn: () => 1, chapter: "electricidad" },
+  { id: "socket-schuko-16a-white", name: "Base de enchufe Schuko 16A empotrable blanca", specification: "Tipo Schuko; 16 A; instalación empotrada; color blanco", unit: "ud", unit_price: 4.80, provider_id: "obramat", qtyFn: q => Math.max(Math.round(q.electricalPointsEstimated * 0.65), 1), chapter: "electricidad" },
+  { id: "switch-one-way-10a-white", name: "Interruptor unipolar 10A empotrable blanco", specification: "Interruptor unipolar; 10 A; instalación empotrada; color blanco", unit: "ud", unit_price: 4.50, provider_id: "obramat", qtyFn: q => Math.max(Math.round(q.electricalPointsEstimated * 0.35), 1), chapter: "electricidad" },
+  { id: "led-surface-20w-4000k", name: "Luminaria LED de superficie 20W 4000K IP20", specification: "Potencia 20 W; temperatura 4000 K; protección IP20; montaje en superficie", unit: "ud", unit_price: 5.95, provider_id: "manomano", qtyFn: q => Math.max(Math.round(q.floorArea / 6), 4), chapter: "electricidad" },
+
+  // Acabados: se elimina la alternativa cerámico/laminado y se define una solución completa.
+  { id: "porcelain-wall-60-60", name: "Revestimiento porcelánico rectificado 60x60 cm mate", specification: "Porcelánico rectificado; formato 60x60 cm; acabado mate", unit: "m2", unit_price: 28.0, provider_id: "porcelanosa", qtyFn: q => Math.ceil(q.wetWallArea * 1.1), chapter: "revestimientos" },
+  { id: "adhesive-c2te-25", name: "Adhesivo cementoso flexible C2TE gris saco 25 kg", specification: "Clasificación C2TE; color gris; saco de 25 kg", unit: "sacos", unit_price: 12.50, provider_id: "obramat", qtyFn: q => Math.ceil((q.wetWallArea + q.pavementArea) / 5), chapter: "revestimientos" },
+  { id: "laminate-ac5-oak-10", name: "Suelo laminado AC5 10 mm acabado roble", specification: "Clase de uso AC5; espesor 10 mm; acabado roble", unit: "m2", unit_price: 22.31, provider_id: "obramat", qtyFn: q => Math.ceil(q.pavementArea * 1.1), chapter: "pavimentos" },
+  { id: "laminate-underlay-5", name: "Base aislante para suelo laminado 5 mm", specification: "Espesor 5 mm; apta para suelo laminado flotante", unit: "m2", unit_price: 3.40, provider_id: "obramat", qtyFn: q => Math.ceil(q.pavementArea * 1.1), chapter: "pavimentos" },
+  { id: "skirting-mdf-white-2200", name: "Rodapié MDF blanco 2200x70x9 mm", specification: "MDF melaminado blanco; longitud 2200 mm; altura 70 mm; espesor 9 mm", unit: "ud", unit_price: 4.20, provider_id: "obramat", qtyFn: q => Math.ceil((q.baseboardMlEstimated * 1.05) / 2.2), chapter: "rodapie" },
+
+  // Pintura: protección y herramientas dejan de ser lotes genéricos.
+  { id: "paint-white-matt-15", name: "Pintura plástica blanca mate interior 15 L", specification: "Interior; color blanco; acabado mate; envase 15 L", unit: "cubos", unit_price: 37.0, provider_id: "obramat", qtyFn: q => Math.ceil((q.wallPaintArea + q.ceilingArea) / 80), chapter: "pintura" },
+  { id: "primer-water-15", name: "Imprimación fijadora al agua 15 L", specification: "Fijadora al agua; envase 15 L; uso interior", unit: "cubos", unit_price: 35.0, provider_id: "obramat", qtyFn: q => Math.ceil((q.wallPaintArea + q.ceilingArea) / 120), chapter: "pintura" },
+  { id: "interior-repair-putty-15", name: "Masilla de reparación interior saco 15 kg", specification: "Uso interior; saco de 15 kg; lijable", unit: "sacos", unit_price: 18.0, provider_id: "obramat", qtyFn: q => Math.max(Math.ceil(q.wallPaintArea / 100), 1), chapter: "pintura" },
+  { id: "masking-tape-50-50", name: "Cinta de enmascarar 50 mm x 50 m", specification: "Ancho 50 mm; longitud 50 m; uso pintura interior", unit: "ud", unit_price: 5.50, provider_id: "obramat", qtyFn: q => Math.max(Math.ceil(q.floorArea / 25), 2), chapter: "pintura" },
+  { id: "protective-film-4-5", name: "Plástico protector para pintura 4x5 m", specification: "Lámina protectora; formato 4x5 m", unit: "ud", unit_price: 4.50, provider_id: "obramat", qtyFn: q => Math.max(Math.ceil(q.floorArea / 20), 1), chapter: "pintura" },
+  { id: "paint-roller-22", name: "Rodillo para pintura plástica interior 22 cm", specification: "Ancho 22 cm; apto para pintura plástica en paredes", unit: "ud", unit_price: 8.0, provider_id: "obramat", qtyFn: q => Math.max(Math.ceil(q.floorArea / 80), 1), chapter: "pintura" },
+  { id: "paint-brush-40", name: "Brocha plana para pintura 40 mm", specification: "Ancho 40 mm; uso en recortes y encuentros", unit: "ud", unit_price: 4.0, provider_id: "obramat", qtyFn: q => Math.max(Math.ceil(q.floorArea / 100), 1), chapter: "pintura" },
+  { id: "paint-tray-16", name: "Cubeta de pintura con rejilla 16 L", specification: "Capacidad 16 L; rejilla escurridora incluida", unit: "ud", unit_price: 9.0, provider_id: "obramat", qtyFn: q => Math.max(Math.ceil(q.floorArea / 100), 1), chapter: "pintura" },
+
+  // Sanitarios: cada aparato y cada grifería conservan su precio independiente.
+  { id: "toilet-compact-dual-white", name: "Inodoro compacto adosado a pared salida dual blanco", specification: "Compacto; adosado a pared; salida dual; porcelana blanca", unit: "ud", unit_price: 189.0, provider_id: "roca", qtyFn: q => q.bathroomsCount, chapter: "sanitarios" },
+  { id: "countertop-basin-round-400", name: "Lavabo sobre encimera redondo 400 mm blanco", specification: "Instalación sobre encimera; diámetro 400 mm; porcelana blanca", unit: "ud", unit_price: 195.0, provider_id: "roca", qtyFn: q => q.bathroomsCount, chapter: "sanitarios" },
+  { id: "basin-mixer-chrome", name: "Grifo monomando de lavabo cromado", specification: "Monomando; instalación sobre lavabo; acabado cromado", unit: "ud", unit_price: 65.0, provider_id: "roca", qtyFn: q => q.bathroomsCount, chapter: "sanitarios" },
+  { id: "shower-tray-resin-120-80", name: "Plato de ducha de resina antideslizante 120x80 cm blanco", specification: "Resina; 120x80 cm; antideslizante; color blanco", unit: "ud", unit_price: 295.0, provider_id: "roca", qtyFn: q => q.bathroomsCount, chapter: "sanitarios" },
+  { id: "shower-screen-sliding-120", name: "Mampara frontal corredera 120 cm vidrio transparente", specification: "Frontal; corredera; ancho 120 cm; vidrio transparente", unit: "ud", unit_price: 320.0, provider_id: "roca", qtyFn: q => q.bathroomsCount, chapter: "sanitarios" },
+  { id: "shower-thermostatic-chrome", name: "Grifo termostático de ducha cromado", specification: "Termostático; instalación vista; acabado cromado", unit: "ud", unit_price: 185.0, provider_id: "roca", qtyFn: q => q.bathroomsCount, chapter: "sanitarios" },
+
+  // Carpintería: la hipótesis de mano se hace explícita y medible.
+  { id: "door-block-white-725-left", name: "Puerta interior en block lacada blanca ciega 72.5 cm izquierda", specification: "Block completo; hoja ciega lacada blanca; ancho 72,5 cm; mano izquierda", unit: "ud", unit_price: 109.0, provider_id: "obramat", qtyFn: q => Math.ceil(q.doorsEstimated / 2), chapter: "carpinteria_interior" },
+  { id: "door-block-white-725-right", name: "Puerta interior en block lacada blanca ciega 72.5 cm derecha", specification: "Block completo; hoja ciega lacada blanca; ancho 72,5 cm; mano derecha", unit: "ud", unit_price: 109.0, provider_id: "obramat", qtyFn: q => Math.floor(q.doorsEstimated / 2), chapter: "carpinteria_interior" },
+
+  // Impermeabilización y sellado.
+  { id: "waterproof-membrane-1-10", name: "Lámina impermeabilizante para zonas húmedas rollo 1x10 m", specification: "Rollo de 1x10 m; apta para zonas húmedas bajo revestimiento", unit: "rollos", unit_price: 42.0, provider_id: "obramat", qtyFn: q => Math.max(Math.ceil((q.wetWallArea * 0.4) / 10), 1), chapter: "impermeabilizacion" },
+  { id: "sanitary-silicone-clear-300", name: "Silicona sanitaria transparente cartucho 300 ml", specification: "Uso sanitario; transparente; cartucho de 300 ml", unit: "ud", unit_price: 5.50, provider_id: "obramat", qtyFn: q => Math.max(q.bathroomsCount * 3, 4), chapter: "sanitarios" },
+
+  // Los servicios se presupuestan por oferta local y no inflan la cobertura de productos.
+  { id: "waste-container-service-6", name: "Servicio de contenedor de escombros 6 m3", specification: "Alquiler, transporte, retirada y tasa de gestor autorizado", procurementKind: "service", unit: "ud", unit_price: 290.0, provider_id: "proveedor-local", qtyFn: q => q.wasteContainersEstimated, chapter: "residuos" },
 ];
 
 /**
@@ -924,12 +952,14 @@ export function buildScopeMaterials(scope: BudgetScope): EngineMaterial[] {
 
   return MATERIAL_SPECS
     .filter((spec) => !requestedChapters || requestedChapters.has(spec.chapter))
-    .map((spec, idx) => {
+    .map((spec) => {
     const qty = spec.qtyFn(q);
     const adjustedPrice = Math.round(spec.unit_price * qualityMult * 100) / 100;
     return {
-      id: `mat-${idx}`,
+      id: `mat-${spec.id}`,
       name: spec.name,
+      specification: spec.specification,
+      procurementKind: spec.procurementKind || "product",
       quantity: qty,
       unit: spec.unit,
       unit_price: adjustedPrice,

@@ -105,6 +105,8 @@ export function LiveSummaryPanel() {
   const verifiedMaterials = state.priceVerification.verified;
   const totalMaterialsToVerify = state.priceVerification.total;
   const pendingMaterials = state.priceVerification.estimated;
+  const quotedServices = state.priceVerification.servicesQuoted || 0;
+  const totalServicesToQuote = state.priceVerification.servicesTotal || 0;
 
 
 
@@ -366,17 +368,25 @@ export function LiveSummaryPanel() {
               </span>
             </li>
             <li className="flex justify-between">
-              <span>Materiales verificados en este presupuesto:</span>
+              <span>Productos verificados en este presupuesto:</span>
               <span className="font-bold text-navy-900 dark:text-white">
                 {verifiedMaterials}/{totalMaterialsToVerify}
               </span>
             </li>
             <li className="flex justify-between">
               <span>Cobertura comercial:</span>
-              <span className={`font-bold ${totalMaterialsToVerify > 0 && verifiedMaterials / totalMaterialsToVerify >= 0.9 ? "text-brand-green" : "text-amber-600"}`}>
-                {totalMaterialsToVerify > 0 ? Math.round((verifiedMaterials / totalMaterialsToVerify) * 100) : 0}% (objetivo 90%)
+              <span className={`font-bold ${totalMaterialsToVerify > 0 && verifiedMaterials === totalMaterialsToVerify ? "text-brand-green" : "text-amber-600"}`}>
+                {totalMaterialsToVerify > 0 ? Math.round((verifiedMaterials / totalMaterialsToVerify) * 100) : 0}% (objetivo 100%)
               </span>
             </li>
+            {totalServicesToQuote > 0 && (
+              <li className="flex justify-between">
+                <span>Servicios locales cotizados:</span>
+                <span className={`font-bold ${quotedServices === totalServicesToQuote ? "text-brand-green" : "text-violet-700 dark:text-violet-400"}`}>
+                  {quotedServices}/{totalServicesToQuote}
+                </span>
+              </li>
+            )}
             <li className="flex justify-between">
               <span>Referencias técnicas por validar:</span>
               <span className={`font-bold ${pendingMaterials > 0 ? "text-navy-700 dark:text-zinc-300" : "text-brand-green"}`}>
@@ -460,7 +470,7 @@ export function LiveSummaryPanel() {
       {state.analysisDirty && (
         <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-800 rounded-xl p-3 mb-4">
           <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
-            La propuesta ha cambiado desde el último análisis. Pulsa "Generar con IA" en el paso de Partidas para recalcular.
+            La propuesta o su catálogo técnico ha cambiado desde el último análisis. Pulsa &quot;Volver a calcular presupuesto&quot; para regenerar las referencias atómicas y consultar los precios actuales.
           </p>
         </div>
       )}

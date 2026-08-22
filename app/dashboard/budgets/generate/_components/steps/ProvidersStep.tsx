@@ -14,6 +14,10 @@ import {
   getComparableOffers,
   type ComparableOffer,
 } from "@/lib/basket-price-comparison";
+import {
+  isCommercialProductMaterial,
+  isServiceMaterial,
+} from "@/lib/material-procurement";
 
 const SECTOR_REFERENCE_PROVIDERS = [
   { name: "Leroy Merlin", specialty: "Materiales, equipamiento y reforma" },
@@ -153,6 +157,11 @@ export function ProvidersStep() {
 
   /** Badge props for source/provider status. Provider match/missing flags take priority when present. */
   const getBadgeProps = (sourceType?: string, isRealData?: boolean, material?: any) => {
+    if (isServiceMaterial(material || {})) {
+      return material?.isRealData
+        ? { label: "OFERTA", className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800" }
+        : { label: "SERVICIO", className: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 border-violet-200 dark:border-violet-800" };
+    }
     // Provider enrichment flags take priority (commit 1.1.b.2)
     if (material?.missing_in_selected_provider === true) {
       return { label: "SIN PRECIO", className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800" };
@@ -182,9 +191,12 @@ export function ProvidersStep() {
   const providerMissingCount = materials.filter(m => (m as any).missing_in_selected_provider === true).length;
   const hasProviderEnrichment = providerMatchCount > 0 || providerMissingCount > 0;
   const includedMaterials = materials.filter((material) => material.included);
-  const verifiedMaterials = includedMaterials.filter((material) => material.isRealData).length;
-  const coveragePercent = includedMaterials.length > 0
-    ? Math.round((verifiedMaterials / includedMaterials.length) * 100)
+  const includedProducts = includedMaterials.filter(isCommercialProductMaterial);
+  const includedServices = includedMaterials.filter(isServiceMaterial);
+  const verifiedMaterials = includedProducts.filter((material) => material.isRealData).length;
+  const quotedServices = includedServices.filter((material) => material.isRealData).length;
+  const coveragePercent = includedProducts.length > 0
+    ? Math.round((verifiedMaterials / includedProducts.length) * 100)
     : 0;
   const basketProviderCoverage = useMemo(
     () => buildProviderBasketCoverage(materials),
@@ -236,7 +248,7 @@ export function ProvidersStep() {
 
         {includedMaterials.length > 0 && (
           <div className={`mb-6 rounded-xl border p-4 ${
-            coveragePercent >= 90
+            coveragePercent === 100
               ? "border-green-200 bg-green-50 dark:border-green-900/40 dark:bg-green-950/20"
               : coveragePercent >= 70
                 ? "border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20"
@@ -245,18 +257,23 @@ export function ProvidersStep() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="flex items-center gap-2">
-                  {coveragePercent >= 90
+                  {coveragePercent === 100
                     ? <ShieldCheck className="h-5 w-5 text-green-600" />
                     : <AlertTriangle className={`h-5 w-5 ${coveragePercent >= 70 ? "text-amber-600" : "text-red-600"}`} />}
                   <h3 className="font-bold text-navy-900 dark:text-white">
-                    Cobertura comercial: {verifiedMaterials}/{includedMaterials.length} ({coveragePercent}%)
+                    Cobertura comercial de productos: {verifiedMaterials}/{includedProducts.length} ({coveragePercent}%)
                   </h3>
                 </div>
                 <p className="mt-1 text-xs text-navy-600 dark:text-zinc-400">
-                  {coveragePercent >= 90
-                    ? "La cesta alcanza el objetivo de trazabilidad. Revisa únicamente disponibilidad y entrega antes de comprar."
-                    : `Objetivo operativo: 90%. Faltan ${Math.max(includedMaterials.length - verifiedMaterials, 0)} equivalencias por confirmar para reducir incertidumbre antes del inicio.`}
+                  {coveragePercent === 100
+                    ? "Todos los productos de la cesta tienen una referencia exacta y trazable. Revisa únicamente disponibilidad y entrega antes de comprar."
+                    : `Objetivo operativo: 100%. Faltan ${Math.max(includedProducts.length - verifiedMaterials, 0)} productos exactos por confirmar para eliminar equivalencias falsas.`}
                 </p>
+                {includedServices.length > 0 && (
+                  <p className="mt-1 text-xs font-medium text-violet-700 dark:text-violet-400">
+                    Servicios locales: {quotedServices}/{includedServices.length} con oferta vinculada. No se mezclan con el catálogo de productos.
+                  </p>
+                )}
               </div>
               <div className="flex gap-2 text-xs">
                 <span className="rounded-lg border border-white/60 bg-white/70 px-2.5 py-1.5 font-semibold text-navy-700 dark:border-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-300">
@@ -269,7 +286,7 @@ export function ProvidersStep() {
             </div>
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/80 dark:bg-zinc-800">
               <div
-                className={`h-full rounded-full ${coveragePercent >= 90 ? "bg-green-500" : coveragePercent >= 70 ? "bg-amber-500" : "bg-red-500"}`}
+                className={`h-full rounded-full ${coveragePercent === 100 ? "bg-green-500" : coveragePercent >= 70 ? "bg-amber-500" : "bg-red-500"}`}
                 style={{ width: `${coveragePercent}%` }}
               />
             </div>
@@ -480,7 +497,7 @@ export function ProvidersStep() {
                 </thead>
                 <tbody className="divide-y divide-navy-100 dark:divide-zinc-800 bg-white dark:bg-zinc-900">
                   {materials.map((m) => {
-                    const offers = getComparableOffers(m, 5);
+                    const offers = isCommercialProductMaterial(m) ? getComparableOffers(m, 5) : [];
                     const isExpanded = expandedMaterialId === m.id;
                     return (
                       <React.Fragment key={m.id}>
@@ -513,6 +530,11 @@ export function ProvidersStep() {
                                 </button>
                               )}
                             </div>
+                            {m.specification && (
+                              <p className="mt-1 text-[11px] leading-4 text-navy-600 dark:text-zinc-400">
+                                Especificación verificable: {m.specification}
+                              </p>
+                            )}
                             <div className="mt-1 text-[10px] text-navy-400 dark:text-zinc-500 flex flex-wrap gap-x-3 gap-y-1">
                               <span>{m.sourceName || "Sin proveedor verificado"}</span>
                               {m.matchedProductName && (

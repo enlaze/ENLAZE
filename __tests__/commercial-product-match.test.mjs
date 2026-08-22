@@ -40,17 +40,29 @@ test("official M-7.5 mortar is accepted while other grades and mortar variants a
   assert.equal(evaluate({ candidateName: "Mortero autonivelante saco 25 kg" }).isExact, false);
 });
 
-test("three-dimensional catalogue formats expose their thickness", () => {
-  const result = evaluateCommercialProductMatch({
-    requestedName: "Placa de yeso laminado 13mm (Pladur N)",
+test("three-dimensional catalogue formats expose their thickness without confusing board classes", () => {
+  const exactStandard = evaluateCommercialProductMatch({
+    requestedName: "Placa de yeso laminado estándar tipo A 2000x1200x13 mm",
+    candidateName: "PLACA YESO LAMINADO ESTÁNDAR TIPO A 2000X1200X13MM",
+    requestedUnit: "ud",
+    candidateUnit: "ud",
+    referenceUnitPrice: 9.8,
+    candidateUnitPrice: 9.95,
+  });
+  const specialBoard = evaluateCommercialProductMatch({
+    requestedName: "Placa de yeso laminado estándar tipo A 2000x1200x13 mm",
     candidateName: "PLACA DE YESO LAMINADO GLASROC H 2000X1200X13MM",
     requestedUnit: "ud",
     candidateUnit: "ud",
     referenceUnitPrice: 9.8,
     candidateUnitPrice: 15.95,
   });
-  assert.equal(result.formatCompatible, true);
-  assert.equal(result.isExact, true);
+
+  assert.equal(exactStandard.formatCompatible, true);
+  assert.equal(exactStandard.isExact, true);
+  assert.equal(specialBoard.formatCompatible, true);
+  assert.equal(specialBoard.identityCompatible, false);
+  assert.equal(specialBoard.isExact, false);
 });
 
 test("recognizes official supplier synonyms while preserving exact dimensions", () => {
@@ -196,6 +208,59 @@ test("a component price cannot replace a complete electrical panel or bathroom s
   assert.equal(panel.isExact, false);
   assert.equal(basin.bundleCompatible, false);
   assert.equal(basin.isExact, false);
+});
+
+test("atomic plumbing components cannot impersonate one another", () => {
+  const stopValve = evaluateCommercialProductMatch({
+    requestedName: "Llave de corte escuadra 1/2 x 3/8 pulgadas",
+    candidateName: "Colector de fontanería 4 salidas para tubo 16 mm",
+    requestedUnit: "ud",
+    candidateUnit: "ud",
+    referenceUnitPrice: 7.5,
+    candidateUnitPrice: 35,
+  });
+  const basinTrap = evaluateCommercialProductMatch({
+    requestedName: "Sifón botella para lavabo salida 32 mm",
+    candidateName: "Sifón para fregadero salida 40 mm",
+    requestedUnit: "ud",
+    candidateUnit: "ud",
+    referenceUnitPrice: 12,
+    candidateUnitPrice: 15,
+  });
+
+  assert.equal(stopValve.isExact, false);
+  assert.equal(basinTrap.isExact, false);
+});
+
+test("installation side, room use and component role remain mandatory", () => {
+  const wrongDoorHand = evaluateCommercialProductMatch({
+    requestedName: "Puerta interior en block lacada blanca ciega 72.5 cm izquierda",
+    candidateName: "Puerta interior en block lacada blanca ciega 72.5 cm derecha",
+    requestedUnit: "ud",
+    candidateUnit: "ud",
+    referenceUnitPrice: 109,
+    candidateUnitPrice: 109,
+  });
+  const wrongFaucetUse = evaluateCommercialProductMatch({
+    requestedName: "Grifo monomando de lavabo cromado",
+    candidateName: "Grifo monomando de ducha cromado",
+    requestedUnit: "ud",
+    candidateUnit: "ud",
+    referenceUnitPrice: 65,
+    candidateUnitPrice: 69,
+  });
+  const floorInsteadOfUnderlay = evaluateCommercialProductMatch({
+    requestedName: "Base aislante para suelo laminado 5 mm",
+    candidateName: "Suelo laminado AC5 5 mm",
+    requestedUnit: "m2",
+    candidateUnit: "m2",
+    referenceUnitPrice: 3.4,
+    candidateUnitPrice: 9,
+  });
+
+  assert.equal(wrongDoorHand.isExact, false);
+  assert.equal(wrongFaucetUse.isExact, false);
+  assert.equal(floorInsteadOfUnderlay.isExact, false);
 });
 
 test("direct product pages are distinguishable from homepages and catalogue files", () => {
