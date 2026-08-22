@@ -52,6 +52,13 @@ test("recalculation does not load the complete joined current-price table", () =
   assert.match(priceRoute, /pb_products already stores the latest authoritative tracker price/);
 });
 
+test("commercial and BC3 candidate searches use their full-text indexes", () => {
+  assert.match(priceRoute, /\.textSearch\("commercial_name", tokens\.join\(" OR "\)/);
+  assert.match(priceRoute, /\.textSearch\("name", tokens\.join\(" OR "\)/);
+  assert.match(priceRoute, /\.limit\(120\)/);
+  assert.doesNotMatch(priceRoute, /commercial_name\.ilike/);
+});
+
 test("autosave cannot retrigger itself or rewrite unchanged budget items", () => {
   assert.match(provider, /const autosaveSignature = useMemo\(\(\) => buildAutosaveSignature\(state\), \[state\]\)/);
   assert.match(provider, /\}, \[autosaveSignature\]\);/);

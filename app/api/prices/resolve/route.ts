@@ -200,7 +200,7 @@ export async function POST(request: Request) {
     if (includeCommercialCatalog) {
       const { count, error: pbCountError } = await trackerDb
         .from("pb_products")
-        .select("id, pb_providers!inner(company_id)", { count: "exact", head: true })
+        .select("id, pb_providers!inner(company_id)", { count: "estimated", head: true })
         .eq("sector", "construccion")
         .eq("is_active", true)
         .eq("is_available", true)
@@ -264,7 +264,12 @@ export async function POST(request: Request) {
                     .eq("is_available", true)
                     .or(visibleProviderFilter, { referencedTable: "pb_providers" })
                     .gt("unit_price", 0)
-                    .or(tokens.map((token) => `commercial_name.ilike.%${token}%`).join(","))
+                    // Uses idx_pb_products_name_fts instead of a leading-wildcard
+                    // ILIKE scan over the complete supplier catalogue.
+                    .textSearch("commercial_name", tokens.join(" OR "), {
+                      config: "spanish",
+                      type: "websearch",
+                    })
                     .limit(300)
                     .abortSignal(searchController.signal)
                 ),
@@ -292,10 +297,52 @@ export async function POST(request: Request) {
           .eq("user_id", user.id)
           .eq("is_active", true)
           .eq("is_locked", true),
-        supabase
-          .from("technical_price_items")
-          .select("name, item_code, unit, unit_price, confidence_score, source, region, company_id")
-          .eq("is_active", true),
+        (async () => {
+          const rowsByKey = new Map<string, Record<string, unknown>>();
+          const searchController = new AbortController();
+          const searchTimeout = setTimeout(() => searchController.abort(), 18_000);
+
+          try {
+            // technical_price_items may contain a complete BC3 bank. Fetching
+            // every active row for every recalculation exhausted Supabase IO.
+            // The indexed full-text search keeps only relevant candidates.
+            for (let start = 0; start < trackerTokenGroups.length; start += 6) {
+              if (searchController.signal.aborted) break;
+              const groupResults = await Promise.all(
+                trackerTokenGroups.slice(start, start + 6).map((tokens) =>
+                  supabase
+                    .from("technical_price_items")
+                    .select("name, item_code, unit, unit_price, confidence_score, source, region, company_id")
+                    .eq("is_active", true)
+                    .or(`company_id.is.null,company_id.eq.${companyScopeId}`)
+                    .textSearch("name", tokens.join(" OR "), {
+                      config: "spanish",
+                      type: "websearch",
+                    })
+                    .limit(120)
+                    .abortSignal(searchController.signal)
+                ),
+              );
+
+              for (const result of groupResults) {
+                if (result.error) {
+                  if (!searchController.signal.aborted) {
+                    console.error("[PriceResolve] Technical candidate query failed:", result.error.message);
+                  }
+                  continue;
+                }
+                for (const row of result.data || []) {
+                  const key = `${row.item_code || ""}:${row.source || ""}:${row.region || ""}`;
+                  rowsByKey.set(key, row as Record<string, unknown>);
+                }
+              }
+            }
+          } finally {
+            clearTimeout(searchTimeout);
+          }
+
+          return { data: Array.from(rowsByKey.values()) };
+        })(),
         supabase
           .from("sector_data")
           .select("title, value, unit, source, category")
