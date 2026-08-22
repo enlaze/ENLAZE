@@ -342,6 +342,19 @@ test("official OBRAMAT wording remains exact for the new atomic product wave", (
     ["Lavabo sobreponer redondo 40 cm blanco", "LAVABO SOBREPONER REDONDO 40CM BLANCO", "ud", "ud", 43],
     ["Plato de ducha resina rectangular blanco 80x120x3 cm", "PLATO DE DUCHA RESINA RECTANGULAR BLANCO 80X120X3CM", "ud", "ud", 105],
     ["Mampara de ducha frontal corredera Denver Pro 120 cm cromo", "MAMPARA DE DUCHA FRONTAL CORREDERA DENVER PRO 120CM CROMO", "ud", "ud", 160],
+    ["Tubo 110 mm 3 m PVC compacto", "TUBO 110MM 3M PVC COMPACTO", "ud", "ud", 7.95],
+    ["Colector 1 pulgada x 16 mm 4 salidas 1/2 pulgada multicapa", 'COLECTOR 1"X16MM 4 SALIDAS 1/2" MULTICAPA', "ud", "ud", 15.61],
+    ["Sifón fregadero botella extensible 1 1/2 pulgadas blanco Girpi", 'SIFÓN FREGADERO BOTELLA EXTENSIBLE 1 1/2" BLANCO GIRPI', "ud", "ud", 6.60],
+    ["Válvula fregadero 115 mm con vástago blanco Girpi", "VALVULA FREGADERO 115MM CON VÁSTAGO BLANCO GIRPI", "ud", "ud", 6.60],
+    ["Sobretensión transitoria 1P+N Legrand", "SOBRETENSION TRANSITORIA 1P+N LEGRAND", "ud", "ud", 47],
+    ["Schuko serie Europa blanco", "SCHUKO SERIE EUROPA BLANCO", "ud", "ud", 2.79],
+    ["Conmutador serie Europa blanco", "CONMUTADOR SERIE EUROPA BLANCO", "ud", "ud", 2.38],
+    ["Suelo porcelánico 60x60 cm London grafito", "SUELO PORCELÁNICO 60X60CM LONDON GRAFITO", "m2", "m2", 12.96],
+    ["Base suelo laminado", "BASE SUELO LAMINADO", "m2", "m2", 0.83],
+    ["Cinta de pintor exterior 50 mm 50 m", "CINTA DE PINTOR EXTERIOR 50MM 50M", "ud", "ud", 5.20],
+    ["Puerta interior en block lisa lacada blanca ciega 72.5 cm derecha", "PUERTA INTERIOR EN BLOCK LISA LACADA BLANCA CIEGA 72.5CM DERECHA", "ud", "ud", 85],
+    ["Lámina geotextil 1.5x2.5 m Jimten", "LAMINA GEOTEXTIL 1.5X2.5M JIMTEN", "ud", "ud", 19.76],
+    ["Silicona neutra para baños y cocinas 280 ml transparente", "SILICONA NEUTRA PARA BAÑOS Y COCINAS 280ML TRANSPARENTE", "ud", "ud", 4.41],
   ];
 
   for (const [requestedName, candidateName, requestedUnit, candidateUnit, price] of cases) {

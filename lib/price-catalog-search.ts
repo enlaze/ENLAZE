@@ -45,7 +45,7 @@ const CATALOG_SEARCH_RULES: CatalogSearchRule[] = [
     alternatives: [["llave", "escuadra"], ["llave", "corte"]],
   },
   {
-    matches: (name) => /\bcolector\b/.test(name) && /\bfontaneria\b/.test(name),
+    matches: (name) => /\bcolector\b/.test(name) && /\b(?:fontaneria|multicapa|salidas)\b/.test(name),
     alternatives: [["colector", "multicapa"], ["colector", "4", "salidas"]],
   },
   {
@@ -65,7 +65,7 @@ const CATALOG_SEARCH_RULES: CatalogSearchRule[] = [
     alternatives: [["valvula", "cesta"], ["valvula", "fregadero"]],
   },
   {
-    matches: (name) => /\bpvc\b/.test(name) && /\b(evacuacion|desague)\b/.test(name),
+    matches: (name) => /\bpvc\b/.test(name) && /\b(evacuacion|desague|compacto)\b/.test(name),
     alternatives: [["tubo", "pvc"], ["pvc", "compacto"]],
   },
   {
@@ -93,11 +93,19 @@ const CATALOG_SEARCH_RULES: CatalogSearchRule[] = [
     alternatives: [["base", "enchufe"], ["mecanismo", "enchufe"]],
   },
   {
+    matches: (name) => /\bschuko\b/.test(name),
+    alternatives: [["schuko"], ["base", "enchufe", "schuko"]],
+  },
+  {
     matches: (name) => /\binterruptor\b/.test(name) && !/\b(?:diferencial|magnetotermic)/.test(name),
     alternatives: [["mecanismo", "interruptor"], ["interruptor", "empotrar"]],
   },
   {
-    matches: (name) => /\b(azulejo|baldosa|revestimiento)\b/.test(name) && /\bporcelanic/.test(name),
+    matches: (name) => /\bconmutador\b/.test(name),
+    alternatives: [["conmutador"], ["mecanismo", "conmutador"]],
+  },
+  {
+    matches: (name) => /\b(azulejo|baldosa|revestimiento|suelo)\b/.test(name) && /\bporcelanic/.test(name),
     alternatives: [["revestimiento", "porcelanico"], ["porcelanico"]],
   },
   {
@@ -125,7 +133,7 @@ const CATALOG_SEARCH_RULES: CatalogSearchRule[] = [
     alternatives: [["downlight", "led", "superficie"], ["downlight", "20w"], ["luminaria", "led"]],
   },
   {
-    matches: (name) => /\bcinta\b/.test(name) && /\benmascarar\b/.test(name),
+    matches: (name) => /\bcinta\b/.test(name) && /\b(?:enmascarar|pintor)\b/.test(name),
     alternatives: [["cinta", "enmascarar"], ["cinta", "pintor"]],
   },
   {
@@ -173,8 +181,8 @@ const CATALOG_SEARCH_RULES: CatalogSearchRule[] = [
     alternatives: [["puerta", "block", "lacada"], ["puerta", "72", "derecha"], ["puerta", "72", "izquierda"]],
   },
   {
-    matches: (name) => /\blamina\b/.test(name) && /\bimpermeabil/.test(name),
-    alternatives: [["lamina", "impermeabilizante"], ["lamina", "zonas", "humedas"]],
+    matches: (name) => /\blamina\b/.test(name) && /\b(?:impermeabil|geotextil)\b/.test(name),
+    alternatives: [["lamina", "impermeabilizante"], ["lamina", "geotextil"], ["lamina", "zonas", "humedas"]],
   },
 ];
 

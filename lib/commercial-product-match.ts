@@ -48,9 +48,9 @@ const CONCEPT_GROUPS: ConceptGroup[] = [
   { id: "pvc_drain", role: "attribute", aliases: ["pvc evacuacion", "pvc de evacuacion", "desague pvc", "pvc compacto"] },
   { id: "fitting", role: "primary", aliases: ["racor", "racores", "accesorio multicapa"] },
   { id: "angle_stop_valve", role: "primary", aliases: ["llave de corte", "llave escuadra", "llave de escuadra"] },
-  { id: "plumbing_manifold", role: "primary", aliases: ["colector de fontaneria", "colector multicapa"] },
+  { id: "plumbing_manifold", role: "primary", aliases: ["colector de fontaneria", "colector multicapa", "colector"] },
   { id: "basin_waste", role: "primary", aliases: ["valvula de desague para lavabo", "valvula lavabo", "valvula click clack lavabo"] },
-  { id: "sink_basket_waste", role: "primary", aliases: ["valvula cesta para fregadero", "valvula cesta"] },
+  { id: "sink_basket_waste", role: "primary", aliases: ["valvula cesta para fregadero", "valvula cesta", "valvula fregadero"] },
   { id: "basin_trap", role: "primary", aliases: ["sifon botella para lavabo", "sifon para lavabo"] },
   { id: "sink_trap", role: "primary", aliases: ["sifon para fregadero", "sifon fregadero"] },
   { id: "electric_cable", role: "primary", aliases: ["cable electrico", "cable h07", "h07v k", "h07vk"] },
@@ -60,19 +60,19 @@ const CONCEPT_GROUPS: ConceptGroup[] = [
   { id: "residual_current_device", role: "primary", aliases: ["interruptor diferencial", "diferencial"] },
   { id: "surge_protector", role: "primary", aliases: ["protector de sobretensiones", "sobretensiones transitorias"] },
   { id: "mechanism", role: "primary", aliases: ["mecanismo electrico", "mecanismos electricos"] },
-  { id: "socket", role: "primary", aliases: ["enchufe", "enchufes", "toma electrica"] },
-  { id: "switch", role: "primary", aliases: ["interruptor unipolar", "interruptor de luz", "interruptores de luz"] },
+  { id: "socket", role: "primary", aliases: ["enchufe", "enchufes", "toma electrica", "schuko"] },
+  { id: "switch", role: "primary", aliases: ["interruptor unipolar", "interruptor de luz", "interruptores de luz", "conmutador"] },
   { id: "luminaire", role: "primary", aliases: ["luminaria", "lampara", "plafon", "downlight"] },
   { id: "led", role: "attribute", aliases: ["led"] },
-  { id: "ceramic_tile", role: "primary", aliases: ["azulejo", "baldosa ceramica", "revestimiento ceramico", "revestimiento porcelanico"] },
+  { id: "ceramic_tile", role: "primary", aliases: ["azulejo", "baldosa ceramica", "revestimiento ceramico", "revestimiento porcelanico", "suelo porcelanico"] },
   { id: "porcelain", role: "attribute", aliases: ["porcelanico", "porcelanica"] },
-  { id: "laminate_underlay", role: "primary", aliases: ["base aislante para suelo laminado", "base para suelo laminado", "subsuelo laminado"] },
+  { id: "laminate_underlay", role: "primary", aliases: ["base aislante para suelo laminado", "base para suelo laminado", "base suelo laminado", "subsuelo laminado"] },
   { id: "flooring", role: "primary", aliases: ["pavimento", "suelo laminado", "suelo ceramico", "tarima"] },
   { id: "skirting", role: "primary", aliases: ["rodapie"] },
   { id: "paint", role: "primary", aliases: ["pintura"] },
   { id: "primer", role: "primary", aliases: ["imprimacion", "fondo fijador", "sellador de paredes"] },
   { id: "putty", role: "primary", aliases: ["masilla", "plaste"] },
-  { id: "masking", role: "primary", aliases: ["cinta de enmascarar", "plastico protector", "plastico cubretodo"] },
+  { id: "masking", role: "primary", aliases: ["cinta de enmascarar", "cinta de pintor", "plastico protector", "plastico cubretodo"] },
   { id: "paint_roller", role: "primary", aliases: ["rodillo", "rodillos"] },
   { id: "paint_brush", role: "primary", aliases: ["brocha", "brochas"] },
   { id: "paint_tray", role: "primary", aliases: ["cubeta", "cubetas"] },
@@ -96,7 +96,7 @@ const CONCEPT_GROUPS: ConceptGroup[] = [
   { id: "shower_tray", role: "primary", aliases: ["plato de ducha"] },
   { id: "shower_screen", role: "primary", aliases: ["mampara"] },
   { id: "door", role: "primary", aliases: ["puerta interior", "puerta de paso"] },
-  { id: "waterproof_membrane", role: "primary", aliases: ["lamina impermeabilizante", "membrana impermeabilizante"] },
+  { id: "waterproof_membrane", role: "primary", aliases: ["lamina impermeabilizante", "membrana impermeabilizante", "lamina geotextil"] },
   { id: "silicone", role: "primary", aliases: ["silicona"] },
   { id: "waste_container", role: "primary", aliases: ["contenedor de escombros", "contenedor escombros"] },
 ];
@@ -448,9 +448,19 @@ export function evaluateCommercialProductMatch(
   const compactRequested = normalizeCommercialMatchText(input.requestedName).replace(/[^a-z0-9]/g, "");
   const compactCandidate = normalizeCommercialMatchText(input.candidateName).replace(/[^a-z0-9]/g, "");
   const requiredPrimaryIds = new Set(requiredPrimary.map((group) => group.id));
+  // Supplier titles such as "BASE SUELO LAMINADO" necessarily contain the
+  // flooring phrase as well as the more specific underlay concept. Once the
+  // underlay identity is present, that lexical overlap is not a conflicting
+  // product family. A laminate plank without the underlay concept is still
+  // rejected by the required-primary check below.
+  const permittedPrimaryOverlap = new Set(
+    requiredPrimaryIds.has("laminate_underlay") && candidateGroupIds.has("laminate_underlay")
+      ? ["flooring"]
+      : [],
+  );
   const hasConflictingPrimary = requiredPrimary.length > 0 && candidateGroups
     .filter((group) => group.role === "primary")
-    .some((group) => !requiredPrimaryIds.has(group.id));
+    .some((group) => !requiredPrimaryIds.has(group.id) && !permittedPrimaryOverlap.has(group.id));
   const requestedMortarGrade = extractMortarGrade(input.requestedName);
   const candidateMortarGrade = extractMortarGrade(input.candidateName);
   const mortarGradeCompatible = requestedMortarGrade === null || (
