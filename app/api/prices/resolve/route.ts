@@ -312,9 +312,10 @@ export async function POST(request: Request) {
                 trackerTokenGroups.slice(start, start + 6).map((tokens) =>
                   supabase
                     .from("technical_price_items")
-                    .select("name, item_code, unit, unit_price, confidence_score, source, region, company_id")
+                    // Production still uses the original global technical-bank
+                    // schema, which has no company_id column.
+                    .select("name, item_code, unit, unit_price, confidence_score, source, region")
                     .eq("is_active", true)
-                    .or(`company_id.is.null,company_id.eq.${companyScopeId}`)
                     .textSearch("name", tokens.join(" OR "), {
                       config: "spanish",
                       type: "websearch",
@@ -493,7 +494,7 @@ export async function POST(request: Request) {
           confidence_score: Number(r.confidence_score) || 0.80,
           source: String(r.source || ""),
           region: String(r.region || "espana"),
-          is_private: Boolean(r.company_id),
+          is_private: false,
         })),
         enlaze_prices: (pbEnlazeRows || []).map((sd): EnlazePriceRow => ({
           name: String(sd.title || ""),

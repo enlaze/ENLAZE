@@ -57,6 +57,7 @@ test("commercial and BC3 candidate searches use their full-text indexes", () => 
   assert.match(priceRoute, /\.textSearch\("name", tokens\.join\(" OR "\)/);
   assert.match(priceRoute, /\.limit\(120\)/);
   assert.doesNotMatch(priceRoute, /commercial_name\.ilike/);
+  assert.doesNotMatch(priceRoute, /technical_price_items"\)[\s\S]{0,300}\.select\([^)]*company_id/);
 });
 
 test("autosave cannot retrigger itself or rewrite unchanged budget items", () => {
