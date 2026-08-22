@@ -72,7 +72,7 @@ const CONCEPT_GROUPS: ConceptGroup[] = [
   { id: "paint", role: "primary", aliases: ["pintura"] },
   { id: "primer", role: "primary", aliases: ["imprimacion", "fondo fijador", "sellador de paredes"] },
   { id: "putty", role: "primary", aliases: ["masilla", "plaste"] },
-  { id: "masking", role: "primary", aliases: ["cinta de enmascarar", "plastico protector"] },
+  { id: "masking", role: "primary", aliases: ["cinta de enmascarar", "plastico protector", "plastico cubretodo"] },
   { id: "paint_roller", role: "primary", aliases: ["rodillo", "rodillos"] },
   { id: "paint_brush", role: "primary", aliases: ["brocha", "brochas"] },
   { id: "paint_tray", role: "primary", aliases: ["cubeta", "cubetas"] },

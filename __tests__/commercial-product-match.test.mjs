@@ -334,6 +334,10 @@ test("official OBRAMAT wording remains exact for the new atomic product wave", (
     ["Automático magnetotérmico 1P+N 1 módulo 16A Solera", "AUTOMATICO MAGNETOTERMICO 1 P+N 1 MODU 16A SOLERA", "ud", "ud", 6.06],
     ["Downlight LED superficie circular blanco 20W luz neutra", "DOWNLIGHT LED SUPERFICIE CIRCULAR BLANCO 20W LUZ NEUTRA", "ud", "ud", 4.74],
     ["Fondo fijador acrílico 15 L blanco", "FONDO FIJADOR ACRILICO 15L BLANCO", "cubos", "ud", 34],
+    ["Plástico cubretodo fino reciclado 4x5 m", "PLÁSTICO CUBRETODO FINO RECICLADO 4X5 M", "ud", "ud", 0.65],
+    ["Rodillo superficies lisas microfibra seda 22 cm", "RODILLO SUPERFICIES LISAS MICROFIBRA SEDA 22CM", "ud", "ud", 5.2],
+    ["Brocha prensada fibra sintética nº10", "BROCHA PRENSADA FIBRA SINTÉTICA Nº10", "ud", "ud", 4.1],
+    ["Cubeta de plástico 16 L con rejilla", "CUBETA DE PLASTICO 16L + REJILLA", "ud", "ud", 3.54],
   ];
 
   for (const [requestedName, candidateName, requestedUnit, candidateUnit, price] of cases) {
