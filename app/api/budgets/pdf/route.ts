@@ -2,6 +2,11 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { generateBudgetPDFHTML } from "@/lib/pdf-generator";
+import {
+  computeBudgetTotals,
+  checkBudgetTotalsConsistency,
+  hasCurrentTotalsContract,
+} from "@/lib/budget-totals";
 
 interface FiscalSettings {
   nif?: string | null;
@@ -131,6 +136,61 @@ export async function POST(request: Request) {
       phone: fiscal?.phone || "",
       email: user.email || "",
     };
+
+    // ── Puerta de cuadre antes de renderizar ────────────────────────────────
+    //
+    // El PDF es un renderizador puro: imprime lo que hay guardado y no
+    // recalcula precios ni vuelve a preguntar al modelo. Pero justamente por
+    // eso tiene que negarse a imprimir un documento incoherente, porque es la
+    // última pantalla antes de que el importe llegue al cliente.
+    //
+    // Se comprueba que la suma de las líneas guardadas en `budget_items` sea
+    // exactamente el subtotal de la fila `budgets`, que es el que alimenta la
+    // caja de totales.
+    const pdfLines = (items || []).map((item) => ({
+      quantity: Number(item.quantity) || 0,
+      unit_price: Number(item.unit_price) || 0,
+    }));
+    const recomputedTotals = computeBudgetTotals({
+      lines: pdfLines,
+      ivaPercent: Number(budget.iva_percent) || 21,
+      discountType: (budget.discount_type as "percent" | "amount") || "percent",
+      discountPercent: Number(budget.discount_percent) || 0,
+      discountAmount: Number(budget.discount_amount) || 0,
+    });
+    const consistency = checkBudgetTotalsConsistency(
+      Number(budget.subtotal) || 0,
+      recomputedTotals,
+    );
+
+    if (!consistency.ok) {
+      if (hasCurrentTotalsContract(budget.wizard_state)) {
+        // Presupuesto creado bajo el contrato actual: un descuadre aquí es un
+        // defecto real, no una herencia. Se bloquea.
+        return NextResponse.json(
+          {
+            error:
+              "BUDGET_TOTAL_MISMATCH: la suma de las partidas no coincide con la base imponible " +
+              `(desviacion ${consistency.deltaEuros.toFixed(2)} EUR). ` +
+              "No se genera el PDF. Vuelve a abrir el presupuesto y recalcula.",
+            code: "BUDGET_TOTAL_MISMATCH",
+            expected: consistency.expectedCents / 100,
+            actual: consistency.actualCents / 100,
+            delta: consistency.deltaEuros,
+          },
+          { status: 409 },
+        );
+      }
+
+      // Presupuesto heredado (guardado antes de la Fase 1, con los materiales
+      // como líneas adicionales). Su descuadre es conocido y esperado: se
+      // registra y se deja pasar para no romper documentos ya emitidos.
+      console.warn(
+        `[PDF] Presupuesto heredado con totales descuadrados: ${budget.budget_number}. ` +
+          `Desviacion ${consistency.deltaEuros.toFixed(2)} EUR. ` +
+          "Se renderiza igualmente por compatibilidad; al reabrir y guardar se corregira.",
+      );
+    }
 
     const html = generateBudgetPDFHTML(
       {

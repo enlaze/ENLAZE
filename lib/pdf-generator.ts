@@ -13,6 +13,7 @@ import type {
   ClimaSystemSpec,
 } from "./budget-engine";
 import { CHAPTER_LABELS } from "./budget-engine";
+import { computeBudgetTotalsFromSubtotal } from "./budget-totals";
 
 // ─── Shared Types (legacy) ──────────────────────────────────────────────────
 
@@ -734,15 +735,24 @@ function renderPresupixClientHTML(budget: PDFBudget, items: PDFBudgetItem[]): st
   const depositAmount = Math.round(budget.total * (depositPct / 100) * 100) / 100;
   const pendingAmount = Math.round((budget.total - depositAmount) * 100) / 100;
 
-  // Descuento: aplica sobre el subtotal (base imponible) antes del IVA.
+  // Descuento y base imponible: NO se rederivan aquí.
+  //
+  // Antes este bloque recalculaba el descuento y la base imponible por su
+  // cuenta, con un redondeo distinto al del wizard. Eso convertía al PDF en
+  // una cuarta fuente de totales. Ahora se los pide a lib/budget-totals.ts,
+  // que es la misma función que usa la aplicación, de modo que la caja de
+  // totales del PDF y la pantalla muestran exactamente los mismos importes.
   const discountType = budget.discount_type === "amount" ? "amount" : "percent";
   const discountPercent = Math.max(0, Math.min(100, budget.discount_percent ?? 0));
-  const discountAmountInput = Math.max(0, budget.discount_amount ?? 0);
-  const discountValue =
-    discountType === "amount"
-      ? Math.min(budget.subtotal, discountAmountInput)
-      : Math.round(budget.subtotal * (discountPercent / 100) * 100) / 100;
-  const taxableBase = Math.max(0, budget.subtotal - discountValue);
+  const documentTotals = computeBudgetTotalsFromSubtotal(
+    budget.subtotal,
+    budget.iva_percent,
+    discountType,
+    discountPercent,
+    Math.max(0, budget.discount_amount ?? 0),
+  );
+  const discountValue = documentTotals.discountValue;
+  const taxableBase = documentTotals.taxableBase;
 
   // Fases de pago: usa el calendario definido en el presupuesto, o cae al
   // comportamiento clásico (anticipo/resto) para presupuestos antiguos.

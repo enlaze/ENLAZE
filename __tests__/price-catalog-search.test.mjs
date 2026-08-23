@@ -40,11 +40,18 @@ test("catalogue search adds supplier synonyms without weakening exact validation
       ["perfil", "placo"],
     ],
   );
+  // "Fondo fijador" es el nombre comercial con el que la mayoria de proveedores
+  // lista una imprimacion selladora, asi que la regla emite tanto la busqueda
+  // estrecha ["fondo","fijador"] como la amplia ["fijador"]. La estrecha no es
+  // redundante: las consultas de catalogo llevan .limit() sin orden por
+  // relevancia, de modo que la busqueda amplia puede truncar justo los
+  // productos "Fondo fijador" y la estrecha garantiza que afloren.
   assert.deepEqual(
     buildCatalogSearchTokenGroups("Imprimación fijadora (15L)"),
     [
       ["imprimacion", "fijadora"],
       ["imprimacion"],
+      ["fondo", "fijador"],
       ["fijador"],
     ],
   );

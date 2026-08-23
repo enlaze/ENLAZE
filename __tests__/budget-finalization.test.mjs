@@ -53,14 +53,24 @@ test("every deterministic construction material can be finalized", () => {
   assert.ok(materials.every((material) => material.unit !== "lotes"));
 });
 
-test("the budget wizard normalizes both items and materials before inserts", async () => {
+test("the budget wizard normalizes every row it inserts into budget_items", async () => {
   const source = await readFile(
     new URL("../app/dashboard/budgets/generate/_components/BudgetGenerateProvider.tsx", import.meta.url),
     "utf8",
   );
   const normalizationCalls = source.match(/unit: normalizeBudgetItemUnit\([pm]\.unit\)/g) || [];
 
-  assert.ok(normalizationCalls.length >= 4, `found ${normalizationCalls.length} normalization calls`);
+  // Fase 1 (Opcion A): los materiales dejaron de insertarse como lineas
+  // economicas del cliente, porque applyMaterialBasketToItems ya los pliega
+  // dentro del coste de la partida. Quedan por tanto dos puntos de insercion
+  // -saveDraft y finalizeBudget-, ambos de partidas, y ambos deben normalizar
+  // la unidad. La intencion original del test se mantiene: nada llega a
+  // budget_items sin normalizar.
+  assert.equal(normalizationCalls.length, 2, `found ${normalizationCalls.length} normalization calls`);
+  assert.ok(
+    normalizationCalls.every((call) => call.includes("p.unit")),
+    "solo deben insertarse partidas",
+  );
   assert.match(source, /if \(itemsError\) throw itemsError/);
 });
 

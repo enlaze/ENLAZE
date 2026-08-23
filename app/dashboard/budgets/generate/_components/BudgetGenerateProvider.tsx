@@ -45,6 +45,13 @@ import {
 } from "@/lib/geographic-costs";
 import { isTraceableCommercialPrice } from "@/lib/price-traceability";
 import { normalizeBudgetItemUnit } from "@/lib/budget-units";
+import {
+  computeBudgetTotals,
+  computeBudgetTotalsFromSubtotal,
+  assertBudgetTotalsConsistent,
+  BudgetTotalMismatchError,
+  TOTALS_CONTRACT_VERSION,
+} from "@/lib/budget-totals";
 import { canonicalProviderName, providerIdentitySlug } from "@/lib/provider-identity";
 import {
   auditAtomicMaterialName,
@@ -101,6 +108,15 @@ function defaultValidUntil() {
   return date.toISOString().slice(0, 10);
 }
 
+/**
+ * Importes del presupuesto.
+ *
+ * Delega en lib/budget-totals.ts, que es la única fuente matemática de verdad
+ * de la aplicación. Se mantiene el nombre y la firma porque ProvidersStep y el
+ * propio wizard ya la consumen; lo que cambia es que el cálculo ya no vive
+ * aquí y se hace en céntimos enteros, de modo que base + IVA da exactamente el
+ * total (antes el IVA no se redondeaba y arrastraba error de coma flotante).
+ */
 export function calculateBudgetFinancials(
   subtotal: number,
   ivaPercent: number,
@@ -108,21 +124,38 @@ export function calculateBudgetFinancials(
   discountPercent: number,
   discountAmount: number,
 ) {
-  const safeSubtotal = Math.max(0, Number(subtotal) || 0);
-  const discountValue = discountType === "amount"
-    ? Math.min(safeSubtotal, Math.max(0, Number(discountAmount) || 0))
-    : Math.round(
-        safeSubtotal * (Math.max(0, Math.min(100, Number(discountPercent) || 0)) / 100) * 100,
-      ) / 100;
-  const taxableBase = Math.max(0, safeSubtotal - discountValue);
-  const ivaAmount = taxableBase * (Math.max(0, Number(ivaPercent) || 0) / 100);
+  const totals = computeBudgetTotalsFromSubtotal(
+    subtotal,
+    ivaPercent,
+    discountType,
+    discountPercent,
+    discountAmount,
+  );
   return {
-    subtotal: safeSubtotal,
-    discountValue,
-    taxableBase,
-    ivaAmount,
-    total: taxableBase + ivaAmount,
+    subtotal: totals.subtotal,
+    discountValue: totals.discountValue,
+    taxableBase: totals.taxableBase,
+    ivaAmount: totals.ivaAmount,
+    total: totals.total,
   };
+}
+
+/**
+ * Recalcula los importes desde las líneas que se van a persistir y exige que
+ * cuadren con el subtotal que la aplicación está mostrando.
+ *
+ * Es la puerta que impide guardar, finalizar o mandar a PDF un presupuesto
+ * cuyas líneas visibles no sumen la base imponible. Lanza
+ * BudgetTotalMismatchError (code BUDGET_TOTAL_MISMATCH) si no cuadra.
+ */
+function assertPersistedTotalsMatch(
+  lines: Array<{ quantity: number; unit_price: number }>,
+  displayedSubtotal: number,
+  context: string,
+) {
+  const recomputed = computeBudgetTotals({ lines });
+  assertBudgetTotalsConsistent(displayedSubtotal, recomputed, context);
+  return recomputed;
 }
 
 export interface Partida {
@@ -1275,6 +1308,12 @@ export function BudgetGenerateProvider({
         isFinalizing: false,
         saveError: null,
         finalizeError: null,
+        // Marca de contrato de totales. Indica que este presupuesto se guardó
+        // bajo la regla "budget_items contiene solo partidas"; los materiales
+        // son evidencia del escandallo y ya están dentro del precio de la
+        // partida. Los presupuestos anteriores no la llevan y por eso su suma
+        // de líneas no cuadra: se les avisa, pero no se les bloquea.
+        totals_contract: TOTALS_CONTRACT_VERSION,
       };
       const financials = calculateBudgetFinancials(
         state.totals.clientPrice,
@@ -1383,10 +1422,11 @@ export function BudgetGenerateProvider({
         }));
       }
 
-      // Also sync budget_items so the detail page shows partidas
+      // Also sync budget_items so the detail page shows partidas.
+      // La condición sigue incluyendo los materiales a propósito: un borrador
+      // heredado puede tener filas de material guardadas de antes, y queremos
+      // que al volver a guardarlo se ejecute el DELETE que las retira.
       if (draftId && (state.partidas.length > 0 || state.materials.some(m => m.included))) {
-        const marginMultiplier = 1 + (state.marginPercent / 100);
-
         const partidasToInsert = state.partidas.filter(p => p.status !== "opcional").map(p => ({
           budget_id: draftId,
           concept: p.concept,
@@ -1399,19 +1439,23 @@ export function BudgetGenerateProvider({
           subtotal: p.subtotal_client
         }));
 
-        const materialsToInsert = state.materials.filter(m => m.included).map(m => ({
-          budget_id: draftId,
-          concept: m.name,
-          description: "Material sugerido",
-          quantity: m.quantity,
-          unit: normalizeBudgetItemUnit(m.unit),
-          category: "material",
-          chapter: m.linkedChapter || "materiales",
-          unit_price: m.unit_price * marginMultiplier,
-          subtotal: m.subtotal * marginMultiplier
-        }));
+        // Los materiales NO se insertan como líneas económicas del cliente.
+        //
+        // applyMaterialBasketToItems (lib/budget-engine.ts) ya pliega la cesta
+        // de materiales dentro del coste de material de cada partida: la cesta
+        // es evidencia del escandallo, no un cargo adicional. Insertarlos
+        // además como filas propias los cobraba dos veces y hacía que la suma
+        // de las líneas del PDF superase la base imponible en exactamente
+        // materialsCost * marginMultiplier.
+        //
+        // Siguen disponibles en wizard_state para la vista interna, el
+        // comparador de proveedores y la trazabilidad de precios.
+        const itemsToInsert = [...partidasToInsert];
 
-        const itemsToInsert = [...partidasToInsert, ...materialsToInsert];
+        // Puerta de cuadre: las líneas que se van a persistir deben sumar
+        // exactamente el subtotal que la aplicación está mostrando y que se
+        // ha escrito en la fila `budgets`. Si no, se bloquea el guardado.
+        assertPersistedTotalsMatch(itemsToInsert, state.totals.clientPrice, "saveDraft");
 
         // Rewriting identical rows is the single most disk-expensive thing this
         // wizard does (a full DELETE + INSERT churns dead tuples and WAL), so
@@ -1436,10 +1480,13 @@ export function BudgetGenerateProvider({
       }
       return draftId;
     } catch (err: any) {
-      const errorMsg = err?.message || "Error desconocido al guardar";
+      const isMismatch = err instanceof BudgetTotalMismatchError;
+      const errorMsg = isMismatch
+        ? `Los calculos no cuadran: la suma de las partidas no coincide con el subtotal (desviacion ${err.deltaCents / 100} EUR). No se ha guardado nada.`
+        : err?.message || "Error desconocido al guardar";
       console.error("Error saving draft:", err);
       setState(prev => ({ ...prev, isSavingDraft: false, saveError: errorMsg }));
-      if (manual) toast.error("Error al guardar: " + errorMsg);
+      if (manual || isMismatch) toast.error(isMismatch ? errorMsg : "Error al guardar: " + errorMsg);
       return null;
     }
   };
@@ -1471,9 +1518,7 @@ export function BudgetGenerateProvider({
       // 2. Limpiar items antiguos si hubiera (por si era un presupuesto que se volvió a abrir)
       await supabase.from("budget_items").delete().eq("budget_id", budgetId);
 
-      // 3. Insertar las partidas reales + materiales
-      const marginMultiplier = 1 + (state.marginPercent / 100);
-
+      // 3. Insertar las partidas reales
       const partidasToInsert = state.partidas.filter(p => p.status !== "opcional").map(p => ({
         budget_id: budgetId,
         concept: p.concept,
@@ -1486,19 +1531,13 @@ export function BudgetGenerateProvider({
         subtotal: p.subtotal_client
       }));
 
-      const materialsToInsert = state.materials.filter(m => m.included).map(m => ({
-        budget_id: budgetId,
-        concept: m.name,
-        description: "Material sugerido",
-        quantity: m.quantity,
-        unit: normalizeBudgetItemUnit(m.unit),
-        category: "material",
-        chapter: m.linkedChapter || "materiales",
-        unit_price: m.unit_price * marginMultiplier,
-        subtotal: m.subtotal * marginMultiplier
-      }));
+      // Ver la nota en saveDraft: los materiales son evidencia del escandallo,
+      // no líneas económicas independientes (Opción A).
+      const itemsToInsert = [...partidasToInsert];
 
-      const itemsToInsert = [...partidasToInsert, ...materialsToInsert];
+      // Puerta de cuadre antes de dejar el presupuesto en estado "pendiente":
+      // a partir de aquí es un documento que puede irse al cliente en PDF.
+      assertPersistedTotalsMatch(itemsToInsert, financials.subtotal, "finalizeBudget");
 
       if (itemsToInsert.length > 0) {
         const { error: itemsErr } = await supabase.from("budget_items").insert(itemsToInsert);
@@ -1566,10 +1605,13 @@ export function BudgetGenerateProvider({
       return budgetId;
 
     } catch (err: any) {
-      const errorMsg = err?.message || "Error desconocido al finalizar";
+      const isMismatch = err instanceof BudgetTotalMismatchError;
+      const errorMsg = isMismatch
+        ? `No se puede finalizar: los calculos no cuadran. La suma de las partidas no coincide con la base imponible (desviacion ${err.deltaCents / 100} EUR). Revisa las partidas y vuelve a intentarlo.`
+        : err?.message || "Error desconocido al finalizar";
       console.error("Error finalizing budget:", err);
       setState(prev => ({ ...prev, isFinalizing: false, finalizeError: errorMsg }));
-      toast.error("Error al finalizar: " + errorMsg);
+      toast.error(isMismatch ? errorMsg : "Error al finalizar: " + errorMsg);
       return null;
     }
   };
