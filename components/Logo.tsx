@@ -19,7 +19,7 @@ export default function Logo({
   showWordmark = true,
   href = "/",
   className = "",
-  wordmarkClassName = "text-navy-900",
+  wordmarkClassName = "text-navy-900 dark:text-white",
 }: LogoProps) {
   return (
     <Link
