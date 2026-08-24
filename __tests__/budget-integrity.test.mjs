@@ -104,32 +104,99 @@ test("TEST 1c: los emisores de residuos siguen siendo cuatro (defecto documentad
 
 // ───────────────────────────────────────────────────────────────────────────
 // TEST 2 — Duplicados por canonical_id
-// Fase 2 (Registro canónico)
+// Fase 2C (Validators en modo observador) — IMPLEMENTADO
+//
+// Modo observador: los validators DETECTAN y REPORTAN, no bloquean. Por eso no
+// existe ningun `report.valid === false`: lo que se comprueba es que el informe
+// se declara observador (`observer_mode === true`) y que la incidencia aparece.
+// El bloqueo, si algun dia llega, sera una decision de una fase posterior.
 // ───────────────────────────────────────────────────────────────────────────
 
-test(
-  "TEST 2: dos lineas con el mismo canonical_id se detectan como duplicado",
-  { todo: "Fase 2 - Registro canonico" },
-  async () => {
-    const validators = await optionalImport("lib/validation/validators.ts");
-    assert.ok(validators, "lib/validation/validators.ts todavia no existe");
+/**
+ * Contrato canonico minimo, copiado literalmente del seed real, con los unicos
+ * conceptos y relaciones que estos dos tests necesitan. El contrato completo
+ * (20 conceptos, 12 relaciones) vive en __tests__/canonical-validators.test.mjs.
+ */
+const CONTRATO_MINIMO = {
+  concepts: [
+    {
+      canonical_id: "WORK.WASTE.CONTAINER.HAUL",
+      kind: "WORK",
+      allowed_price_types: ["SERVICE", "LABOR_AND_MATERIAL"],
+      default_price_type: "SERVICE",
+    },
+    {
+      canonical_id: "WORK.PAINT.EMULSION.WALL.2COATS",
+      kind: "WORK",
+      allowed_price_types: ["LABOR_ONLY", "LABOR_AND_MATERIAL"],
+      default_price_type: "LABOR_AND_MATERIAL",
+    },
+    {
+      canonical_id: "MAT.PAINT.EMULSION.INTERIOR_MATT",
+      kind: "MAT",
+      allowed_price_types: ["MATERIAL_ONLY"],
+      default_price_type: "MATERIAL_ONLY",
+    },
+  ],
+  relations: [
+    {
+      from_canonical: "WORK.PAINT.EMULSION.WALL.2COATS",
+      to_canonical: "MAT.PAINT.EMULSION.INTERIOR_MATT",
+      relation_type: "includes",
+    },
+  ],
+};
 
-    const report = validators.validateDuplicates([
-      { canonical_id: "WASTE.CONTAINER.6M3", concept: "Contenedor y transporte", quantity: 2 },
-      { canonical_id: "WASTE.CONTAINER.6M3", concept: "Servicio contenedor escombros 6 m3", quantity: 2 },
-    ]);
+test("TEST 2: dos lineas con el mismo canonical_id se detectan como duplicado", async () => {
+  const validators = await optionalImport("lib/validation/validators.ts");
+  assert.ok(validators, "lib/validation/validators.ts todavia no existe");
 
-    assert.equal(report.valid, false);
-    assert.ok(
-      report.errors.some((e) => e.code === "DUPLICATE_CANONICAL_ID"),
-      "debe emitirse DUPLICATE_CANONICAL_ID",
-    );
-  },
-);
+  // Caso real del presupuesto 55082c1b: el mismo servicio de contenedor cobrado
+  // dos veces con nombres distintos, 6 ud x 717,50 EUR en ambas lineas.
+  const lineas = [
+    {
+      item_id: "a0565e4d-76f5-4798-a2c8-6e02091b0aa0",
+      budget_id: "55082c1b-ebd4-464d-a24a-049845f73734",
+      name: "Contenedor y transporte a gestor autorizado",
+      canonical_id: "WORK.WASTE.CONTAINER.HAUL",
+      canonical_status: "resolved",
+      price_type: "SERVICE",
+      quantity: 6,
+      unit: "ud",
+      unit_price: 717.5,
+      subtotal: 4305.02,
+    },
+    {
+      item_id: "faaff323-79a1-40d5-94d7-06185c990458",
+      budget_id: "55082c1b-ebd4-464d-a24a-049845f73734",
+      name: "Contenedores y transporte",
+      canonical_id: "WORK.WASTE.CONTAINER.HAUL",
+      canonical_status: "resolved",
+      price_type: "SERVICE",
+      quantity: 6,
+      unit: "ud",
+      unit_price: 717.5,
+      subtotal: 4305.02,
+    },
+  ];
+
+  const incidencias = validators.findDuplicateCanonical(lineas, CONTRATO_MINIMO);
+  assert.ok(
+    incidencias.some((f) => f.code === "DUPLICATE_CANONICAL"),
+    "debe emitirse DUPLICATE_CANONICAL",
+  );
+
+  const report = validators.validateBudget(lineas, CONTRATO_MINIMO);
+  assert.equal(report.observer_mode, true, "Fase 2C observa, no bloquea");
+  assert.ok(
+    report.findings.some((f) => f.code === "DUPLICATE_CANONICAL"),
+    "la incidencia debe aparecer tambien en el informe completo",
+  );
+});
 
 // ───────────────────────────────────────────────────────────────────────────
 // TEST 3 — Doble imputación de materiales
-// 3a: Fase 1 (eliminar la ocurrencia) · 3b: Fase 4 (detectarla)
+// 3a: Fase 1 (eliminar la ocurrencia) · 3b: Fase 2C (detectarla) — IMPLEMENTADO
 // ───────────────────────────────────────────────────────────────────────────
 
 test("TEST 3a: los materiales no se insertan como lineas economicas de cliente", () => {
@@ -155,28 +222,53 @@ test("TEST 3a-bis: el contrato de totales queda marcado en los presupuestos nuev
   );
 });
 
-test(
-  "TEST 3b: un precio que ya incluye material mas el material aparte se detecta",
-  { todo: "Fase 4 - Validation Engine" },
-  async () => {
-    const validators = await optionalImport("lib/validation/validators.ts");
-    assert.ok(validators, "lib/validation/validators.ts todavia no existe");
+test("TEST 3b: un precio que ya incluye material mas el material aparte se detecta", async () => {
+  const validators = await optionalImport("lib/validation/validators.ts");
+  assert.ok(validators, "lib/validation/validators.ts todavia no existe");
 
-    const report = validators.validateDoubleImputation([
-      {
-        canonical_id: "PAINT.WALL.2COATS",
-        price_type: "LABOR_AND_MATERIAL",
-        quantity: 165,
-        unit_price: 9.5,
-        materials: ["PAINT.PLASTIC.MATT"],
-      },
-      { canonical_id: "PAINT.PLASTIC.MATT", price_type: "MATERIAL_ONLY", quantity: 40, unit_price: 3.2 },
-    ]);
+  // La pertenencia del material a la partida NO viaja en la linea: la declara el
+  // contrato canonico mediante la relacion 'includes'. Por eso aqui no hay campo
+  // `materials`, y por eso el contrato es un argumento del validator.
+  const lineas = [
+    {
+      item_id: "92e6d5b0-7095-43dc-9d9f-6b0ddc138269",
+      budget_id: "318dc62a-b519-4637-a361-d87ca63aa628",
+      name: "Pintura plastica en paredes",
+      canonical_id: "WORK.PAINT.EMULSION.WALL.2COATS",
+      canonical_status: "resolved",
+      price_type: "LABOR_AND_MATERIAL",
+      quantity: 58,
+      unit: "m2",
+      unit_price: 15.64,
+      subtotal: 906.89,
+    },
+    {
+      item_id: "3fa68327-d23e-4a80-a9d6-aed9d31839a4",
+      budget_id: "318dc62a-b519-4637-a361-d87ca63aa628",
+      name: "Pintura plastica blanca mate interior 15 L",
+      canonical_id: "MAT.PAINT.EMULSION.INTERIOR_MATT",
+      canonical_status: "resolved",
+      price_type: "MATERIAL_ONLY",
+      quantity: 3,
+      unit: "cubos",
+      unit_price: 52.8,
+      subtotal: 158.4,
+    },
+  ];
 
-    assert.equal(report.valid, false);
-    assert.ok(report.errors.some((e) => e.code === "DOUBLE_IMPUTATION"));
-  },
-);
+  const incidencias = validators.findMaterialDoubleImputation(lineas, CONTRATO_MINIMO);
+  assert.ok(
+    incidencias.some((f) => f.code === "MATERIAL_DOUBLE_IMPUTATION"),
+    "debe emitirse MATERIAL_DOUBLE_IMPUTATION",
+  );
+
+  const report = validators.validateBudget(lineas, CONTRATO_MINIMO);
+  assert.equal(report.observer_mode, true, "Fase 2C observa, no bloquea");
+  assert.ok(
+    report.findings.some((f) => f.code === "MATERIAL_DOUBLE_IMPUTATION"),
+    "la incidencia debe aparecer tambien en el informe completo",
+  );
+});
 
 // ───────────────────────────────────────────────────────────────────────────
 // TEST 4 — La suma de las líneas debe igualar el subtotal

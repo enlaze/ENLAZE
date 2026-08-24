@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test:p1": "node --import tsx --test __tests__/p1-review.test.mjs",
     "test:canonical": "node --import tsx --test __tests__/canonical-resolver.test.mjs",
+    "test:validators": "node --import tsx --test __tests__/canonical-validators.test.mjs",
     "test:price-evidence": "node --import tsx --test __tests__/price-ingest-evidence.test.mjs",
     "test:authorized-suppliers": "node --test __tests__/authorized-supplier-feed.test.mjs",
     "test:price-tracker-cancel": "node --test __tests__/price-tracker-cancel.test.mjs",
