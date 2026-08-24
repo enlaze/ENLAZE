@@ -47,47 +47,48 @@ export interface DailyBriefingCardProps {
 const LIGHT_VARS: Record<string, string> = {
   "--card": "#ffffff",
   "--text": "var(--color-navy-900)",
-  "--body": "#3c4d5c",
-  "--muted": "#5b6b7b",
-  "--faint": "#c3ccd4",
-  "--border": "rgba(10,25,41,.08)",
-  "--row": "#fcfdfd",
-  "--pill": "#f0f3f5",
+  "--body": "var(--color-navy-600)",
+  "--muted": "var(--color-navy-500)",
+  "--faint": "var(--color-navy-200)",
+  "--border": "color-mix(in srgb, var(--color-navy-900) 8%, transparent)",
+  "--row": "var(--color-navy-50)",
+  "--pill": "var(--color-navy-50)",
   "--accent": "var(--color-brand-green)",
   "--accent-dark": "var(--color-brand-green-dark)",
   "--accent-light": "var(--color-brand-green-light)",
-  "--accent-soft": "rgba(0,200,150,.12)",
+  "--accent-soft": "color-mix(in srgb, var(--color-brand-green) 12%, transparent)",
   "--alta-bg": "#fee2e2",
   "--media-bg": "#fef3c7",
   "--baja-bg": "#dbeafe",
-  "--opp-bg": "#f0fdf8",
-  "--opp-border": "rgba(0,166,122,.22)",
-  "--opp-icon-bg": "#d6f7ec",
+  "--opp-bg": "color-mix(in srgb, var(--color-brand-green) 6%, transparent)",
+  "--opp-border": "color-mix(in srgb, var(--color-brand-green-dark) 22%, transparent)",
+  "--opp-icon-bg": "color-mix(in srgb, var(--color-brand-green) 16%, transparent)",
   "--watch-bg": "#fffbeb",
   "--watch-border": "rgba(217,119,6,.24)",
   "--watch-icon-bg": "#fef0cd",
-  "--shadow": "0 1px 2px rgba(10,25,41,.04), 0 18px 44px -20px rgba(10,25,41,.18)",
+  "--shadow":
+    "0 1px 2px color-mix(in srgb, var(--color-navy-900) 4%, transparent), 0 18px 44px -20px color-mix(in srgb, var(--color-navy-900) 18%, transparent)",
 };
 
 const DARK_VARS: Record<string, string> = {
-  "--card": "#09090b",
-  "--text": "#e4e4e7",
-  "--body": "#c2c5cc",
-  "--muted": "#8b8b95",
-  "--faint": "#3f3f46",
+  "--card": "var(--color-zinc-950)",
+  "--text": "var(--color-zinc-200)",
+  "--body": "var(--color-zinc-300)",
+  "--muted": "var(--color-zinc-400)",
+  "--faint": "var(--color-zinc-700)",
   "--border": "rgba(255,255,255,.09)",
   "--row": "rgba(255,255,255,.02)",
   "--pill": "rgba(255,255,255,.05)",
   "--accent": "var(--color-brand-green-light)",
   "--accent-dark": "var(--color-brand-green-light)",
   "--accent-light": "var(--color-brand-green)",
-  "--accent-soft": "rgba(0,230,172,.14)",
+  "--accent-soft": "color-mix(in srgb, var(--color-brand-green-light) 14%, transparent)",
   "--alta-bg": "rgba(239,68,68,.16)",
   "--media-bg": "rgba(245,158,11,.16)",
   "--baja-bg": "rgba(59,130,246,.18)",
-  "--opp-bg": "rgba(0,200,150,.07)",
-  "--opp-border": "rgba(0,230,172,.25)",
-  "--opp-icon-bg": "rgba(0,230,172,.16)",
+  "--opp-bg": "color-mix(in srgb, var(--color-brand-green) 7%, transparent)",
+  "--opp-border": "color-mix(in srgb, var(--color-brand-green-light) 25%, transparent)",
+  "--opp-icon-bg": "color-mix(in srgb, var(--color-brand-green-light) 16%, transparent)",
   "--watch-bg": "rgba(245,158,11,.08)",
   "--watch-border": "rgba(245,158,11,.28)",
   "--watch-icon-bg": "rgba(245,158,11,.18)",
@@ -233,8 +234,8 @@ export default function DailyBriefingCard({
     <div
       style={{
         ...(vars as React.CSSProperties),
-        background: "var(--card,#fff)",
-        border: "1px solid var(--border,rgba(10,25,41,.08))",
+        background: "var(--card)",
+        border: "1px solid var(--border)",
         borderRadius: "24px",
         boxShadow: "var(--shadow)",
         overflow: "hidden",
@@ -263,11 +264,11 @@ export default function DailyBriefingCard({
           }}
         >
           <span style={eyebrowStyle}>RESUMEN DE HOY</span>
-          <span style={{ color: "var(--faint,#c3ccd4)" }}>·</span>
+          <span style={{ color: "var(--faint)" }}>·</span>
           <span style={eyebrowStyle}>{date}</span>
           {aiWritten && (
             <>
-              <span style={{ color: "var(--faint,#c3ccd4)" }}>·</span>
+              <span style={{ color: "var(--faint)" }}>·</span>
               <span
                 style={{
                   fontSize: "12px",
@@ -305,7 +306,7 @@ export default function DailyBriefingCard({
               margin: 0,
               fontSize: "16px",
               lineHeight: 1.7,
-              color: "var(--body,#3c4d5c)",
+              color: "var(--body)",
               maxWidth: "78ch",
               whiteSpace: "pre-line",
             }}
@@ -318,7 +319,7 @@ export default function DailyBriefingCard({
         {actions.length > 0 && (
           <div style={{ marginTop: "32px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
-              <span style={{ ...iconBadgeStyle, background: "var(--accent-soft,rgba(0,200,150,.12))", color: "var(--accent-dark)" }}>
+              <span style={{ ...iconBadgeStyle, background: "var(--accent-soft)", color: "var(--accent-dark)" }}>
                 <ListChecksIcon />
               </span>
               <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 700, letterSpacing: ".01em", color: "var(--text)" }}>
@@ -407,7 +408,7 @@ export default function DailyBriefingCard({
                         )}
                       </div>
                       {a.reason && (
-                        <p style={{ margin: 0, fontSize: "14px", lineHeight: 1.55, color: "var(--body,#3c4d5c)" }}>
+                        <p style={{ margin: 0, fontSize: "14px", lineHeight: 1.55, color: "var(--body)" }}>
                           {a.reason}
                         </p>
                       )}
@@ -422,9 +423,9 @@ export default function DailyBriefingCard({
                           gap: "5px",
                           fontSize: "12px",
                           fontWeight: 600,
-                          color: "var(--muted,#5b6b7b)",
-                          background: "var(--pill,#f0f3f5)",
-                          border: "1px solid var(--border,rgba(10,25,41,.06))",
+                          color: "var(--muted)",
+                          background: "var(--pill)",
+                          border: "1px solid var(--border)",
                           padding: "5px 11px",
                           borderRadius: "999px",
                           whiteSpace: "nowrap",
@@ -448,14 +449,14 @@ export default function DailyBriefingCard({
             {opportunities.length > 0 && (
               <div
                 style={{
-                  border: "1px solid var(--opp-border,rgba(0,166,122,.22))",
-                  background: "var(--opp-bg,#f0fdf8)",
+                  border: "1px solid var(--opp-border)",
+                  background: "var(--opp-bg)",
                   borderRadius: "16px",
                   padding: "20px 22px",
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
-                  <span style={{ ...iconBadgeStyle, background: "var(--opp-icon-bg,#d6f7ec)", color: "var(--accent-dark)" }}>
+                  <span style={{ ...iconBadgeStyle, background: "var(--opp-icon-bg)", color: "var(--accent-dark)" }}>
                     <TrendingUpIcon />
                   </span>
                   <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "var(--text)" }}>
@@ -520,7 +521,7 @@ const eyebrowStyle: React.CSSProperties = {
   fontWeight: 700,
   letterSpacing: ".09em",
   textTransform: "uppercase",
-  color: "var(--muted,#5b6b7b)",
+  color: "var(--muted)",
 };
 
 const iconBadgeStyle: React.CSSProperties = {
@@ -547,5 +548,5 @@ const listItemStyle: React.CSSProperties = {
   alignItems: "flex-start",
   fontSize: "14px",
   lineHeight: 1.55,
-  color: "var(--body,#3c4d5c)",
+  color: "var(--body)",
 };

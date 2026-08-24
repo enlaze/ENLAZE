@@ -177,31 +177,31 @@ export default function OnboardingChecklist() {
     return (
       <button
         onClick={toggleCollapsed}
-        className="flex items-center gap-2.5 rounded-full border border-[#e5eae8] bg-white px-4 py-2.5 text-[13.5px] font-semibold text-[#3d4f48] shadow-[0_1px_3px_rgba(15,30,26,0.04)] transition-colors hover:border-[#c8f0e2] hover:bg-[#fbfefd] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-brand-green/40 dark:hover:bg-zinc-800"
+        className="flex items-center gap-2.5 rounded-full border border-navy-100 bg-white px-4 py-2.5 text-[13.5px] font-semibold text-navy-600 shadow-[0_1px_3px_rgba(10,25,41,0.04)] transition-colors hover:border-brand-green/30 hover:bg-navy-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-brand-green/40 dark:hover:bg-zinc-800"
       >
         <RocketIcon size={16} />
         Primeros pasos
-        <span className="rounded-full bg-[#e6faf4] px-2 py-0.5 text-[11px] font-bold text-brand-green-dark dark:bg-brand-green/15 dark:text-brand-green">
+        <span className="rounded-full bg-brand-green/10 px-2 py-0.5 text-[11px] font-bold text-brand-green-dark dark:bg-brand-green/15 dark:text-brand-green">
           {pct}%
         </span>
-        <ChevronDown size={15} className="text-[#9aa8a2] dark:text-zinc-500" />
+        <ChevronDown size={15} className="text-navy-400 dark:text-zinc-500" />
       </button>
     );
   }
 
   /* ─── Expanded card ──────────────────────────────────────────────── */
   return (
-    <section className="rounded-2xl border border-[#e5eae8] bg-white px-[26px] pt-[26px] pb-[18px] shadow-[0_1px_3px_rgba(15,30,26,0.04)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
+    <section className="rounded-2xl border border-navy-100 bg-white px-[26px] pt-[26px] pb-[18px] shadow-[0_1px_3px_rgba(10,25,41,0.04)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
       {/* Header */}
       <div className="flex items-start gap-4 px-1 pt-1">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#e6faf4] dark:bg-brand-green/15">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-green/10 dark:bg-brand-green/15">
           <RocketIcon size={22} />
         </div>
         <div className="flex flex-1 flex-col gap-0.5">
-          <div className="text-[17px] font-bold text-[#0f1e1a] dark:text-white">
+          <div className="text-[17px] font-bold text-navy-900 dark:text-white">
             Primeros pasos con Enlaze
           </div>
-          <div className="text-[14px] text-[#6b7d76] dark:text-zinc-400">
+          <div className="text-[14px] text-navy-500 dark:text-zinc-400">
             Completa estos pasos para sacar el máximo partido a tu cuenta.
           </div>
         </div>
@@ -209,7 +209,7 @@ export default function OnboardingChecklist() {
         {/* Progress ring */}
         <div className="relative h-14 w-14 shrink-0">
           <svg width="56" height="56" viewBox="0 0 56 56">
-            <circle cx="28" cy="28" r="24" fill="none" className="stroke-[#eef2f0] dark:stroke-zinc-800" strokeWidth="5" />
+            <circle cx="28" cy="28" r="24" fill="none" className="stroke-navy-100 dark:stroke-zinc-800" strokeWidth="5" />
             <circle
               cx="28"
               cy="28"
@@ -224,7 +224,7 @@ export default function OnboardingChecklist() {
               style={{ transition: "stroke-dashoffset 0.4s ease" }}
             />
           </svg>
-          <div className="absolute inset-0 flex items-center justify-center text-[13px] font-bold text-[#0f1e1a] dark:text-white">
+          <div className="absolute inset-0 flex items-center justify-center text-[13px] font-bold text-navy-900 dark:text-white">
             {pct}%
           </div>
         </div>
@@ -234,7 +234,7 @@ export default function OnboardingChecklist() {
           onClick={toggleCollapsed}
           title="Ocultar esta sección"
           aria-label="Ocultar esta sección"
-          className="-mr-1.5 -mt-1 shrink-0 rounded-lg p-1.5 text-[#9aa8a2] transition-colors hover:bg-[#f0f4f2] hover:text-[#3d4f48] dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+          className="-mr-1.5 -mt-1 shrink-0 rounded-lg p-1.5 text-navy-400 transition-colors hover:bg-navy-50 hover:text-navy-600 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
         >
           <ChevronUp size={18} />
         </button>
@@ -254,16 +254,16 @@ export default function OnboardingChecklist() {
             return (
               <div
                 key={step.id}
-                className="flex items-center gap-3.5 rounded-xl bg-[#f7fbf9] px-3.5 py-3 dark:bg-brand-green/[0.06]"
+                className="flex items-center gap-3.5 rounded-xl bg-brand-green/[0.04] px-3.5 py-3 dark:bg-brand-green/[0.06]"
               >
                 <svg width="22" height="22" viewBox="0 0 24 24" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 fill-brand-green">
                   <circle cx="12" cy="12" r="10" stroke="none" />
                   <path d="m9 12 2 2 4-4" />
                 </svg>
-                <div className="flex-1 text-[15px] font-medium text-[#9aa8a2] line-through dark:text-zinc-500">
+                <div className="flex-1 text-[15px] font-medium text-navy-400 line-through dark:text-zinc-500">
                   {step.label}
                 </div>
-                <div className="rounded-full bg-[#e6faf4] px-2.5 py-0.5 text-[12px] font-semibold text-brand-green-dark dark:bg-brand-green/15 dark:text-brand-green">
+                <div className="rounded-full bg-brand-green/10 px-2.5 py-0.5 text-[12px] font-semibold text-brand-green-dark dark:bg-brand-green/15 dark:text-brand-green">
                   Hecho
                 </div>
               </div>
@@ -284,16 +284,16 @@ export default function OnboardingChecklist() {
                   {index + 1}
                 </div>
                 <div className="flex flex-1 flex-col gap-1">
-                  <div className="text-[15px] font-semibold text-[#0f1e1a] dark:text-white">
+                  <div className="text-[15px] font-semibold text-navy-900 dark:text-white">
                     {step.label}
                   </div>
-                  <div className="text-[14px] leading-relaxed text-[#6b7d76] dark:text-zinc-400">
+                  <div className="text-[14px] leading-relaxed text-navy-500 dark:text-zinc-400">
                     {step.description}
                   </div>
                   <Link
                     href={step.href}
                     onClick={(e) => e.stopPropagation()}
-                    className="mt-2 inline-flex items-center gap-1.5 self-start rounded-[9px] bg-[#0f1e1a] px-4 py-2 text-[13.5px] font-semibold text-white transition-colors hover:bg-[#22332d] dark:bg-brand-green dark:text-zinc-950 dark:hover:bg-brand-green-light"
+                    className="mt-2 inline-flex items-center gap-1.5 self-start rounded-[9px] bg-navy-900 px-4 py-2 text-[13.5px] font-semibold text-white transition-colors hover:bg-navy-800 dark:bg-brand-green dark:text-zinc-950 dark:hover:bg-brand-green-light"
                   >
                     Empezar
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -302,7 +302,7 @@ export default function OnboardingChecklist() {
                     </svg>
                   </Link>
                 </div>
-                <ChevronUp size={17} className="mt-0.5 shrink-0 text-[#9aa8a2] dark:text-zinc-500" />
+                <ChevronUp size={17} className="mt-0.5 shrink-0 text-navy-400 dark:text-zinc-500" />
               </div>
             );
           }
@@ -312,15 +312,15 @@ export default function OnboardingChecklist() {
             <div
               key={step.id}
               onClick={() => toggleStep(index)}
-              className="flex cursor-pointer items-center gap-3.5 rounded-xl border border-[#eef2f0] bg-white px-3.5 py-3 transition-colors hover:border-[#c8f0e2] hover:bg-[#fbfefd] dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-brand-green/30 dark:hover:bg-zinc-800/50"
+              className="flex cursor-pointer items-center gap-3.5 rounded-xl border border-navy-100 bg-white px-3.5 py-3 transition-colors hover:border-brand-green/30 hover:bg-navy-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-brand-green/30 dark:hover:bg-zinc-800/50"
             >
-              <div className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-2 border-[#d4ddd9] text-[11px] font-bold text-[#9aa8a2] dark:border-zinc-700 dark:text-zinc-500">
+              <div className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-2 border-navy-200 text-[11px] font-bold text-navy-400 dark:border-zinc-700 dark:text-zinc-500">
                 {index + 1}
               </div>
-              <div className="flex-1 text-[15px] font-medium text-[#3d4f48] dark:text-zinc-200">
+              <div className="flex-1 text-[15px] font-medium text-navy-600 dark:text-zinc-200">
                 {step.label}
               </div>
-              <ChevronDown size={17} className="shrink-0 text-[#9aa8a2] dark:text-zinc-500" />
+              <ChevronDown size={17} className="shrink-0 text-navy-400 dark:text-zinc-500" />
             </div>
           );
         })}

@@ -128,8 +128,8 @@ export default function PriceHistoryModal({ productId, productName, onClose }: P
                 const price = minPrice + priceRange * pct;
                 return (
                   <g key={pct}>
-                    <line x1={padding.left} y1={y} x2={chartW - padding.right} y2={y} stroke="#e2e8f0" strokeWidth="1" />
-                    <text x={padding.left - 8} y={y + 4} textAnchor="end" className="text-[10px]" fill="#94a3b8">
+                    <line x1={padding.left} y1={y} x2={chartW - padding.right} y2={y} stroke="var(--color-navy-100)" strokeWidth="1" />
+                    <text x={padding.left - 8} y={y + 4} textAnchor="end" className="text-[10px]" fill="var(--color-navy-400)">
                       {price.toFixed(2)}
                     </text>
                   </g>
@@ -157,7 +157,7 @@ export default function PriceHistoryModal({ productId, productName, onClose }: P
 
               {/* X axis labels */}
               {points.filter((_, i) => i % Math.max(1, Math.floor(points.length / 5)) === 0 || i === points.length - 1).map((p, i) => (
-                <text key={i} x={p.x} y={chartH - 5} textAnchor="middle" className="text-[9px]" fill="#94a3b8">
+                <text key={i} x={p.x} y={chartH - 5} textAnchor="middle" className="text-[9px]" fill="var(--color-navy-400)">
                   {new Date(p.date).toLocaleDateString("es-ES", { day: "2-digit", month: "short" })}
                 </text>
               ))}

@@ -26,6 +26,10 @@
   --color-brand-green: #00c896;
   --color-brand-green-dark: #00a67a;
   --color-brand-green-light: #00e6ac;
+  /* Verde de marca legible como TEXTO sobre fondos claros teñidos de verde.
+     El valor ya vivia en la superficie de Ajustes como --st-accent-ink; se
+     promueve aqui para que las insignias del dashboard usen el mismo. */
+  --color-brand-green-ink: #00795c;
 
   /* Typography — Inter is loaded via next/font in app/layout.tsx.
      The `--font-inter` variable is set on <html> by next/font; we wire it
@@ -275,7 +279,7 @@ html.dark ::selection {
   --st-text-2: #3d5658;
   --st-muted: #7b8f8e;
   --st-accent: #00c896;
-  --st-accent-ink: #00795c;
+  --st-accent-ink: var(--color-brand-green-ink);
   --st-accent-soft: #e9faf4;
   --st-accent-ring: rgba(0, 200, 150, 0.18);
   --st-accent-contrast: #04120e;

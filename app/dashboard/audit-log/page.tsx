@@ -134,22 +134,22 @@ const entityVariant: Record<string, EntityColor> = {
 
 /* Pill badge, per entity colour. Green/gray hexes come from the design. */
 const badgeStyles: Record<EntityColor, string> = {
-  green: "bg-[#e6faf4] text-[#00795b] border-[#bdeede] dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60",
+  green: "bg-brand-green/10 text-brand-green-ink border-brand-green/30 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60",
   blue: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/60",
   yellow: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/60",
   red: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800/60",
-  gray: "bg-[#eef2f6] text-[#475569] border-[#e2e8f0] dark:bg-zinc-800/60 dark:text-zinc-300 dark:border-zinc-800",
+  gray: "bg-navy-100 text-navy-600 border-navy-100 dark:bg-zinc-800/60 dark:text-zinc-300 dark:border-zinc-800",
   purple: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/60",
   orange: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800/60",
 };
 
 /* Tinted circle behind the row icon, following the same entity colour. */
 const iconWrapStyles: Record<EntityColor, string> = {
-  green: "bg-[#e6faf4] text-[#00a37b] dark:bg-emerald-950/40 dark:text-emerald-300",
+  green: "bg-brand-green/10 text-brand-green-dark dark:bg-emerald-950/40 dark:text-emerald-300",
   blue: "bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300",
   yellow: "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-300",
   red: "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-300",
-  gray: "bg-[#eef2f6] text-[#64748b] dark:bg-zinc-800/60 dark:text-zinc-300",
+  gray: "bg-navy-100 text-navy-500 dark:bg-zinc-800/60 dark:text-zinc-300",
   purple: "bg-purple-50 text-purple-600 dark:bg-purple-950/40 dark:text-purple-300",
   orange: "bg-orange-50 text-orange-600 dark:bg-orange-950/40 dark:text-orange-300",
 };
@@ -271,10 +271,10 @@ export default function AuditLogPage() {
 
   return (
     <div className="mx-auto max-w-[880px]">
-      <h1 className="text-[32px] font-bold tracking-[-0.02em] text-[#0f172a] dark:text-white">
+      <h1 className="text-[32px] font-bold tracking-[-0.02em] text-navy-900 dark:text-white">
         Registro de Actividad
       </h1>
-      <p className="mb-7 mt-2 text-[15px] text-[#64748b] dark:text-zinc-400">
+      <p className="mb-7 mt-2 text-[15px] text-navy-500 dark:text-zinc-400">
         Historial de cambios en tu cuenta
       </p>
 
@@ -320,7 +320,7 @@ export default function AuditLogPage() {
               return (
                 <div
                   key={activity.id}
-                  className="flex items-start gap-[18px] rounded-[14px] border border-[#e8edf2] bg-white px-6 py-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none"
+                  className="flex items-start gap-[18px] rounded-[14px] border border-navy-100 bg-white px-6 py-5 shadow-[0_1px_2px_rgba(10,25,41,0.04)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none"
                 >
                   <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${iconWrapStyles[color]}`}>
                     <EntityIcon name={getEntityIcon(activity.entity_type)} />
@@ -328,7 +328,7 @@ export default function AuditLogPage() {
 
                   <div className="flex min-w-0 flex-1 flex-col gap-2">
                     <div className="flex flex-wrap items-center gap-2.5">
-                      <h3 className="font-mono text-[15.5px] font-semibold text-[#0f172a] dark:text-white">
+                      <h3 className="font-mono text-[15.5px] font-semibold text-navy-900 dark:text-white">
                         {activity.action}
                       </h3>
                       <span className={`inline-flex items-center rounded-full border px-2.5 py-[3px] text-[12.5px] font-semibold ${badgeStyles[color]}`}>
@@ -336,17 +336,17 @@ export default function AuditLogPage() {
                       </span>
                     </div>
 
-                    <p className="font-mono text-[13px] text-[#94a3b8] dark:text-zinc-500">
+                    <p className="font-mono text-[13px] text-navy-400 dark:text-zinc-500">
                       ID: {activity.entity_id}
                     </p>
 
-                    <div className="overflow-x-auto rounded-[10px] border border-[#eef2f6] bg-[#f6f8fa] px-4 py-3 dark:border-zinc-800 dark:bg-zinc-800/40">
-                      <code className="block break-all font-mono text-[13px] text-[#475569] dark:text-zinc-300">
+                    <div className="overflow-x-auto rounded-[10px] border border-navy-100 bg-navy-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-800/40">
+                      <code className="block break-all font-mono text-[13px] text-navy-600 dark:text-zinc-300">
                         {getMetadataPreview(activity.metadata)}
                       </code>
                     </div>
 
-                    <p className="text-[13px] text-[#94a3b8] dark:text-zinc-500">
+                    <p className="text-[13px] text-navy-400 dark:text-zinc-500">
                       {formatTimestamp(activity.created_at)}
                     </p>
                   </div>

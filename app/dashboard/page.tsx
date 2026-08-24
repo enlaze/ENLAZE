@@ -249,7 +249,7 @@ export default function DashboardHome() {
 
       /* ── Budget Breakdown ───────────────────────────────── */
       const statusMap: Record<string, { label: string; color: string }> = {
-        draft: { label: "Borrador", color: "#94a3b8" },
+        draft: { label: "Borrador", color: "var(--color-navy-400)" },
         pending: { label: "Pendiente", color: "#f59e0b" },
         sent: { label: "Enviado", color: "#3b82f6" },
         enviado: { label: "Enviado", color: "#3b82f6" },
@@ -265,7 +265,7 @@ export default function DashboardHome() {
           status,
           label: statusMap[status]?.label || status,
           count,
-          color: statusMap[status]?.color || "#64748b",
+          color: statusMap[status]?.color || "var(--color-navy-500)",
         }))
         .sort((a, b) => b.count - a.count);
       setBudgetBreakdown(breakdown);
@@ -575,7 +575,7 @@ function BarChart({ data }: { data: MonthlyRevenue[] }) {
         {/* Grid lines */}
         {[0, 0.25, 0.5, 0.75, 1].map(f => (
           <line key={f} x1="0" y1={chartH - chartH * f} x2={Math.max(totalW, 300)} y2={chartH - chartH * f}
-            stroke="#e2e8f0" strokeWidth="1" strokeDasharray={f === 0 ? "0" : "4 4"} />
+            stroke="var(--color-navy-100)" strokeWidth="1" strokeDasharray={f === 0 ? "0" : "4 4"} />
         ))}
 
         {data.map((d, i) => {

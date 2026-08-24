@@ -190,14 +190,14 @@ export default function ComplianceDashboardPage() {
   };
 
   const statusBadge = {
-    green: "bg-[#e6faf4] text-[#00795b] border-[#bdeede] dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-900",
+    green: "bg-brand-green/10 text-brand-green-ink border-brand-green/30 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-900",
     yellow: "bg-[#fef3e2] text-[#b45309] border-[#f8e0b8] dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-900",
     red: "bg-[#fee2e2] text-[#b91c1c] border-[#fecaca] dark:bg-red-950/50 dark:text-red-300 dark:border-red-900",
   };
 
   /* Tinted circle behind each row icon, keyed by that row's status. */
   const iconWrap = {
-    green: "bg-[#e6faf4] text-[#00a37b] dark:bg-emerald-950/50 dark:text-emerald-300",
+    green: "bg-brand-green/10 text-brand-green-dark dark:bg-emerald-950/50 dark:text-emerald-300",
     yellow: "bg-[#fef3e2] text-[#d97706] dark:bg-amber-950/50 dark:text-amber-300",
     red: "bg-[#fee2e2] text-[#dc2626] dark:bg-red-950/50 dark:text-red-300",
   };
@@ -220,15 +220,15 @@ export default function ComplianceDashboardPage() {
 
   return (
     <div className="mx-auto max-w-[880px]">
-      <h1 className="text-[32px] font-bold tracking-[-0.02em] text-[#0f172a] dark:text-white">
+      <h1 className="text-[32px] font-bold tracking-[-0.02em] text-navy-900 dark:text-white">
         Cumplimiento
       </h1>
-      <p className="mb-7 mt-2 text-[15px] text-[#64748b] dark:text-zinc-400">
+      <p className="mb-7 mt-2 text-[15px] text-navy-500 dark:text-zinc-400">
         Estado de cumplimiento legal, fiscal, privacidad y seguridad de tu cuenta.
       </p>
 
       {/* Overall status */}
-      <div className="mb-7 flex items-center gap-5 rounded-2xl border border-[#e8edf2] bg-white px-7 py-6 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
+      <div className="mb-7 flex items-center gap-5 rounded-2xl border border-navy-100 bg-white px-7 py-6 shadow-[0_1px_2px_rgba(10,25,41,0.04)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
         <div className={`flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full ${iconWrap[overallStatus]}`}>
           <svg
             width="24"
@@ -256,10 +256,10 @@ export default function ComplianceDashboardPage() {
           </svg>
         </div>
         <div className="flex flex-col gap-1.5">
-          <div className="text-[19px] font-bold tracking-[-0.01em] text-[#0f172a] dark:text-white">
+          <div className="text-[19px] font-bold tracking-[-0.01em] text-navy-900 dark:text-white">
             {overallTitle}
           </div>
-          <div className="flex flex-wrap items-center gap-4 text-sm text-[#64748b] dark:text-zinc-400">
+          <div className="flex flex-wrap items-center gap-4 text-sm text-navy-500 dark:text-zinc-400">
             {summaryCounts.map(({ key, count, label }) => (
               <span key={key} className="inline-flex items-center gap-[7px]">
                 <span className={`h-2 w-2 rounded-full ${statusDot[key]}`} />
@@ -274,13 +274,13 @@ export default function ComplianceDashboardPage() {
       <div className="flex flex-col gap-3">
         {checks.map((check) => (
           <Link key={check.area} href={check.href} className="group block">
-            <div className="flex cursor-pointer items-center gap-[18px] rounded-[14px] border border-[#e8edf2] bg-white px-6 py-5 transition-[border-color,box-shadow] duration-150 group-hover:border-[#c7ded5] group-hover:shadow-[0_2px_8px_rgba(15,23,42,0.06)] dark:border-zinc-800 dark:bg-zinc-900 dark:group-hover:border-brand-green/40 dark:group-hover:shadow-none">
+            <div className="flex cursor-pointer items-center gap-[18px] rounded-[14px] border border-navy-100 bg-white px-6 py-5 transition-[border-color,box-shadow] duration-150 group-hover:border-brand-green/30 group-hover:shadow-[0_2px_8px_rgba(10,25,41,0.06)] dark:border-zinc-800 dark:bg-zinc-900 dark:group-hover:border-brand-green/40 dark:group-hover:shadow-none">
               <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${iconWrap[check.status]}`}>
                 <CheckIcon name={check.icon} />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2.5">
-                  <span className="text-base font-semibold text-[#0f172a] dark:text-white">
+                  <span className="text-base font-semibold text-navy-900 dark:text-white">
                     {check.label}
                   </span>
                   <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-[3px] text-[12.5px] font-semibold ${statusBadge[check.status]}`}>
@@ -288,7 +288,7 @@ export default function ComplianceDashboardPage() {
                     {statusLabels[check.status]}
                   </span>
                 </div>
-                <p className="mt-1 text-sm text-[#64748b] dark:text-zinc-400">
+                <p className="mt-1 text-sm text-navy-500 dark:text-zinc-400">
                   {check.detail}
                 </p>
               </div>
@@ -301,7 +301,7 @@ export default function ComplianceDashboardPage() {
                 strokeWidth="1.75"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="shrink-0 text-[#94a3b8] dark:text-zinc-600"
+                className="shrink-0 text-navy-400 dark:text-zinc-600"
                 aria-hidden="true"
               >
                 <path d="M5 12h14" />
