@@ -13,16 +13,34 @@
  * del volumen de evidencia distinta y no del número de partidas, y devuelve un
  * `createInMemoryRegistry` cargado. A partir de ahí la clasificación no toca la red.
  *
- * Coste:
- *     1  (canonical_alias_sources)
- *   + ceil(D / chunk.aliasNorms) * max(1, ceil(R / chunk.sourceRefs))
- *   + ceil(C / chunk.canonicalIds)
+ * COSTE DE LAS CONSULTAS DE CLASIFICACIÓN. Con troceado simultáneo de alias_norm y de
+ * source_ref, el número de peticiones a PostgREST es exactamente:
  *
- * donde D = alias_norm distintos, R = source_ref válidos distintos y C = canonical_id
- * distintos hallados. NO es constante: es O(fragmentos de evidencia distinta). Lo que
- * sí garantiza es que nunca hay una consulta por línea. En la práctica R vale 0 o 1
- * —un presupuesto importa de un banco, no de doce—, así que el factor multiplicativo
- * es 1 y el coste queda en 1 + ceil(D/200) + ceil(C/200).
+ *     1                                                    (canonical_alias_sources)
+ *   + ceil(D / chunk.aliasNorms) * max(1, ceil(R / chunk.sourceRefs))   (canonical_aliases)
+ *   + ceil(C / chunk.canonicalIds)                         (canonical_concepts)
+ *
+ * donde:
+ *     D = alias_norm distintos que aportan las líneas
+ *     R = source_ref válidos distintos que declaran las líneas
+ *     C = canonical_id distintos HALLADOS en los aliases recuperados
+ *
+ * Los dos troceados se multiplican entre sí porque cada fragmento de norms debe
+ * consultarse contra cada fragmento de refs; por eso las filas con source_ref NULL
+ * vuelven en todos los fragmentos y hay que deduplicar por id.
+ *
+ * Esta cifra NO es constante y no debe describirse como tal. Es
+ *
+ *     O(fragmentos de evidencia distinta)
+ *
+ * y nunca O(partidas): jamás se emite una consulta por línea. Que un presupuesto de 1
+ * partida y otro de 100 cuesten ambos 3 peticiones es consecuencia de que 100 norms
+ * distintos caben en un fragmento de 200, no de una propiedad del número de partidas.
+ * Con 250 conceptos distintos serían 2 fragmentos de aliases.
+ *
+ * En la práctica R vale 0 o 1 —un presupuesto importa de un banco de precios, no de
+ * doce—, así que el factor multiplicativo es 1 y el coste queda en
+ * 1 + ceil(D/200) + ceil(C/200).
  *
  * LÍMITE DELIBERADO: aquí no se decide nada. Ni precedencia de procedencias, ni
  * global-only para `engine`, ni anulación de empresa para `legacy`, ni exact contra

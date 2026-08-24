@@ -29,6 +29,7 @@
     "test:platform-assistant": "node --import tsx --test __tests__/platform-assistant.test.mjs",
     "test:price-worker": "PYTHONPATH=services/price-worker/src python3 -m unittest discover -s services/price-worker/tests",
     "test:integration": "node --import tsx --test __tests__/account-deletion-lock.integration.test.mjs",
+    "smoke:snapshot": "node --env-file-if-exists=.env.local --import tsx scripts/smoke-canonical-snapshot.ts",
     "verify:scheduled": "node scripts/verificar-envios-programados.mjs",
     "scrape:prices": "node scripts/scraper-precios.js",
     "scrape:suppliers": "node scripts/scraper-proveedores-oficiales.js",

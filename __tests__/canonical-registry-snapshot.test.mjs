@@ -762,3 +762,194 @@ describe("Fase 2D-1b · snapshot loader", () => {
     cubre(SOURCE_SELECT, DEFAULT_ALIAS_SOURCES[0], "canonical_alias_sources");
   });
 });
+
+// ─── Fase 2D-1c · el oráculo del smoke real ───────────────────────────────────
+
+/**
+ * El smoke contra Supabase real compara lo que PostgREST devuelve con los filtros
+ * puestos contra lo que sale de filtrar las tablas enteras en memoria. Esa comparación
+ * es el único juez de si el `or=(...)` real se comporta como el fake supone.
+ *
+ * Un oráculo que siempre dijera "coinciden" haría el smoke decorativo. Estos tests
+ * comprueban que el oráculo (a) coincide con el loader sobre el fake, y (b) DETECTA la
+ * avería concreta que el smoke busca: que los dos grupos de filtros se combinasen con
+ * OR en vez de con AND.
+ */
+const { esperadoEnMemoria, clienteInstrumentado, nuevoContador } = await import(
+  path.join(root, "scripts/smoke-canonical-snapshot.ts")
+);
+
+describe("Fase 2D-1c · oráculo del smoke real", () => {
+  test("ORÁCULO — coincide con el loader sobre el fake en los tres casos", async () => {
+    const privadoA = makeAlias("WORK.GEN.C0", "Nombre interno de A", {
+      source: "manual",
+      company_id: COMPANY_A,
+    });
+    const privadoB = makeAlias("WORK.GEN.C1", "Nombre interno de B", {
+      source: "manual",
+      company_id: COMPANY_B,
+    });
+    const importado = makeAlias("WORK.GEN.C2", TEXT(2), {
+      source: "import",
+      source_ref: "cype_2026",
+    });
+    const otroBanco = makeAlias("WORK.GEN.C3", TEXT(3), {
+      source: "import",
+      source_ref: "bc3_publico",
+    });
+
+    const db = buildDb(6, [privadoA, privadoB, importado, otroBanco]);
+
+    const casos = [
+      { nombre: "global", companyId: null, lineas: makeLines(4) },
+      {
+        nombre: "company + global",
+        companyId: COMPANY_A,
+        lineas: [
+          ...makeLines(4),
+          { concept: "Nombre interno de A", canonical_origin: "free_text" },
+          { concept: "Nombre interno de B", canonical_origin: "free_text" },
+        ],
+      },
+      {
+        nombre: "source_ref",
+        companyId: COMPANY_A,
+        lineas: [
+          { concept: TEXT(2), canonical_origin: "import", canonical_source_ref: "cype_2026" },
+          { concept: TEXT(3), canonical_origin: "import", canonical_source_ref: "cype_2026" },
+        ],
+      },
+    ];
+
+    for (const caso of casos) {
+      const fake = fakeSupabase(db);
+      const snapshot = await loadCanonicalRegistrySnapshot({
+        supabase: fake.client,
+        lines: caso.lineas,
+        companyId: caso.companyId,
+      });
+
+      const norms = [
+        ...new Set(caso.lineas.map((l) => canonicalNormalize(l.concept)).filter((n) => n !== "")),
+      ].sort();
+      const refs = [
+        ...new Set(
+          caso.lineas.map((l) => l.canonical_source_ref).filter((r) => typeof r === "string")
+        ),
+      ].sort();
+
+      const esperado = esperadoEnMemoria(db.canonical_aliases, norms, caso.companyId, refs);
+
+      assert.deepEqual(
+        snapshot.data.aliases.map((a) => a.id).sort(),
+        esperado.map((a) => a.id).sort(),
+        `el oráculo discrepa del loader en el caso "${caso.nombre}"`
+      );
+      // Y no es que ambos estén vacíos: el caso tiene que traer algo.
+      assert.ok(esperado.length > 0, `el caso "${caso.nombre}" no ejerce nada`);
+    }
+  });
+
+  test("ORÁCULO — detecta la avería que el smoke busca: OR en vez de AND", () => {
+    const privadoB = makeAlias("WORK.GEN.C1", "Nombre interno de B", {
+      source: "manual",
+      company_id: COMPANY_B,
+    });
+    const importado = makeAlias("WORK.GEN.C2", TEXT(2), {
+      source: "import",
+      source_ref: "cype_2026",
+    });
+    const db = buildDb(4, [privadoB, importado]);
+
+    // Se consulta el norm del alias privado de B y el del importado.
+    const norms = [
+      canonicalNormalize("Nombre interno de B"),
+      canonicalNormalize(TEXT(2)),
+    ].sort();
+    const refs = ["cype_2026"];
+
+    const conAnd = esperadoEnMemoria(db.canonical_aliases, norms, COMPANY_A, refs);
+
+    // La avería: unir los dos grupos con OR. Si PostgREST hiciera esto, la fila de
+    // COMPANY_B entraría por la puerta de source_ref (su source_ref es NULL).
+    const setNorms = new Set(norms);
+    const setRefs = new Set(refs);
+    const conOr = db.canonical_aliases
+      .filter((a) => setNorms.has(a.alias_norm))
+      .filter(
+        (a) =>
+          a.company_id === null ||
+          a.company_id === COMPANY_A ||
+          a.source_ref === null ||
+          setRefs.has(a.source_ref)
+      );
+
+    assert.notDeepEqual(
+      conOr.map((a) => a.id).sort(),
+      conAnd.map((a) => a.id).sort(),
+      "el oráculo no distingue AND de OR: el smoke no probaría nada"
+    );
+    assert.ok(
+      conOr.some((a) => a.company_id === COMPANY_B),
+      "el escenario de avería debía filtrar un tenant ajeno"
+    );
+    assert.ok(
+      !conAnd.some((a) => a.company_id === COMPANY_B),
+      "la semántica correcta no puede traer tenants ajenos"
+    );
+  });
+
+  test("SOLO LECTURA — el cliente del smoke bloquea toda escritura", async () => {
+    const contador = nuevoContador();
+    let tocado = false;
+
+    const clienteFalso = {
+      from() {
+        const builder = {
+          select() {
+            return builder;
+          },
+          insert() {
+            tocado = true;
+            return builder;
+          },
+          update() {
+            tocado = true;
+            return builder;
+          },
+          delete() {
+            tocado = true;
+            return builder;
+          },
+          upsert() {
+            tocado = true;
+            return builder;
+          },
+          then(fn) {
+            return Promise.resolve(fn({ data: [], error: null }));
+          },
+        };
+        return builder;
+      },
+    };
+
+    const cliente = clienteInstrumentado(clienteFalso, contador);
+
+    for (const verbo of ["insert", "update", "delete", "upsert"]) {
+      assert.throws(
+        () => cliente.from("canonical_aliases")[verbo]({ x: 1 }),
+        /EscrituraProhibida|escribir en Supabase/,
+        `${verbo} debía quedar bloqueado`
+      );
+    }
+    assert.equal(tocado, false, "una escritura llegó al cliente subyacente");
+
+    // La lectura sí pasa, y se cuenta un request por cada .from().
+    contador.reset();
+    await cliente.from("canonical_aliases").select("id").then((r) => r);
+    await cliente.from("canonical_concepts").select("id").then((r) => r);
+
+    assert.equal(contador.total, 2);
+    assert.deepEqual(contador.porTabla, { canonical_aliases: 1, canonical_concepts: 1 });
+  });
+});
