@@ -170,7 +170,7 @@ const NO_CONNECTIONS: LiveConnections = { gmail: false, calendar: false, sheets:
 
 /* ─── Helpers ───────────────────────────────────────────────────────── */
 
-const ICON_CLS = "h-5 w-5 text-[#00c896]";
+const ICON_CLS = "h-5 w-5 text-brand-green";
 const signalTypeLabels: Record<string, { label: string; icon: ReactNode }> = {
   regulation: { label: "Normativa", icon: <ScrollText className={ICON_CLS} /> },
   subsidy: { label: "Ayuda", icon: <Wallet className={ICON_CLS} /> },
@@ -644,7 +644,7 @@ function BriefingFallback() {
     <div className="flex flex-col items-start gap-4 rounded-2xl border border-[#c8f0e2] bg-[#e9faf4] px-6 py-[22px] sm:flex-row sm:items-center sm:gap-[18px] dark:border-brand-green/25 dark:bg-brand-green/[0.06]">
       {/* Icon chip — lucide triangle-alert */}
       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#c8f0e2] bg-white dark:border-brand-green/25 dark:bg-zinc-900">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00c896" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className="stroke-brand-green" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
           <path d="M12 9v4" />
           <path d="M12 17h.01" />

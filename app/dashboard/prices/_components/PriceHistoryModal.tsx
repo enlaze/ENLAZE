@@ -140,18 +140,18 @@ export default function PriceHistoryModal({ productId, productName, onClose }: P
               <path d={areaPath} fill="url(#greenGradient)" opacity="0.3" />
 
               {/* Line */}
-              <path d={linePath} fill="none" stroke="#00c896" strokeWidth="2.5" strokeLinejoin="round" />
+              <path d={linePath} fill="none" className="stroke-brand-green" strokeWidth="2.5" strokeLinejoin="round" />
 
               {/* Dots */}
               {points.map((p, i) => (
-                <circle key={i} cx={p.x} cy={p.y} r="3" fill="#00c896" stroke="white" strokeWidth="1.5" />
+                <circle key={i} cx={p.x} cy={p.y} r="3" className="fill-brand-green" stroke="white" strokeWidth="1.5" />
               ))}
 
               {/* Gradient definition */}
               <defs>
                 <linearGradient id="greenGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#00c896" stopOpacity="0.4" />
-                  <stop offset="100%" stopColor="#00c896" stopOpacity="0" />
+                  <stop offset="0%" style={{ stopColor: "var(--color-brand-green)" }} stopOpacity="0.4" />
+                  <stop offset="100%" style={{ stopColor: "var(--color-brand-green)" }} stopOpacity="0" />
                 </linearGradient>
               </defs>
 

@@ -46,16 +46,16 @@ export interface DailyBriefingCardProps {
 
 const LIGHT_VARS: Record<string, string> = {
   "--card": "#ffffff",
-  "--text": "#0a1929",
+  "--text": "var(--color-navy-900)",
   "--body": "#3c4d5c",
   "--muted": "#5b6b7b",
   "--faint": "#c3ccd4",
   "--border": "rgba(10,25,41,.08)",
   "--row": "#fcfdfd",
   "--pill": "#f0f3f5",
-  "--accent": "#00c896",
-  "--accent-dark": "#00a67a",
-  "--accent-light": "#00e6ac",
+  "--accent": "var(--color-brand-green)",
+  "--accent-dark": "var(--color-brand-green-dark)",
+  "--accent-light": "var(--color-brand-green-light)",
   "--accent-soft": "rgba(0,200,150,.12)",
   "--alta-bg": "#fee2e2",
   "--media-bg": "#fef3c7",
@@ -78,9 +78,9 @@ const DARK_VARS: Record<string, string> = {
   "--border": "rgba(255,255,255,.09)",
   "--row": "rgba(255,255,255,.02)",
   "--pill": "rgba(255,255,255,.05)",
-  "--accent": "#00e6ac",
-  "--accent-dark": "#00e6ac",
-  "--accent-light": "#00c896",
+  "--accent": "var(--color-brand-green-light)",
+  "--accent-dark": "var(--color-brand-green-light)",
+  "--accent-light": "var(--color-brand-green)",
   "--accent-soft": "rgba(0,230,172,.14)",
   "--alta-bg": "rgba(239,68,68,.16)",
   "--media-bg": "rgba(245,158,11,.16)",
@@ -186,7 +186,8 @@ export default function DailyBriefingCard({
 }: DailyBriefingCardProps) {
   const isDark = useIsDark();
   const vars = isDark ? DARK_VARS : LIGHT_VARS;
-  const accent = isDark ? "#00e6ac" : "#00a67a";
+  // Ambas paletas usan `--accent-dark` como color de marca «sólido» del check.
+  const accent = "var(--accent-dark)";
 
   // Per-briefing checklist state. Persisted as an array of done indices under a
   // key that already changes every day (summary.id), so it resets on its own.
@@ -246,7 +247,7 @@ export default function DailyBriefingCard({
         style={{
           height: "3px",
           background:
-            "linear-gradient(90deg,var(--accent-light,#00e6ac),var(--accent,#00c896) 45%,var(--accent-dark,#00a67a))",
+            "linear-gradient(90deg,var(--accent-light),var(--accent) 45%,var(--accent-dark))",
         }}
       />
 
@@ -273,7 +274,7 @@ export default function DailyBriefingCard({
                   fontWeight: 700,
                   letterSpacing: ".05em",
                   textTransform: "uppercase",
-                  color: "var(--accent-dark,#00a67a)",
+                  color: "var(--accent-dark)",
                 }}
               >
                 escrito por tu asistente
@@ -290,7 +291,7 @@ export default function DailyBriefingCard({
             lineHeight: 1.18,
             fontWeight: 800,
             letterSpacing: "-.02em",
-            color: "var(--text,#0a1929)",
+            color: "var(--text)",
             maxWidth: "26ch",
           }}
         >
@@ -317,10 +318,10 @@ export default function DailyBriefingCard({
         {actions.length > 0 && (
           <div style={{ marginTop: "32px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
-              <span style={{ ...iconBadgeStyle, background: "var(--accent-soft,rgba(0,200,150,.12))", color: "var(--accent-dark,#00a67a)" }}>
+              <span style={{ ...iconBadgeStyle, background: "var(--accent-soft,rgba(0,200,150,.12))", color: "var(--accent-dark)" }}>
                 <ListChecksIcon />
               </span>
-              <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 700, letterSpacing: ".01em", color: "var(--text,#0a1929)" }}>
+              <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 700, letterSpacing: ".01em", color: "var(--text)" }}>
                 Qué hacer hoy
               </h2>
             </div>
@@ -454,17 +455,17 @@ export default function DailyBriefingCard({
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
-                  <span style={{ ...iconBadgeStyle, background: "var(--opp-icon-bg,#d6f7ec)", color: "var(--accent-dark,#00a67a)" }}>
+                  <span style={{ ...iconBadgeStyle, background: "var(--opp-icon-bg,#d6f7ec)", color: "var(--accent-dark)" }}>
                     <TrendingUpIcon />
                   </span>
-                  <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "var(--text,#0a1929)" }}>
+                  <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "var(--text)" }}>
                     Aprovecha hoy
                   </h2>
                 </div>
                 <ul style={listStyle}>
                   {opportunities.map((o, i) => (
                     <li key={i} style={listItemStyle}>
-                      <svg style={{ flexShrink: 0, marginTop: "3px" }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-dark,#00a67a)" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+                      <svg style={{ flexShrink: 0, marginTop: "3px" }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-dark)" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
                         <path d="M20 6 9 17l-5-5" />
                       </svg>
                       <span>{o}</span>
@@ -487,7 +488,7 @@ export default function DailyBriefingCard({
                   <span style={{ ...iconBadgeStyle, background: "var(--watch-icon-bg,#fef0cd)", color: "#d97706" }}>
                     <TriangleAlertIcon />
                   </span>
-                  <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "var(--text,#0a1929)" }}>
+                  <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "var(--text)" }}>
                     Ojo con
                   </h2>
                 </div>

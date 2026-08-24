@@ -11,7 +11,11 @@ type GradientTextProps = {
   showBorder?: boolean;
 };
 
-const DEFAULT_COLORS = ["#0a1929", "#00c896", "#0a1929"];
+const DEFAULT_COLORS = [
+  "var(--color-navy-900)",
+  "var(--color-brand-green)",
+  "var(--color-navy-900)",
+];
 
 export default function GradientText({
   children,

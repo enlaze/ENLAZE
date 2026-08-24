@@ -102,7 +102,7 @@ export function ItemsStep() {
         
         {partidas.length === 0 ? (
           <div className="text-center py-12 bg-navy-50 dark:bg-zinc-900/50">
-            <Construction className="h-9 w-9 text-[#00c896] mb-3 mx-auto" />
+            <Construction className="h-9 w-9 text-brand-green mb-3 mx-auto" />
             <h3 className="text-lg font-bold text-navy-900 dark:text-white">Aún no hay partidas</h3>
             <p className="text-sm text-navy-500 dark:text-zinc-400 mt-1 max-w-sm mx-auto">
               Añade partidas manualmente o usa la IA para generarlas.

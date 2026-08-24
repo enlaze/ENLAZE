@@ -253,8 +253,8 @@ export default function DashboardHome() {
         pending: { label: "Pendiente", color: "#f59e0b" },
         sent: { label: "Enviado", color: "#3b82f6" },
         enviado: { label: "Enviado", color: "#3b82f6" },
-        accepted: { label: "Aceptado", color: "#00c896" },
-        aceptado: { label: "Aceptado", color: "#00c896" },
+        accepted: { label: "Aceptado", color: "var(--color-brand-green)" },
+        aceptado: { label: "Aceptado", color: "var(--color-brand-green)" },
         rejected: { label: "Rechazado", color: "#ef4444" },
         rechazado: { label: "Rechazado", color: "#ef4444" },
       };
@@ -587,7 +587,7 @@ function BarChart({ data }: { data: MonthlyRevenue[] }) {
             <g key={d.month}>
               {/* Income bar */}
               <rect x={x} y={chartH - h1} width={barW} height={Math.max(h1, 2)}
-                rx="4" fill="#00c896" opacity="0.85" />
+                rx="4" className="fill-brand-green" opacity="0.85" />
               {/* Invoiced bar */}
               <rect x={x + barW + 4} y={chartH - h2} width={barW} height={Math.max(h2, 2)}
                 rx="4" fill="#38bdf8" opacity="0.7" />
@@ -639,7 +639,7 @@ function DonutChart({ data }: { data: BudgetBreakdown[] }) {
             cy={size / 2}
             r={radius}
             fill="none"
-            stroke={seg.color}
+            style={{ stroke: seg.color }}
             strokeWidth={strokeW}
             strokeDasharray={`${seg.length} ${circumference - seg.length}`}
             strokeDashoffset={-seg.offset}

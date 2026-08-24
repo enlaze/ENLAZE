@@ -42,7 +42,7 @@ const typeLabels: Record<string, string> = {
   received_invoice: "Facturas recibidas",
 };
 
-const QA_ICON = "h-4 w-4 text-[#00c896]";
+const QA_ICON = "h-4 w-4 text-brand-green";
 const quickActions: { label: string; href: string; icon: ReactNode; keys: string }[] = [
   { label: "Nuevo presupuesto", href: "/dashboard/budgets/new", icon: <ClipboardList className={QA_ICON} />, keys: "N P" },
   { label: "Nueva factura", href: "/dashboard/issued-invoices/new", icon: <Receipt className={QA_ICON} />, keys: "N F" },

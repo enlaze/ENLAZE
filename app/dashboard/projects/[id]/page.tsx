@@ -814,7 +814,7 @@ export default function ProjectDetailPage() {
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-navy-900 dark:text-white">{project.name}</h1>
-          {project.address && <p className="text-navy-500 dark:text-zinc-400 text-sm mt-0.5 flex items-center gap-1.5"><MapPin className="h-4 w-4 text-[#00c896] shrink-0" /> {project.address}</p>}
+          {project.address && <p className="text-navy-500 dark:text-zinc-400 text-sm mt-0.5 flex items-center gap-1.5"><MapPin className="h-4 w-4 text-brand-green shrink-0" /> {project.address}</p>}
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusColorMap[project.status] || defaultStatusColor}`}>
@@ -878,9 +878,9 @@ export default function ProjectDetailPage() {
           {client ? (
             <div className="space-y-2 text-sm">
               <p className="text-navy-900 dark:text-white font-medium text-base">{client.name}</p>
-              {client.company && <p className="text-navy-600 dark:text-zinc-300 flex items-center gap-1.5"><Building2 className="h-4 w-4 text-[#00c896] shrink-0" /> {client.company}</p>}
-              {client.email && <p className="text-navy-600 dark:text-zinc-300 flex items-center gap-1.5"><Mail className="h-4 w-4 text-[#00c896] shrink-0" /> {client.email}</p>}
-              {client.phone && <p className="text-navy-600 dark:text-zinc-300 flex items-center gap-1.5"><Smartphone className="h-4 w-4 text-[#00c896] shrink-0" /> {client.phone}</p>}
+              {client.company && <p className="text-navy-600 dark:text-zinc-300 flex items-center gap-1.5"><Building2 className="h-4 w-4 text-brand-green shrink-0" /> {client.company}</p>}
+              {client.email && <p className="text-navy-600 dark:text-zinc-300 flex items-center gap-1.5"><Mail className="h-4 w-4 text-brand-green shrink-0" /> {client.email}</p>}
+              {client.phone && <p className="text-navy-600 dark:text-zinc-300 flex items-center gap-1.5"><Smartphone className="h-4 w-4 text-brand-green shrink-0" /> {client.phone}</p>}
             </div>
           ) : (
             <p className="text-navy-500 dark:text-zinc-400 text-sm">Sin cliente asignado</p>
@@ -1217,8 +1217,8 @@ export default function ProjectDetailPage() {
                           </div>
                           {c.description && <p className="text-sm text-navy-600 dark:text-zinc-300 mb-2">{c.description}</p>}
                           <div className="flex flex-wrap gap-4 text-xs text-navy-500 dark:text-zinc-400">
-                            <span className="inline-flex items-center gap-1"><Wallet className="h-3.5 w-3.5 text-[#00c896]" /> {eur(c.economic_impact)}</span>
-                            {c.time_impact_days > 0 && <span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5 text-[#00c896]" /> +{c.time_impact_days} días</span>}
+                            <span className="inline-flex items-center gap-1"><Wallet className="h-3.5 w-3.5 text-brand-green" /> {eur(c.economic_impact)}</span>
+                            {c.time_impact_days > 0 && <span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5 text-brand-green" /> +{c.time_impact_days} días</span>}
                             <span>Creado: {fmtDate(c.created_at)}</span>
                             {c.approved_date && <span>Aprobado: {fmtDate(c.approved_date)}</span>}
                           </div>

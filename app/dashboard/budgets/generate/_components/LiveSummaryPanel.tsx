@@ -122,7 +122,7 @@ export function LiveSummaryPanel() {
           <div className="bg-navy-50 dark:bg-zinc-800/50 p-3 rounded-xl mb-4 border border-navy-100 dark:border-zinc-700">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-full bg-white dark:bg-zinc-700 flex items-center justify-center shadow-sm">
-                <Building2 className="h-4 w-4 text-[#00c896]" />
+                <Building2 className="h-4 w-4 text-brand-green" />
               </div>
               <div className="flex-1">
                 <div className="flex justify-between items-center">
@@ -358,7 +358,7 @@ export function LiveSummaryPanel() {
       {dataSources && (
         <div className="bg-navy-50 dark:bg-zinc-800/50 border border-navy-100 dark:border-zinc-800 rounded-xl p-4 mb-6">
           <h4 className="text-xs font-bold text-navy-800 dark:text-zinc-300 uppercase tracking-wider mb-2 flex items-center">
-            <BarChart3 className="mr-2 h-4 w-4 text-[#00c896]" /> Cobertura y trazabilidad
+            <BarChart3 className="mr-2 h-4 w-4 text-brand-green" /> Cobertura y trazabilidad
           </h4>
           <ul className="text-[11px] text-navy-600 dark:text-zinc-400 space-y-1">
             <li className="flex justify-between">

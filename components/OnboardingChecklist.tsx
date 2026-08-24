@@ -67,9 +67,9 @@ const RING_CIRCUMFERENCE = 150.8;
 
 /* ─── Lucide icons (inline, strokeWidth 2) ─────────────────────────── */
 
-function RocketIcon({ size = 22, color = "#00c896" }: { size?: number; color?: string }) {
+function RocketIcon({ size = 22, color = "var(--color-brand-green)" }: { size?: number; color?: string }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ stroke: color }} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
       <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
       <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
@@ -215,7 +215,7 @@ export default function OnboardingChecklist() {
               cy="28"
               r="24"
               fill="none"
-              stroke="#00c896"
+              className="stroke-brand-green"
               strokeWidth="5"
               strokeLinecap="round"
               strokeDasharray={RING_CIRCUMFERENCE}
@@ -256,7 +256,7 @@ export default function OnboardingChecklist() {
                 key={step.id}
                 className="flex items-center gap-3.5 rounded-xl bg-[#f7fbf9] px-3.5 py-3 dark:bg-brand-green/[0.06]"
               >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="#00c896" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                <svg width="22" height="22" viewBox="0 0 24 24" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 fill-brand-green">
                   <circle cx="12" cy="12" r="10" stroke="none" />
                   <path d="m9 12 2 2 4-4" />
                 </svg>

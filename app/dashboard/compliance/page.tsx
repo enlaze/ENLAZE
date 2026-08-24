@@ -178,7 +178,7 @@ export default function ComplianceDashboardPage() {
   const reds = checks.filter(c => c.status === "red").length;
 
   const statusDot = {
-    green: "bg-[#00c896]",
+    green: "bg-brand-green",
     yellow: "bg-[#f59e0b]",
     red: "bg-[#ef4444]",
   };

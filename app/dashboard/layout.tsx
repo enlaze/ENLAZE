@@ -149,7 +149,7 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f4f7fa_280px)] font-sans dark:bg-zinc-950 dark:bg-none">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,var(--color-navy-50)_280px)] font-sans dark:bg-zinc-950 dark:bg-none">
       {/* ── Topbar ─────────────────────────────────────────────────── */}
       <header className="fixed top-0 left-0 right-0 z-40 border-b border-navy-100 bg-white/90 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90">
         <div className="flex items-center gap-4 px-4 py-3 sm:px-6">

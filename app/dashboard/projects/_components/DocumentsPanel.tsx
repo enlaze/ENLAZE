@@ -37,13 +37,13 @@ const DOC_TYPES = [
 ];
 
 const typeIcons: Record<string, ReactNode> = {
-  documento: <FileText className="h-10 w-10 text-[#00c896]" />,
-  foto: <Camera className="h-10 w-10 text-[#00c896]" />,
-  plano: <Ruler className="h-10 w-10 text-[#00c896]" />,
-  acta: <ClipboardList className="h-10 w-10 text-[#00c896]" />,
-  parte: <Wrench className="h-10 w-10 text-[#00c896]" />,
-  contrato: <Pencil className="h-10 w-10 text-[#00c896]" />,
-  licencia: <Landmark className="h-10 w-10 text-[#00c896]" />,
+  documento: <FileText className="h-10 w-10 text-brand-green" />,
+  foto: <Camera className="h-10 w-10 text-brand-green" />,
+  plano: <Ruler className="h-10 w-10 text-brand-green" />,
+  acta: <ClipboardList className="h-10 w-10 text-brand-green" />,
+  parte: <Wrench className="h-10 w-10 text-brand-green" />,
+  contrato: <Pencil className="h-10 w-10 text-brand-green" />,
+  licencia: <Landmark className="h-10 w-10 text-brand-green" />,
 };
 
 function formatFileSize(bytes: number) {
@@ -401,7 +401,7 @@ export default function DocumentsPanel({
                 {/* Non-image icon */}
                 {!isImage && (
                   <div className="h-24 bg-navy-50 dark:bg-zinc-800 flex items-center justify-center">
-                    <span className="text-4xl">{typeIcons[doc.doc_type] || <FileText className="h-10 w-10 text-[#00c896]" />}</span>
+                    <span className="text-4xl">{typeIcons[doc.doc_type] || <FileText className="h-10 w-10 text-brand-green" />}</span>
                   </div>
                 )}
 
