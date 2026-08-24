@@ -500,7 +500,7 @@ export default function EmpresaPanel({
                   height: 56,
                   flex: "none",
                   borderRadius: 14,
-                  background: form.logo_url ? "var(--st-field)" : "#0d2a2c",
+                  background: form.logo_url ? "var(--st-field)" : "var(--st-avatar-bg)",
                   color: "#fff",
                   display: "grid",
                   placeItems: "center",

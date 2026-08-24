@@ -281,22 +281,28 @@ html.dark ::selection {
   --st-accent-contrast: #04120e;
   --st-danger: #d1444b;
   --st-danger-soft: #fdf0f0;
+  /* Fondo del avatar de logotipo cuando no hay imagen. */
+  --st-avatar-bg: #0d2a2c;
 
   color: var(--st-text);
 }
 
+/* En oscuro la superficie NO conserva el verde del diseño original: se alinea
+   con el zinc neutro del resto del dashboard (zinc-950 de fondo, zinc-900 de
+   panel, zinc-800/700 de borde) para que Ajustes no desentone al lado de la
+   barra lateral. El verde se reserva para el acento de marca. */
 html.dark [data-settings-surface],
 html[data-theme="dark"] [data-settings-surface] {
-  --st-bg: #080d0d;
-  --st-panel: #0f1716;
-  --st-panel-2: #0c1413;
-  --st-field: #121b1a;
-  --st-field-alt: #0f1817;
-  --st-border: #1d2a28;
-  --st-border-strong: #263634;
-  --st-text: #e9f2f0;
-  --st-text-2: #b3c5c2;
-  --st-muted: #7d938f;
+  --st-bg: #09090b;            /* zinc-950 — mismo fondo que el dashboard */
+  --st-panel: #18181b;         /* zinc-900 — mismas tarjetas que el dashboard */
+  --st-panel-2: #141417;
+  --st-field: #202024;
+  --st-field-alt: #1b1b1f;
+  --st-border: #2e2e33;        /* un punto por encima de zinc-800: se marca */
+  --st-border-strong: #47474f; /* campos: se marcan como en claro */
+  --st-text: #e4e4e7;          /* zinc-200 */
+  --st-text-2: #a1a1aa;        /* zinc-400 */
+  --st-muted: #71717a;         /* zinc-500 */
   --st-accent: #00c896;
   --st-accent-ink: #5ff0c8;
   --st-accent-soft: rgba(0, 200, 150, 0.1);
@@ -304,6 +310,7 @@ html[data-theme="dark"] [data-settings-surface] {
   --st-accent-contrast: #04120e;
   --st-danger: #ff7a80;
   --st-danger-soft: rgba(209, 68, 75, 0.12);
+  --st-avatar-bg: #27272a;     /* zinc-800 — en oscuro tampoco tira a verde */
 }
 
 @media (min-width: 768px) {
@@ -434,26 +441,29 @@ html[data-theme="dark"] [data-settings-surface] {
   color: var(--msg-tx);
 }
 
+/* Mismo criterio que en Ajustes: en oscuro los paneles y los bordes son zinc
+   neutro, no verde. Se mantienen el verde de marca, los semánticos y la
+   burbuja de WhatsApp, que sí son color con significado. */
 html.dark [data-msg-surface],
 html[data-theme="dark"] [data-msg-surface] {
-  --msg-panel: #111917;
-  --msg-panel-2: #151e1c;
-  --msg-bd: #202b28;
-  --msg-bd-2: #2a3733;
-  --msg-tx: #e8f0ed;
-  --msg-tx-2: #b2c1bc;
-  --msg-mut: #7e8d87;
+  --msg-panel: #18181b;        /* zinc-900 */
+  --msg-panel-2: #212125;      /* hover de fila */
+  --msg-bd: #2e2e33;
+  --msg-bd-2: #47474f;         /* campos y marcos: se marcan como en claro */
+  --msg-tx: #e4e4e7;           /* zinc-200 */
+  --msg-tx-2: #a1a1aa;         /* zinc-400 */
+  --msg-mut: #71717a;          /* zinc-500 */
   --msg-brand: #00c896;
   --msg-brand-deep: #00c896;
   --msg-brand-tx: #3fdcb4;
   --msg-brand-soft: rgba(0, 200, 150, 0.13);
-  --msg-chip: #19211f;
+  --msg-chip: #27272a;         /* zinc-800 */
   --msg-dang: #ff7a7a;
   --msg-dang-soft: rgba(255, 122, 122, 0.13);
   --msg-warn: #f0b03c;
   --msg-warn-soft: rgba(240, 176, 60, 0.11);
   --msg-warn-bd: rgba(240, 176, 60, 0.4);
-  --msg-bub-bg: #0d1614;
+  --msg-bub-bg: #0f0f11;       /* fondo del hilo, neutro */
   --msg-bub: #0f3b2c;
   --msg-bub-tx: #d8f5e9;
   --msg-sh: 0 1px 2px rgba(0, 0, 0, 0.35);
