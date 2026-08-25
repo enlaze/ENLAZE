@@ -59,6 +59,7 @@ import {
   isServiceMaterial,
   type ProcurementKind,
 } from "@/lib/material-procurement";
+import type { ResolutionOrigin } from "@/lib/types/canonical";
 
 // The v2 price resolver (/api/prices/resolve, resolver_used: "v2") can
 // return several low-confidence "estimate" source types — market_estimate,
@@ -181,6 +182,36 @@ export interface Partida {
   cost_breakdown?: EnginePartida["cost_breakdown"];
   market_adjustment?: EnginePartida["market_adjustment"];
   estimated_hours?: number;
+
+  // ─── Procedencia (FASE 2D-2) ───────────────────────────────────────────────
+  //
+  // `canonical_origin` responde a UNA sola pregunta: ¿dónde NACIÓ esta línea?
+  // No es lo mismo que `price_source`, que responde a otra distinta: ¿de dónde
+  // salió el PRECIO? Son independientes y no deben derivarse la una de la otra.
+  // Una línea escrita a mano por el usuario (`free_text`) puede acabar con
+  // `price_source: "obramat"` tras pasar por el resolver; sigue siendo
+  // `free_text`. Una línea `engine` puede terminar con
+  // `price_source: "geographic_adjustment"`; sigue siendo `engine`.
+  //
+  // REGLA DE SELLADO: se escribe UNA vez, en el instante del nacimiento, y no
+  // se vuelve a tocar. Atravesar `normalizeBudgetItemsToScope`,
+  // `applyMaterialBasketToItems` o `adjustToMarket` NO convierte una línea en
+  // `engine`: transformar una línea no equivale a crearla. Esta distinción es
+  // la que después permitirá al resolver aplicar correctamente los aliases de
+  // nivel 1.
+  //
+  // COMPATIBILIDAD HISTÓRICA: un `wizard_state` guardado antes de esta fase no
+  // trae los campos. Al rehidratar quedan `undefined`, y así deben quedarse: no
+  // se convierten automáticamente a `engine`, `free_text` ni `legacy`. Esa
+  // decisión pertenece al backfill, no a la lectura.
+  canonical_origin?: ResolutionOrigin | null;
+
+  // Referencia documental de la evidencia (banco de precios, tarifa de
+  // proveedor, fichero importado). En 2D-2 siempre `null` para `engine` y
+  // `free_text` — todavía no se crean líneas `import` ni `provider` — pero el
+  // campo existe y se PRESERVA si una partida ya lo trae, para que añadir esos
+  // orígenes después no obligue a rehacer el modelo.
+  canonical_source_ref?: string | null;
 }
 
 export interface ProviderOption {
@@ -1122,7 +1153,20 @@ export function BudgetGenerateProvider({
       unit_price_client: 0,
       subtotal_client: 0,
       status: partida.status || "incluida",
-      ...partida
+      ...partida,
+
+      // NACIMIENTO. `addPartida` es el alta manual del wizard: la línea no
+      // existía en ninguna parte y la está escribiendo una persona. Único punto
+      // de nacimiento `free_text` de todo el flujo.
+      //
+      // Van DESPUÉS del spread a propósito, para que un llamante que ya sepa la
+      // procedencia gane sobre el valor por defecto (así, cuando existan altas
+      // por `import` o `provider`, bastará con que el llamante las declare).
+      // Un `canonical_origin` ausente o nulo significa "no lo sé", y aquí sí lo
+      // sabemos: la línea nace en este preciso instante.
+      canonical_origin: partida.canonical_origin ?? "free_text",
+      // Se preserva si el llamante la trae; en 2D-2 `free_text` siempre da null.
+      canonical_source_ref: partida.canonical_source_ref ?? null,
     };
 
     // Calculate subtotals based on margin
@@ -1823,6 +1867,14 @@ export function BudgetGenerateProvider({
       const marginMultiplier = 1 + (state.marginPercent / 100);
 
       // Map suggested_items to Partidas
+      //
+      // PROCEDENCIA (FASE 2D-2): estas líneas nacen de la sugerencia de la IA,
+      // que NO es ninguno de los dos orígenes que 2D-2 autoriza a sellar
+      // (`engine` en el motor, `free_text` en el alta manual). Salen por tanto
+      // sin `canonical_origin`, igual que un presupuesto histórico. Es
+      // deliberado, no un olvido: inventar aquí un origen sería exactamente el
+      // error que esta fase quiere impedir. Queda pendiente decidir su origen
+      // —probablemente uno nuevo— antes de conectar el clasificador en 2D-3.
       let newPartidas: Partida[] = (data.suggested_items || []).map((item: any, idx: number) => {
         const cost = item.unit_cost || item.unit_price || 0;
         const qty = item.quantity || 1;
@@ -1970,6 +2022,14 @@ export function BudgetGenerateProvider({
           estimated_hours: ep.estimated_hours,
           cost_breakdown: ep.cost_breakdown,
           market_adjustment: ep.market_adjustment,
+          // COPIA EXPLÍCITA, no nacimiento. Esta reasignación reconstruye el
+          // objeto enumerando campos, así que sin estas dos líneas la
+          // procedencia se perdería al volver de EnginePartida a Partida.
+          // Se copia lo que la línea YA traía: las que vienen del usuario
+          // conservan su `free_text` y sólo las que el motor acaba de inventar
+          // dentro de `normalizeBudgetItemsToScope` llegan aquí como `engine`.
+          canonical_origin: ep.canonical_origin ?? null,
+          canonical_source_ref: ep.canonical_source_ref ?? null,
         }));
 
         // Convert engine materials to Material format
@@ -2007,6 +2067,12 @@ export function BudgetGenerateProvider({
           unit_price_client: ep.unit_price_client, subtotal_client: ep.subtotal_client,
           status: ep.status,
           estimated_hours: ep.estimated_hours,
+          // COPIA EXPLÍCITA. Aquí `buildDeterministicBudgetItems` ha fabricado
+          // todas las líneas desde cero, así que en la práctica todas llegan
+          // con `engine`. Aun así se copia en lugar de escribir la constante:
+          // el sello lo pone el punto de nacimiento, no el punto de conversión.
+          canonical_origin: ep.canonical_origin ?? null,
+          canonical_source_ref: ep.canonical_source_ref ?? null,
         }));
         finalMaterials = buildScopeMaterials(fallbackScope).map(em => ({
           id: em.id, name: em.name, quantity: em.quantity, unit: em.unit,

@@ -4,6 +4,8 @@
  * No React, no Supabase, no side-effects. Fully idempotent.
  */
 
+import type { ResolutionOrigin } from "./types/canonical";
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export interface BudgetScope {
@@ -138,6 +140,26 @@ export interface EnginePartida {
   geographic_profile?: string;
   price_source?: string;
   estimated_hours?: number;
+  /**
+   * Dónde NACIÓ la línea. Se sella una sola vez, en el momento de crearla, y no
+   * vuelve a tocarse: atravesar una función del motor no convierte una línea en
+   * `engine`. Ver la nota extensa en `Partida` (BudgetGenerateProvider).
+   *
+   * Está aquí, y no sólo en `Partida`, por necesidad técnica: los dos únicos
+   * puntos donde nace una línea `engine` son los `add()` de
+   * `normalizeBudgetItemsToScope` y de `buildDeterministicBudgetItems`, que
+   * construyen `EnginePartida`. Sin el campo en este tipo, el sello no podría
+   * ponerse donde ocurre el nacimiento, y TypeScript además lo descartaría al
+   * cruzar la frontera Partida → EnginePartida.
+   *
+   * NO se añaden aquí las otras cinco columnas canónicas (`canonical_id`,
+   * `canonical_status`, `canonical_confidence`, `canonical_source`,
+   * `price_type`): esas son resultado de la clasificación, no del nacimiento, y
+   * el motor no clasifica.
+   */
+  canonical_origin?: ResolutionOrigin | null;
+  /** Referencia documental (banco de precios, tarifa). Ver `Partida`. */
+  canonical_source_ref?: string | null;
 }
 
 export interface EngineMaterial {
@@ -501,6 +523,13 @@ export function normalizeBudgetItemsToScope(
       unit_price_client: price * marginMultiplier,
       subtotal_client: qty * price * marginMultiplier,
       status: "incluida",
+      // NACIMIENTO. Esta línea no existía: la inventa el motor para completar un
+      // capítulo que el alcance exige y el presupuesto no traía. Es el único
+      // punto de esta función donde se sella procedencia. Las líneas que ya
+      // venían (`corrected`) conservan la suya vía spread y NO se marcan como
+      // `engine` por haber pasado por aquí.
+      canonical_origin: "engine",
+      canonical_source_ref: null,
     });
   };
 
@@ -679,6 +708,13 @@ export function buildDeterministicBudgetItems(
       status: "incluida",
       estimated_hours: estimatedHours,
       price_source: "engine_scope",
+      // NACIMIENTO. `buildDeterministicBudgetItems` fabrica el presupuesto entero
+      // a partir del alcance: aquí no hay línea previa que transformar, todas las
+      // líneas nacen en este punto. Segundo y último punto de nacimiento `engine`.
+      // Ojo: que `price_source` valga "engine_scope" es una coincidencia, no la
+      // causa. `canonical_origin` NO se deriva nunca de `price_source`.
+      canonical_origin: "engine",
+      canonical_source_ref: null,
     });
   };
 
