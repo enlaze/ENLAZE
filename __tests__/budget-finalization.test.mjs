@@ -71,7 +71,17 @@ test("the budget wizard normalizes every row it inserts into budget_items", asyn
     normalizationCalls.every((call) => call.includes("p.unit")),
     "solo deben insertarse partidas",
   );
-  assert.match(source, /if \(itemsError\) throw itemsError/);
+  // Un error del INSERT en budget_items debe propagarse, nunca tragarse: si se tragara,
+  // el asistente diria "guardado" con la tabla vacia. Desde 2D-4 hay dos puntos donde
+  // ese throw vive, porque el camino del borrador se extrajo a un modulo propio para
+  // poder comparar la firma antes de escribir. El contrato es el mismo en los dos.
+  assert.match(source, /if \(itemsErr\) throw itemsErr/, "finalizeBudget se traga el error del INSERT");
+
+  const sync = await readFile(
+    new URL("../lib/canonical/persist-budget-items.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(sync, /if \(error\) throw error/, "el autoguardado se traga el error del INSERT");
 });
 
 test("PDF preparation no longer invokes Python or pip at runtime", async () => {

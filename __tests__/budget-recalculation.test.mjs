@@ -65,6 +65,23 @@ test("autosave cannot retrigger itself or rewrite unchanged budget items", () =>
   assert.match(provider, /\}, \[autosaveSignature\]\);/);
   assert.doesNotMatch(provider, /\}, \[state\]\);/);
   assert.match(provider, /if \(autosaveSignature === lastSavedSignature\.current\) return/);
-  assert.match(provider, /const itemsSignature = `\$\{draftId\}:\$\{JSON\.stringify\(itemsToInsert\)\}`/);
-  assert.match(provider, /if \(itemsSignature !== lastSyncedItemsSignature\.current\)/);
+
+  // La firma de PERSISTENCIA (la que decide si se reescriben las filas de
+  // `budget_items`) ya no se calcula en línea dentro de `saveDraft`: la fase 2D-4 la
+  // movió a `lib/canonical/persist-budget-items.ts`, donde puede comprobarse con
+  // tests de comportamiento en vez de con expresiones regulares sobre el provider.
+  // El CONTRATO no ha cambiado: firma → comparar → escribir → y sólo entonces
+  // recordar. Aquí se protege que el provider siga cableado a ese contrato.
+  assert.match(provider, /previousSignature: lastSyncedItemsSignature\.current/);
+  assert.match(provider, /lastSyncedItemsSignature\.current = sync\.signature/);
+
+  const sync = fs.readFileSync(path.join(root, "lib/canonical/persist-budget-items.ts"), "utf8");
+  assert.match(sync, /if \(signature === options\.previousSignature\)/);
+  assert.match(sync, /return \{ signature, skipped: true, report: null \}/);
+  // Y la firma nueva se devuelve DESPUÉS del DELETE y del INSERT, no antes: es lo que
+  // hace que un fallo de escritura se reintente en lugar de perderse.
+  assert.ok(
+    sync.indexOf('.insert(classified)') < sync.indexOf("return { signature, skipped: false"),
+    "la firma se devuelve antes de escribir: un fallo de INSERT quedaría congelado",
+  );
 });

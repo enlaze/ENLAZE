@@ -518,3 +518,68 @@ export async function classifyForPersistence<T extends ClassifiableLine>(
     );
   }
 }
+
+// ─── Envoltorio compartido por los dos puntos de escritura ────────────────────
+
+/**
+ * Cuál de los dos caminos de escritura está clasificando.
+ *
+ * Se etiqueta porque los dos tienen frecuencias y consecuencias muy distintas:
+ * `saveDraft` corre cada vez que el usuario deja de teclear, y `finalizeBudget` una
+ * sola vez sobre un documento que ya puede irse al cliente. Un informe degradado
+ * significa cosas diferentes en cada uno, y sin la etiqueta serían indistinguibles
+ * en el log.
+ */
+export type CanonicalPersistenceContext = "saveDraft" | "finalizeBudget";
+
+export interface EnrichForPersistenceOptions<T extends ClassifiableLine> {
+  items: readonly T[];
+  /** Ya resuelto por `resolveTenant`. Aquí no se vuelve a llamar a auth. */
+  tenant: ResolvedTenant;
+  supabase: MinimalSupabaseClient;
+  context: CanonicalPersistenceContext;
+  defaultOrigin?: ResolutionOrigin;
+  /** Inyectable para los tests; en producción escribe en la consola. */
+  log?: (report: CanonicalWiringReport, context: CanonicalPersistenceContext) => void;
+  loadSnapshot?: SnapshotLoader;
+  classify?: LineClassifier;
+}
+
+function defaultLog(report: CanonicalWiringReport, context: CanonicalPersistenceContext): void {
+  // Sólo contadores y etiquetas técnicas. Ni conceptos, ni descripciones, ni importes,
+  // ni el identificador de empresa: un log de presupuestos no debe permitir
+  // reconstruir el presupuesto.
+  console.info(`[canonical] ${context}`, report);
+}
+
+/**
+ * `classifyForPersistence` más el desempaquetado del tenant y la observabilidad.
+ *
+ * Existe para que los dos puntos de escritura no repitan las mismas cinco líneas de
+ * pegamento —esparcir `companyId`/`tenantContext`/`tenantFailure` y acordarse de
+ * registrar el informe con la etiqueta correcta—, que es justo el tipo de duplicación
+ * que se desincroniza en silencio: el día que el informe gane un campo, olvidarlo en
+ * uno de los dos sitios no rompería ningún test.
+ *
+ * No añade ninguna decisión propia. Hereda íntegro el contrato de 2D-3: no lanza,
+ * devuelve siempre las mismas líneas en el mismo orden, y ante cualquier avería
+ * —snapshot, clasificador o corrupción económica— saca las líneas originales
+ * `unmatched` conservando su procedencia.
+ */
+export async function enrichForPersistence<T extends ClassifiableLine>(
+  options: EnrichForPersistenceOptions<T>
+): Promise<ClassifyForPersistenceResult<T>> {
+  const result = await classifyForPersistence({
+    items: options.items,
+    companyId: options.tenant.companyId,
+    tenantContext: options.tenant.tenantContext,
+    tenantFailure: options.tenant.tenantFailure,
+    supabase: options.supabase,
+    defaultOrigin: options.defaultOrigin,
+    loadSnapshot: options.loadSnapshot,
+    classify: options.classify,
+  });
+
+  (options.log ?? defaultLog)(result.report, options.context);
+  return result;
+}

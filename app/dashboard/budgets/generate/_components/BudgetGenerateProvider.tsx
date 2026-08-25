@@ -62,10 +62,11 @@ import {
 import type { ResolutionOrigin } from "@/lib/types/canonical";
 import { originForBudgetAnalysis } from "@/lib/canonical/analysis-origin";
 import {
-  classifyForPersistence,
+  enrichForPersistence,
   resolveTenant,
   type ResolvedTenant,
 } from "@/lib/canonical/finalize-classification";
+import { syncClassifiedBudgetItems } from "@/lib/canonical/persist-budget-items";
 import type { MinimalSupabaseClient } from "@/lib/canonical/registry";
 
 // The v2 price resolver (/api/prices/resolve, resolver_used: "v2") can
@@ -1320,7 +1321,12 @@ export function BudgetGenerateProvider({
 
     try {
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      // Se guarda la respuesta ENTERA, no sólo el usuario: `resolveTenant` necesita ver
+      // el `error` para no adoptar como tenant a un usuario que Supabase no ha podido
+      // verificar. La desestructuración de debajo se deja exactamente como estaba para
+      // no alterar el comportamiento de `saveDraft` ante una respuesta malformada.
+      const authResponse = await supabase.auth.getUser();
+      const { data: { user } } = authResponse;
       if (!user) {
         if (manual) {
           setState(prev => ({ ...prev, isSavingDraft: false, saveError: "No hay usuario autenticado" }));
@@ -1487,7 +1493,20 @@ export function BudgetGenerateProvider({
           category: p.category,
           chapter: p.chapter || p.category || "otros",
           unit_price: p.unit_price_client,
-          subtotal: p.subtotal_client
+          subtotal: p.subtotal_client,
+          // Procedencia sellada en el nacimiento de la partida, igual que en
+          // finalizeBudget: este `.map()` es el único punto por el que la línea pasa de
+          // ser estado de React a ser fila de `budget_items`, y lo que no se copie aquí
+          // se pierde.
+          //
+          // SÍ entra en la firma de persistencia —ver `persistenceSignature`—, porque
+          // es una columna que APORTA el estado, no una que derive el clasificador. Si
+          // quedase fuera y cambiase sin cambiar la economía, la salida temprana por
+          // firma impediría para siempre el UPDATE y la tabla se quedaría con el valor
+          // viejo. No añade autoguardados nuevos: `state.partidas` ya estaba entero
+          // dentro de `autosaveSignature` antes de esta fase.
+          canonical_origin: p.canonical_origin ?? null,
+          canonical_source_ref: p.canonical_source_ref ?? null,
         }));
 
         // Los materiales NO se insertan como líneas económicas del cliente.
@@ -1508,22 +1527,46 @@ export function BudgetGenerateProvider({
         // ha escrito en la fila `budgets`. Si no, se bloquea el guardado.
         assertPersistedTotalsMatch(itemsToInsert, state.totals.clientPrice, "saveDraft");
 
-        // Rewriting identical rows is the single most disk-expensive thing this
-        // wizard does (a full DELETE + INSERT churns dead tuples and WAL), so
-        // skip it entirely when nothing changed.
-        // Include the destination budget: two drafts may legitimately contain
-        // identical rows, but both still need their own budget_items records.
-        const itemsSignature = `${draftId}:${JSON.stringify(itemsToInsert)}`;
-        if (itemsSignature !== lastSyncedItemsSignature.current) {
-          await supabase.from("budget_items").delete().eq("budget_id", draftId);
+        // ── FASE 2D-4. Enriquecimiento canónico OBSERVADOR en el borrador ────────
+        //
+        // Todo el trabajo canónico vive DENTRO de `syncClassifiedBudgetItems`, que
+        // compara la firma antes de gastar una sola consulta. Un autoguardado sin
+        // cambios económicos no carga vocabulario, no clasifica, no borra y no
+        // inserta: sigue costando cero, exactamente igual que antes de esta fase.
+        //
+        // El tenant se resuelve a partir de la respuesta de auth que `saveDraft` YA
+        // pidió al principio. Es importante que no haya una segunda llamada: este
+        // camino se ejecuta cada vez que el usuario deja de teclear.
+        //
+        // Y el resultado NO vuelve al estado de React. Clasificar es una
+        // transformación de persistencia; retroalimentar `state.partidas` con las
+        // columnas canónicas cambiaría la firma de autoguardado y el sistema canónico
+        // acabaría provocando escrituras por su cuenta.
+        const sync = await syncClassifiedBudgetItems({
+          budgetId: draftId,
+          items: itemsToInsert,
+          previousSignature: lastSyncedItemsSignature.current,
+          tenant: resolveTenant(authResponse),
+          supabase: supabase as unknown as MinimalSupabaseClient,
+          context: "saveDraft",
+          verifyTotals: (rows) =>
+            assertPersistedTotalsMatch(rows, state.totals.clientPrice, "saveDraft"),
+        });
 
-          if (itemsToInsert.length > 0) {
-            const { error: itemsError } = await supabase.from("budget_items").insert(itemsToInsert);
-            if (itemsError) throw itemsError;
-          }
-
-          lastSyncedItemsSignature.current = itemsSignature;
-        }
+        // La firma SÓLO avanza cuando la escritura ha terminado bien.
+        //
+        // `syncClassifiedBudgetItems` lanza si falla el DELETE, si falla el INSERT o si
+        // `verifyTotals` detecta un descuadre. Cualquiera de esos casos sale por el
+        // `catch` de `saveDraft` sin llegar a esta línea, con lo que
+        // `lastSyncedItemsSignature` conserva el valor del último volcado que sí se
+        // escribió y el siguiente intento con el MISMO contenido vuelve a sincronizar
+        // en vez de salir temprano. Es lo que hace que un fallo de escritura se
+        // reintente en lugar de perderse en silencio.
+        //
+        // DELETE + INSERT no es atómico y esta fase no lo convierte en atómico: si el
+        // INSERT falla, la tabla queda vacía hasta el siguiente guardado. Lo que sí se
+        // garantiza es que ese siguiente guardado ocurra.
+        lastSyncedItemsSignature.current = sync.signature;
       }
 
       if (manual) {
@@ -1629,15 +1672,20 @@ export function BudgetGenerateProvider({
         canonicalTenant = resolveTenant({ error: authErr });
       }
 
-      // `classifyForPersistence` no lanza por contrato y devuelve SIEMPRE las mismas
+      // `enrichForPersistence` no lanza por contrato y devuelve SIEMPRE las mismas
       // líneas, en el mismo orden, con las siete columnas canónicas añadidas. Si el
       // snapshot se avería, si el clasificador lanza o si el clasificador devuelve
       // algo que ya no es el presupuesto que recibió, las líneas salen ORIGINALES y
       // `unmatched`, conservando su procedencia, y el presupuesto se finaliza igual.
       // La fase 2 observa; no bloquea. Ni siquiera cuando se rompe.
-      const canonicalResult = await classifyForPersistence({
+      //
+      // El desempaquetado del tenant y el registro del informe los hace el propio
+      // envoltorio, que es el mismo que usa `saveDraft`: así el día que el informe gane
+      // un campo no puede quedarse a medias en uno de los dos caminos.
+      const canonicalResult = await enrichForPersistence({
         items: itemsToInsert,
-        companyId: canonicalTenant.companyId,
+        tenant: canonicalTenant,
+        context: "finalizeBudget",
         // `MinimalSupabaseClient` describe el encadenado que la capa canónica usa de
         // verdad (`from().select().eq()…`), no la firma completa de supabase-js. El
         // cliente real lo cumple en ejecución —es el mismo objeto que ejecuta el
@@ -1645,20 +1693,10 @@ export function BudgetGenerateProvider({
         // `from()` devuelve un PostgrestQueryBuilder y el modelo describe el filtro
         // que viene después. Mismo tratamiento que en scripts/smoke-canonical-snapshot.ts.
         supabase: supabase as unknown as MinimalSupabaseClient,
-        // Lo declara quien resolvió el tenant, que es el único que sabe si el null de
-        // arriba es legítimo o es una avería. Del error sólo se extrae una etiqueta
-        // técnica corta; el objeto nunca llega al log.
-        tenantContext: canonicalTenant.tenantContext,
-        tenantFailure: canonicalTenant.tenantFailure,
         // Sin `defaultOrigin` a propósito: una línea rehidratada de un `wizard_state`
         // anterior a 2D-2 no tiene procedencia demostrable, y NULL es lo que consta.
       });
       const classifiedItems = canonicalResult.items;
-
-      // Observabilidad: sólo contadores. Ni conceptos, ni descripciones, ni importes,
-      // ni identificadores de cliente. Un log de presupuestos no debe permitir
-      // reconstruir el presupuesto.
-      console.info("[canonical] finalizeBudget", canonicalResult.report);
 
       // Puerta de cuadre antes de dejar el presupuesto en estado "pendiente":
       // a partir de aquí es un documento que puede irse al cliente en PDF.

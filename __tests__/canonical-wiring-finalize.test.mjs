@@ -32,7 +32,7 @@ const { CANONICAL_COLUMN_KEYS, classifyBudgetItems } = await import(
 const { loadCanonicalRegistrySnapshot } = await import(
   path.join(root, "lib/canonical/registry-snapshot.ts")
 );
-const { classifyForPersistence, resolveTenant } = await import(
+const { classifyForPersistence, enrichForPersistence, resolveTenant } = await import(
   path.join(root, "lib/canonical/finalize-classification.ts")
 );
 const { computeBudgetTotals, computeBudgetTotalsFromSubtotal, assertBudgetTotalsConsistent } =
@@ -1055,13 +1055,33 @@ describe("2D-3 · perder el tenant no bloquea, pero se nota en el informe", () =
     assert.equal(report.tenantFailureKind, "code:no_session");
   });
 
-  test("el provider declara el contexto de empresa al orquestador", () => {
+  test("el envoltorio traslada el tenant entero al orquestador", async () => {
+    // Desde 2D-4 el provider ya no desmonta el tenant campo a campo: le pasa el objeto
+    // `ResolvedTenant` a `enrichForPersistence`, que es quien lo despliega. El contrato
+    // es MÁS estricto que antes —ya no es posible mandar un `companyId` olvidándose de
+    // declarar el `tenantContext` que lo acompaña— y además es comprobable de verdad,
+    // porque el envoltorio sí se puede importar aquí.
+    const err = new Error("jwt expired");
+    err.name = "AuthApiError";
+    const { client } = fakeSupabase(DB);
+
+    const { report } = await enrichForPersistence({
+      items: presupuesto(),
+      tenant: resolveTenant({ data: { user: { id: EMPRESA } }, error: err }),
+      supabase: client,
+      context: "finalizeBudget",
+      log: () => {},
+    });
+
+    assert.equal(report.tenant_context, "unavailable");
+    assert.equal(report.tenantFailureKind, "AuthApiError");
+  });
+
+  test("el provider resuelve el tenant antes de clasificar", () => {
     // Comprobación de cableado, no de comportamiento: el provider es un componente de
     // React que no puede importarse aquí. El comportamiento se prueba arriba y, para
     // las cuatro ramas de auth, en el bloque siguiente sobre `resolveTenant`.
-    assert.match(providerSrc, /companyId:\s*canonicalTenant\.companyId/);
-    assert.match(providerSrc, /tenantContext:\s*canonicalTenant\.tenantContext/);
-    assert.match(providerSrc, /tenantFailure:\s*canonicalTenant\.tenantFailure/);
+    assert.match(providerSrc, /tenant:\s*canonicalTenant/);
     assert.match(providerSrc, /resolveTenant\(await supabase\.auth\.getUser\(\)\)/);
     assert.match(providerSrc, /canonicalTenant = resolveTenant\(\{ error: authErr \}\)/);
     // Y que no queda ningún camino que lea el id por su cuenta saltándose la decisión.
@@ -1226,7 +1246,7 @@ describe("2D-3 · lo que queda tras finalizar es el INSERT clasificado", () => {
     const cuerpo = providerSrc.slice(providerSrc.indexOf("const finalizeBudget"));
 
     const iDelete = cuerpo.indexOf('.from("budget_items").delete()');
-    const iClasificar = cuerpo.indexOf("classifyForPersistence({");
+    const iClasificar = cuerpo.indexOf("enrichForPersistence({");
     const iCuadre = cuerpo.indexOf('assertPersistedTotalsMatch(classifiedItems');
     const iInsert = cuerpo.indexOf('.from("budget_items").insert(classifiedItems)');
 
@@ -1243,16 +1263,25 @@ describe("2D-3 · lo que queda tras finalizar es el INSERT clasificado", () => {
     );
   });
 
-  test("CASO 22c — el borrador NO se clasifica todavía", () => {
-    // Límite deliberado de 2D-3: saveDraft se cablea en una fase posterior. Si alguien
-    // lo adelanta sin decidirlo, este test lo señala en vez de dejarlo pasar.
+  test("CASO 22c — el borrador se clasifica por el sincronizador, nunca por el orquestador", () => {
+    // En 2D-3 este caso comprobaba que `saveDraft` NO clasificaba, porque su cableado
+    // pertenecía a la fase siguiente. En 2D-4 ya clasifica, así que dejarlo como estaba
+    // habría sido un test verde por el motivo equivocado. Lo que protege ahora es el
+    // límite NUEVO: el borrador clasifica sólo a través de `syncClassifiedBudgetItems`.
+    //
+    // La diferencia no es de estilo. Llamar al orquestador en directo desde `saveDraft`
+    // saltaría la comparación de firma, y entonces cada pausa del cursor cargaría el
+    // vocabulario entero para acabar descubriendo que no había nada que guardar.
     const inicio = providerSrc.indexOf("const saveDraft");
     const fin = providerSrc.indexOf("const finalizeBudget");
     assert.ok(inicio > 0 && fin > inicio);
+    const cuerpo = providerSrc.slice(inicio, fin);
+
+    assert.match(cuerpo, /syncClassifiedBudgetItems\(\{/);
     assert.doesNotMatch(
-      providerSrc.slice(inicio, fin),
-      /classifyForPersistence/,
-      "saveDraft ha empezado a clasificar; eso pertenece a una fase posterior"
+      cuerpo,
+      /classifyForPersistence|enrichForPersistence/,
+      "saveDraft clasifica saltándose la salida temprana por firma"
     );
   });
 });
