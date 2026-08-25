@@ -20,11 +20,11 @@ const AURORA =
 
 // Estilos reutilizables de formulario (importables desde las páginas).
 export const authLabel =
-  "block text-[13px] font-semibold text-[#22334e] mb-1.5";
+  "block text-[13px] font-semibold text-navy-700 mb-1.5";
 
 export const authInput =
-  "w-full h-11 rounded-[10px] border border-[#dbe3ee] bg-[#fbfcfe] px-3.5 text-sm text-[#101d33] " +
-  "placeholder:text-[#95a3b8] outline-none transition " +
+  "w-full h-11 rounded-[10px] border border-navy-200 bg-navy-50 px-3.5 text-sm text-navy-900 " +
+  "placeholder:text-navy-400 outline-none transition " +
   "focus:border-brand-green focus:bg-white focus:shadow-[0_0_0_3px_rgba(0,200,150,0.14)]";
 
 export const authButton =
@@ -48,7 +48,7 @@ function Wordmark({ size = 34 }: { size?: number }) {
         className="shrink-0"
       />
       <span
-        className="font-bold tracking-tight text-[#101d33]"
+        className="font-bold tracking-tight text-navy-900"
         style={{ fontSize: Math.round(size * 0.7) }}
       >
         enla<span className="text-brand-green">z</span>e
@@ -74,15 +74,15 @@ function BrandPanel() {
   return (
     <>
       <div className="flex flex-col gap-[22px]">
-        <div className="self-start inline-flex items-center gap-2 rounded-full border border-[#d7ede2] bg-white px-3.5 py-[7px] text-[11px] font-bold tracking-[1px] text-[#33415c]">
+        <div className="self-start inline-flex items-center gap-2 rounded-full border border-brand-green/20 bg-white px-3.5 py-[7px] text-[11px] font-bold tracking-[1px] text-navy-600">
           <span className="h-1.5 w-1.5 rounded-full bg-brand-green" />
           PARA AUTÓNOMOS Y PYMES
         </div>
-        <h2 className="text-[32px] leading-10 font-bold tracking-[-0.7px] text-[#101d33] text-pretty">
-          Vende más, cobra antes, <span className="text-[#159d76]">vive mejor.</span>
+        <h2 className="text-[32px] leading-10 font-bold tracking-[-0.7px] text-navy-900 text-pretty">
+          Vende más, cobra antes, <span className="text-brand-green-ink">vive mejor.</span>
           <Underline width={140} />
         </h2>
-        <p className="text-[15px] leading-[23px] text-[#54657d]">
+        <p className="text-[15px] leading-[23px] text-navy-500">
           Clientes, presupuestos, facturas y cobros en un solo sitio — sin Excel,
           sin papeles.
         </p>
@@ -91,7 +91,7 @@ function BrandPanel() {
         {["Sin tarjeta", "Listo en 2 minutos", "Soporte en español"].map((t) => (
           <span
             key={t}
-            className="rounded-full border border-[#d7ede2] bg-white px-3 py-1.5 text-xs font-semibold text-[#33415c]"
+            className="rounded-full border border-brand-green/20 bg-white px-3 py-1.5 text-xs font-semibold text-navy-600"
           >
             {t}
           </span>
@@ -105,11 +105,11 @@ function RecoverPanel() {
   return (
     <>
       <div className="flex flex-col gap-3.5">
-        <h2 className="text-[28px] leading-9 font-bold tracking-[-0.6px] text-[#101d33] text-pretty">
+        <h2 className="text-[28px] leading-9 font-bold tracking-[-0.6px] text-navy-900 text-pretty">
           Te ayudamos a recuperar tu acceso.
           <Underline width={110} />
         </h2>
-        <p className="text-[15px] leading-[23px] text-[#54657d]">
+        <p className="text-[15px] leading-[23px] text-navy-500">
           Un momento y estás dentro de nuevo.
         </p>
       </div>
@@ -126,14 +126,18 @@ type AuthShellProps = {
 
 export default function AuthShell({ children, panel = "brand" }: AuthShellProps) {
   return (
-    <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#05070d] px-4 py-10 sm:px-6">
+    <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-navy-950 px-4 py-10 sm:px-6">
       <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: AURORA }} />
 
       <div className="relative w-full max-w-[1000px] overflow-hidden rounded-3xl bg-white shadow-[0_30px_80px_rgba(0,0,0,0.5)] lg:grid lg:min-h-[620px] lg:grid-cols-[420px_1fr]">
         {/* Panel de marca — solo desktop */}
         <aside
-          className="hidden flex-col justify-between border-r border-[#e2f0e9] p-9 lg:flex"
-          style={{ background: "linear-gradient(170deg, #f4fbf8 0%, #e9f7f0 100%)" }}
+          className="hidden flex-col justify-between border-r border-brand-green/15 p-9 lg:flex"
+          style={{
+            background:
+              "linear-gradient(170deg, color-mix(in srgb, var(--color-brand-green) 5%, #fff) 0%, " +
+              "color-mix(in srgb, var(--color-brand-green) 10%, #fff) 100%)",
+          }}
         >
           <Wordmark />
           {panel === "brand" ? <BrandPanel /> : <RecoverPanel />}

@@ -136,14 +136,18 @@ export default function SecurityCompliancePage() {
                 onClick={() => setSelectedIncident(selectedIncident?.id === incident.id ? null : incident)}
                 className="p-4 rounded-xl border border-navy-100 bg-navy-50 hover:bg-white hover:shadow-sm transition cursor-pointer border-l-4 dark:border-zinc-800 dark:bg-zinc-800/50 dark:hover:bg-zinc-800"
                 style={{
+                  /* Rampa de cuatro pasos: los extremos y el medio son los
+                     semánticos; "alta" es el escalón intermedio que no tiene
+                     token propio, así que se mezcla entre peligro y aviso en
+                     vez de reintroducir un naranja suelto. */
                   borderLeftColor:
                     incident.severity === "critical"
-                      ? "#ef4444"
+                      ? "var(--color-danger)"
                       : incident.severity === "high"
-                      ? "#f97316"
+                      ? "color-mix(in srgb, var(--color-danger) 60%, var(--color-warning))"
                       : incident.severity === "medium"
-                      ? "#eab308"
-                      : "#3b82f6",
+                      ? "var(--color-warning)"
+                      : "var(--color-info)",
                 }}
               >
                 <div className="flex items-start justify-between gap-3">

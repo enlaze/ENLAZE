@@ -31,6 +31,35 @@
      promueve aqui para que las insignias del dashboard usen el mismo. */
   --color-brand-green-ink: #00795c;
 
+  /* ── Semánticos: peligro, éxito, aviso, info ──────────────────────
+     Cuatro familias que sustituyen a los rojos, verdes, ámbares y azules
+     sueltos que el dashboard repetía a mano. Cada familia tiene dos pasos
+     porque los literales que sustituyen cumplían dos papeles distintos:
+
+       base  color vivo — puntos, barras, rellenos y bordes de acento.
+       ink   el mismo significado, legible como TEXTO o icono sobre el
+             tinte claro de su propia familia.
+
+     Colapsar ink sobre base no es opción: #ef4444 sobre el tinte rojo
+     #fee2e2 da 3,18 de contraste y la insignia baja de AA. Es el mismo
+     motivo por el que la fase 2 creó --color-brand-green-ink.
+
+     Los valores en claro son los que ya estaban en el código; los de
+     oscuro siguen la convención que el propio dashboard usaba con las
+     utilidades `dark:text-red-300` / `amber-300` / `blue-300`. Los
+     redefine `:root.dark` más abajo, así que un `text-danger` mantiene
+     el significado en los dos temas sin variante `dark:`. */
+  --color-danger: #ef4444;   /* red-500   */
+  --color-danger-ink: #b91c1c;   /* red-700   */
+  --color-warning: #f59e0b;  /* amber-500 */
+  --color-warning-ink: #b45309;  /* amber-700 */
+  --color-info: #3b82f6;     /* blue-500  */
+  --color-info-ink: #1d4ed8;     /* blue-700  */
+  /* El éxito es el verde de marca: la app ya lo usaba como tal. Se le da
+     nombre propio para que un día pueda separarse sin tocar los usos. */
+  --color-success: var(--color-brand-green);
+  --color-success-ink: var(--color-brand-green-ink);
+
   /* Typography — Inter is loaded via next/font in app/layout.tsx.
      The `--font-inter` variable is set on <html> by next/font; we wire it
      through to Tailwind's `font-sans` utility via `--font-sans`. */
@@ -60,6 +89,18 @@ html {
   color-scheme: dark;
   --app-bg: #09090b; /* zinc-950 */
   --app-fg: #e4e4e7; /* zinc-200 */
+
+  /* Los semánticos suben un par de pasos: sobre zinc-950 el rojo-500 y el
+     azul-500 se apagan, y el ink oscuro de claro (#b91c1c sobre el tinte
+     rojo daba 3,61) deja de leerse. Mismo significado, distinto valor. */
+  --color-danger: #f87171;   /* red-400   */
+  --color-danger-ink: #fca5a5;   /* red-300   */
+  --color-warning: #fbbf24;  /* amber-400 */
+  --color-warning-ink: #fcd34d;  /* amber-300 */
+  --color-info: #60a5fa;     /* blue-400  */
+  --color-info-ink: #93c5fd;     /* blue-300  */
+  --color-success: var(--color-brand-green-light);
+  --color-success-ink: #5ff0c8; /* el mismo que --st-accent-ink en oscuro */
 }
 
 html {

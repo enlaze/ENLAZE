@@ -44,7 +44,20 @@ export interface DailyBriefingCardProps {
 
 /* ── Theme palettes (copied verbatim from the design) ─────────────────── */
 
+/* Los derivados de los semánticos NO se duplican por tema: --color-danger,
+   --color-warning y --color-info ya cambian de valor en oscuro, así que la
+   misma mezcla vale en los dos y se comparte entre las dos paletas. */
+const SEMANTIC_VARS: Record<string, string> = {
+  "--alta-bg": "color-mix(in srgb, var(--color-danger) 16%, transparent)",
+  "--media-bg": "color-mix(in srgb, var(--color-warning) 16%, transparent)",
+  "--baja-bg": "color-mix(in srgb, var(--color-info) 16%, transparent)",
+  "--watch-bg": "color-mix(in srgb, var(--color-warning) 8%, transparent)",
+  "--watch-border": "color-mix(in srgb, var(--color-warning) 26%, transparent)",
+  "--watch-icon-bg": "color-mix(in srgb, var(--color-warning) 20%, transparent)",
+};
+
 const LIGHT_VARS: Record<string, string> = {
+  ...SEMANTIC_VARS,
   "--card": "#ffffff",
   "--text": "var(--color-navy-900)",
   "--body": "var(--color-navy-600)",
@@ -57,20 +70,15 @@ const LIGHT_VARS: Record<string, string> = {
   "--accent-dark": "var(--color-brand-green-dark)",
   "--accent-light": "var(--color-brand-green-light)",
   "--accent-soft": "color-mix(in srgb, var(--color-brand-green) 12%, transparent)",
-  "--alta-bg": "#fee2e2",
-  "--media-bg": "#fef3c7",
-  "--baja-bg": "#dbeafe",
   "--opp-bg": "color-mix(in srgb, var(--color-brand-green) 6%, transparent)",
   "--opp-border": "color-mix(in srgb, var(--color-brand-green-dark) 22%, transparent)",
   "--opp-icon-bg": "color-mix(in srgb, var(--color-brand-green) 16%, transparent)",
-  "--watch-bg": "#fffbeb",
-  "--watch-border": "rgba(217,119,6,.24)",
-  "--watch-icon-bg": "#fef0cd",
   "--shadow":
     "0 1px 2px color-mix(in srgb, var(--color-navy-900) 4%, transparent), 0 18px 44px -20px color-mix(in srgb, var(--color-navy-900) 18%, transparent)",
 };
 
 const DARK_VARS: Record<string, string> = {
+  ...SEMANTIC_VARS,
   "--card": "var(--color-zinc-950)",
   "--text": "var(--color-zinc-200)",
   "--body": "var(--color-zinc-300)",
@@ -83,24 +91,18 @@ const DARK_VARS: Record<string, string> = {
   "--accent-dark": "var(--color-brand-green-light)",
   "--accent-light": "var(--color-brand-green)",
   "--accent-soft": "color-mix(in srgb, var(--color-brand-green-light) 14%, transparent)",
-  "--alta-bg": "rgba(239,68,68,.16)",
-  "--media-bg": "rgba(245,158,11,.16)",
-  "--baja-bg": "rgba(59,130,246,.18)",
   "--opp-bg": "color-mix(in srgb, var(--color-brand-green) 7%, transparent)",
   "--opp-border": "color-mix(in srgb, var(--color-brand-green-light) 25%, transparent)",
   "--opp-icon-bg": "color-mix(in srgb, var(--color-brand-green-light) 16%, transparent)",
-  "--watch-bg": "rgba(245,158,11,.08)",
-  "--watch-border": "rgba(245,158,11,.28)",
-  "--watch-icon-bg": "rgba(245,158,11,.18)",
   "--shadow": "0 1px 2px rgba(0,0,0,.5), 0 18px 44px -20px rgba(0,0,0,.7)",
 };
 
 const FONT_STACK = "'Plus Jakarta Sans', system-ui, sans-serif";
 
 const BADGE: Record<BriefingPriority, { label: string; color: string; bg: string }> = {
-  alta: { label: "Alta", color: "#dc2626", bg: "var(--alta-bg,#fee2e2)" },
-  media: { label: "Media", color: "#d97706", bg: "var(--media-bg,#fef3c7)" },
-  baja: { label: "Baja", color: "#2563eb", bg: "var(--baja-bg,#dbeafe)" },
+  alta: { label: "Alta", color: "var(--color-danger-ink)", bg: "var(--alta-bg)" },
+  media: { label: "Media", color: "var(--color-warning-ink)", bg: "var(--media-bg)" },
+  baja: { label: "Baja", color: "var(--color-info-ink)", bg: "var(--baja-bg)" },
 };
 
 /* ── Inline icons (verbatim SVG paths from the design) ────────────────── */
@@ -479,14 +481,14 @@ export default function DailyBriefingCard({
             {watch_outs.length > 0 && (
               <div
                 style={{
-                  border: "1px solid var(--watch-border,rgba(217,119,6,.24))",
-                  background: "var(--watch-bg,#fffbeb)",
+                  border: "1px solid var(--watch-border)",
+                  background: "var(--watch-bg)",
                   borderRadius: "16px",
                   padding: "20px 22px",
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
-                  <span style={{ ...iconBadgeStyle, background: "var(--watch-icon-bg,#fef0cd)", color: "#d97706" }}>
+                  <span style={{ ...iconBadgeStyle, background: "var(--watch-icon-bg)", color: "var(--color-warning-ink)" }}>
                     <TriangleAlertIcon />
                   </span>
                   <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "var(--text)" }}>
@@ -496,7 +498,7 @@ export default function DailyBriefingCard({
                 <ul style={listStyle}>
                   {watch_outs.map((w, i) => (
                     <li key={i} style={listItemStyle}>
-                      <svg style={{ flexShrink: 0, marginTop: "3px" }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+                      <svg style={{ flexShrink: 0, marginTop: "3px" }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning-ink)" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="12" cy="12" r="10" />
                         <line x1="12" x2="12" y1="8" y2="12" />
                         <line x1="12" x2="12.01" y1="16" y2="16" />

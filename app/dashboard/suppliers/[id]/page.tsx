@@ -99,7 +99,7 @@ export default function SupplierDetailPage() {
               className="h-full rounded-full transition-all"
               style={{
                 width: `${Math.min(paidPct, 100)}%`,
-                backgroundColor: paidPct >= 100 ? "var(--color-brand-green)" : paidPct >= 50 ? "#3b82f6" : "#f59e0b",
+                backgroundColor: paidPct >= 100 ? "var(--color-success)" : paidPct >= 50 ? "var(--color-info)" : "var(--color-warning)",
               }}
             />
           </div>

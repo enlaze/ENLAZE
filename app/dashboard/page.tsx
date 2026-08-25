@@ -250,13 +250,13 @@ export default function DashboardHome() {
       /* ── Budget Breakdown ───────────────────────────────── */
       const statusMap: Record<string, { label: string; color: string }> = {
         draft: { label: "Borrador", color: "var(--color-navy-400)" },
-        pending: { label: "Pendiente", color: "#f59e0b" },
-        sent: { label: "Enviado", color: "#3b82f6" },
-        enviado: { label: "Enviado", color: "#3b82f6" },
+        pending: { label: "Pendiente", color: "var(--color-warning)" },
+        sent: { label: "Enviado", color: "var(--color-info)" },
+        enviado: { label: "Enviado", color: "var(--color-info)" },
         accepted: { label: "Aceptado", color: "var(--color-brand-green)" },
         aceptado: { label: "Aceptado", color: "var(--color-brand-green)" },
-        rejected: { label: "Rechazado", color: "#ef4444" },
-        rechazado: { label: "Rechazado", color: "#ef4444" },
+        rejected: { label: "Rechazado", color: "var(--color-danger)" },
+        rechazado: { label: "Rechazado", color: "var(--color-danger)" },
       };
       const counts: Record<string, number> = {};
       allB.forEach(b => { counts[b.status] = (counts[b.status] || 0) + 1; });
@@ -428,7 +428,7 @@ export default function DashboardHome() {
             <h2 className="text-[14px] font-semibold text-navy-900 dark:text-white">Evolución de ingresos</h2>
             <div className="flex items-center gap-4 text-[11px]">
               <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-brand-green" /> Aceptados</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-sky-400" /> Facturado</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-info" /> Facturado</span>
             </div>
           </div>
           <div className="px-6 py-6">
@@ -590,7 +590,7 @@ function BarChart({ data }: { data: MonthlyRevenue[] }) {
                 rx="4" className="fill-brand-green" opacity="0.85" />
               {/* Invoiced bar */}
               <rect x={x + barW + 4} y={chartH - h2} width={barW} height={Math.max(h2, 2)}
-                rx="4" fill="#38bdf8" opacity="0.7" />
+                rx="4" className="fill-info" opacity="0.7" />
               {/* Label */}
               <text x={x + barW + 2} y={chartH + 18} textAnchor="middle"
                 className="fill-navy-400 text-[11px]">{d.label}</text>
@@ -712,9 +712,9 @@ function AlertRow({
   severity: "danger" | "warning" | "info"; customValue?: string;
 }) {
   const colors = {
-    danger: "bg-red-50 text-red-600 ring-red-100",
-    warning: "bg-amber-50 text-amber-600 ring-amber-100",
-    info: "bg-sky-50 text-sky-600 ring-sky-100",
+    danger: "bg-danger/10 text-danger-ink ring-danger/20",
+    warning: "bg-warning/10 text-warning-ink ring-warning/20",
+    info: "bg-info/10 text-info-ink ring-info/20",
   };
   return (
     <li>

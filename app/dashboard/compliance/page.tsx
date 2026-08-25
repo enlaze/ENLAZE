@@ -179,8 +179,8 @@ export default function ComplianceDashboardPage() {
 
   const statusDot = {
     green: "bg-brand-green",
-    yellow: "bg-[#f59e0b]",
-    red: "bg-[#ef4444]",
+    yellow: "bg-warning",
+    red: "bg-danger",
   };
 
   const statusLabels = {
@@ -190,16 +190,16 @@ export default function ComplianceDashboardPage() {
   };
 
   const statusBadge = {
-    green: "bg-brand-green/10 text-brand-green-ink border-brand-green/30 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-900",
-    yellow: "bg-[#fef3e2] text-[#b45309] border-[#f8e0b8] dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-900",
-    red: "bg-[#fee2e2] text-[#b91c1c] border-[#fecaca] dark:bg-red-950/50 dark:text-red-300 dark:border-red-900",
+    green: "bg-success/10 text-success-ink border-success/30",
+    yellow: "bg-warning/10 text-warning-ink border-warning/30",
+    red: "bg-danger/10 text-danger-ink border-danger/30",
   };
 
   /* Tinted circle behind each row icon, keyed by that row's status. */
   const iconWrap = {
-    green: "bg-brand-green/10 text-brand-green-dark dark:bg-emerald-950/50 dark:text-emerald-300",
-    yellow: "bg-[#fef3e2] text-[#d97706] dark:bg-amber-950/50 dark:text-amber-300",
-    red: "bg-[#fee2e2] text-[#dc2626] dark:bg-red-950/50 dark:text-red-300",
+    green: "bg-success/10 text-success-ink",
+    yellow: "bg-warning/10 text-warning-ink",
+    red: "bg-danger/10 text-danger-ink",
   };
 
   const overallStatus = reds > 0 ? "red" : yellows > 0 ? "yellow" : "green";
