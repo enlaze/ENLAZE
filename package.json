@@ -24,6 +24,7 @@
     "test:budget-integrity": "node --import tsx --test __tests__/budget-integrity.test.mjs",
     "test:provenance": "node --import tsx --test __tests__/budget-provenance.test.mjs",
     "test:origin-ai": "node --import tsx --test __tests__/canonical-origin-ai.test.mjs",
+    "test:wiring-finalize": "node --import tsx --test __tests__/canonical-wiring-finalize.test.mjs",
     "test:money": "node --import tsx --test __tests__/money.test.mjs",
     "test:scheduled": "node --import tsx --test __tests__/scheduled-messages.test.mjs",
     "test:budget-pdf-completion": "node --import tsx --test __tests__/budget-ai-pdf-completion.test.mjs",

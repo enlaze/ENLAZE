@@ -61,6 +61,12 @@ import {
 } from "@/lib/material-procurement";
 import type { ResolutionOrigin } from "@/lib/types/canonical";
 import { originForBudgetAnalysis } from "@/lib/canonical/analysis-origin";
+import {
+  classifyForPersistence,
+  resolveTenant,
+  type ResolvedTenant,
+} from "@/lib/canonical/finalize-classification";
+import type { MinimalSupabaseClient } from "@/lib/canonical/registry";
 
 // The v2 price resolver (/api/prices/resolve, resolver_used: "v2") can
 // return several low-confidence "estimate" source types — market_estimate,
@@ -1573,19 +1579,104 @@ export function BudgetGenerateProvider({
         category: p.category,
         chapter: p.chapter || p.category || "otros",
         unit_price: p.unit_price_client,
-        subtotal: p.subtotal_client
+        subtotal: p.subtotal_client,
+        // Procedencia SELLADA en el nacimiento de la partida. Se transporta aquí
+        // porque este `.map()` es el único punto por el que la línea pasa de ser
+        // estado de React a ser fila de `budget_items`: lo que no se copie en estas
+        // llaves se pierde para siempre. No es un dato económico y no participa en
+        // ningún cuadre; el clasificador lo normalizará más abajo contra las
+        // restricciones reales de la tabla.
+        canonical_origin: p.canonical_origin ?? null,
+        canonical_source_ref: p.canonical_source_ref ?? null,
       }));
 
       // Ver la nota en saveDraft: los materiales son evidencia del escandallo,
       // no líneas económicas independientes (Opción A).
       const itemsToInsert = [...partidasToInsert];
 
+      // ── FASE 2D-3. Enriquecimiento canónico OBSERVADOR ────────────────────────
+      //
+      // Aquí y no antes. Las partidas ya han atravesado la normalización a scope, el
+      // fallback determinista, el ajuste geográfico, la resolución de precios de
+      // mercado, la cesta de materiales y el ajuste a mercado. Clasificar antes de
+      // que termine esa cadena sería clasificar textos que todavía van a cambiar, y
+      // el resultado describiría una línea que nunca llegó a existir.
+      //
+      // Tenant: la convención del proyecto es `company_id = auth.uid()`, la misma que
+      // usan `pb_providers` y las políticas RLS de `canonical_aliases`. No hay tabla
+      // de empresas y no se inventa aquí ninguna. El filtro explícito del snapshot se
+      // mantiene ADEMÁS de RLS, porque son dos defensas contra fallos distintos.
+      //
+      // Que auth falle NO degrada la clasificación: sin `company_id` se clasifica
+      // contra el vocabulario global, que es seguro —nunca puede devolver aliases de
+      // otra empresa— y desde luego no es motivo para impedir finalizar. Lo único que
+      // se hace distinto es DECIRLO. Un `companyId` nulo por avería y un `companyId`
+      // nulo legítimo producen la misma consulta pero no significan lo mismo, y sin
+      // `tenantContext` el informe de una caída de auth sería indistinguible del de
+      // una clasificación perfectamente normal: se perderían en silencio todos los
+      // alias privados que la empresa haya curado a mano.
+      //
+      // La decisión vive en `resolveTenant`, no aquí: son cuatro ramas con una
+      // consecuencia de seguridad —si `getUser()` devolvió `error`, el `user` que venga
+      // con él NO es una identidad verificada y no puede acabar en el filtro
+      // `company_id` del snapshot— y dentro de este componente no habría forma de
+      // comprobarlas más que leyendo el código fuente. Una excepción se traduce a
+      // `{ error }`, que cae en esa misma primera rama.
+      let canonicalTenant: ResolvedTenant;
+      try {
+        canonicalTenant = resolveTenant(await supabase.auth.getUser());
+      } catch (authErr) {
+        canonicalTenant = resolveTenant({ error: authErr });
+      }
+
+      // `classifyForPersistence` no lanza por contrato y devuelve SIEMPRE las mismas
+      // líneas, en el mismo orden, con las siete columnas canónicas añadidas. Si el
+      // snapshot se avería, si el clasificador lanza o si el clasificador devuelve
+      // algo que ya no es el presupuesto que recibió, las líneas salen ORIGINALES y
+      // `unmatched`, conservando su procedencia, y el presupuesto se finaliza igual.
+      // La fase 2 observa; no bloquea. Ni siquiera cuando se rompe.
+      const canonicalResult = await classifyForPersistence({
+        items: itemsToInsert,
+        companyId: canonicalTenant.companyId,
+        // `MinimalSupabaseClient` describe el encadenado que la capa canónica usa de
+        // verdad (`from().select().eq()…`), no la firma completa de supabase-js. El
+        // cliente real lo cumple en ejecución —es el mismo objeto que ejecuta el
+        // DELETE y el INSERT de aquí al lado— pero no estructuralmente, porque
+        // `from()` devuelve un PostgrestQueryBuilder y el modelo describe el filtro
+        // que viene después. Mismo tratamiento que en scripts/smoke-canonical-snapshot.ts.
+        supabase: supabase as unknown as MinimalSupabaseClient,
+        // Lo declara quien resolvió el tenant, que es el único que sabe si el null de
+        // arriba es legítimo o es una avería. Del error sólo se extrae una etiqueta
+        // técnica corta; el objeto nunca llega al log.
+        tenantContext: canonicalTenant.tenantContext,
+        tenantFailure: canonicalTenant.tenantFailure,
+        // Sin `defaultOrigin` a propósito: una línea rehidratada de un `wizard_state`
+        // anterior a 2D-2 no tiene procedencia demostrable, y NULL es lo que consta.
+      });
+      const classifiedItems = canonicalResult.items;
+
+      // Observabilidad: sólo contadores. Ni conceptos, ni descripciones, ni importes,
+      // ni identificadores de cliente. Un log de presupuestos no debe permitir
+      // reconstruir el presupuesto.
+      console.info("[canonical] finalizeBudget", canonicalResult.report);
+
       // Puerta de cuadre antes de dejar el presupuesto en estado "pendiente":
       // a partir de aquí es un documento que puede irse al cliente en PDF.
-      assertPersistedTotalsMatch(itemsToInsert, financials.subtotal, "finalizeBudget");
+      //
+      // Se ejecuta DESPUÉS del enriquecimiento y sobre las líneas realmente
+      // enriquecidas, no sobre `itemsToInsert`: comprobarlo antes dejaría sin vigilar
+      // justo el tramo donde acaba de correr código nuevo.
+      //
+      // Pero NO es el mecanismo que detecta una clasificación corrupta. De eso se
+      // encarga la guarda de integridad de `classifyForPersistence`, que ante una
+      // corrupción devuelve las líneas económicas originales; por eso este cuadre
+      // recibirá siempre importes intactos aunque el sistema canónico esté averiado, y
+      // por eso una avería canónica no puede impedir finalizar. Esta línea se queda
+      // como última barrera contra lo que nadie previó, no como la primera.
+      assertPersistedTotalsMatch(classifiedItems, financials.subtotal, "finalizeBudget");
 
-      if (itemsToInsert.length > 0) {
-        const { error: itemsErr } = await supabase.from("budget_items").insert(itemsToInsert);
+      if (classifiedItems.length > 0) {
+        const { error: itemsErr } = await supabase.from("budget_items").insert(classifiedItems);
         if (itemsErr) throw itemsErr;
       }
 

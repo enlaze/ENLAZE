@@ -310,6 +310,32 @@ function unmatchedColumns(provenance: NormalizedProvenance): CanonicalColumns {
 }
 
 /**
+ * Fila degradada COMPLETA de una línea, procedencia normalizada incluida.
+ *
+ * Es la MISMA fila que produce `classifyBudgetItems` cuando el registry no está
+ * disponible, expuesta aquí para que quien cablea la clasificación en un flujo de
+ * escritura (fase 2D-3) no tenga que reconstruirla a mano. Ése es el punto: la
+ * lógica de procedencia vive en `normalizeProvenance` y sólo ahí. Duplicarla en el
+ * provider —"si el origen es import y no hay ref, pon null…"— crearía una segunda
+ * copia que puede desincronizarse de `ck_origin_source_ref` sin que nada avise, y
+ * el fallo aparecería como un rechazo de Postgres justo en el momento en que el
+ * sistema canónico ya está averiado, es decir, en el peor momento posible.
+ *
+ * Preserva la procedencia a propósito. Que Supabase no responda no desmiente dónde
+ * nació la línea: una línea `ai` sigue siendo `ai` aunque no haya vocabulario
+ * contra el que clasificarla. Perder eso convertiría una avería temporal de lectura
+ * en una pérdida permanente de información escrita.
+ *
+ * No lanza y no hace I/O.
+ */
+export function unmatchedColumnsForLine(
+  line: LineProvenance,
+  defaultOrigin: ResolutionOrigin | null = null
+): CanonicalColumns {
+  return unmatchedColumns(normalizeProvenance(line, defaultOrigin));
+}
+
+/**
  * Clasifica un lote de líneas.
  *
  * Garantías comprobadas por los tests:
