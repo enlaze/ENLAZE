@@ -1289,7 +1289,7 @@ select
                          'synonym','fingerprint'))
     as source_fuera_de_vocabulario,
   count(*) filter (where canonical_origin is not null
-                     and canonical_origin not in ('engine','import','provider','free_text','legacy'))
+                     and canonical_origin not in ('engine','ai','import','provider','free_text','legacy'))
     as origin_fuera_de_vocabulario,
   count(*) filter (where price_type is not null
                      and price_type not in ('LABOR_ONLY','MATERIAL_ONLY',

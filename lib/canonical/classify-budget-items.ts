@@ -133,10 +133,13 @@ interface NormalizedProvenance {
  *
  * Las dos reglas son ASIMÉTRICAS a propósito, porque los dos defectos son distintos:
  *
- *   engine / free_text / legacy con un source_ref inesperado
+ *   engine / ai / free_text / legacy con un source_ref inesperado
  *     → el origen es válido y la clasificación sigue siendo posible. El source_ref
  *       sobra (`ck_origin_source_ref` lo prohíbe), así que se descarta y punto. La
- *       línea se clasifica con normalidad.
+ *       línea se clasifica con normalidad. En particular NO se degrada el origen: un
+ *       campo de más no desmiente dónde nació la línea, y castigar con `unmatched`
+ *       una procedencia correcta por un adorno sobrante sería perder información
+ *       buena por culpa de información irrelevante.
  *
  *   import / provider sin source_ref o con formato inválido
  *     → el origen es INUTILIZABLE. El nivel 1 del resolver no tiene banco concreto
@@ -164,7 +167,9 @@ export function normalizeProvenance(
     return { origin: declared, sourceRef: rawRef };
   }
 
-  // engine / free_text / legacy: la instancia documental está PROHIBIDA por la tabla.
+  // engine / ai / free_text / legacy: la instancia documental está PROHIBIDA por la
+  // tabla. 'ai' cae aquí sin necesidad de una rama propia, y es lo correcto: una
+  // propuesta del modelo no procede de ningún banco ni tarifa que pueda citarse.
   return { origin: declared, sourceRef: null };
 }
 

@@ -205,7 +205,8 @@ procedencia. Para `import` y `provider`, además, dentro de `source + source_ref
 conocemos `source_ref`, el nivel 1 se **omite**: no se inventa y no se busca "en todos los
 bancos".
 
-**Nivel 2 — precedencia general.** Se aplica cuando el origen es `free_text`, o cuando el
+**Nivel 2 — precedencia general.** Se aplica cuando el origen es `free_text` o `ai` (ver
+E-004: `ai` no es una procedencia de alias, así que nunca entra en el nivel 1), o cuando el
 nivel 1 no encontró nada. Aquí no se filtra por `source_ref`, así que si un texto coincide
 con un alias de CYPE y otro de BC3 apuntando a conceptos distintos, ambos empatan en
 `general_rank = 4` y el resultado es `ambiguous`. Sin conocer el banco, la respuesta
@@ -252,7 +253,7 @@ describe *qué alias ganó*, mientras que la procedencia de la fila vive en
 resolveCanonical(input, ctx):
 
   ctx = { company_id: string|null,
-          origin: 'engine'|'import'|'provider'|'free_text'|'legacy',
+          origin: 'engine'|'ai'|'import'|'provider'|'free_text'|'legacy',
           source_ref?: string|null }
 
   effective_company = (ctx.origin in {engine, legacy}) ? null : ctx.company_id
@@ -341,7 +342,7 @@ candidato es indistinguible de `unmatched`.
 | `canonical_origin` | `canonical_source_ref` |
 |---|---|
 | `import`, `provider` | **obligatorio** |
-| `engine`, `free_text`, `legacy` | **prohibido** |
+| `engine`, `ai`, `free_text`, `legacy` | **prohibido** |
 | NULL (transición) | **prohibido** |
 
 Ambos CHECK se implementan con `CASE ... ELSE false`, no con `OR` encadenados, para que
@@ -568,3 +569,46 @@ Se añaden FK, vocabulario de `concept_match_type` e índice, pero **no** un CHE
 una restricción sobre el comportamiento del resolver, no sobre la identidad canónica, y
 exige haber confirmado antes que ninguna de las 42.221 filas tiene `concept_match_type`
 NULL. Se pospone al paso de vinculación, que es cuando esa columna empieza a escribirse.
+
+### E-004 — `canonical_origin` admite `ai`
+
+**Fecha:** 2026-08-25. **Estado:** migración escrita, pendiente de aplicar.
+
+El vocabulario congelado no contemplaba las líneas propuestas por el modelo. Quedaban con
+`canonical_origin` NULL, indistinguibles de un histórico sin procedencia, y el diseño exige
+que un origen desconocido no reciba una procedencia inventada. Las alternativas dentro del
+vocabulario existente eran las dos peores posibles: marcarlas `engine` les concedería el
+nivel 1 privilegiado de la sección 4.3 —ganar un concepto por delante de la curación
+manual de la empresa— sin haberlo acreditado, y marcarlas `free_text` afirmaría que las
+escribió una persona.
+
+Se añade `ai` con esta semántica: **la línea la propuso originalmente el modelo**. Describe
+procedencia, no fiabilidad; una línea `ai` puede acabar `resolved` con evidencia canónica
+fuerte, igual que una `provider` puede quedarse `unmatched`. Son dimensiones distintas y
+viven en columnas distintas.
+
+`ai` **no** entra en `canonical_alias_sources` ni en el vocabulario de `canonical_source`:
+no existe `exact_ai`. Es la propiedad que lo mantiene sin privilegio. Como no es una
+procedencia de alias, `originAsAliasSource` devuelve NULL, el nivel 1 se omite entero y la
+línea resuelve por el nivel 2 general, respetando `general_rank` y el aislamiento por
+empresa como cualquier otro texto. A diferencia de `legacy`, `ai` **sí** conserva su
+`company_id`: sabemos quién pidió el presupuesto, así que puede beneficiarse legítimamente
+de la curación privada de esa empresa. El resolver no necesitó ningún cambio de lógica.
+
+En `ck_origin_source_ref`, `ai` cae en la rama de `source_ref` **prohibido**: una propuesta
+del modelo no procede de ningún banco ni tarifa citable. Hubo que tocar las dos
+restricciones y no sólo el vocabulario, precisamente por el `CASE ... ELSE false` de E-001:
+un valor nuevo que no aparezca en ninguna rama se rechaza siempre, así que ampliar sólo
+`ck_budget_items_canonical_origin` habría dejado `ai` aceptado por una restricción y
+prohibido por la otra.
+
+Ninguna fila existente cambia: ambos CHECK nuevos son superconjuntos estrictos de los que
+sustituyen. Cero UPDATE, cero backfill, cero cambios de importes.
+
+El discriminador vive en `lib/canonical/analysis-origin.ts` y es puro. `suggested_items` no
+siempre viene del modelo: cuando el enriquecimiento externo falla, lo rellena
+`buildDeterministicBudgetAnalysis` con la salida del motor. Sólo se admiten dos señales
+—`analysis_mode = 'deterministic_engine'` **y** `data_sources.using_ai_fallback = true`—,
+ambas emitidas por el propio fallback en el acto de fabricar las líneas. Si discrepan o
+falta una, el resultado es `ai`, porque es el origen sin privilegio: errar hacia `engine`
+concede autoridad no acreditada, errar hacia `ai` sólo obliga a competir en igualdad.

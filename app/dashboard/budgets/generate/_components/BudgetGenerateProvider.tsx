@@ -60,6 +60,7 @@ import {
   type ProcurementKind,
 } from "@/lib/material-procurement";
 import type { ResolutionOrigin } from "@/lib/types/canonical";
+import { originForBudgetAnalysis } from "@/lib/canonical/analysis-origin";
 
 // The v2 price resolver (/api/prices/resolve, resolver_used: "v2") can
 // return several low-confidence "estimate" source types — market_estimate,
@@ -1868,13 +1869,25 @@ export function BudgetGenerateProvider({
 
       // Map suggested_items to Partidas
       //
-      // PROCEDENCIA (FASE 2D-2): estas líneas nacen de la sugerencia de la IA,
-      // que NO es ninguno de los dos orígenes que 2D-2 autoriza a sellar
-      // (`engine` en el motor, `free_text` en el alta manual). Salen por tanto
-      // sin `canonical_origin`, igual que un presupuesto histórico. Es
-      // deliberado, no un olvido: inventar aquí un origen sería exactamente el
-      // error que esta fase quiere impedir. Queda pendiente decidir su origen
-      // —probablemente uno nuevo— antes de conectar el clasificador en 2D-3.
+      // NACIMIENTO (FASE 2D-2b). Tercer y último punto de sellado del flujo, junto
+      // a los dos `add()` del motor y al alta manual de `addPartida`.
+      //
+      // La procedencia se decide UNA VEZ, aquí fuera, antes del `.map()`, y no una
+      // vez por línea: todas las partidas de un mismo análisis nacen del mismo acto,
+      // así que preguntárselo al payload en cada iteración sólo abriría la puerta a
+      // que dos líneas hermanas acabaran con orígenes distintos.
+      //
+      // No siempre es `ai`: cuando el enriquecimiento externo falla, `suggested_items`
+      // lo rellena `buildDeterministicBudgetAnalysis` con la salida del motor, tanto
+      // por el fallback de servidor como por el del `catch` de arriba. Quién decide
+      // eso —y con qué señales, que son sólo dos y no incluyen `price_source`— está
+      // razonado en `originForBudgetAnalysis`.
+      //
+      // A partir de aquí el sello es intocable: si más abajo `finalPartidas.length < 5`
+      // descarta estas líneas y `buildDeterministicBudgetItems` fabrica otras, las
+      // nuevas nacerán `engine` en su propio punto de nacimiento, no aquí.
+      const analysisOrigin = originForBudgetAnalysis(data);
+
       let newPartidas: Partida[] = (data.suggested_items || []).map((item: any, idx: number) => {
         const cost = item.unit_cost || item.unit_price || 0;
         const qty = item.quantity || 1;
@@ -1892,6 +1905,11 @@ export function BudgetGenerateProvider({
           subtotal_client: qty * cost * marginMultiplier,
           status: "incluida" as const,
           estimated_hours: Number(item.estimated_hours) || undefined,
+          canonical_origin: analysisOrigin,
+          // Ni `ai` ni `engine` tienen instancia documental que declarar: no vienen
+          // de un banco de precios ni de una tarifa identificable. `ck_origin_source_ref`
+          // lo exige NULL para ambos.
+          canonical_source_ref: null,
         };
       });
 

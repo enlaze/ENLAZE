@@ -461,11 +461,11 @@ describe("Fase 2D · clasificación inocua", () => {
 
   // ─── TEST 9c / 9d — Las dos reglas de sanitización, por separado ────────────
 
-  test("TEST 9c — engine/free_text/legacy con source_ref sobrante: CONSERVAN origin y se clasifican", async () => {
+  test("TEST 9c — engine/ai/free_text/legacy con source_ref sobrante: CONSERVAN origin y se clasifican", async () => {
     // Regla A. El origen es válido; lo único que sobra es la instancia documental,
-    // que ck_origin_source_ref prohíbe para estas tres procedencias. Se descarta el
+    // que ck_origin_source_ref prohíbe para estas cuatro procedencias. Se descarta el
     // source_ref y la clasificación continúa con total normalidad.
-    for (const origin of ["engine", "free_text", "legacy"]) {
+    for (const origin of ["engine", "ai", "free_text", "legacy"]) {
       assert.deepEqual(
         normalizeProvenance({ canonical_origin: origin, canonical_source_ref: "cype_2026" }, null),
         { origin, sourceRef: null },

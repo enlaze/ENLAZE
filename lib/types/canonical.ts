@@ -32,6 +32,21 @@ export type AliasKind = (typeof ALIAS_KINDS)[number];
  * canonical_alias_sources.source. El ORDEN de este array no significa nada: la
  * precedencia real vive en canonical_alias_sources.general_rank y se lee de la base
  * de datos. Ordenar por posición en este array sería hardcodear la precedencia.
+ *
+ * NO AÑADIR 'ai' AQUÍ. Es tentador porque 'ai' sí está en RESOLUTION_ORIGINS, pero
+ * este array responde a otra pregunta: "¿qué procedencias puede tener un ALIAS del
+ * registro?", no "¿dónde nació la LÍNEA?". Añadirlo tendría tres efectos, los tres
+ * indeseados y ninguno evidente desde aquí:
+ *   1. `originAsAliasSource("ai")` dejaría de devolver null y una línea `ai`
+ *      obtendría NIVEL 1 privilegiado en resolver.ts — exactamente el privilegio
+ *      que 2D-2b existe para negarle.
+ *   2. Aparecería `exact_ai` en ExactSource, un valor que ck_budget_items_canonical_source
+ *      NO acepta: la base de datos rechazaría la escritura.
+ *   3. Exigiría una fila en canonical_alias_sources con un general_rank inventado,
+ *      es decir, decidir que una propuesta del modelo pesa más o menos que una
+ *      curación humana. Esa decisión no se toma con un push a un array.
+ * Una línea `ai` resuelve por NIVEL 2 general, como cualquier texto sin evidencia
+ * documental propia. Es lo correcto: el modelo propone el texto, no lo acredita.
  */
 export const ALIAS_SOURCES = ["manual", "curated", "engine", "import", "provider"] as const;
 export type AliasSource = (typeof ALIAS_SOURCES)[number];
@@ -54,12 +69,29 @@ export const CONCEPT_STATUSES = ["active", "deprecated"] as const;
 export type ConceptStatus = (typeof CONCEPT_STATUSES)[number];
 
 /**
- * ck_budget_items_canonical_origin. De dónde viene el texto que se va a resolver.
- * No es lo mismo que AliasSource: 'free_text' y 'legacy' describen la procedencia de
- * la LÍNEA, no la de un alias, y por eso nunca aparecen en canonical_alias_sources.
+ * ck_budget_items_canonical_origin. De dónde NACIÓ la línea cuyo texto se va a
+ * resolver. No es lo mismo que AliasSource: 'ai', 'free_text' y 'legacy' describen
+ * la procedencia de la LÍNEA, no la de un alias, y por eso nunca aparecen en
+ * canonical_alias_sources.
+ *
+ * Describe procedencia, NO fiabilidad. Una línea nacida de 'ai' puede acabar
+ * 'resolved' con evidencia canónica fuerte, y una nacida de 'provider' puede
+ * quedarse 'unmatched'. Son dimensiones independientes.
+ *
+ *   engine    — creada determinísticamente por budget-engine.
+ *   ai        — propuesta originalmente por el modelo.
+ *   import    — nacida de una importación identificable (exige source_ref).
+ *   provider  — nacida de un catálogo o tarifa de proveedor (exige source_ref).
+ *   free_text — escrita a mano por una persona.
+ *   legacy    — histórica, sin procedencia demostrable.
+ *   null      — procedencia realmente desconocida.
+ *
+ * Sólo 'engine', 'import' y 'provider' coinciden por nombre con una AliasSource.
+ * Ver originAsAliasSource al final de este archivo.
  */
 export const RESOLUTION_ORIGINS = [
   "engine",
+  "ai",
   "import",
   "provider",
   "free_text",
@@ -236,8 +268,15 @@ export const isRelationType = (v: unknown): v is RelationType => has(RELATION_TY
 
 /**
  * Un ResolutionOrigin puede coincidir con una AliasSource ('engine', 'import',
- * 'provider') o no ('free_text', 'legacy'). Esta función es la única traducción
+ * 'provider') o no ('ai', 'free_text', 'legacy'). Esta función es la única traducción
  * permitida entre ambos vocabularios.
+ *
+ * Devolver null NO es un caso degradado: es lo que le dice al resolver que esa línea
+ * no tiene una procedencia acreditada en el registro y por tanto no puede saltarse el
+ * ranking general. Para 'ai' ese null es la garantía de todo el diseño, y se obtiene
+ * gratis por no estar en ALIAS_SOURCES. Si alguien lo añadiera allí, esta función
+ * empezaría a devolver "ai" en silencio y el privilegio aparecería sin que ningún
+ * test de este archivo se rompiera. Ver la advertencia sobre ALIAS_SOURCES arriba.
  */
 export function originAsAliasSource(origin: ResolutionOrigin): AliasSource | null {
   return isAliasSource(origin) ? origin : null;

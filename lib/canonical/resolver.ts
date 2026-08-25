@@ -298,6 +298,17 @@ export async function resolveCanonical(
   // Sólo para orígenes que SON una procedencia de alias (engine, import, provider) y
   // que estén marcados source_specific en la base de datos. Se busca exclusivamente
   // dentro de esa procedencia: si la línea viene de CYPE, la respuesta está en CYPE.
+  //
+  // Los demás orígenes ('ai', 'free_text', 'legacy') entran aquí con originSource
+  // null y se saltan el bloque entero. Eso NO es una carencia que haya que remediar:
+  // este nivel permite ganar un concepto por delante del ranking general, incluida la
+  // curación manual de la empresa, y ese atajo se paga con una procedencia acreditada
+  // en el registro. Una propuesta del modelo no la tiene: 'ai' no es 'engine' por
+  // haberse generado automáticamente, ni 'import'/'provider' porque no aporta
+  // source_ref. Resuelve en el NIVEL 2, compitiendo como cualquier otro texto.
+  //
+  // Nada de esto se comprueba aquí: depende por entero de que 'ai' siga fuera de
+  // ALIAS_SOURCES en lib/types/canonical.ts, donde está la advertencia larga.
   if (originSource !== null) {
     const meta = metaFor(index, originSource);
     const hasEvidence = !meta.requires_source_ref || sourceRef !== null;
