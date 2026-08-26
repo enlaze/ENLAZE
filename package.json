@@ -23,6 +23,7 @@
     "test:budget-finalization": "node --import tsx --test __tests__/budget-finalization.test.mjs",
     "test:budget-integrity": "node --import tsx --test __tests__/budget-integrity.test.mjs",
     "test:provenance": "node --import tsx --test __tests__/budget-provenance.test.mjs",
+    "test:provenance-projections": "node --import tsx --test __tests__/budget-provenance-projections.test.mjs",
     "test:origin-ai": "node --import tsx --test __tests__/canonical-origin-ai.test.mjs",
     "test:wiring-finalize": "node --import tsx --test __tests__/canonical-wiring-finalize.test.mjs",
     "test:wiring-savedraft": "node --import tsx --test __tests__/canonical-wiring-savedraft.test.mjs",

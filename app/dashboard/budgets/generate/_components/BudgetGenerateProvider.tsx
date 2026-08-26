@@ -2757,6 +2757,17 @@ export function BudgetGenerateProvider({
                 unit_price: ep.unit_price, subtotal_cost: ep.subtotal_cost,
                 unit_price_client: ep.unit_price_client, subtotal_client: ep.subtotal_client,
                 status: ep.status,
+                // COPIA EXPLÍCITA, no nacimiento. Esta proyección reconstruye el objeto
+                // enumerando campos: lo que no se copie aquí se pierde, y se perdía.
+                // `buildDeterministicBudgetItems` sella `engine` en el nacimiento; sin
+                // estas dos líneas ese sello moría en la conversión a `Partida` y la
+                // línea acababa en `budget_items` con procedencia nula, indistinguible
+                // de una línea de origen desconocido.
+                //
+                // Se copia lo que la línea YA trae. No se escribe la constante `engine`:
+                // el sello lo pone el punto de nacimiento, no el punto de conversión.
+                canonical_origin: ep.canonical_origin ?? null,
+                canonical_source_ref: ep.canonical_source_ref ?? null,
               })),
               materials: verifiedFallback.materials,
               // Snapshot base inmutable para enriquecimiento por proveedor
@@ -2839,6 +2850,14 @@ export function BudgetGenerateProvider({
                     unit_price: ep.unit_price, subtotal_cost: ep.subtotal_cost,
                     unit_price_client: ep.unit_price_client, subtotal_client: ep.subtotal_client,
                     status: ep.status,
+                    // COPIA EXPLÍCITA, no nacimiento. Mismo caso que en `nextStep`: es
+                    // el otro camino por el que el asistente cae al motor local cuando
+                    // la IA no responde, y perdía la procedencia por el mismo motivo.
+                    // Los dos caminos tienen que sellar igual; si no, la procedencia de
+                    // una línea dependería de si el usuario avanzó con "Siguiente" o
+                    // saltando de paso, que es una diferencia sin ningún significado.
+                    canonical_origin: ep.canonical_origin ?? null,
+                    canonical_source_ref: ep.canonical_source_ref ?? null,
                   })),
                   materials: verifiedFallback.materials,
                   baseAIMaterials: verifiedFallback.materials.map((material) => ({ ...material })),
