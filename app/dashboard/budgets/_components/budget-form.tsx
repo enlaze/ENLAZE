@@ -12,6 +12,14 @@ import { useToast } from "@/components/ui/toast";
 import { analytics } from "@/lib/analytics";
 import { saveDocumentVersion } from "@/lib/document-versions";
 import { normalizeBudgetItemUnit } from "@/lib/budget-units";
+import { computeBudgetTotals, assertBudgetTotalsConsistent } from "@/lib/budget-totals";
+import {
+  enrichForPersistence,
+  resolveTenant,
+  type ResolvedTenant,
+} from "@/lib/canonical/finalize-classification";
+import type { MinimalSupabaseClient } from "@/lib/canonical/registry";
+import type { ResolutionOrigin } from "@/lib/types/canonical";
 
 const fallbackServiceTypes = [
   { value: "reforma", label: "Reforma integral" },
@@ -38,6 +46,20 @@ interface Partida {
   category: string;
   unit_price: number;
   subtotal: number;
+  /**
+   * FASE 2D-5. La procedencia que la fila YA traía de la base de datos.
+   *
+   * Sólo transporte: este formulario no SELLA procedencia. Una partida nueva
+   * escrita aquí a mano sale con las dos en `undefined` y se persiste como NULL,
+   * que es exactamente lo que consta. Inventar aquí un `free_text` sería un
+   * nacimiento, no una conservación.
+   *
+   * Las otras cinco columnas canónicas no viven en el estado a propósito: las
+   * DERIVA el clasificador en cada guardado, y traerlas al formulario abriría el
+   * bucle que la capa canónica existe para no tener.
+   */
+  canonical_origin?: ResolutionOrigin | null;
+  canonical_source_ref?: string | null;
 }
 
 interface PaymentPhase {
@@ -248,6 +270,18 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
                 unit_price: Number(item.unit_price || 0),
                 subtotal:
                   Number(item.quantity || 0) * Number(item.unit_price || 0),
+                // FASE 2D-5. COPIA EXPLÍCITA, no nacimiento.
+                //
+                // Esta proyección reconstruye la fila clave a clave, así que todo lo
+                // que no se nombre aquí se pierde. Antes de 2D-5 la procedencia se
+                // perdía JUSTO AQUÍ, al leer: la RPC no podía conservar una
+                // procedencia que el formulario ya había tirado al cargar. Cerrar
+                // sólo la escritura habría dejado el agujero abierto.
+                //
+                // El `select("*")` de arriba ya trae las dos columnas; lo único que
+                // faltaba era no descartarlas.
+                canonical_origin: (item.canonical_origin ?? null) as ResolutionOrigin | null,
+                canonical_source_ref: (item.canonical_source_ref ?? null) as string | null,
               }))
             : [emptyPartida()]
         );
@@ -331,6 +365,54 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
     const selectedClient = clients.find((client) => client.id === selectedClientId);
 
     if (editBudgetId) {
+      // ── FASE 2D-5. Enriquecimiento canónico OBSERVADOR en la edición clásica ──
+      //
+      // Mismo cableado que `finalizeBudget`, con una diferencia: aquí NO escribe el
+      // cliente. Las filas se enriquecen en memoria y se le entregan a la RPC, que
+      // hace el UPDATE de `budgets`, el DELETE de `budget_items` y el INSERT de las
+      // nuevas dentro de una sola función de PostgreSQL. Llamar a
+      // `syncClassifiedBudgetItems` aquí habría sido reutilizar por reutilizar:
+      // volvería a poner el DELETE + INSERT en el cliente y tiraría la única ventaja
+      // que este camino tiene sobre el asistente, que es la atomicidad real.
+      //
+      // `resolveTenant` decide qué significa el `companyId`: si `getUser()` devolvió
+      // error, el `user` que venga con él no es una identidad verificada y no puede
+      // acabar filtrando el snapshot. Una excepción se traduce a `{ error }`, que cae
+      // en esa misma rama.
+      let canonicalTenant: ResolvedTenant;
+      try {
+        canonicalTenant = resolveTenant(await supabase.auth.getUser());
+      } catch (authErr) {
+        canonicalTenant = resolveTenant({ error: authErr });
+      }
+
+      // `enrichForPersistence` no lanza por contrato: devuelve SIEMPRE las mismas
+      // líneas, en el mismo orden, con las siete columnas canónicas añadidas. Si el
+      // snapshot se avería, si el clasificador lanza o si devuelve algo que ya no es
+      // el presupuesto que recibió, las líneas salen ORIGINALES y `unmatched`
+      // conservando su procedencia, y la edición se guarda igual. La fase 2 observa;
+      // no bloquea. Ni siquiera cuando se rompe.
+      //
+      // Sin `defaultOrigin` a propósito: una fila anterior a 2D-2 no tiene
+      // procedencia demostrable, y NULL es lo que consta.
+      const canonicalResult = await enrichForPersistence({
+        items: partidas,
+        tenant: canonicalTenant,
+        context: "editBudget",
+        supabase: supabase as unknown as MinimalSupabaseClient,
+      });
+      const classifiedPartidas = canonicalResult.items;
+
+      // Puerta de cuadre sobre las líneas REALMENTE enviadas, y después del
+      // enriquecimiento: comprobarlo antes dejaría sin vigilar justo el tramo donde
+      // acaba de correr código nuevo. Es lo único aquí que puede impedir el guardado,
+      // y sólo ante un descuadre económico de verdad.
+      assertBudgetTotalsConsistent(
+        subtotal,
+        computeBudgetTotals({ lines: classifiedPartidas }),
+        "editBudget",
+      );
+
       const { data: updatedBudget, error: updateError } = await supabase.rpc(
         "update_budget_with_items",
         {
@@ -359,7 +441,11 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
             observations,
             conditions_text: conditionsText,
           },
-          p_items: partidas,
+          // Las filas ENRIQUECIDAS, no `partidas`. La economía es idéntica —la guarda
+          // de integridad de `classifyForPersistence` lo garantiza y el cuadre de
+          // arriba lo vuelve a comprobar—; lo que cambia es que ahora viajan las siete
+          // columnas canónicas para que la RPC pueda persistirlas.
+          p_items: classifiedPartidas,
         }
       );
 

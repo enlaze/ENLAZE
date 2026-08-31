@@ -522,15 +522,20 @@ export async function classifyForPersistence<T extends ClassifiableLine>(
 // ─── Envoltorio compartido por los dos puntos de escritura ────────────────────
 
 /**
- * Cuál de los dos caminos de escritura está clasificando.
+ * Cuál de los caminos de escritura está clasificando.
  *
- * Se etiqueta porque los dos tienen frecuencias y consecuencias muy distintas:
- * `saveDraft` corre cada vez que el usuario deja de teclear, y `finalizeBudget` una
- * sola vez sobre un documento que ya puede irse al cliente. Un informe degradado
- * significa cosas diferentes en cada uno, y sin la etiqueta serían indistinguibles
- * en el log.
+ * Se etiqueta porque tienen frecuencias y consecuencias muy distintas:
+ * `saveDraft` corre cada vez que el usuario deja de teclear, `finalizeBudget` una
+ * sola vez sobre un documento que ya puede irse al cliente, y `editBudget` cada vez
+ * que alguien guarda cambios en el formulario clásico de un presupuesto que YA
+ * existe. Un informe degradado significa cosas diferentes en cada uno, y sin la
+ * etiqueta serían indistinguibles en el log.
+ *
+ * `editBudget` (FASE 2D-5) es además el único de los tres cuya escritura no la hace
+ * el cliente: enriquece las filas aquí y se las entrega a la RPC
+ * `update_budget_with_items`, que hace el DELETE + INSERT dentro de PostgreSQL.
  */
-export type CanonicalPersistenceContext = "saveDraft" | "finalizeBudget";
+export type CanonicalPersistenceContext = "saveDraft" | "finalizeBudget" | "editBudget";
 
 export interface EnrichForPersistenceOptions<T extends ClassifiableLine> {
   items: readonly T[];
