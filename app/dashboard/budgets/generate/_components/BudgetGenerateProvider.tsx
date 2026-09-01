@@ -1508,8 +1508,24 @@ export function BudgetGenerateProvider({
       // heredado puede tener filas de material guardadas de antes, y queremos
       // que al volver a guardarlo se ejecute el DELETE que las retira.
       if (draftId && (state.partidas.length > 0 || state.materials.some(m => m.included))) {
-        const partidasToInsert = state.partidas.filter(p => p.status !== "opcional").map(p => ({
+        const partidasToInsert = state.partidas.filter(p => p.status !== "opcional").map((p, idx) => ({
           budget_id: draftId,
+          // ── FASE 2E. La posición es un dato, no una casualidad ──────────────────
+          //
+          // El índice se toma DESPUÉS del filtro, así que las posiciones salen 0..N-1
+          // sin huecos aunque se hayan descartado partidas opcionales por el camino.
+          //
+          // Antes de esta fase el orden no se guardaba en ninguna parte. Los lectores
+          // ordenaban por `created_at`, y las filas de un presupuesto se escriben TODAS
+          // en el mismo INSERT, es decir, con el mismo `now()`: un ORDER BY sobre una
+          // columna constante no ordena, devuelve lo que el plan tenga a mano. En
+          // producción salía bien casi siempre por accidente —el orden del montón
+          // coincidía con el de inserción— y mal, sin avisar, cuando no coincidía.
+          //
+          // Entra en la firma de persistencia por el mismo motivo que la procedencia: lo
+          // APORTA el estado. Reordenar partidas sin tocar un solo importe es un cambio
+          // que hay que guardar, y fuera de la firma la salida temprana lo descartaría.
+          sort_order: idx,
           concept: p.concept,
           description: p.description,
           quantity: p.quantity,
@@ -1662,8 +1678,15 @@ export function BudgetGenerateProvider({
       if (deleteError) throw deleteError;
 
       // 3. Insertar las partidas reales
-      const partidasToInsert = state.partidas.filter(p => p.status !== "opcional").map(p => ({
+      const partidasToInsert = state.partidas.filter(p => p.status !== "opcional").map((p, idx) => ({
         budget_id: budgetId,
+        // FASE 2E. Misma posición y mismo significado que en `saveDraft`. Esta
+        // proyección tiene que ser campo por campo idéntica a la de allí —mismas
+        // llaves, mismo orden, mismas expresiones—: de eso depende que las dos firmas
+        // de persistencia sean intercambiables, que es lo que cierra la ventana
+        // destructiva de 2D-9. Añadir la columna en un sitio y no en el otro haría que
+        // finalizar dejase una firma que el siguiente autoguardado no sabe reproducir.
+        sort_order: idx,
         concept: p.concept,
         description: p.description,
         quantity: p.quantity,

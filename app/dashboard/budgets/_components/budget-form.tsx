@@ -395,8 +395,17 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
       //
       // Sin `defaultOrigin` a propósito: una fila anterior a 2D-2 no tiene
       // procedencia demostrable, y NULL es lo que consta.
+      // FASE 2E. La posición se sella aquí, sobre el array que se va a persistir, y no
+      // dentro de la RPC: es este array el que representa lo que el usuario tiene
+      // delante. La RPC lo transporta literalmente, igual que hace con las canónicas.
+      //
+      // Sin esto, la edición clásica sería el camino que DESTRUYE el orden: borra todas
+      // las partidas y las reinserta, y sin `sort_order` explícito volverían todas al
+      // default 0, dejando el presupuesto exactamente como estaba antes de esta fase.
+      const partidasOrdenadas = partidas.map((p, idx) => ({ ...p, sort_order: idx }));
+
       const canonicalResult = await enrichForPersistence({
-        items: partidas,
+        items: partidasOrdenadas,
         tenant: canonicalTenant,
         context: "editBudget",
         supabase: supabase as unknown as MinimalSupabaseClient,
@@ -493,7 +502,12 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
     // cuando la fila de `budgets` ya tiene identidad. No participa en la clasificación
     // —`ClassifiableLine` sólo necesita el concepto y la procedencia— así que añadirlo
     // después no cambia nada de lo que se decidió antes.
-    const nuevasPartidas = partidas.map((p) => ({
+    const nuevasPartidas = partidas.map((p, idx) => ({
+      // FASE 2E. La posición que el usuario ve en el formulario es la que se guarda.
+      // Base 0, contigua, tomada del índice del array que se persiste y no de
+      // `created_at`: todas estas filas entran en un solo INSERT y comparten `now()`,
+      // así que `created_at` no puede distinguirlas.
+      sort_order: idx,
       concept: p.concept,
       description: p.description,
       quantity: p.quantity,

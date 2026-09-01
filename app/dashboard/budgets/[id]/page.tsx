@@ -317,7 +317,13 @@ export default function BudgetDetailPage() {
     // veredicto emitido contra el vocabulario canónico de otro momento; y en las filas
     // anteriores a la Fase 2 ese `unmatched` ni siquiera es un veredicto, es el default
     // de la columna. Se derivan al persistir, como en los otros cuatro writers.
-    const partidasCopiadas = items.map((item) => ({
+    const partidasCopiadas = items.map((item, idx) => ({
+      // FASE 2E. La copia se numera de nuevo, 0..N-1, en el orden en que `items` llegó
+      // a esta pantalla. No se copia el `sort_order` del original: para eso tendría que
+      // ser fiable en el original, y hasta que el backfill corra hay presupuestos con
+      // todas sus filas a 0. Renumerar aquí es correcto en los dos escenarios, porque
+      // `items` ya viene ordenado por el mismo criterio que el usuario está viendo.
+      sort_order: idx,
       concept: item.concept,
       description: item.description,
       quantity: item.quantity,
