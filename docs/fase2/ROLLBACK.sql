@@ -15,6 +15,8 @@
 --     y el índice que Fase 2 añadió.
 -- Lo único que se pierde al revertir es el trabajo de clasificación canónica ya hecho:
 -- los valores de canonical_* en budget_items y los vínculos concept_id de pb_products.
+-- El BLOQUE 0-2E tampoco toca datos: conserva a propósito los sort_order recuperados
+-- por el backfill de FASE 2E-2 y se limita a soltar las restricciones que los protegían.
 -- Antes de revertir en un entorno donde el resolver ya haya corrido, hacer el respaldo
 -- del bloque 0.
 -- =====================================================================================
@@ -34,6 +36,62 @@
 --   select id, concept_id, concept_match_type
 --   from public.pb_products
 --   where concept_id is not null;
+
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BLOQUE 0-2E · Revierte 20260901120000_budget_items_sort_order.sql (FASE 2E-2)
+--
+-- Va DELANTE del BLOQUE 1 porque este archivo se ejecuta en orden inverso al de
+-- aplicación y 20260901120000 es la migración más reciente. Numerado 0-2E, y no 0.5 ni
+-- renumerando todo, para no invalidar las referencias a "BLOQUE N" que ya existen en
+-- CHECKS.sql y en los informes de fase.
+--
+-- QUÉ SE REVIERTE Y QUÉ NO
+-- Se revierte lo que 2E-2 AÑADIÓ al esquema: la UNIQUE, el CHECK, el NOT NULL y el
+-- comentario de columna. NO se revierten:
+--
+--   · Los valores de sort_order. El backfill RECUPERÓ el orden histórico leyendo
+--     wizard_state; volver a poner 807 ceros no restauraría un estado anterior mejor,
+--     destruiría información que ya no está en ningún otro sitio (wizard_state se
+--     limpia). Con el NOT NULL y la UNIQUE fuera, unos sort_order correctos son
+--     inertes para todo lo que había antes de 2E: los cuatro lectores siguen
+--     ordenando por created_at hasta la fase 2E-3. Revertir es, por tanto, seguro
+--     dejándolos.
+--
+--   · El DEFAULT 0. Ya existía antes de 2E-2, que se limitó a reafirmarlo en términos
+--     absolutos. Quitarlo aquí no revertiría nada: dejaría la columna en un estado en
+--     el que nunca estuvo.
+--
+-- La constraint y el índice implícito se sueltan ANTES que el NOT NULL por legibilidad;
+-- el orden entre ellos es indiferente, no hay dependencias.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+begin;
+alter table public.budget_items drop constraint if exists uq_budget_items_budget_id_sort_order;
+alter table public.budget_items drop constraint if exists ck_budget_items_sort_order_non_negative;
+alter table public.budget_items alter column sort_order drop not null;
+comment on column public.budget_items.sort_order is null;
+commit;
+
+-- Y la RPC. `update_budget_with_items` no se revierte con un DROP: hay que dejarla en la
+-- versión anterior, que es la de 20260826103500. Ese archivo es `create or replace` de
+-- principio a fin y declara su ACL en términos absolutos, así que volver a ejecutarlo
+-- ENTERO y SIN MODIFICAR devuelve exactamente el estado previo, sea cual sea el actual:
+--
+--   psql "$DATABASE_URL" -f supabase/migrations/20260826103500_update_budget_with_items_canonical.sql
+--
+-- No copiar aquí el cuerpo de la función: una copia diverge del original en cuanto
+-- alguien toque uno de los dos, y entonces el rollback introduce una tercera versión que
+-- nunca ha estado en producción.
+--
+-- CONSECUENCIA INMEDIATA, Y ES LA ESPERADA: la RPC restaurada deja de transportar
+-- sort_order, de modo que la primera edición clásica de un presupuesto reinsertará sus
+-- partidas al default 0 y perderá el orden recuperado de ese presupuesto. Por eso el
+-- NOT NULL y la UNIQUE se sueltan ANTES de restaurar la RPC: al revés, esa primera
+-- edición no perdería el orden, fallaría con violación de UNIQUE y dejaría al usuario
+-- sin poder guardar.
+--
+-- Tras restaurar la RPC:
+--   notify pgrst, 'reload schema';
 
 
 -- ─────────────────────────────────────────────────────────────────────────────────────

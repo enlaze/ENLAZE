@@ -32,6 +32,7 @@
     "test:wiring-duplicate": "node --import tsx --test __tests__/canonical-wiring-duplicate-budget.test.mjs",
     "test:migration-tx": "node --test __tests__/migration-transaction-control.test.mjs",
     "test:sort-order": "node --import tsx --test __tests__/budget-items-sort-order.test.mjs",
+    "test:sort-order-migration": "node --test __tests__/budget-items-sort-order-migration.test.mjs",
     "test:money": "node --import tsx --test __tests__/money.test.mjs",
     "test:scheduled": "node --import tsx --test __tests__/scheduled-messages.test.mjs",
     "test:budget-pdf-completion": "node --import tsx --test __tests__/budget-ai-pdf-completion.test.mjs",

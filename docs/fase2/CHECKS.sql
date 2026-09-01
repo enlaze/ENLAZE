@@ -1540,3 +1540,170 @@ select
 --   huella_monetaria = e11db5c2ddd964cb7d5daddd709ba3b0
 --
 -- Si huella_monetaria cambia y las sumas NO, hay un cambio compensado. Se para.
+
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BLOQUE 11 · Tras 20260901120000_budget_items_sort_order.sql  (FASE 2E-2, SOLO LECTURA)
+--
+-- QUE ENTRA EN ESA MIGRACION: la RPC update_budget_with_items pasa a nombrar
+-- sort_order y a alimentarla con `with ordinality`; el backfill escribe la posicion
+-- historica de las 807 filas; y entran el NOT NULL, el CHECK >= 0 y la UNIQUE
+-- (budget_id, sort_order). Las tres cosas son inseparables y viajan en un solo lote.
+--
+-- La migracion ya se autocomprueba: aborta sola si la asignacion no es 0..N-1, si
+-- cambia el numero de filas, si cambia el conjunto de ids o si cambia la huella del
+-- contenido. Este bloque es la confirmacion INDEPENDIENTE, desde fuera, de que lo que
+-- quedo en la base es lo que se esperaba.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+
+-- 11.1 · ANTES DE APLICAR. Se ejecuta con la migracion todavia sin aplicar y se guarda
+-- el resultado: es el punto de comparacion de 11.3.
+select count(*)                                        as filas,
+       md5(string_agg(id::text, '|' order by id))      as huella_ids,
+       md5(string_agg(md5((to_jsonb(bi) - 'sort_order')::text), '|'
+             order by md5((to_jsonb(bi) - 'sort_order')::text)))
+                                                       as huella_contenido,
+       count(distinct sort_order)                      as valores_distintos
+  from public.budget_items bi;
+-- ESPERADO ANTES (medido 2026-09-01):
+--   filas             = 807
+--   huella_ids        = edb8e516ceb157ee061d19b063fd888c
+--   huella_contenido  = 6de4f522e8b6943bf81ff6064405aa94
+--   valores_distintos = 1        (todas las filas a 0: ese es el defecto que se cierra)
+
+-- 11.2 · ENSAYO EN SECO del backfill, sin escribir nada. Tiene que decir que hay 11
+-- presupuestos elegibles y 806 de las 807 filas cambiando de posicion.
+with elegibles as (
+  select bi.budget_id
+    from public.budget_items bi
+   group by bi.budget_id
+  having not (
+    count(*) filter (where bi.sort_order is null) = 0
+    and min(coalesce(bi.sort_order, -1)) = 0
+    and max(coalesce(bi.sort_order, -1)) = count(*) - 1
+    and count(distinct coalesce(bi.sort_order, -1)) = count(*)
+  )
+)
+select count(distinct e.budget_id) as presupuestos_elegibles,
+       count(*)                    as filas_elegibles
+  from public.budget_items bi
+  join elegibles e on e.budget_id = bi.budget_id;
+-- ESPERADO: 11 | 807   (las 807 filas viven en 11 presupuestos, todos elegibles)
+
+-- 11.3 · DESPUES DE APLICAR. La invariante absoluta, comprobada desde fuera.
+select count(*)                                        as filas,
+       md5(string_agg(id::text, '|' order by id))      as huella_ids,
+       md5(string_agg(md5((to_jsonb(bi) - 'sort_order')::text), '|'
+             order by md5((to_jsonb(bi) - 'sort_order')::text)))
+                                                       as huella_contenido
+  from public.budget_items bi;
+-- ESPERADO DESPUES: LOS TRES VALORES IDENTICOS A 11.1.
+--   Si huella_contenido cambia, la migracion ha tocado una columna que no era
+--   sort_order. Se para y se revierte con el BLOQUE 0-2E de ROLLBACK.sql.
+--   Nota: la huella se construye con to_jsonb(bi) - 'sort_order', es decir, con la fila
+--   ENTERA menos esa clave. No enumera columnas y por tanto no deja agujeros ni
+--   envejece cuando se anade una columna nueva.
+
+-- 11.4 · DESPUES DE APLICAR. La posicion es 0..N-1, completa y unica, en TODOS los
+-- presupuestos. Es lo que la UNIQUE exige y lo que los lectores van a asumir.
+select count(*) as presupuestos_mal
+  from (
+    select budget_id,
+           count(*)                  as n,
+           min(sort_order)           as mn,
+           max(sort_order)           as mx,
+           count(distinct sort_order) as distintos
+      from public.budget_items
+     group by budget_id
+  ) g
+ where g.mn <> 0 or g.mx <> g.n - 1 or g.distintos <> g.n;
+-- ESPERADO: 0
+
+-- 11.5 · DESPUES DE APLICAR. El esquema quedo con el contrato escrito.
+select (select count(*) from information_schema.columns
+         where table_schema='public' and table_name='budget_items'
+           and column_name='sort_order' and is_nullable='NO'
+           and column_default='0')                                   as columna_ok,
+       (select count(*) from pg_constraint
+         where conrelid='public.budget_items'::regclass
+           and conname='ck_budget_items_sort_order_non_negative')     as check_ok,
+       (select count(*) from pg_constraint
+         where conrelid='public.budget_items'::regclass
+           and conname='uq_budget_items_budget_id_sort_order')        as unique_ok,
+       (select count(*) from pg_indexes
+         where schemaname='public' and tablename='budget_items'
+           and indexdef ilike '%(budget_id, sort_order)%')            as indices;
+-- ESPERADO: 1 | 1 | 1 | 1
+--   'indices' tiene que ser 1, no 2: el btree que crea la UNIQUE por debajo es
+--   exactamente el que necesita el ORDER BY de los lectores. Un segundo indice seria el
+--   mismo indice dos veces, con el coste de escritura duplicado y sin ganancia.
+
+-- 11.6 · DESPUES DE APLICAR. La RPC transporta la posicion y la toma de la ordinalidad
+-- del array, no de un campo del JSON que pudiera venir repetido o con huecos.
+select (prosrc like '%with ordinality%')          as usa_ordinalidad,
+       (prosrc like '%(ordinality - 1)::integer%') as base_cero,
+       (prosrc like '%item->>''sort_order''%')     as lee_del_json
+  from pg_proc
+ where oid = 'public.update_budget_with_items(uuid, jsonb, jsonb)'::regprocedure;
+-- ESPERADO: true | true | false
+
+-- 11.7 · ANTES **Y** DESPUES DE APLICAR. La misma consulta, ejecutada dos veces.
+--
+-- CRITERIO DE PASS: PRE == POST. No hay ningun valor esperado escrito aqui contra el
+-- que comparar, y es deliberado. Un numero de filas o una suma clavados en este archivo
+-- convierten un presupuesto nuevo y legitimo -creado entre la medicion y el despliegue-
+-- en un falso fallo, y empujan a quien despliega a decidir sobre la marcha si "esta vez
+-- da igual". La invariante real de un reordenamiento no es "807 filas": es que NADA de
+-- lo que se mide aqui cambie, sea cual sea su valor.
+--
+-- Un reordenamiento no es un evento economico ni una reclasificacion. Si cualquiera de
+-- las seis medidas se mueve, no era un reordenamiento: se para y se revierte con el
+-- BLOQUE 0-2E de ROLLBACK.sql.
+--
+-- PROCEDIMIENTO, sin comparar hashes a ojo:
+--   psql "$DATABASE_URL" -f /dev/stdin > /tmp/2e_pre.txt   <<< "<esta consulta>"
+--   ... aplicar la migracion ...
+--   psql "$DATABASE_URL" -f /dev/stdin > /tmp/2e_post.txt  <<< "<esta consulta>"
+--   diff /tmp/2e_pre.txt /tmp/2e_post.txt   # PASS es salida vacia, codigo 0
+--
+-- QUE MIDE CADA COLUMNA
+--   filas             recuento. Ni una fila creada ni borrada.
+--   huella_ids        el conjunto exacto de ids, no solo cuantos.
+--   huella_contenido  la fila ENTERA menos sort_order, por fila y en orden de id. Es la
+--                     medida fuerte: cubre las columnas que hay hoy y las que se anadan
+--                     manana, sin enumerar ninguna. Ojo, NO es comparable con el valor
+--                     de 11.1: alli las huellas de fila se agregan ordenadas por la
+--                     propia huella (semantica de conjunto) y aqui por id (posicional).
+--                     Cada una se compara consigo misma.
+--   base_calculada    sum(quantity * unit_price).
+--   base_almacenada   sum(subtotal). Las dos sumas son redundantes con la huella de
+--                     contenido y se mantienen a proposito: si algo se rompe, dicen en
+--                     terminos de dinero lo que la huella solo dice en hexadecimal.
+--   huella_canonica   la clasificacion canonica de FASE 2. Las claves se seleccionan por
+--                     patron (canonical%, price_type), no por lista escrita a mano, asi
+--                     que una octava columna canonica entraria sola.
+select count(*)                                                       as filas,
+       md5(coalesce(string_agg(bi.id::text, '|' order by bi.id), ''))  as huella_ids,
+       md5(coalesce(string_agg(md5((to_jsonb(bi) - 'sort_order')::text),
+                               '|' order by bi.id), ''))              as huella_contenido,
+       sum(bi.quantity * bi.unit_price)                                as base_calculada,
+       sum(bi.subtotal)                                                as base_almacenada,
+       md5(coalesce(string_agg(c.huella, '|' order by bi.id), ''))     as huella_canonica
+  from public.budget_items bi
+  cross join lateral (
+    select md5(coalesce((
+             select jsonb_object_agg(k.key, k.value)
+               from jsonb_each(to_jsonb(bi)) k
+              where k.key like 'canonical%' or k.key = 'price_type'
+           )::text, '')) as huella
+  ) c;
+-- BASELINE OBSERVADA 2026-09-01 (referencia informativa, NO criterio de PASS):
+--   filas            = 807
+--   huella_ids       = edb8e516ceb157ee061d19b063fd888c
+--   huella_contenido = 875ae1f830dbb16f5047d2ae35ae164c
+--   base_calculada   = 978511.3000
+--   base_almacenada  = 978511.61
+--   huella_canonica  = 441446a3f26406beda5af38ab3b0de02
+-- Que la medicion PRE del dia del despliegue difiera de esta baseline no es un fallo:
+-- significa que la aplicacion ha seguido viva, que es lo normal. Lo que no puede diferir
+-- es PRE de POST.
