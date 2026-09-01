@@ -1411,7 +1411,12 @@ export function BudgetGenerateProvider({
           subtotal: m.subtotal * marginMultiplier
         }));
 
-        const itemsToInsert = [...partidasToInsert, ...materialsToInsert];
+        // Persist the wizard's own order: partidas first, then materials, each
+        // numbered from zero. The position is assigned before itemsSignature so
+        // the signature represents exactly the rows that will be inserted,
+        // including their persisted sort_order values.
+        const itemsToInsert = [...partidasToInsert, ...materialsToInsert]
+          .map((row, idx) => ({ ...row, sort_order: idx }));
 
         // Rewriting identical rows is the single most disk-expensive thing this
         // wizard does (a full DELETE + INSERT churns dead tuples and WAL), so
@@ -1498,7 +1503,10 @@ export function BudgetGenerateProvider({
         subtotal: m.subtotal * marginMultiplier
       }));
 
-      const itemsToInsert = [...partidasToInsert, ...materialsToInsert];
+      // Same ordering contract as saveDraft: partidas first, then materials,
+      // numbered from zero over the already-filtered rows.
+      const itemsToInsert = [...partidasToInsert, ...materialsToInsert]
+        .map((row, idx) => ({ ...row, sort_order: idx }));
 
       if (itemsToInsert.length > 0) {
         const { error: itemsErr } = await supabase.from("budget_items").insert(itemsToInsert);

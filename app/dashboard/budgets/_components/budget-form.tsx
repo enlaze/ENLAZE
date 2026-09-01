@@ -331,6 +331,11 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
     const selectedClient = clients.find((client) => client.id === selectedClientId);
 
     if (editBudgetId) {
+      // The RPC receives the items already numbered from zero, following the
+      // order the form displays them in. That numbering is the contract: the
+      // array's index is the row's persisted position.
+      const itemsForRpc = partidas.map((p, idx) => ({ ...p, sort_order: idx }));
+
       const { data: updatedBudget, error: updateError } = await supabase.rpc(
         "update_budget_with_items",
         {
@@ -359,7 +364,7 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
             observations,
             conditions_text: conditionsText,
           },
-          p_items: partidas,
+          p_items: itemsForRpc,
         }
       );
 
@@ -433,7 +438,9 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
       return;
     }
 
-    for (const p of partidas) {
+    // Each row is written with its position in the form's order, numbered from
+    // zero, so the insertion sequence stops being the only record of it.
+    for (const [idx, p] of partidas.entries()) {
       await supabase.from("budget_items").insert({
         budget_id: budget.id,
         concept: p.concept,
@@ -443,6 +450,7 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
         category: p.category,
         unit_price: p.unit_price,
         subtotal: p.subtotal,
+        sort_order: idx,
       });
     }
 

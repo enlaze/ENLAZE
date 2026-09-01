@@ -306,7 +306,11 @@ export default function BudgetDetailPage() {
       return;
     }
 
-    for (const item of items) {
+    // The copy is renumbered from zero rather than carrying over the source's
+    // sort_order: the original may be historical, may not have been backfilled,
+    // or may otherwise not yet satisfy the contiguous-from-zero contract, and
+    // the duplicate should satisfy it regardless.
+    for (const [idx, item] of items.entries()) {
       await supabase.from("budget_items").insert({
         budget_id: newB.id,
         concept: item.concept,
@@ -316,6 +320,7 @@ export default function BudgetDetailPage() {
         category: item.category,
         unit_price: item.unit_price,
         subtotal: item.subtotal,
+        sort_order: idx,
       });
     }
 
