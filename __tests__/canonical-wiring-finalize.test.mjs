@@ -37,6 +37,12 @@ const { classifyForPersistence, enrichForPersistence, resolveTenant } = await im
 );
 const { computeBudgetTotals, computeBudgetTotalsFromSubtotal, assertBudgetTotalsConsistent } =
   await import(path.join(root, "lib/budget-totals.ts"));
+// FASE 2D-9. El BLOQUE G ejecuta el sincronizador REAL del borrador, no una imitación:
+// la salida temprana por firma es justo el mecanismo que allí se pone a prueba, y una
+// réplica en el test podría quedar verde mientras la de producción se rompe.
+const { syncClassifiedBudgetItems, persistenceSignature } = await import(
+  path.join(root, "lib/canonical/persist-budget-items.ts")
+);
 
 const providerSrc = fs.readFileSync(
   path.join(root, "app/dashboard/budgets/generate/_components/BudgetGenerateProvider.tsx"),
@@ -1282,6 +1288,473 @@ describe("2D-3 · lo que queda tras finalizar es el INSERT clasificado", () => {
       cuerpo,
       /classifyForPersistence|enrichForPersistence/,
       "saveDraft clasifica saltándose la salida temprana por firma"
+    );
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BLOQUE G — La ventana destructiva de finalizeBudget (casos 23 a 35)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// FASE 2D-9. Lo que se protege aquí es el tramo de `finalizeBudget` que va del DELETE
+// al INSERT. Durante ese tramo `budget_items` no corresponde al estado, y la firma de
+// autoguardado —que acaba de quedar marcada como sincronizada por el `saveDraft(false)`
+// de dos líneas más arriba— estaría MINTIENDO si se dejase intacta.
+//
+// Los dos fallos que esto evita son distintos y ninguno es teórico:
+//
+//   DELETE falla y se ignora  → el INSERT corre sobre una tabla que no se vació, así que
+//                               TODAS las partidas quedan duplicadas en un presupuesto
+//                               que inmediatamente pasa a 'pendiente' y puede irse al
+//                               cliente en PDF. El cuadre no lo ve: mide las líneas en
+//                               memoria, no las que hay en disco.
+//   INSERT falla              → la tabla queda vacía. Si la firma sigue diciendo
+//                               «sincronizado», el siguiente autoguardado del MISMO
+//                               contenido sale temprano y el borrador se queda sin
+//                               partidas hasta que el usuario toque un importe.
+//
+// El escenario ejecuta el sincronizador REAL para el borrador y una réplica fiel del
+// escritor de `finalizeBudget` —no puede ser el propio, porque es un componente de
+// React— con interruptores para APAGAR cada una de las dos correcciones. Esos
+// interruptores son los controles negativos: con ellos encendidos, los casos 24, 27 y
+// 30 describen el comportamiento anterior a esta fase, y son la prueba de que los casos
+// verdes de al lado están verdes por el motivo correcto.
+
+/**
+ * `budget_items` como tabla que se puede escribir, sobre el mismo lector de vocabulario
+ * de siempre. Los fallos son MUTABLES a propósito: hay casos que necesitan encadenar
+ * autoguardado → finalización rota → autoguardado dentro del mismo presupuesto.
+ */
+function escenario() {
+  const tabla = [];
+  const fallos = { deleteError: null, insertError: null };
+  const stats = { deletes: 0, inserts: [] };
+  const lector = fakeSupabase(DB);
+
+  const client = {
+    from(table) {
+      const lectura = lector.client.from(table);
+      return {
+        ...lectura,
+        delete: () => ({
+          eq(column, value) {
+            stats.deletes += 1;
+            // supabase-js NO lanza aquí: resuelve con `{ error }`. Reproducirlo así es
+            // la mitad del test; un doble que lanzase haría pasar el código roto.
+            if (fallos.deleteError) return Promise.resolve({ error: fallos.deleteError });
+            for (let i = tabla.length - 1; i >= 0; i -= 1) {
+              if (tabla[i][column] === value) tabla.splice(i, 1);
+            }
+            return Promise.resolve({ error: null });
+          },
+        }),
+        insert(payload) {
+          const rows = Array.isArray(payload) ? payload : [payload];
+          stats.inserts.push({ table, rows: rows.map((r) => ({ ...r })) });
+          if (fallos.insertError) return Promise.resolve({ error: fallos.insertError });
+          tabla.push(...rows.map((r) => ({ ...r })));
+          return Promise.resolve({ error: null });
+        },
+      };
+    },
+  };
+
+  // El equivalente en el test de `lastSyncedItemsSignature`, con su mismo significado:
+  // una CREENCIA sobre el disco. `null` es «no lo sé», nunca «está vacío».
+  const firma = { current: null };
+
+  const tenant = () => resolveTenant({ data: { user: { id: EMPRESA } }, error: null });
+
+  /** Réplica de `assertPersistedTotalsMatch`, que es local al provider y no se exporta. */
+  function cuadrar(lineas, subtotalMostrado, contexto) {
+    assertBudgetTotalsConsistent(subtotalMostrado, computeBudgetTotals({ lines: lineas }), contexto);
+  }
+
+  /** `saveDraft`: el sincronizador de verdad, con la firma del test como memoria. */
+  async function autoguardar(items, opciones = {}) {
+    const sync = await syncClassifiedBudgetItems({
+      budgetId: PRESUPUESTO_ID,
+      items,
+      previousSignature: firma.current,
+      tenant: tenant(),
+      supabase: client,
+      context: "saveDraft",
+      verifyTotals: (rows) =>
+        cuadrar(
+          rows,
+          opciones.subtotalMostrado ?? computeBudgetTotals({ lines: items }).subtotal,
+          "saveDraft"
+        ),
+    });
+    firma.current = sync.signature;
+    return sync;
+  }
+
+  /**
+   * `finalizeBudget`, paso por paso y en el mismo orden que el provider.
+   *
+   * Interruptores (todos apagados por defecto = comportamiento de 2D-9):
+   *   sinInvalidarFirma       — no invalidar antes del DELETE   (código pre-2D-9)
+   *   ignorandoErrorDeDelete  — descartar el `{ error }` del DELETE (el bug auditado)
+   *   firmaDeLasClasificadas  — firmar con `classifiedItems` en vez de `itemsToInsert`
+   *   subtotalMostrado        — forzar un descuadre entre el DELETE y el INSERT
+   */
+  async function finalizar(items, modo = {}) {
+    const itemsToInsert = items.map((r) => ({ ...r }));
+
+    if (!modo.sinInvalidarFirma) firma.current = null;
+
+    const { error: deleteError } = await client
+      .from("budget_items")
+      .delete()
+      .eq("budget_id", PRESUPUESTO_ID);
+    if (deleteError && !modo.ignorandoErrorDeDelete) throw deleteError;
+
+    const canonicalResult = await enrichForPersistence({
+      items: itemsToInsert,
+      tenant: tenant(),
+      context: "finalizeBudget",
+      supabase: client,
+    });
+    const classifiedItems = canonicalResult.items;
+
+    cuadrar(
+      classifiedItems,
+      modo.subtotalMostrado ?? computeBudgetTotals({ lines: itemsToInsert }).subtotal,
+      "finalizeBudget"
+    );
+
+    if (classifiedItems.length > 0) {
+      const { error: itemsErr } = await client.from("budget_items").insert(classifiedItems);
+      if (itemsErr) throw itemsErr;
+    }
+
+    firma.current = modo.firmaDeLasClasificadas
+      ? persistenceSignature(PRESUPUESTO_ID, classifiedItems)
+      : persistenceSignature(PRESUPUESTO_ID, itemsToInsert);
+
+    return { classifiedItems, report: canonicalResult.report };
+  }
+
+  return { tabla, fallos, stats, client, firma, autoguardar, finalizar };
+}
+
+describe("2D-9 · A — el DELETE falla y la finalización se detiene ahí", () => {
+  test("CASO 23 — error propagado, ningún INSERT, tabla intacta y firma invalidada", async () => {
+    const e = escenario();
+    const entrada = presupuesto();
+
+    await e.autoguardar(entrada);
+    assert.equal(e.tabla.length, 7, "premisa: el borrador ya está en disco");
+    const insertsDelBorrador = e.stats.inserts.length;
+    const antes = e.tabla.map((r) => ({ ...r }));
+
+    e.fallos.deleteError = { message: "could not serialize access due to concurrent update" };
+
+    await assert.rejects(() => e.finalizar(entrada), "el DELETE fallido no detuvo la finalización");
+
+    // 1. No se ha intentado insertar nada. Es lo que impide la duplicación.
+    assert.equal(
+      e.stats.inserts.length,
+      insertsDelBorrador,
+      "se llegó al INSERT sobre una tabla que no se había vaciado"
+    );
+    // 2. La tabla sigue exactamente como estaba: ni duplicados ni pérdidas.
+    assert.deepEqual(e.tabla, antes);
+    // 3. Y la creencia sobre el disco queda invalidada, no «sincronizada».
+    assert.equal(e.firma.current, null, "la firma sigue afirmando que el disco cuadra");
+  });
+
+  test("CASO 23b — el error que sale es el del DELETE, no otro traducido por el camino", async () => {
+    const e = escenario();
+    const entrada = presupuesto();
+    await e.autoguardar(entrada);
+
+    const original = { message: "permission denied for table budget_items", code: "42501" };
+    e.fallos.deleteError = original;
+
+    await assert.rejects(
+      () => e.finalizar(entrada),
+      (thrown) => {
+        assert.equal(thrown, original, "el error del DELETE se sustituyó por otro");
+        return true;
+      }
+    );
+  });
+
+  test("CONTROL NEGATIVO · CASO 24 — volver a ignorar `deleteError` DUPLICA el presupuesto", async () => {
+    // Este caso ejecuta el código anterior a 2D-9. Si alguien quitase el
+    // `if (deleteError) throw deleteError`, el CASO 23 fallaría y este pasaría a
+    // describir producción. Está aquí para que el precio del bug sea un número.
+    const e = escenario();
+    const entrada = presupuesto();
+
+    await e.autoguardar(entrada);
+    const subtotalReal = computeBudgetTotals({ lines: e.tabla }).subtotal;
+
+    e.fallos.deleteError = { message: "could not serialize access due to concurrent update" };
+
+    // Sin las dos correcciones, la finalización termina «bien».
+    await e.finalizar(entrada, { ignorandoErrorDeDelete: true, sinInvalidarFirma: true });
+
+    assert.equal(e.tabla.length, 14, "el control negativo ya no reproduce la duplicación");
+    assert.equal(
+      computeBudgetTotals({ lines: e.tabla }).subtotal,
+      Number((subtotalReal * 2).toFixed(2)),
+      "el presupuesto en disco vale el doble del que se le enseñó al usuario"
+    );
+    // Y nadie se entera: el cuadre miró las líneas en memoria, que eran correctas.
+    assert.equal(e.stats.deletes, 2);
+  });
+});
+
+describe("2D-9 · B — el DELETE funciona y el INSERT falla", () => {
+  test("CASO 25 — error propagado, tabla vacía y firma invalidada", async () => {
+    const e = escenario();
+    const entrada = presupuesto();
+
+    await e.autoguardar(entrada);
+    e.fallos.insertError = { message: "deadlock detected" };
+
+    await assert.rejects(() => e.finalizar(entrada));
+
+    assert.equal(e.tabla.length, 0, "premisa del caso: la tabla se quedó a medias");
+    assert.equal(e.firma.current, null, "la firma dice «sincronizado» sobre una tabla vacía");
+  });
+
+  test("CASO 26 — el siguiente autoguardado del MISMO contenido reintenta y recupera las partidas", async () => {
+    const e = escenario();
+    const entrada = presupuesto();
+
+    await e.autoguardar(entrada);
+    e.fallos.insertError = { message: "deadlock detected" };
+    await assert.rejects(() => e.finalizar(entrada));
+    assert.equal(e.tabla.length, 0);
+
+    // El usuario no toca nada. Se recupera la conexión y el autoguardado vuelve a pasar
+    // con un estado IDÉNTICO al de antes: ni un céntimo distinto.
+    e.fallos.insertError = null;
+    const sync = await e.autoguardar(entrada);
+
+    assert.equal(sync.skipped, false, "salió temprano y dejó el borrador vacío");
+    assert.equal(e.tabla.length, 7, "las partidas no volvieron a disco");
+    assert.deepEqual(
+      e.tabla.map(vistaEconomica),
+      entrada.map(vistaEconomica),
+      "lo reescrito no es lo que había"
+    );
+  });
+
+  test("CONTROL NEGATIVO · CASO 27 — conservar la firma tras el INSERT fallido CONGELA el borrador vacío", async () => {
+    // Sin la invalidación previa al DELETE, `saveDraft(false)` acaba de dejar la firma
+    // marcada para exactamente este contenido, así que el autoguardado siguiente la
+    // compara, la ve igual y no escribe. El presupuesto se queda sin partidas y no las
+    // recupera hasta que el usuario cambie algo.
+    const e = escenario();
+    const entrada = presupuesto();
+
+    await e.autoguardar(entrada);
+    const firmaDelBorrador = e.firma.current;
+
+    e.fallos.insertError = { message: "deadlock detected" };
+    await assert.rejects(() => e.finalizar(entrada, { sinInvalidarFirma: true }));
+
+    assert.equal(e.firma.current, firmaDelBorrador, "el control negativo ya no invalida de menos");
+    assert.equal(e.tabla.length, 0);
+
+    e.fallos.insertError = null;
+    const sync = await e.autoguardar(entrada);
+
+    assert.equal(sync.skipped, true, "el control negativo ya no reproduce la salida temprana");
+    assert.equal(e.tabla.length, 0, "el borrador se quedó vacío y el autoguardado no lo notó");
+  });
+
+  test("CASO 28 — un descuadre entre el DELETE y el INSERT también deja la firma invalidada", async () => {
+    // La TERCERA salida del tramo destructivo, y la que un arreglo estrecho —«comprueba
+    // el deleteError y ya»— se habría dejado fuera: el cuadre corre DESPUÉS del DELETE.
+    // Si lanza, la tabla ya está vacía. Por eso la invalidación va antes de abrir la
+    // ventana y no dentro de los `catch`.
+    const e = escenario();
+    const entrada = presupuesto();
+
+    await e.autoguardar(entrada);
+    const subtotal = computeBudgetTotals({ lines: entrada }).subtotal;
+
+    await assert.rejects(
+      () => e.finalizar(entrada, { subtotalMostrado: subtotal + 0.01 }),
+      (err) => {
+        assert.equal(err.name, "BudgetTotalMismatchError");
+        assert.equal(err.code, "BUDGET_TOTAL_MISMATCH");
+        return true;
+      }
+    );
+
+    assert.equal(e.tabla.length, 0, "el DELETE ya había corrido: ésa es la premisa");
+    assert.equal(e.stats.inserts.length, 1, "se insertó pese al descuadre");
+    assert.equal(e.firma.current, null);
+
+    // Y se puede reintentar: el estado correcto vuelve a disco.
+    const sync = await e.autoguardar(entrada);
+    assert.equal(sync.skipped, false);
+    assert.equal(e.tabla.length, 7);
+  });
+});
+
+describe("2D-9 · C — DELETE e INSERT funcionan: la firma vuelve a ser cierta", () => {
+  test("CASO 29 — la firma final es la de las líneas que el estado aporta, y no es null", async () => {
+    const e = escenario();
+    const entrada = presupuesto();
+
+    await e.autoguardar(entrada);
+    await e.finalizar(entrada);
+
+    assert.notEqual(e.firma.current, null, "quedó invalidada pese a haber ido todo bien");
+    assert.equal(
+      e.firma.current,
+      persistenceSignature(PRESUPUESTO_ID, entrada),
+      "la firma no es la que el siguiente autoguardado calculará desde el estado"
+    );
+  });
+
+  test("CASO 30 — no se introduce un autoguardado extra: el siguiente sale temprano", async () => {
+    const e = escenario();
+    const entrada = presupuesto();
+
+    await e.autoguardar(entrada);
+    await e.finalizar(entrada);
+
+    const insertsAntes = e.stats.inserts.length;
+    const deletesAntes = e.stats.deletes;
+
+    const sync = await e.autoguardar(entrada);
+
+    assert.equal(sync.skipped, true, "reescribe el presupuesto entero justo tras finalizar");
+    assert.equal(e.stats.inserts.length, insertsAntes, "hubo un INSERT de más");
+    assert.equal(e.stats.deletes, deletesAntes, "hubo un DELETE de más");
+    assert.equal(e.tabla.length, 7);
+  });
+
+  test("CONTROL NEGATIVO · CASO 31 — firmar con las líneas CLASIFICADAS reescribiría el presupuesto para siempre", async () => {
+    // La alternativa que parecía más honesta —«firma lo que hay literalmente en disco»—
+    // es la que rompe. `normalizeProvenance` degrada la procedencia al persistir: la
+    // séptima línea del presupuesto es un 'provider' sin `source_ref` y sale (null,
+    // null). Esa firma no la puede reproducir NADIE desde el estado, así que el
+    // presupuesto se reescribe entero en cada autoguardado, para siempre.
+    const e = escenario();
+    const entrada = presupuesto();
+
+    await e.autoguardar(entrada);
+    const { classifiedItems } = await e.finalizar(entrada, { firmaDeLasClasificadas: true });
+
+    // La premisa: las dos fórmulas NO coinciden para este presupuesto.
+    assert.notEqual(
+      persistenceSignature(PRESUPUESTO_ID, classifiedItems),
+      persistenceSignature(PRESUPUESTO_ID, entrada),
+      "el fixture perdió el caso de procedencia degradada y este control ya no prueba nada"
+    );
+    const degradada = classifiedItems[6];
+    assert.equal(degradada.canonical_origin, null);
+    assert.equal(degradada.canonical_source_ref, null);
+
+    const insertsAntes = e.stats.inserts.length;
+    const sync = await e.autoguardar(entrada);
+
+    assert.equal(sync.skipped, false, "el control negativo ya no reproduce la reescritura");
+    assert.equal(e.stats.inserts.length, insertsAntes + 1, "se reescribió el presupuesto entero");
+  });
+});
+
+describe("2D-9 · D — regresión: la finalización sigue escribiendo exactamente lo mismo", () => {
+  test("CASO 32 — mismas siete líneas, mismo orden, misma economía", async () => {
+    const e = escenario();
+    const entrada = presupuesto();
+    const copia = JSON.parse(JSON.stringify(entrada));
+
+    await e.autoguardar(entrada);
+    await e.finalizar(entrada);
+
+    assert.equal(e.tabla.length, 7, "ni una fila de más ni de menos");
+    assert.deepEqual(
+      e.tabla.map((r) => r.concept),
+      copia.map((r) => r.concept),
+      "el orden de las partidas es el del documento"
+    );
+    assert.deepEqual(
+      e.tabla.map(vistaEconomica),
+      copia.map(vistaEconomica),
+      "alguna columna económica cambió al atravesar la ventana destructiva"
+    );
+    assert.equal(
+      computeBudgetTotals({ lines: e.tabla }).subtotal,
+      computeBudgetTotals({ lines: copia }).subtotal
+    );
+    assert.deepEqual(entrada, copia, "la finalización mutó el array del estado");
+  });
+
+  test("CASO 33 — la clasificación canónica es la misma de siempre", async () => {
+    const e = escenario();
+    const entrada = presupuesto();
+
+    await e.autoguardar(entrada);
+    await e.finalizar(entrada);
+
+    assert.deepEqual(
+      e.tabla.map((r) => r.canonical_status),
+      ["resolved", "resolved", "review", "ambiguous", "unmatched", "resolved", "unmatched"]
+    );
+    assert.ok(
+      e.tabla.every((r) => CANONICAL_COLUMN_KEYS.every((k) => k in r)),
+      "alguna fila llegó a disco sin las siete columnas canónicas"
+    );
+  });
+
+  test("CASO 34 — la procedencia que llega a disco respeta las restricciones de la tabla", async () => {
+    const e = escenario();
+    const entrada = presupuesto();
+
+    await e.autoguardar(entrada);
+    await e.finalizar(entrada);
+
+    e.tabla.forEach((row, i) => assertRestriccionesDeProcedencia(row, `fila ${i} tras finalizar`));
+
+    // Y la que era demostrable sigue estando: 2D-9 no toca la procedencia.
+    assert.equal(e.tabla[5].canonical_origin, "import");
+    assert.equal(e.tabla[5].canonical_source_ref, "cype_2026");
+    assert.equal(e.tabla[0].canonical_origin, "ai");
+  });
+});
+
+describe("2D-9 · el orden dentro del provider", () => {
+  test("CASO 35 — invalidar → DELETE comprobado → … → INSERT → restaurar con itemsToInsert", () => {
+    // Complemento estructural, igual que el CASO 22b: la secuencia vive en un componente
+    // de React y no puede ejecutarse desde node:test. El COMPORTAMIENTO ya está probado
+    // arriba; esto sólo ata la réplica del escenario al código real.
+    const cuerpo = providerSrc.slice(providerSrc.indexOf("const finalizeBudget"));
+
+    const iInvalidar = cuerpo.indexOf("lastSyncedItemsSignature.current = null");
+    const iDelete = cuerpo.indexOf('.from("budget_items").delete()');
+    const iComprobacion = cuerpo.indexOf("if (deleteError) throw deleteError;");
+    const iInsert = cuerpo.indexOf('.from("budget_items").insert(classifiedItems)');
+    const iRestaurar = cuerpo.indexOf(
+      "lastSyncedItemsSignature.current = persistenceSignature(budgetId, itemsToInsert)"
+    );
+
+    assert.ok(iInvalidar > 0, "finalizeBudget no invalida la firma en ningún momento");
+    assert.ok(
+      iInvalidar < iDelete,
+      "la firma se invalida después de abrir la ventana destructiva, no antes"
+    );
+    assert.ok(
+      iComprobacion > iDelete && iComprobacion < iInsert,
+      "el `{ error }` del DELETE no se comprueba antes del INSERT"
+    );
+    assert.ok(iRestaurar > iInsert, "la firma se restaura antes de que el INSERT haya terminado");
+
+    // Y se restaura con las líneas que aporta el estado, no con las clasificadas.
+    assert.doesNotMatch(
+      cuerpo,
+      /lastSyncedItemsSignature\.current = persistenceSignature\(budgetId, classifiedItems\)/,
+      "la firma se calcula sobre las clasificadas: ver el CONTROL NEGATIVO del CASO 31"
     );
   });
 });

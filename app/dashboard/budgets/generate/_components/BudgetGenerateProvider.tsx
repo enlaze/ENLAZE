@@ -66,7 +66,10 @@ import {
   resolveTenant,
   type ResolvedTenant,
 } from "@/lib/canonical/finalize-classification";
-import { syncClassifiedBudgetItems } from "@/lib/canonical/persist-budget-items";
+import {
+  persistenceSignature,
+  syncClassifiedBudgetItems,
+} from "@/lib/canonical/persist-budget-items";
 import type { MinimalSupabaseClient } from "@/lib/canonical/registry";
 
 // The v2 price resolver (/api/prices/resolve, resolver_used: "v2") can
@@ -1307,6 +1310,27 @@ export function BudgetGenerateProvider({
   /* ─── Persistencia y Borradores ─── */
   // Fingerprint of the budget_items rows last written to the database, so an
   // unchanged item list never triggers another DELETE + INSERT cycle.
+  //
+  // QUÉ SIGNIFICA EXACTAMENTE (FASE 2D-9). Es una CREENCIA sobre el disco: «la
+  // representación de persistencia que corresponde a este estado ya está escrita en
+  // `budget_items`». `null` significa «no lo sé», nunca «está vacío».
+  //
+  // La huella es la de `persistenceSignature`, calculada sobre las filas TAL Y COMO EL
+  // ESTADO LAS APORTA, antes de clasificar. No sobre las clasificadas. La diferencia no
+  // es cosmética: `normalizeProvenance` puede degradar `canonical_origin` /
+  // `canonical_source_ref` al persistir —un 'provider' sin `source_ref` sale (null,
+  // null)—, así que la firma de las filas clasificadas no siempre coincide con la que el
+  // siguiente autoguardado calculará desde el estado. Guardar la clasificada haría que
+  // esos presupuestos se reescribieran enteros en cada autoguardado para siempre.
+  //
+  // Por eso hay UNA sola fórmula y un solo significado, los de `persistenceSignature`, y
+  // los dos escritores del asistente —`saveDraft` vía `syncClassifiedBudgetItems`, y
+  // `finalizeBudget` por su cuenta— la alimentan con la misma entrada.
+  //
+  // QUIÉN LA MUEVE Y CUÁNDO:
+  //   - `saveDraft`: la avanza sólo cuando el volcado terminó bien.
+  //   - `finalizeBudget`: la INVALIDA antes de abrir su ventana destructiva y la
+  //     restaura sólo cuando el DELETE y el INSERT han terminado los dos.
   const lastSyncedItemsSignature = useRef<string | null>(null);
 
   const saveDraft = async (manual = false): Promise<string | null> => {
@@ -1610,7 +1634,32 @@ export function BudgetGenerateProvider({
       const nextVer = await getNextVersion(supabase, "budget", budgetId);
 
       // 2. Limpiar items antiguos si hubiera (por si era un presupuesto que se volvió a abrir)
-      await supabase.from("budget_items").delete().eq("budget_id", budgetId);
+      //
+      // ── FASE 2D-9. Aquí empieza la ventana destructiva ────────────────────────
+      //
+      // La firma se invalida ANTES del DELETE, no en los `catch`. El motivo es que a
+      // partir de esta línea y hasta que el INSERT termine hay TRES formas de salir mal
+      // —el DELETE falla, `assertPersistedTotalsMatch` lanza, el INSERT falla—, y sólo
+      // la primera y la tercera son previsibles. Invalidar aquí cubre también la
+      // segunda, y cubrirá la cuarta que alguien añada en medio sin acordarse de esto.
+      //
+      // Sin esta línea el fallo era mudo y permanente: `saveDraft(false)`, unas líneas
+      // más arriba, acaba de dejar `lastSyncedItemsSignature` marcada como sincronizada
+      // para EXACTAMENTE este contenido. Si la sustitución se rompe a mitad, la tabla
+      // queda vacía y el siguiente autoguardado del mismo estado compara firmas, las ve
+      // iguales y sale temprano: el borrador se queda sin partidas y no las recupera
+      // hasta que el usuario toque un importe. Es el mismo modo de fallo "congelado"
+      // que documenta `persist-budget-items.ts`, por el otro camino.
+      lastSyncedItemsSignature.current = null;
+
+      // Y el resultado del DELETE se COMPRUEBA. supabase-js no lanza aquí: resuelve con
+      // `{ error }`. Ignorarlo permitía seguir hasta el INSERT sobre una tabla que no se
+      // había vaciado, es decir, DUPLICAR todas las partidas de un presupuesto que
+      // inmediatamente después pasa a 'pendiente' y puede irse al cliente en PDF. El
+      // cuadre de más abajo no lo veía, porque mide las líneas en memoria, no las que
+      // hay en disco.
+      const { error: deleteError } = await supabase.from("budget_items").delete().eq("budget_id", budgetId);
+      if (deleteError) throw deleteError;
 
       // 3. Insertar las partidas reales
       const partidasToInsert = state.partidas.filter(p => p.status !== "opcional").map(p => ({
@@ -1717,6 +1766,30 @@ export function BudgetGenerateProvider({
         const { error: itemsErr } = await supabase.from("budget_items").insert(classifiedItems);
         if (itemsErr) throw itemsErr;
       }
+
+      // ── FASE 2D-9. Aquí se cierra la ventana destructiva ──────────────────────
+      //
+      // El DELETE y el INSERT han terminado los dos, así que `budget_items` vuelve a
+      // corresponder al estado y la creencia puede restaurarse. Cualquier salida por
+      // `throw` de las de arriba se salta esta línea y deja la firma en `null`: eso es
+      // lo que hace que el siguiente autoguardado del MISMO contenido no salga temprano
+      // y vuelva a intentar la escritura en vez de perderla en silencio.
+      //
+      // La entrada es `itemsToInsert`, no `classifiedItems`, y es deliberado: es la
+      // misma que `syncClassifiedBudgetItems` le pasa a `persistenceSignature` en el
+      // borrador. Con las clasificadas, un presupuesto cuya procedencia se degrada al
+      // normalizar (un 'provider' sin `source_ref`, por ejemplo) produciría una firma
+      // que el siguiente autoguardado nunca podría reproducir desde el estado, y se
+      // reescribiría entero cada vez. Ver la nota de `lastSyncedItemsSignature`.
+      //
+      // Va aquí y no después del UPDATE de `budgets` porque la firma describe
+      // `budget_items` y nada más: si el UPDATE de la cabecera fallase, las partidas
+      // seguirían estando bien escritas y volver a volcarlas no arreglaría nada.
+      //
+      // Fuera del `if` a propósito: un presupuesto sin partidas no ejecuta INSERT, pero
+      // el DELETE sí ha corrido y la tabla está vacía, que es exactamente lo que la
+      // firma de una lista vacía significa.
+      lastSyncedItemsSignature.current = persistenceSignature(budgetId, itemsToInsert);
 
       // 4. Actualizar el estado a pendiente y la versión
       const { error: upErr } = await supabase.from("budgets").update({
