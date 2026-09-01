@@ -543,13 +543,20 @@ export async function classifyForPersistence<T extends ClassifiableLine>(
  * esperado y no una señal de avería. El transporte de `canonical_origin` y
  * `canonical_source_ref` está puesto igualmente, para el día que sí se sellen.
  *
- * La duplicación de presupuestos no está en esta lista porque sigue sin clasificar.
+ * `duplicateBudget` (FASE 2D-8) es el único cuyas líneas NO nacen aquí: son la copia de
+ * las partidas de un presupuesto que ya existía. Por eso transporta la procedencia del
+ * original en lugar de inventarla —duplicar no vuelve a nacer una línea— y por eso
+ * tampoco pasa `defaultOrigin`. Las cinco columnas derivadas sí se recalculan: una
+ * clasificación vieja es un veredicto emitido contra el vocabulario canónico de otro
+ * momento, y en las filas anteriores a la Fase 2 ni siquiera es un veredicto, es el
+ * default `unmatched` de la columna.
  */
 export type CanonicalPersistenceContext =
   | "saveDraft"
   | "finalizeBudget"
   | "editBudget"
-  | "createBudget";
+  | "createBudget"
+  | "duplicateBudget";
 
 export interface EnrichForPersistenceOptions<T extends ClassifiableLine> {
   items: readonly T[];

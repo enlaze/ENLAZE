@@ -18,7 +18,25 @@ import Loading from "@/components/ui/loading";
 import Breadcrumbs from "@/components/ui/breadcrumbs";
 import Link from "next/link";
 import { normalizeBudgetItemUnit } from "@/lib/budget-units";
+import { computeBudgetTotals, assertBudgetTotalsConsistent } from "@/lib/budget-totals";
+import {
+  enrichForPersistence,
+  resolveTenant,
+  type ResolvedTenant,
+} from "@/lib/canonical/finalize-classification";
+import type { MinimalSupabaseClient } from "@/lib/canonical/registry";
+import { isResolutionOrigin } from "@/lib/types/canonical";
 
+/**
+ * Lo que esta pantalla necesita de una partida.
+ *
+ * Las dos columnas canónicas APORTADAS están aquí porque la duplicación tiene que
+ * transportarlas: la copia de una partida nacida `ai` sigue siendo, en origen, una
+ * partida `ai`. Las cinco DERIVADAS (`canonical_id`, `canonical_status`,
+ * `canonical_confidence`, `canonical_source`, `price_type`) NO están, y no es un
+ * olvido: se derivan al persistir, no se transportan, y meterlas en el estado de React
+ * las convertiría en una fuente de verdad paralela a la del clasificador.
+ */
 interface BudgetItem {
   id: string;
   concept: string;
@@ -28,6 +46,8 @@ interface BudgetItem {
   category: string;
   unit_price: number;
   subtotal: number;
+  canonical_origin?: string | null;
+  canonical_source_ref?: string | null;
 }
 
 interface Budget {
@@ -165,7 +185,24 @@ export default function BudgetDetailPage() {
         client_phone: b.client_phone || selectedClient?.phone || "",
       } as Budget;
       setBudget(hydratedBudget);
-      setItems(bi || []);
+      // Proyección explícita. El `select("*")` trae las siete columnas canónicas, y
+      // volcarlas enteras al estado metería las cinco DERIVADAS en React como si fueran
+      // una fuente de verdad. Se derivan al persistir; aquí sólo entra lo que esta
+      // pantalla pinta y lo que la duplicación tiene que transportar.
+      setItems(
+        (bi || []).map((row: Record<string, unknown>) => ({
+          id: String(row.id ?? ""),
+          concept: String(row.concept ?? ""),
+          description: String(row.description ?? ""),
+          quantity: Number(row.quantity ?? 0),
+          unit: String(row.unit ?? ""),
+          category: String(row.category ?? ""),
+          unit_price: Number(row.unit_price ?? 0),
+          subtotal: Number(row.subtotal ?? 0),
+          canonical_origin: (row.canonical_origin as string | null) ?? null,
+          canonical_source_ref: (row.canonical_source_ref as string | null) ?? null,
+        })),
+      );
       if (selectedClient) {
         void supabase
           .from("budgets")
@@ -263,6 +300,82 @@ export default function BudgetDetailPage() {
 
   async function duplicateBudget() {
     if (!budget) return;
+
+    // ── FASE 2D-8. Enriquecimiento canónico OBSERVADOR en la DUPLICACIÓN ─────────
+    //
+    // ALCANCE: la duplicación de un presupuesto desde su ficha, y nada más. Este
+    // camino insertaba las partidas copiadas con sólo las ocho columnas económicas,
+    // así que las siete canónicas se perdían en cada copia. Ahora pasa por la misma
+    // capa que el resto de escrituras. No clasifica por su cuenta: delega.
+    //
+    // PROCEDENCIA: se TRANSPORTAN `canonical_origin` y `canonical_source_ref` del
+    // original. Duplicar no vuelve a nacer una línea; la copia de una partida nacida
+    // `ai` sigue teniendo ese origen. Por eso NO se pasa `defaultOrigin`: inventar
+    // aquí una procedencia sería afirmar algo que nadie ha comprobado.
+    //
+    // LAS CINCO DERIVADAS SÍ SE RECALCULAN. Copiarlas de la fila vieja importaría un
+    // veredicto emitido contra el vocabulario canónico de otro momento; y en las filas
+    // anteriores a la Fase 2 ese `unmatched` ni siquiera es un veredicto, es el default
+    // de la columna. Se derivan al persistir, como en los otros cuatro writers.
+    const partidasCopiadas = items.map((item) => ({
+      concept: item.concept,
+      description: item.description,
+      quantity: item.quantity,
+      unit: normalizeBudgetItemUnit(item.unit),
+      category: item.category,
+      unit_price: item.unit_price,
+      subtotal: item.subtotal,
+      // El origen llega de la base de datos como texto libre. Se valida aquí en vez de
+      // fingir que el tipo lo garantiza; un valor no reconocido degrada a null, que es
+      // exactamente lo que `normalizeProvenance` haría con él después.
+      canonical_origin: isResolutionOrigin(item.canonical_origin) ? item.canonical_origin : null,
+      canonical_source_ref: item.canonical_source_ref ?? null,
+    }));
+
+    // La economía del ORIGINAL, recalculada desde sus propias líneas.
+    //
+    // La referencia NO es `budget.subtotal`. Ese campo y la suma de las líneas no
+    // cuadran en los presupuestos anteriores al contrato de totales v2 —guardaban los
+    // materiales como líneas económicas además de las partidas—, y como el cuadre se
+    // exige con delta cero, gatear contra él dejaría sin poder duplicarse a casi todo
+    // lo que hay. Ese descuadre es una deuda heredada que la duplicación no creó y no
+    // le toca arreglar: la copia hereda la economía del original tal cual.
+    //
+    // Lo que esta guarda sí protege es lo único que la capa canónica podría romper:
+    // que clasificar no altere cantidades ni precios unitarios.
+    const economiaOriginal = computeBudgetTotals({ lines: partidasCopiadas });
+
+    let duplicateTenant: ResolvedTenant;
+    try {
+      duplicateTenant = resolveTenant(await supabase.auth.getUser());
+    } catch (authErr) {
+      duplicateTenant = resolveTenant({ error: authErr });
+    }
+
+    const duplicateResult = await enrichForPersistence({
+      items: partidasCopiadas,
+      tenant: duplicateTenant,
+      context: "duplicateBudget",
+      supabase: supabase as unknown as MinimalSupabaseClient,
+    });
+    const partidasClasificadas = duplicateResult.items;
+
+    // El assert lanza. Un throw sin capturar dentro de un onClick no lo ve nadie, así
+    // que se traduce a un aviso y se aborta ANTES de crear el presupuesto: si la copia
+    // no es económicamente idéntica al original, no se escribe nada en ningún sitio.
+    try {
+      assertBudgetTotalsConsistent(
+        economiaOriginal.subtotal,
+        computeBudgetTotals({ lines: partidasClasificadas }),
+        "duplicateBudget",
+      );
+    } catch (mismatch) {
+      toast.error("No se pudo duplicar: los importes de la copia no coinciden con el original", {
+        description: mismatch instanceof Error ? mismatch.message : undefined,
+      });
+      return;
+    }
+
     const year = new Date().getFullYear();
     const rand = Math.floor(10000 + Math.random() * 90000);
     const newNumber = `PRE-${year}-${rand}`;
@@ -306,17 +419,37 @@ export default function BudgetDetailPage() {
       return;
     }
 
-    for (const item of items) {
-      await supabase.from("budget_items").insert({
-        budget_id: newB.id,
-        concept: item.concept,
-        description: item.description,
-        quantity: item.quantity,
-        unit: normalizeBudgetItemUnit(item.unit),
-        category: item.category,
-        unit_price: item.unit_price,
-        subtotal: item.subtotal,
-      });
+    // Un solo INSERT, no uno por partida.
+    //
+    // El bucle anterior hacía N viajes y tiraba cada `{ error }` sin mirarlo: una copia
+    // podía quedarse a medias —unas partidas dentro, otras no— sin que nadie se
+    // enterase. Un único statement es all-or-nothing DENTRO de `budget_items`: o entran
+    // todas las filas o no entra ninguna.
+    //
+    // LO QUE ESTO NO ES: la duplicación completa no es transaccional. La fila de
+    // `budgets` ya se insertó arriba, en otra operación. Si este INSERT falla, la copia
+    // puede quedarse creada y vacía. Se avisa y se navega a ella para que el usuario lo
+    // vea, en vez de fingir que la duplicación terminó bien.
+    //
+    // No se compensa con un DELETE desde el cliente: borrar en nombre del usuario a
+    // partir de un error que no se ha podido inspeccionar es peor que dejar una copia
+    // vacía y visible.
+    //
+    // DEUDA TÉCNICA, fuera del alcance de 2D-8: cerrar las dos escrituras en una RPC
+    // transaccional del lado de PostgreSQL, como ya hace la edición con
+    // `update_budget_with_items`.
+    if (partidasClasificadas.length > 0) {
+      const { error: itemsError } = await supabase
+        .from("budget_items")
+        .insert(partidasClasificadas.map((row) => ({ ...row, budget_id: newB.id })));
+
+      if (itemsError) {
+        toast.error("El presupuesto se duplicó, pero las partidas no se copiaron", {
+          description: itemsError.message || "Ábrelo y vuelve a añadirlas desde la edición.",
+        });
+        router.push(`/dashboard/budgets/${newB.id}`);
+        return;
+      }
     }
 
     router.push(`/dashboard/budgets/${newB.id}`);

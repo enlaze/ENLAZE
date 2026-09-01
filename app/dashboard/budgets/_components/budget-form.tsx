@@ -480,9 +480,8 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
     // clasificador sí hubiese mirado y no hubiese sabido resolver. Eso no es un metadato
     // que falte: es un metadato que MIENTE, y el backfill no puede separar los dos casos.
     //
-    // SIGUE HABIENDO otro escritor directo sin cablear, el de la duplicación de
-    // presupuestos (`app/dashboard/budgets/[id]/page.tsx`), con exactamente el mismo
-    // defecto. Es trabajo de una fase posterior; esto no lo cubre.
+    // La duplicación de presupuestos (`app/dashboard/budgets/[id]/page.tsx`) tenía
+    // exactamente el mismo defecto. Se cableó aparte, en 2D-8; esta fase no la cubría.
     //
     // La proyección a fila de tabla se hace ANTES de clasificar, y no en el `.insert()`
     // como hasta ahora. El motivo es la unidad: la que se persiste es la normalizada, y

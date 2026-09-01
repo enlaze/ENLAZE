@@ -29,6 +29,7 @@
     "test:wiring-savedraft": "node --import tsx --test __tests__/canonical-wiring-savedraft.test.mjs",
     "test:edit-rpc": "node --import tsx --test __tests__/canonical-wiring-edit-rpc.test.mjs",
     "test:wiring-create": "node --import tsx --test __tests__/canonical-wiring-create-budget.test.mjs",
+    "test:wiring-duplicate": "node --import tsx --test __tests__/canonical-wiring-duplicate-budget.test.mjs",
     "test:migration-tx": "node --test __tests__/migration-transaction-control.test.mjs",
     "test:money": "node --import tsx --test __tests__/money.test.mjs",
     "test:scheduled": "node --import tsx --test __tests__/scheduled-messages.test.mjs",

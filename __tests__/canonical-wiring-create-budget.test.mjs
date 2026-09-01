@@ -6,8 +6,8 @@
  * y ni una sola canónica. Esto la pone a la altura de las otras tres.
  *
  * NO cubre la duplicación de presupuestos (`app/dashboard/budgets/[id]/page.tsx`), que
- * sigue escribiendo en `budget_items` sin pasar por la capa canónica y con el mismo
- * defecto. Queda para una fase posterior, aparte. Esta suite no dice nada sobre ella.
+ * tenía el mismo defecto y se cableó aparte en 2D-8. Su suite es
+ * `canonical-wiring-duplicate-budget.test.mjs`; ésta no dice nada sobre ella.
  *
  * Por qué eso era un defecto y no una carencia: las siete columnas tienen valores por
  * defecto en la tabla, así que la fila no salía vacía, salía `unmatched` con procedencia
