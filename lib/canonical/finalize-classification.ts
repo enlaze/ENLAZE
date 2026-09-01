@@ -531,11 +531,25 @@ export async function classifyForPersistence<T extends ClassifiableLine>(
  * existe. Un informe degradado significa cosas diferentes en cada uno, y sin la
  * etiqueta serían indistinguibles en el log.
  *
- * `editBudget` (FASE 2D-5) es además el único de los tres cuya escritura no la hace
+ * `editBudget` (FASE 2D-5) es además el único de los cuatro cuya escritura no la hace
  * el cliente: enriquece las filas aquí y se las entrega a la RPC
  * `update_budget_with_items`, que hace el DELETE + INSERT dentro de PostgreSQL.
+ *
+ * `createBudget` (FASE 2D-7) es la otra mitad del formulario clásico: el alta MANUAL de
+ * un presupuesto que todavía no existe. Se distingue de `editBudget` en que no hay nada
+ * que borrar antes de escribir, y en que sus filas NACEN aquí: mientras nadie selle la
+ * procedencia en el alta —hoy no lo hace ni el buscador del banco de precios—, todas
+ * llegan sin origen y salen `unmatched`. Un `unmatched` masivo en este contexto es lo
+ * esperado y no una señal de avería. El transporte de `canonical_origin` y
+ * `canonical_source_ref` está puesto igualmente, para el día que sí se sellen.
+ *
+ * La duplicación de presupuestos no está en esta lista porque sigue sin clasificar.
  */
-export type CanonicalPersistenceContext = "saveDraft" | "finalizeBudget" | "editBudget";
+export type CanonicalPersistenceContext =
+  | "saveDraft"
+  | "finalizeBudget"
+  | "editBudget"
+  | "createBudget";
 
 export interface EnrichForPersistenceOptions<T extends ClassifiableLine> {
   items: readonly T[];

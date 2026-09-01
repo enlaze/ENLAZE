@@ -472,6 +472,81 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
       return;
     }
 
+    // ── FASE 2D-7. Enriquecimiento canónico OBSERVADOR en el ALTA manual ────────
+    //
+    // ALCANCE: el alta manual del formulario clásico, y nada más. Hasta aquí esta rama
+    // metía filas en `budget_items` sin pasar por la capa canónica: nacían con las siete
+    // columnas a su valor por defecto de la tabla, indistinguibles de una fila que el
+    // clasificador sí hubiese mirado y no hubiese sabido resolver. Eso no es un metadato
+    // que falte: es un metadato que MIENTE, y el backfill no puede separar los dos casos.
+    //
+    // SIGUE HABIENDO otro escritor directo sin cablear, el de la duplicación de
+    // presupuestos (`app/dashboard/budgets/[id]/page.tsx`), con exactamente el mismo
+    // defecto. Es trabajo de una fase posterior; esto no lo cubre.
+    //
+    // La proyección a fila de tabla se hace ANTES de clasificar, y no en el `.insert()`
+    // como hasta ahora. El motivo es la unidad: la que se persiste es la normalizada, y
+    // si se normalizase después, el clasificador habría mirado una fila que no es la que
+    // acaba en disco. Fuera de eso la proyección es la de siempre, clave por clave:
+    // ni se añade `chapter`, ni se reordena, ni se recalcula ningún importe.
+    //
+    // `budget_id` no está aquí porque todavía no existe: se añade justo en el INSERT,
+    // cuando la fila de `budgets` ya tiene identidad. No participa en la clasificación
+    // —`ClassifiableLine` sólo necesita el concepto y la procedencia— así que añadirlo
+    // después no cambia nada de lo que se decidió antes.
+    const nuevasPartidas = partidas.map((p) => ({
+      concept: p.concept,
+      description: p.description,
+      quantity: p.quantity,
+      unit: normalizeBudgetItemUnit(p.unit),
+      category: p.category,
+      unit_price: p.unit_price,
+      subtotal: p.subtotal,
+      // Transporte, no nacimiento. En un alta estas dos vienen siempre vacías —este
+      // formulario no SELLA procedencia, ni siquiera cuando la partida se rellena desde
+      // el buscador del banco de precios— y NULL es exactamente lo que consta. Se
+      // copian igualmente para que el día que alguien sí las selle aquí, lleguen solas.
+      canonical_origin: p.canonical_origin ?? null,
+      canonical_source_ref: p.canonical_source_ref ?? null,
+    }));
+
+    // Mismo tratamiento que en la edición: si `getUser()` devolvió error, el `user` que
+    // venga con él no es una identidad verificada y no puede acabar filtrando el
+    // snapshot. Una excepción se traduce a `{ error }` y cae en esa misma rama.
+    let createTenant: ResolvedTenant;
+    try {
+      createTenant = resolveTenant(await supabase.auth.getUser());
+    } catch (authErr) {
+      createTenant = resolveTenant({ error: authErr });
+    }
+
+    // No lanza por contrato. Si el snapshot se avería, si el clasificador lanza o si
+    // devuelve algo que ya no son las líneas que recibió, salen las ORIGINALES y
+    // `unmatched`, y el presupuesto se crea igual. La fase 2 observa; no bloquea.
+    //
+    // Sin `defaultOrigin` a propósito: inventar aquí un `free_text` sería declarar un
+    // nacimiento que nadie ha sellado.
+    const createResult = await enrichForPersistence({
+      items: nuevasPartidas,
+      tenant: createTenant,
+      context: "createBudget",
+      supabase: supabase as unknown as MinimalSupabaseClient,
+    });
+    const classifiedNuevas = createResult.items;
+
+    // Puerta de cuadre ANTES de crear la fila de `budgets`, no después.
+    //
+    // En la edición el orden da igual, porque allí lo único que escribe es la RPC del
+    // final. Aquí no: si esto lanzase después del INSERT de `budgets`, un descuadre
+    // dejaría en la base un presupuesto huérfano y sin partidas, creado por una
+    // operación que se consideró fallida. Con este orden, un descuadre económico real
+    // no llega a escribir absolutamente nada.
+    assertBudgetTotalsConsistent(
+      subtotal,
+      computeBudgetTotals({ lines: classifiedNuevas }),
+      "createBudget",
+    );
+
     const year = new Date().getFullYear();
     const randArray = new Uint32Array(1);
     crypto.getRandomValues(randArray);
@@ -519,17 +594,47 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
       return;
     }
 
-    for (const p of partidas) {
-      await supabase.from("budget_items").insert({
-        budget_id: budget.id,
-        concept: p.concept,
-        description: p.description,
-        quantity: p.quantity,
-        unit: normalizeBudgetItemUnit(p.unit),
-        category: p.category,
-        unit_price: p.unit_price,
-        subtotal: p.subtotal,
-      });
+    // Un solo INSERT, no uno por partida.
+    //
+    // El bucle anterior tenía dos defectos que se arreglan juntos porque son el mismo:
+    // hacía N viajes de red donde basta uno, y sobre todo DESCARTABA el resultado de
+    // cada uno. supabase-js no lanza en estos casos, resuelve con `{ error }`, así que
+    // un fallo a mitad de bucle dejaba en la base un presupuesto con ALGUNAS de sus
+    // partidas, sin aviso y sin nada en la consola. Un único statement es all-or-nothing
+    // DENTRO de `budget_items`: entran las líneas todas o ninguna, y el error se ve.
+    //
+    // LO QUE ESTO NO ES: la creación completa no es transaccional. La fila de `budgets`
+    // se insertó unas líneas más arriba, en otra operación y sin posibilidad de deshacerla
+    // desde aquí, así que si este INSERT falla queda un presupuesto padre creado y sin
+    // ninguna partida. No se compensa con un DELETE de cliente: un borrado que a su vez
+    // puede fallar —o que puede correr con el usuario ya navegando— no da atomicidad,
+    // sólo añade un segundo modo de fallo y el riesgo de borrar lo que no toca.
+    //
+    // DEUDA TÉCNICA, fuera del alcance de 2D-7: la forma correcta de cerrarlo es una RPC
+    // `create_budget_with_items` que haga el INSERT del presupuesto y el de sus partidas
+    // dentro de una única transacción de PostgreSQL, igual que `update_budget_with_items`
+    // hace con el DELETE + INSERT de la edición. Requiere migración y contrato nuevo.
+    if (classifiedNuevas.length > 0) {
+      const { error: itemsError } = await supabase
+        .from("budget_items")
+        .insert(classifiedNuevas.map((row) => ({ ...row, budget_id: budget.id })));
+
+      if (itemsError) {
+        // Se avisa Y se sale por una rama distinta. Lo que NO se hace es seguir como si
+        // el guardado hubiese ido bien: `analytics.budgetCreated` describe un alta manual
+        // completa, y contar aquí una que se quedó sin ninguna partida ensucia el embudo
+        // con un éxito que no existió.
+        //
+        // Se navega igualmente al presupuesto creado —quedarse en el formulario invitaría
+        // a volver a pulsar Guardar y crear un SEGUNDO presupuesto vacío— y desde ahí el
+        // usuario puede añadir las partidas editando.
+        toast.error("El presupuesto se creó, pero las partidas no se guardaron", {
+          description: itemsError.message || "Vuelve a añadirlas desde la edición.",
+        });
+        setSaving(false);
+        router.push("/dashboard/budgets/" + budget.id);
+        return;
+      }
     }
 
     analytics.budgetCreated("manual", serviceType);

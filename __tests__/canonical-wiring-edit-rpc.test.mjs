@@ -760,10 +760,21 @@ describe("2D-5 · E — el cliente no escribe: escribe PostgreSQL", () => {
     );
   });
 
-  test("CASO 24 — el segundo escritor directo del formulario sigue intacto (queda para 2D-7)", () => {
-    // El bucle de creación inserta partidas fila a fila y NO se toca en esta fase.
-    // Este test no lo aprueba: fija que sigue ahí, para que 2D-7 encuentre lo que espera.
-    assert.match(formSrc, /for \(const p of partidas\) \{[\s\S]*?from\("budget_items"\)\.insert\(/);
+  test("CASO 24 — el segundo escritor directo del formulario ya está cableado (2D-7)", () => {
+    // Hasta 2D-7 el alta insertaba partidas fila a fila y sin clasificar, y este caso
+    // fijaba ese bucle para que la fase siguiente encontrase lo que esperaba. Ya no
+    // existe: el alta enriquece y escribe de una vez. Aquí sólo se comprueba que no ha
+    // vuelto; lo que ese camino hace de verdad lo mide
+    // `__tests__/canonical-wiring-create-budget.test.mjs`.
+    assert.doesNotMatch(
+      formCodigo,
+      /for \(const p of partidas\) \{[\s\S]*?from\("budget_items"\)\.insert\(/,
+      "ha vuelto el INSERT fila a fila sin clasificar del alta",
+    );
+    assert.ok(
+      formCodigo.includes('context: "createBudget"'),
+      "el alta ya no declara el contexto canónico createBudget",
+    );
   });
 });
 
