@@ -1,0 +1,719 @@
+{
+  "schema_version": 1,
+  "generado_en": "2026-08-31",
+  "fase": "2D-5b — reconciliación del historial de migraciones",
+  "proyecto_supabase": "dsgnymebkxxkslyeotee",
+  "techo_remoto_al_archivar": "20260825094545",
+  "descripcion": "Inventario de las migraciones locales retiradas de `supabase/migrations/` y movidas aquí. Ninguna se ha borrado. Ninguna se ha convertido todavía en migración nueva. Este directorio NO lo lee el CLI de Supabase: es documentación.",
+  "invariante": "Regla estable, sin cifras vivas: (1) `supabase/migrations/` debe contener un fichero para cada versión registrada en `supabase_migrations.schema_migrations`; (2) toda migración nueva debe llevar una versión posterior al techo remoto vigente en ese momento; (3) ningún fichero de este directorio puede volver a `supabase/migrations/`, porque todas sus versiones son anteriores al techo remoto del momento del archivado y su reintroducción rompería la reconciliación del CLI. El inventario vigente de aplicadas y pendientes no se declara aquí: se obtiene siempre con `supabase migration list`.",
+  "resumen": {
+    "total": 47,
+    "applied": 27,
+    "partial": 6,
+    "pending": 2,
+    "indeterminate": 12
+  },
+  "leyenda_production_state": {
+    "applied": "Todos los objetos declarados existen en producción. Sólo historia; no reaplicar.",
+    "partial": "Parte de los objetos existen y parte no. Necesita migración de reconciliación acotada a lo ausente.",
+    "pending": "Ningún objeto declarado existe en producción. Migración genuinamente no aplicada.",
+    "indeterminate": "No decidible por catálogo (políticas RLS, semillas de datos, redefiniciones). Requiere auditoría manual antes de tocar nada."
+  },
+  "migraciones": [
+    {
+      "original_filename": "20260417_add_client_email_to_budgets.sql",
+      "parsed_version": "20260417",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 1143,
+      "md5": "02ec7739b221411e18243f938e2a0d56",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260417) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260418_align_budgets_client_snapshot.sql",
+      "parsed_version": "20260418",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 2390,
+      "md5": "9135a0d6e0b187152e302476e9306254",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260418) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260418_align_budgets_full_schema.sql",
+      "parsed_version": "20260418",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 5764,
+      "md5": "3b2b054424868134a038a906ef15dce4",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260418) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260418_relax_budgets_status_and_add_compliance.sql",
+      "parsed_version": "20260418",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 4575,
+      "md5": "048af8da765e2235b7cfa816f97b60d8",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260418) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260420_retail_price_bank.sql",
+      "parsed_version": "20260420",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 12254,
+      "md5": "01b6193bf1f7baab17f4c9fe5d153a81",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260420) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260422_agent_connections.sql",
+      "parsed_version": "20260422",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 1609,
+      "md5": "91749cd145388b0b5839c7f9c7805af5",
+      "production_state": "partial",
+      "reason_archived": "Migración local aplicada SÓLO EN PARTE en producción (1 de 2 objetos ausentes) y sin fila en `supabase_migrations.schema_migrations`. Su versión (20260422) está por debajo del techo remoto, así que bloquearía la reconciliación del CLI.",
+      "evidence": {
+        "objetos_ausentes_contados": 1,
+        "objetos_declarados": 2,
+        "objetos_ausentes": [
+          "handle_updated_at (trigger/función)"
+        ]
+      },
+      "future_action": "PARCIAL. Requiere una migración de reconciliación que cree ÚNICAMENTE los objetos ausentes listados, con guardas de idempotencia, y con timestamp posterior al último remoto. Reaplicar el fichero entero sería incorrecto. NO se convierte todavía."
+    },
+    {
+      "original_filename": "20260512_add_wizard_state_to_budgets.sql",
+      "parsed_version": "20260512",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 364,
+      "md5": "2c22a3654b826b1ebefd90949af919b1",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260512) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260517_agent_data_rls.sql",
+      "parsed_version": "20260517",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 2888,
+      "md5": "0542e70141bdec2c1ff4a2ba6dc74f70",
+      "production_state": "indeterminate",
+      "reason_archived": "Migración local sin fila en `supabase_migrations.schema_migrations` cuya aplicación NO puede decidirse por catálogo. Su versión (20260517) está por debajo del techo remoto, así que bloquearía la reconciliación del CLI.",
+      "evidence": {
+        "motivo": "Sólo declara políticas RLS; el nombre de política no basta para probar que la definición vigente sea ésta."
+      },
+      "future_action": "INDETERMINADO. Antes de decidir nada hay que auditar en producción el efecto concreto (definición vigente de la política/constraint, o presencia de los datos) y sólo entonces decidir entre descartar o escribir una migración idempotente nueva. NO se convierte todavía."
+    },
+    {
+      "original_filename": "20260517_backfill_suppliers.sql",
+      "parsed_version": "20260517",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 789,
+      "md5": "a0d1cf3164d9e782e5d91ef49fb5681b",
+      "production_state": "indeterminate",
+      "reason_archived": "Migración local sin fila en `supabase_migrations.schema_migrations` cuya aplicación NO puede decidirse por catálogo. Su versión (20260517) está por debajo del techo remoto, así que bloquearía la reconciliación del CLI.",
+      "evidence": {
+        "motivo": "Sólo hace UPDATE/INSERT de datos: no deja objeto de catálogo que permita comprobar si corrió."
+      },
+      "future_action": "INDETERMINADO. Antes de decidir nada hay que auditar en producción el efecto concreto (definición vigente de la política/constraint, o presencia de los datos) y sólo entonces decidir entre descartar o escribir una migración idempotente nueva. NO se convierte todavía."
+    },
+    {
+      "original_filename": "20260519_align_budget_items_schema.sql",
+      "parsed_version": "20260519",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 2392,
+      "md5": "87c73a26104e65f863b1be6e27666b17",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260519) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260519_drop_service_type_check.sql",
+      "parsed_version": "20260519",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 1153,
+      "md5": "e693f758cc05f376497dc06c21b8dde4",
+      "production_state": "indeterminate",
+      "reason_archived": "Migración local sin fila en `supabase_migrations.schema_migrations` cuya aplicación NO puede decidirse por catálogo. Su versión (20260519) está por debajo del techo remoto, así que bloquearía la reconciliación del CLI.",
+      "evidence": {
+        "motivo": "Comprueba la AUSENCIA de un constraint. La ausencia hoy es compatible con que corriera esta migración o con que el constraint nunca existiera."
+      },
+      "future_action": "INDETERMINADO. Antes de decidir nada hay que auditar en producción el efecto concreto (definición vigente de la política/constraint, o presencia de los datos) y sólo entonces decidir entre descartar o escribir una migración idempotente nueva. NO se convierte todavía."
+    },
+    {
+      "original_filename": "20260520_flexible_unit_check.sql",
+      "parsed_version": "20260520",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 757,
+      "md5": "39559037c6f0ac34863cb7458e617422",
+      "production_state": "indeterminate",
+      "reason_archived": "Migración local sin fila en `supabase_migrations.schema_migrations` cuya aplicación NO puede decidirse por catálogo. Su versión (20260520) está por debajo del techo remoto, así que bloquearía la reconciliación del CLI.",
+      "evidence": {
+        "motivo": "Redefine un CHECK ya existente; el catálogo muestra un constraint con ese nombre pero no permite datar cuál de las dos definiciones quedó."
+      },
+      "future_action": "INDETERMINADO. Antes de decidir nada hay que auditar en producción el efecto concreto (definición vigente de la política/constraint, o presencia de los datos) y sólo entonces decidir entre descartar o escribir una migración idempotente nueva. NO se convierte todavía."
+    },
+    {
+      "original_filename": "20260521_resolved_prices.sql",
+      "parsed_version": "20260521",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 2724,
+      "md5": "be89dd37c9c6c5092bbb5a173887f2e6",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260521) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260526_technical_price_bank.sql",
+      "parsed_version": "20260526",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 11969,
+      "md5": "f6c21ae2d0cabd0901978213b7422c2d",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260526) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260526_technical_price_bank_seed.sql",
+      "parsed_version": "20260526",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 22082,
+      "md5": "33e3ad7bc1b610b885fb1c8c8ee80fb0",
+      "production_state": "indeterminate",
+      "reason_archived": "Migración local sin fila en `supabase_migrations.schema_migrations` cuya aplicación NO puede decidirse por catálogo. Su versión (20260526) está por debajo del techo remoto, así que bloquearía la reconciliación del CLI.",
+      "evidence": {
+        "motivo": "Sólo siembra datos. Hay filas, pero pueden proceder de otra vía de carga."
+      },
+      "future_action": "INDETERMINADO. Antes de decidir nada hay que auditar en producción el efecto concreto (definición vigente de la política/constraint, o presencia de los datos) y sólo entonces decidir entre descartar o escribir una migración idempotente nueva. NO se convierte todavía."
+    },
+    {
+      "original_filename": "20260709_fix_profiles_rls_and_autocreate.sql",
+      "parsed_version": "20260709",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 2696,
+      "md5": "630e56ec3263f929265e888ed2323aa9",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260709) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260709_user_data_rls_policies.sql",
+      "parsed_version": "20260709",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 14709,
+      "md5": "a8cdc98e6ae8bd7b278c341db270cbcb",
+      "production_state": "indeterminate",
+      "reason_archived": "Migración local sin fila en `supabase_migrations.schema_migrations` cuya aplicación NO puede decidirse por catálogo. Su versión (20260709) está por debajo del techo remoto, así que bloquearía la reconciliación del CLI.",
+      "evidence": {
+        "motivo": "Sólo políticas RLS; mismo problema de identidad que 20260517_agent_data_rls."
+      },
+      "future_action": "INDETERMINADO. Antes de decidir nada hay que auditar en producción el efecto concreto (definición vigente de la política/constraint, o presencia de los datos) y sólo entonces decidir entre descartar o escribir una migración idempotente nueva. NO se convierte todavía."
+    },
+    {
+      "original_filename": "20260710_projects_add_service_type_start_date.sql",
+      "parsed_version": "20260710",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 1500,
+      "md5": "a9c71b7d5a4072ae27659a72926bbd4f",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260710) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260716_budget_snapshots.sql",
+      "parsed_version": "20260716",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 2962,
+      "md5": "ae762a1d9825590b47f71e5764fd6564",
+      "production_state": "partial",
+      "reason_archived": "Migración local aplicada SÓLO EN PARTE en producción (3 de 4 objetos ausentes) y sin fila en `supabase_migrations.schema_migrations`. Su versión (20260716) está por debajo del techo remoto, así que bloquearía la reconciliación del CLI.",
+      "evidence": {
+        "objetos_ausentes_contados": 3,
+        "objetos_declarados": 4,
+        "objetos_ausentes": [
+          "idx_snapshots_budget",
+          "idx_snapshots_user",
+          "idx_snapshots_type"
+        ]
+      },
+      "future_action": "PARCIAL. Requiere una migración de reconciliación que cree ÚNICAMENTE los objetos ausentes listados, con guardas de idempotencia, y con timestamp posterior al último remoto. Reaplicar el fichero entero sería incorrecto. NO se convierte todavía."
+    },
+    {
+      "original_filename": "20260716_price_bank_v2.sql",
+      "parsed_version": "20260716",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 25496,
+      "md5": "41a092f056247b4ddd1bcd0d44ca4a59",
+      "production_state": "partial",
+      "reason_archived": "Migración local aplicada SÓLO EN PARTE en producción (26 de 39 objetos ausentes) y sin fila en `supabase_migrations.schema_migrations`. Su versión (20260716) está por debajo del techo remoto, así que bloquearía la reconciliación del CLI.",
+      "evidence": {
+        "objetos_ausentes_contados": 26,
+        "objetos_declarados": 39,
+        "objetos_ausentes": [
+          "pb_normalized_concepts",
+          "pb_sync_run_details",
+          "price_items.is_locked",
+          "technical_price_items.company_id",
+          "idx_tech_items_company",
+          "idx_pb_providers_active"
+        ],
+        "nota": "Se listan los ausentes representativos; el recuento completo es 26 de 39."
+      },
+      "future_action": "PARCIAL. Requiere una migración de reconciliación que cree ÚNICAMENTE los objetos ausentes listados, con guardas de idempotencia, y con timestamp posterior al último remoto. Reaplicar el fichero entero sería incorrecto. NO se convierte todavía."
+    },
+    {
+      "original_filename": "20260717_price_bank_v2.sql",
+      "parsed_version": "20260717",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 7853,
+      "md5": "d12e5efcf41f2822629f8bee64a9ccd3",
+      "production_state": "partial",
+      "reason_archived": "Migración local aplicada SÓLO EN PARTE en producción (2 de 17 objetos ausentes) y sin fila en `supabase_migrations.schema_migrations`. Su versión (20260717) está por debajo del techo remoto, así que bloquearía la reconciliación del CLI.",
+      "evidence": {
+        "objetos_ausentes_contados": 2,
+        "objetos_declarados": 17,
+        "objetos_ausentes": [
+          "idx_pb_observations_product",
+          "idx_pb_observations_dedup"
+        ]
+      },
+      "future_action": "PARCIAL. Requiere una migración de reconciliación que cree ÚNICAMENTE los objetos ausentes listados, con guardas de idempotencia, y con timestamp posterior al último remoto. Reaplicar el fichero entero sería incorrecto. NO se convierte todavía."
+    },
+    {
+      "original_filename": "20260721_obra_partes_gantt.sql",
+      "parsed_version": "20260721",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 5898,
+      "md5": "3fa43fa57f63de441eb9fcb21bafee36",
+      "production_state": "pending",
+      "reason_archived": "Migración local que nunca llegó a `supabase_migrations.schema_migrations` y cuyo número de versión (20260721) queda por debajo del techo remoto 20260825094545. Dejarla en `supabase/migrations/` haría que el CLI abortara la reconciliación con \"Found local migration files to be inserted before the last migration on remote database\".",
+      "evidence": "Ninguno de los objetos que declara existe en producción. Es una migración genuinamente no aplicada.",
+      "future_action": "PENDIENTE REAL. Reescribir su contenido como migración nueva e idempotente con timestamp POSTERIOR al último remoto, revisada una a una. NO se convierte todavía: se hará después de cerrar 2D-5."
+    },
+    {
+      "original_filename": "20260721_price_alerts_history.sql",
+      "parsed_version": "20260721",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 4583,
+      "md5": "024b0aafb52fec703174b4ef4121c8ed",
+      "production_state": "partial",
+      "reason_archived": "Migración local aplicada SÓLO EN PARTE en producción (1 de 11 objetos ausentes) y sin fila en `supabase_migrations.schema_migrations`. Su versión (20260721) está por debajo del techo remoto, así que bloquearía la reconciliación del CLI.",
+      "evidence": {
+        "objetos_ausentes_contados": 1,
+        "objetos_declarados": 11,
+        "objetos_ausentes": [
+          "idx_pb_observations_product_time"
+        ]
+      },
+      "future_action": "PARCIAL. Requiere una migración de reconciliación que cree ÚNICAMENTE los objetos ausentes listados, con guardas de idempotencia, y con timestamp posterior al último remoto. Reaplicar el fichero entero sería incorrecto. NO se convierte todavía."
+    },
+    {
+      "original_filename": "20260721_price_bank_complete.sql",
+      "parsed_version": "20260721",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 1281,
+      "md5": "fa1f46195be4d68bda269fd424b3baff",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260721) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260721_price_bank_seed_complete.sql",
+      "parsed_version": "20260721",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 51290,
+      "md5": "1ebac978a7106674ecb9d2858ea6bd91",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260721) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260722_firma_digital.sql",
+      "parsed_version": "20260722",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 3961,
+      "md5": "db0dc0923b86dba6d4b801bd3fedc9d2",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260722) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260722_gestor_obras_capitulos.sql",
+      "parsed_version": "20260722",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 5510,
+      "md5": "bdd54f8f312efc95cf34f092754b6260",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260722) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260722_pb_sector_column.sql",
+      "parsed_version": "20260722",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 1274,
+      "md5": "778758ada856f8182fd70a41b48f8d5d",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260722) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260722_price_bank_sectors.sql",
+      "parsed_version": "20260722",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 58256,
+      "md5": "2dc1543fc61483ea17b2637707333df7",
+      "production_state": "indeterminate",
+      "reason_archived": "Migración local sin fila en `supabase_migrations.schema_migrations` cuya aplicación NO puede decidirse por catálogo. Su versión (20260722) está por debajo del techo remoto, así que bloquearía la reconciliación del CLI.",
+      "evidence": {
+        "motivo": "Sólo datos de sectores; las filas existen pero no son atribuibles a esta migración."
+      },
+      "future_action": "INDETERMINADO. Antes de decidir nada hay que auditar en producción el efecto concreto (definición vigente de la política/constraint, o presencia de los datos) y sólo entonces decidir entre descartar o escribir una migración idempotente nueva. NO se convierte todavía."
+    },
+    {
+      "original_filename": "20260722_price_bank_sectors_ampliacion.sql",
+      "parsed_version": "20260722",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 45868,
+      "md5": "9cdb341718ef514ba7cbc89a8d3877a4",
+      "production_state": "indeterminate",
+      "reason_archived": "Migración local sin fila en `supabase_migrations.schema_migrations` cuya aplicación NO puede decidirse por catálogo. Su versión (20260722) está por debajo del techo remoto, así que bloquearía la reconciliación del CLI.",
+      "evidence": {
+        "motivo": "Sólo datos de sectores; las filas existen pero no son atribuibles a esta migración."
+      },
+      "future_action": "INDETERMINADO. Antes de decidir nada hay que auditar en producción el efecto concreto (definición vigente de la política/constraint, o presencia de los datos) y sólo entonces decidir entre descartar o escribir una migración idempotente nueva. NO se convierte todavía."
+    },
+    {
+      "original_filename": "20260722_proveedores_reales_completos.sql",
+      "parsed_version": "20260722",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 20357,
+      "md5": "b6dcb031271952db3010a358beb242a9",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260722) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260728_account_deletion_retention.sql",
+      "parsed_version": "20260728",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 2650,
+      "md5": "e328699442d59d3f2092104269f1beec",
+      "production_state": "indeterminate",
+      "reason_archived": "Migración local sin fila en `supabase_migrations.schema_migrations` cuya aplicación NO puede decidirse por catálogo. Su versión (20260728) está por debajo del techo remoto, así que bloquearía la reconciliación del CLI.",
+      "evidence": {
+        "motivo": "Mezcla columnas ya presentes con políticas; las columnas existen, las políticas no son datables."
+      },
+      "future_action": "INDETERMINADO. Antes de decidir nada hay que auditar en producción el efecto concreto (definición vigente de la política/constraint, o presencia de los datos) y sólo entonces decidir entre descartar o escribir una migración idempotente nueva. NO se convierte todavía."
+    },
+    {
+      "original_filename": "20260729_edit_budgets.sql",
+      "parsed_version": "20260729",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 4551,
+      "md5": "cd29ddc48c7cd9b749e1fded9bc5b832",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260729) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260729_permanent_trash_selection.sql",
+      "parsed_version": "20260729",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 7322,
+      "md5": "b44a4df46a0c06b180a336844e820d42",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260729) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260729_recoverable_trash.sql",
+      "parsed_version": "20260729",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 9142,
+      "md5": "98fe5d5b23e6be84fe53d152b9bca79e",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260729) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260730_budget_technical_documents.sql",
+      "parsed_version": "20260730",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 2250,
+      "md5": "c674d5cfe3e4de32f147958fd42b11ed",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260730) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260730_budget_tracker_read_access.sql",
+      "parsed_version": "20260730",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 1465,
+      "md5": "e446eb3b5ea8d209c6051afd67d352d3",
+      "production_state": "indeterminate",
+      "reason_archived": "Migración local sin fila en `supabase_migrations.schema_migrations` cuya aplicación NO puede decidirse por catálogo. Su versión (20260730) está por debajo del techo remoto, así que bloquearía la reconciliación del CLI.",
+      "evidence": {
+        "motivo": "Sólo concede lecturas vía políticas; no datable por catálogo."
+      },
+      "future_action": "INDETERMINADO. Antes de decidir nada hay que auditar en producción el efecto concreto (definición vigente de la política/constraint, o presencia de los datos) y sólo entonces decidir entre descartar o escribir una migración idempotente nueva. NO se convierte todavía."
+    },
+    {
+      "original_filename": "20260730_company_branding_calendar_whatsapp.sql",
+      "parsed_version": "20260730",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 2038,
+      "md5": "bc312112bce3c3a1ca5e0313ddb3b48b",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260730) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260804_preserve_budget_before_lifecycle_edit.sql",
+      "parsed_version": "20260804",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 9179,
+      "md5": "a23fc566028be8251584dca8421690a2",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260804) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260804_retained_received_invoice_documents.sql",
+      "parsed_version": "20260804",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 1473,
+      "md5": "1e4282982fbd3b2d2757b7e23981a44a",
+      "production_state": "indeterminate",
+      "reason_archived": "Migración local sin fila en `supabase_migrations.schema_migrations` cuya aplicación NO puede decidirse por catálogo. Su versión (20260804) está por debajo del techo remoto, así que bloquearía la reconciliación del CLI.",
+      "evidence": {
+        "motivo": "Columnas presentes pero también declaradas por otras migraciones; no se puede atribuir."
+      },
+      "future_action": "INDETERMINADO. Antes de decidir nada hay que auditar en producción el efecto concreto (definición vigente de la política/constraint, o presencia de los datos) y sólo entonces decidir entre descartar o escribir una migración idempotente nueva. NO se convierte todavía."
+    },
+    {
+      "original_filename": "20260806_01_align_agent_connections.sql",
+      "parsed_version": "20260806",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 1038,
+      "md5": "3e993e5962df1ae474d145de70ab2c11",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260806) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260806_02_fix_price_bank_service_role_policies.sql",
+      "parsed_version": "20260806",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 2317,
+      "md5": "11dfb882def40e6ac8b1e8bc3873c6c3",
+      "production_state": "indeterminate",
+      "reason_archived": "Migración local sin fila en `supabase_migrations.schema_migrations` cuya aplicación NO puede decidirse por catálogo. Su versión (20260806) está por debajo del techo remoto, así que bloquearía la reconciliación del CLI.",
+      "evidence": {
+        "motivo": "Corrige políticas existentes; el catálogo no distingue la versión corregida de la original."
+      },
+      "future_action": "INDETERMINADO. Antes de decidir nada hay que auditar en producción el efecto concreto (definición vigente de la política/constraint, o presencia de los datos) y sólo entonces decidir entre descartar o escribir una migración idempotente nueva. NO se convierte todavía."
+    },
+    {
+      "original_filename": "20260806_04_reconcile_supplier_invoiced.sql",
+      "parsed_version": "20260806",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 2590,
+      "md5": "cb6a4008397781d70c66cf8f0e5c8113",
+      "production_state": "pending",
+      "reason_archived": "Migración local que nunca llegó a `supabase_migrations.schema_migrations` y cuyo número de versión (20260806) queda por debajo del techo remoto 20260825094545. Dejarla en `supabase/migrations/` haría que el CLI abortara la reconciliación con \"Found local migration files to be inserted before the last migration on remote database\".",
+      "evidence": "Ninguno de los objetos que declara existe en producción. Es una migración genuinamente no aplicada.",
+      "future_action": "PENDIENTE REAL. Reescribir su contenido como migración nueva e idempotente con timestamp POSTERIOR al último remoto, revisada una a una. NO se convierte todavía: se hará después de cerrar 2D-5."
+    },
+    {
+      "original_filename": "20260808_01_fix_p1_deletion_signature_invoice_races.sql",
+      "parsed_version": "20260808",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 10772,
+      "md5": "b6dd1465234a96809f0b71546c378079",
+      "production_state": "partial",
+      "reason_archived": "Migración local aplicada SÓLO EN PARTE en producción (2 de 4 objetos ausentes) y sin fila en `supabase_migrations.schema_migrations`. Su versión (20260808) está por debajo del techo remoto, así que bloquearía la reconciliación del CLI.",
+      "evidence": {
+        "objetos_ausentes_contados": 2,
+        "objetos_declarados": 4,
+        "objetos_ausentes": [
+          "rotate_signature_public_token_locked",
+          "update_received_invoice_and_reconcile"
+        ]
+      },
+      "future_action": "PARCIAL. Requiere una migración de reconciliación que cree ÚNICAMENTE los objetos ausentes listados, con guardas de idempotencia, y con timestamp posterior al último remoto. Reaplicar el fichero entero sería incorrecto. NO se convierte todavía."
+    },
+    {
+      "original_filename": "20260818_profiles_hidden_modules.sql",
+      "parsed_version": "20260818",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 1323,
+      "md5": "af3affc55bbc8eacf07cbcf0568e65da",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260818) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    },
+    {
+      "original_filename": "20260820_scheduled_messages.sql",
+      "parsed_version": "20260820",
+      "classification": "F-divergencia-real-documentada",
+      "remote_equivalent_version": "20260820180526",
+      "bytes": 11920,
+      "md5": "10f8f7fcc939458aa4d8e2c8f3df0e9e",
+      "production_state": "applied",
+      "reason_archived": "ÚNICA divergencia real de contenido de todo el inventario. Producción registró la versión 20260820180526 (restaurada byte a byte en `supabase/migrations/`), que añade `user_id` con un `add column if not exists user_id uuid,` en línea. Este fichero local es un SUPERCONJUNTO revisado de aquélla: sustituye ese inline por un bloque `DO` defensivo que añade la columna, crea la FK contra `auth.users` y hace `SET NOT NULL`, y remata con un NOTIFY. Se archiva, no se borra, para que ese delta quede escrito.",
+      "evidence": {
+        "delta_respecto_al_remoto": [
+          "bloque DO defensivo en lugar del `add column if not exists user_id uuid,` en línea",
+          "FK explícita de scheduled_messages.user_id -> auth.users(id)",
+          "SET NOT NULL sobre user_id",
+          "notify pgrst, 'reload schema' al final"
+        ],
+        "verificacion_en_produccion": "Comprobado en producción: la tabla tiene 18 columnas, `user_id` es NOT NULL, existe 1 constraint FK sobre user_id, y hay 0 filas con user_id nulo. Es decir, el delta ya está materializado: la diferencia es sólo de forma, no de efecto.",
+        "decision_del_usuario": "Opción B: restaurar 20260820180526 exacto, archivar este fichero y NO crear todavía la migración idempotente con el bloque DO."
+      },
+      "future_action": "DIFERIDO POR DECISIÓN EXPRESA. La migración de reconciliación que reintroduzca el bloque DO/FK/NOT NULL de forma idempotente se escribirá DESPUÉS de cerrar 2D-5, con timestamp posterior al último remoto. NO se convierte ahora."
+    },
+    {
+      "original_filename": "20260822_price_search_and_sync_indexes.sql",
+      "parsed_version": "20260822",
+      "classification": "C-local-only-sin-equivalente-remoto",
+      "remote_equivalent_version": null,
+      "bytes": 619,
+      "md5": "0df61bb13bd855ba91618c4cf1fdafdd",
+      "production_state": "applied",
+      "reason_archived": "Migración local cuyos efectos YA están en producción, pero que nunca se registró en `supabase_migrations.schema_migrations` (se aplicó a mano o por dashboard). Su versión (20260822) está por debajo del techo remoto 20260825094545: mantenerla en `supabase/migrations/` haría que el CLI abortara la reconciliación.",
+      "evidence": {
+        "motivo": "Todos los objetos que declara existen en producción con la forma esperada."
+      },
+      "future_action": "NINGUNA. Se conserva sólo como historia. No debe reaplicarse ni convertirse en migración nueva."
+    }
+  ]
+}
