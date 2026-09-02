@@ -226,17 +226,26 @@ describe("FASE 2E-1 · BLOQUE B — los cinco escritores reales", () => {
     );
   });
 
-  test("CASO 14 — la duplicacion escribe sort_order en cada insert", () => {
+  test("CASO 14 — la duplicacion escribe sort_order en cada fila del lote", () => {
     const plano = norm(leer(F_DETALLE));
     assert.match(
       plano,
-      /for \(const \[idx, item\] of items\.entries\(\)\)/,
-      "el bucle de duplicado debe iterar con indice",
+      /const itemsToInsert = items\.map\(\(item, idx\) => \(\{/,
+      "el lote duplicado debe construirse con items.map((item, idx) => ...)",
     );
     assert.match(
       plano,
-      /subtotal: item\.subtotal, sort_order: idx, \}\);/,
-      "el insert duplicado debe incluir sort_order: idx",
+      /subtotal: item\.subtotal, sort_order: idx, \}\)\);/,
+      "cada fila del lote duplicado debe incluir sort_order: idx",
+    );
+    assert.match(
+      plano,
+      /\.from\("budget_items"\) \.insert\(itemsToInsert\)/,
+      "las partidas duplicadas deben insertarse como un unico lote",
+    );
+    assert.ok(
+      !/for \(const \[idx, item\] of items\.entries\(\)\)/.test(plano),
+      "el antiguo bucle de INSERT individual no debe reaparecer",
     );
   });
 
