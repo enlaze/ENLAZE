@@ -130,7 +130,9 @@ const CalendarioIcon = (
   </svg>
 );
 
-const FacturasEmitidasIcon = (
+/* Facturación: el mismo documento que usaban "emitidas" y "recibidas", con las
+   dos flechas en el sello — lo que sale y lo que entra, ahora en una sección. */
+const FacturacionIcon = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
     <path d="M6 4.5h7.5L17 8v9.25A2.25 2.25 0 0 1 14.75 19.5H6A2.25 2.25 0 0 1 3.75 17.25v-10.5A2.25 2.25 0 0 1 6 4.5Z" />
     <path d="M13.25 4.5v3.5h3.5" />
@@ -139,7 +141,7 @@ const FacturasEmitidasIcon = (
     <path d="M9 13.5h5" />
     <path d="M9 16.25h3.5" />
     <circle cx="18" cy="6" r="3" fill="currentColor" stroke="none" />
-    <path d="M16.65 6.85L18 5.5l1.35 1.35M18 5.7v2.7" stroke="#fff" strokeWidth="1.6" />
+    <path d="M16.85 7.15V4.85m0 0-.8.85m.8-.85.8.85M19.15 4.85v2.3m0 0 .8-.85m-.8.85-.8-.85" stroke="#fff" strokeWidth="1.3" />
   </svg>
 );
 
@@ -184,18 +186,6 @@ const CumplimientoIcon = (
   </svg>
 );
 
-const FacturasRecibidasIcon = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-    <path d="M6 4.5h7.5L17 8v9.25A2.25 2.25 0 0 1 14.75 19.5H6A2.25 2.25 0 0 1 3.75 17.25v-10.5A2.25 2.25 0 0 1 6 4.5Z" />
-    <path d="M13.25 4.5v3.5h3.5" />
-    <path d="M6.75 8.5v8" strokeOpacity=".55" />
-    <path d="M9 10.75h5.5" />
-    <path d="M9 13.5h5" />
-    <path d="M9 16.25h3.5" />
-    <circle cx="18" cy="6" r="3" fill="currentColor" stroke="none" />
-    <path d="M19.35 5.15 18 6.5l-1.35-1.35M18 6.3V3.6" stroke="#fff" strokeWidth="1.6" />
-  </svg>
-);
 
 const PagosTesoreriaIcon = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
@@ -235,8 +225,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard/calendar", label: "Calendario", icon: CalendarioIcon, section: "Negocio" },
 
   // FINANZAS
-  { href: "/dashboard/suppliers/invoices", label: "Facturas recibidas", icon: FacturasRecibidasIcon, section: "Finanzas" },
-  { href: "/dashboard/issued-invoices", label: "Facturas emitidas", icon: FacturasEmitidasIcon, section: "Finanzas" },
+  { href: "/dashboard/facturacion", label: "Facturación", icon: FacturacionIcon, section: "Finanzas" },
   { href: "/dashboard/payments", label: "Pagos y tesorería", icon: PagosTesoreriaIcon, section: "Finanzas" },
   { href: "/dashboard/margins", label: "Márgenes", icon: MargenesIcon, section: "Finanzas" },
   { href: "/dashboard/contabilidad", label: "Contabilidad", icon: ContabilidadIcon, section: "Finanzas" },
@@ -255,6 +244,10 @@ export const SECTION_ORDER: Array<NavItem["section"]> = [null, "General", "Negoc
 const ALWAYS_VISIBLE_HREFS = new Set([
   "/dashboard",
   "/dashboard/clientes",
+  // El hub de Facturación es nuevo y las filas de sector_config en base de
+  // datos siguen declarando las dos rutas viejas, así que sin esto quedaría
+  // filtrado fuera del menú para todos los sectores.
+  "/dashboard/facturacion",
   "/dashboard/settings",
   "/dashboard/trash",
   "/dashboard/compliance",
