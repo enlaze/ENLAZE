@@ -70,12 +70,17 @@ export default function RecibidasTab({
           placeholder="Buscar por nº factura, proveedor..."
           className="w-64"
         />
-        <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-44">
-          <option value="all">Todos los estados</option>
-          {Object.entries(receivedInvoiceStatusLabels).map(([k, v]) => (
-            <option key={k} value={k}>{v.label}</option>
-          ))}
-        </Select>
+        {/* El ancho va en el contenedor: `Select` arrastra el w-full de
+            `inputBase` y gana a cualquier w-* que se le pase por className,
+            que es por lo que en la página original se comía toda la fila. */}
+        <div className="w-44">
+          <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="all">Todos los estados</option>
+            {Object.entries(receivedInvoiceStatusLabels).map(([k, v]) => (
+              <option key={k} value={k}>{v.label}</option>
+            ))}
+          </Select>
+        </div>
       </div>
 
       {showForm && <ReceivedInvoiceForm state={state} />}
