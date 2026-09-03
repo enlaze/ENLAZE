@@ -150,7 +150,8 @@ export default function BudgetDetailPage() {
         .from("budget_items")
         .select("*")
         .eq("budget_id", params.id)
-        .order("created_at", { ascending: true });
+        .order("sort_order", { ascending: true })
+        .order("id", { ascending: true });
 
       const { data: selectedClient } = b.client_id
         ? await supabase
