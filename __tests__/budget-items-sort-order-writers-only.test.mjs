@@ -249,20 +249,6 @@ describe("FASE 2E-1 · BLOQUE B — los cinco escritores reales", () => {
     );
   });
 
-  test("CASO 15 — el LECTOR sigue ordenando por created_at (fuera de alcance)", () => {
-    const plano = norm(leer(F_DETALLE));
-    assert.match(
-      plano,
-      /\.order\("created_at", \{ ascending: true \}\)/,
-      "esta fase NO cambia el criterio de lectura",
-    );
-    assert.doesNotMatch(
-      plano,
-      /\.order\("sort_order"/,
-      "leer por sort_order es la fase siguiente, no esta",
-    );
-  });
-
   test("CASO 16 — no se ha tocado la migracion ni la RPC desde el codigo", () => {
     // Ningun fichero de aplicacion define ni altera la columna.
     for (const f of [F_PROVIDER, F_FORM, F_DETALLE]) {

@@ -101,7 +101,8 @@ export async function POST(request: Request) {
       .from("budget_items")
       .select("*")
       .eq("budget_id", budgetId)
-      .order("created_at", { ascending: true });
+      .order("sort_order", { ascending: true })
+      .order("id", { ascending: true });
 
     // Load company info from profile
     const { data: profile } = await supabase

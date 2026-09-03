@@ -185,7 +185,7 @@ function WizardContent() {
     try {
       const [{ data: budget }, { data: items }, { data: profile }, { data: fiscal }] = await Promise.all([
         supabase.from("budgets").select("*").eq("id", finalizedId).maybeSingle(),
-        supabase.from("budget_items").select("*").eq("budget_id", finalizedId).order("created_at", { ascending: true }),
+        supabase.from("budget_items").select("*").eq("budget_id", finalizedId).order("sort_order", { ascending: true }).order("id", { ascending: true }),
         supabase.from("profiles").select("business_name, full_name, logo_url").maybeSingle(),
         supabase.from("fiscal_settings").select("*").maybeSingle(),
       ]);

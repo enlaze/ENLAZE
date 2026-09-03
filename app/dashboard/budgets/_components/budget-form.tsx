@@ -196,7 +196,8 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
               .from("budget_items")
               .select("*")
               .eq("budget_id", editBudgetId)
-              .order("created_at", { ascending: true }),
+              .order("sort_order", { ascending: true })
+              .order("id", { ascending: true }),
           ]);
 
         if (!existingBudget) {
