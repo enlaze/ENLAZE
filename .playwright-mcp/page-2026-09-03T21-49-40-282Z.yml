@@ -1,0 +1,171 @@
+- generic [ref=f13e1]:
+  - generic [ref=f13e5]:
+    - banner [ref=f13e77]:
+      - generic [ref=f13e78]:
+        - link "Enlaze" [ref=f13e80] [cursor=pointer]:
+          - /url: /dashboard
+          - img "Enlaze" [ref=f13e81]
+        - button "Buscar clientes, presupuestos… ⌘K" [ref=f13e84]:
+          - generic [ref=f13e88]: Buscar clientes, presupuestos…
+          - generic [ref=f13e89]: ⌘K
+        - generic [ref=f13e90]:
+          - button "Cambiar tema" [ref=f13e92]
+          - button "Notificaciones" [ref=f13e100]:
+            - generic [ref=f13e104]: "2"
+          - button "DK idkdu37@gmail.com" [ref=f13e106]:
+            - generic [ref=f13e107]: DK
+            - generic [ref=f13e108]: idkdu37@gmail.com
+    - complementary [ref=f13e111]:
+      - navigation [ref=f13e112]:
+        - list [ref=f13e114]:
+          - listitem [ref=f13e115]:
+            - link "Centro de control" [ref=f13e116] [cursor=pointer]:
+              - /url: /dashboard
+        - generic [ref=f13e125]:
+          - paragraph [ref=f13e126]: General
+          - list [ref=f13e127]:
+            - listitem [ref=f13e128]:
+              - link "Clientes" [ref=f13e129] [cursor=pointer]:
+                - /url: /dashboard/clientes
+            - listitem [ref=f13e138]:
+              - link "WhatsApp" [ref=f13e139] [cursor=pointer]:
+                - /url: /dashboard/messages
+            - listitem [ref=f13e145]:
+              - link "Emails" [ref=f13e146] [cursor=pointer]:
+                - /url: /dashboard/emails
+        - generic [ref=f13e153]:
+          - paragraph [ref=f13e154]: Negocio
+          - list [ref=f13e155]:
+            - listitem [ref=f13e156]:
+              - link "Rastreador de precios" [ref=f13e157] [cursor=pointer]:
+                - /url: /dashboard/prices
+            - listitem [ref=f13e165]:
+              - link "Proyectos" [ref=f13e166] [cursor=pointer]:
+                - /url: /dashboard/projects
+            - listitem [ref=f13e173]:
+              - link "Colaboradores" [ref=f13e174] [cursor=pointer]:
+                - /url: /dashboard/suppliers
+            - listitem [ref=f13e183]:
+              - link "Partes de trabajo" [ref=f13e184] [cursor=pointer]:
+                - /url: /dashboard/delivery-notes
+            - listitem [ref=f13e191]:
+              - link "Agenda" [ref=f13e192] [cursor=pointer]:
+                - /url: /dashboard/calendar
+        - generic [ref=f13e198]:
+          - paragraph [ref=f13e199]: Finanzas
+          - list [ref=f13e200]:
+            - listitem [ref=f13e201]:
+              - link "Facturación" [ref=f13e202] [cursor=pointer]:
+                - /url: /dashboard/facturacion
+            - listitem [ref=f13e211]:
+              - link "Pagos y tesorería" [ref=f13e212] [cursor=pointer]:
+                - /url: /dashboard/payments
+            - listitem [ref=f13e220]:
+              - link "Rentabilidad" [ref=f13e221] [cursor=pointer]:
+                - /url: /dashboard/margins
+        - generic [ref=f13e229]:
+          - paragraph [ref=f13e230]: Sistema
+          - list [ref=f13e231]:
+            - listitem [ref=f13e232]:
+              - link "Papelera" [ref=f13e233] [cursor=pointer]:
+                - /url: /dashboard/trash
+            - listitem [ref=f13e240]:
+              - link "Ajustes" [ref=f13e241] [cursor=pointer]:
+                - /url: /dashboard/settings
+            - listitem [ref=f13e248]:
+              - link "Cumplimiento" [ref=f13e249] [cursor=pointer]:
+                - /url: /dashboard/compliance
+    - main [ref=f13e16]:
+      - generic [ref=f13e18]:
+        - generic [ref=f13e21]:
+          - generic [ref=f13e22]:
+            - heading "Facturación" [level=1] [ref=f13e23]
+            - button "Información sobre Facturación" [ref=f13e25]
+          - paragraph [ref=f13e28]: Lo que emites y lo que recibes, en el mismo sitio
+        - generic [ref=f13e29]:
+          - generic [ref=f13e30]:
+            - generic [ref=f13e31]:
+              - paragraph [ref=f13e32]: Facturado
+              - paragraph [ref=f13e33]: 0,00 €
+              - paragraph [ref=f13e34]: 0 facturas
+            - generic [ref=f13e35]:
+              - paragraph [ref=f13e36]: Cobrado
+              - paragraph [ref=f13e37]: 0,00 €
+              - paragraph [ref=f13e38]: —
+            - generic [ref=f13e39]:
+              - paragraph [ref=f13e40]: Pendiente
+              - paragraph [ref=f13e41]: 0,00 €
+              - paragraph [ref=f13e42]: sin cobrar
+            - generic [ref=f13e43]:
+              - paragraph [ref=f13e44]: Vencido
+              - paragraph [ref=f13e45]: 0,00 €
+              - paragraph [ref=f13e46]: nada fuera de plazo
+          - generic [ref=f13e47]:
+            - generic [ref=f13e48]:
+              - generic [ref=f13e49]:
+                - paragraph [ref=f13e50]: Facturado por mes
+                - paragraph [ref=f13e51]: 0,00 € últimos 12 meses
+              - generic [ref=f13e52]:
+                - generic [ref=f13e53]: Cobrado
+                - generic [ref=f13e55]: Pendiente
+            - generic [ref=f13e57]: Todavía no hay facturas emitidas en los últimos 12 meses.
+        - tablist "Secciones de facturación" [ref=f13e58]:
+          - tab "Emitidas0" [ref=f13e59]
+          - tab "Recibidas1" [active] [selected] [ref=f13e60]
+          - tab "Escanear" [ref=f13e61]
+        - generic [ref=f13e256]:
+          - generic [ref=f13e257]:
+            - paragraph [ref=f13e258]: Gastos de proveedor · 1 factura registrada
+            - generic [ref=f13e259]:
+              - button "Escanear factura" [ref=f13e260] [cursor=pointer]
+              - button "+ Nueva factura" [ref=f13e264] [cursor=pointer]
+          - generic [ref=f13e265]:
+            - generic [ref=f13e266]:
+              - paragraph [ref=f13e267]: Pendiente de pago
+              - paragraph [ref=f13e268]: 111,00 €
+            - generic [ref=f13e269]:
+              - paragraph [ref=f13e270]: Pagado este mes
+              - paragraph [ref=f13e271]: 0,00 €
+            - generic [ref=f13e272]:
+              - paragraph [ref=f13e273]: Vencido
+              - paragraph [ref=f13e274]: 0,00 €
+            - generic [ref=f13e275]:
+              - paragraph [ref=f13e276]: Proveedores activos
+              - paragraph [ref=f13e277]: "1"
+          - generic [ref=f13e278]:
+            - textbox "Buscar por nº factura, proveedor..." [ref=f13e280]
+            - combobox [ref=f13e281]:
+              - option "Todos los estados" [selected]
+              - option "Pendiente"
+              - option "Aprobada"
+              - option "Pagada"
+              - option "Pago parcial"
+              - option "Rechazada"
+              - option "Vencida"
+          - table [ref=f13e284]:
+            - rowgroup [ref=f13e285]:
+              - row [ref=f13e286]:
+                - columnheader "Nº Factura" [ref=f13e287]
+                - columnheader "Proveedor" [ref=f13e288]
+                - columnheader "Fecha" [ref=f13e289]
+                - columnheader "Vencimiento" [ref=f13e290]
+                - columnheader "Total" [ref=f13e291]
+                - columnheader "Pagado" [ref=f13e292]
+                - columnheader "Estado" [ref=f13e293]
+            - rowgroup [ref=f13e294]:
+              - row [ref=f13e295]:
+                - cell [ref=f13e296]:
+                  - link "F2024" [ref=f13e297] [cursor=pointer]:
+                    - /url: /dashboard/suppliers/invoices/8a9feaff-f6a7-4ce1-93e5-1b3374656eb2
+                - cell [ref=f13e298]:
+                  - paragraph [ref=f13e299]: Mercadona
+                  - paragraph [ref=f13e300]: 34367092D
+                - cell "21/8/2026" [ref=f13e301]
+                - cell "—" [ref=f13e302]
+                - cell "111,00 €" [ref=f13e303]
+                - cell "0,00 €" [ref=f13e304]
+                - cell "Pendiente" [ref=f13e305]
+    - button "Abrir Guía ENLAZE" [ref=f13e308]:
+      - generic [ref=f13e312]: Ayuda IA
+  - button "Open Next.js Dev Tools" [ref=f13e12] [cursor=pointer]
+  - alert [ref=f13e313]

@@ -1,0 +1,39 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e6]:
+    - complementary [ref=e7]:
+      - link "Enlaze" [ref=e8] [cursor=pointer]:
+        - /url: /
+        - img "Enlaze" [ref=e9]
+        - generic [ref=e10]: enlaze
+      - generic [ref=e11]:
+        - generic [ref=e12]: PARA AUTÓNOMOS Y PYMES
+        - heading "Vende más, cobra antes, vive mejor." [level=2] [ref=e14]
+        - paragraph [ref=e16]: Clientes, presupuestos, facturas y cobros en un solo sitio — sin Excel, sin papeles.
+      - generic [ref=e17]:
+        - generic [ref=e18]: Sin tarjeta
+        - generic [ref=e19]: Listo en 2 minutos
+        - generic [ref=e20]: Soporte en español
+    - main [ref=e21]:
+      - generic [ref=e22]:
+        - generic [ref=e23]:
+          - heading "Hola de nuevo" [level=1] [ref=e24]
+          - paragraph [ref=e25]: Inicia sesión en tu cuenta.
+        - generic [ref=e26]:
+          - generic [ref=e27]:
+            - generic [ref=e28]: Email
+            - textbox "tu@empresa.com" [ref=e29]: qa.visual+coherencia@enlaze.test
+          - generic [ref=e30]:
+            - generic [ref=e31]:
+              - generic [ref=e32]: Contraseña
+              - link "¿Olvidaste tu contraseña?" [ref=e33] [cursor=pointer]:
+                - /url: /forgot-password
+            - textbox "Tu contraseña" [ref=e34]: Coherencia-QA-2026!
+          - button "Iniciar sesión →" [ref=e35]:
+            - text: Iniciar sesión
+            - generic [ref=e36]: →
+        - paragraph [ref=e37]:
+          - text: ¿No tienes cuenta?
+          - link "Crea una" [ref=e38] [cursor=pointer]:
+            - /url: /register
+  - button "Open Next.js Dev Tools" [ref=e44] [cursor=pointer]
+  - alert [ref=e48]

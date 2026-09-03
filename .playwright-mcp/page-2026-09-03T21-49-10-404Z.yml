@@ -1,0 +1,130 @@
+- generic [active] [ref=f10e1]:
+  - generic [ref=f10e2]:
+    - banner [ref=f10e3]:
+      - generic [ref=f10e4]:
+        - link "Enlaze" [ref=f10e6] [cursor=pointer]:
+          - /url: /dashboard
+          - img "Enlaze" [ref=f10e7]
+        - button "Buscar clientes, presupuestos… ⌘K" [ref=f10e10]:
+          - generic [ref=f10e14]: Buscar clientes, presupuestos…
+          - generic [ref=f10e15]: ⌘K
+        - generic [ref=f10e16]:
+          - button "Cambiar tema" [ref=f10e18]
+          - button "Notificaciones" [ref=f10e26]:
+            - generic [ref=f10e30]: "2"
+          - button "DK idkdu37@gmail.com" [ref=f10e32]:
+            - generic [ref=f10e33]: DK
+            - generic [ref=f10e34]: idkdu37@gmail.com
+    - complementary [ref=f10e37]:
+      - navigation [ref=f10e38]:
+        - list [ref=f10e40]:
+          - listitem [ref=f10e41]:
+            - link "Centro de control" [ref=f10e42] [cursor=pointer]:
+              - /url: /dashboard
+        - generic [ref=f10e51]:
+          - paragraph [ref=f10e52]: General
+          - list [ref=f10e53]:
+            - listitem [ref=f10e54]:
+              - link "Clientes" [ref=f10e55] [cursor=pointer]:
+                - /url: /dashboard/clientes
+            - listitem [ref=f10e64]:
+              - link "WhatsApp" [ref=f10e65] [cursor=pointer]:
+                - /url: /dashboard/messages
+            - listitem [ref=f10e71]:
+              - link "Emails" [ref=f10e72] [cursor=pointer]:
+                - /url: /dashboard/emails
+        - generic [ref=f10e79]:
+          - paragraph [ref=f10e80]: Negocio
+          - list [ref=f10e81]:
+            - listitem [ref=f10e82]:
+              - link "Rastreador de precios" [ref=f10e83] [cursor=pointer]:
+                - /url: /dashboard/prices
+            - listitem [ref=f10e91]:
+              - link "Proyectos" [ref=f10e92] [cursor=pointer]:
+                - /url: /dashboard/projects
+            - listitem [ref=f10e99]:
+              - link "Colaboradores" [ref=f10e100] [cursor=pointer]:
+                - /url: /dashboard/suppliers
+            - listitem [ref=f10e109]:
+              - link "Partes de trabajo" [ref=f10e110] [cursor=pointer]:
+                - /url: /dashboard/delivery-notes
+            - listitem [ref=f10e117]:
+              - link "Agenda" [ref=f10e118] [cursor=pointer]:
+                - /url: /dashboard/calendar
+        - generic [ref=f10e124]:
+          - paragraph [ref=f10e125]: Finanzas
+          - list [ref=f10e126]:
+            - listitem [ref=f10e127]:
+              - link "Facturación" [ref=f10e128] [cursor=pointer]:
+                - /url: /dashboard/facturacion
+            - listitem [ref=f10e137]:
+              - link "Pagos y tesorería" [ref=f10e138] [cursor=pointer]:
+                - /url: /dashboard/payments
+            - listitem [ref=f10e146]:
+              - link "Rentabilidad" [ref=f10e147] [cursor=pointer]:
+                - /url: /dashboard/margins
+        - generic [ref=f10e155]:
+          - paragraph [ref=f10e156]: Sistema
+          - list [ref=f10e157]:
+            - listitem [ref=f10e158]:
+              - link "Papelera" [ref=f10e159] [cursor=pointer]:
+                - /url: /dashboard/trash
+            - listitem [ref=f10e166]:
+              - link "Ajustes" [ref=f10e167] [cursor=pointer]:
+                - /url: /dashboard/settings
+            - listitem [ref=f10e174]:
+              - link "Cumplimiento" [ref=f10e175] [cursor=pointer]:
+                - /url: /dashboard/compliance
+    - main [ref=f10e182]:
+      - generic [ref=f10e184]:
+        - generic [ref=f10e187]:
+          - generic [ref=f10e188]:
+            - heading "Facturación" [level=1] [ref=f10e189]
+            - button "Información sobre Facturación" [ref=f10e191]
+          - paragraph [ref=f10e194]: Lo que emites y lo que recibes, en el mismo sitio
+        - generic [ref=f10e195]:
+          - generic [ref=f10e196]:
+            - generic [ref=f10e197]:
+              - paragraph [ref=f10e198]: Facturado
+              - paragraph [ref=f10e199]: 0,00 €
+              - paragraph [ref=f10e200]: 0 facturas
+            - generic [ref=f10e201]:
+              - paragraph [ref=f10e202]: Cobrado
+              - paragraph [ref=f10e203]: 0,00 €
+              - paragraph [ref=f10e204]: —
+            - generic [ref=f10e205]:
+              - paragraph [ref=f10e206]: Pendiente
+              - paragraph [ref=f10e207]: 0,00 €
+              - paragraph [ref=f10e208]: sin cobrar
+            - generic [ref=f10e209]:
+              - paragraph [ref=f10e210]: Vencido
+              - paragraph [ref=f10e211]: 0,00 €
+              - paragraph [ref=f10e212]: nada fuera de plazo
+          - generic [ref=f10e213]:
+            - generic [ref=f10e214]:
+              - generic [ref=f10e215]:
+                - paragraph [ref=f10e216]: Facturado por mes
+                - paragraph [ref=f10e217]: 0,00 € últimos 12 meses
+              - generic [ref=f10e218]:
+                - generic [ref=f10e219]: Cobrado
+                - generic [ref=f10e221]: Pendiente
+            - generic [ref=f10e223]: Todavía no hay facturas emitidas en los últimos 12 meses.
+        - tablist "Secciones de facturación" [ref=f10e224]:
+          - tab "Emitidas0" [selected] [ref=f10e225]
+          - tab "Recibidas1" [ref=f10e226]
+          - tab "Escanear" [ref=f10e227]
+        - generic [ref=f10e228]:
+          - generic [ref=f10e229]:
+            - paragraph [ref=f10e230]: Facturación a clientes con Verifactu y Facturae
+            - generic [ref=f10e231]:
+              - link "Ajustes fiscales" [ref=f10e232] [cursor=pointer]:
+                - /url: /dashboard/settings/fiscal
+              - button "+ Nueva factura" [ref=f10e233]
+          - generic [ref=f10e234]:
+            - heading "Aún no has emitido facturas" [level=3] [ref=f10e239]
+            - paragraph [ref=f10e240]: Crea tu primera factura emitida para empezar a facturar a tus clientes con Verifactu y Facturae.
+            - button "+ Nueva factura" [ref=f10e242]
+    - button "Abrir Guía ENLAZE" [ref=f10e244]:
+      - generic [ref=f10e248]: Ayuda IA
+  - button "Open Next.js Dev Tools" [ref=f10e254] [cursor=pointer]
+  - alert [ref=f10e258]

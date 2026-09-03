@@ -1,0 +1,477 @@
+[      70ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[     123ms] [LOG] [Fast Refresh] done in 53ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[     175ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[     195ms] [LOG] [Fast Refresh] done in 20ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[     528ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[     549ms] [LOG] [Fast Refresh] done in 20ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[     584ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[     585ms] [LOG] [Fast Refresh] done in 1ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[     936ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/dashboard/facturacion?tab=recibidas&_rsc=myjpi:0
+[    1641ms] [ERROR] Creating a worker from 'blob:http://localhost:3000/637c75af-b719-4b09-956c-06fb266093fa' violates the following Content Security Policy directive: "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://*.sentry.io https://*.posthog.com". Note that 'worker-src' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked. @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/replay/build/npm/esm/index.js:5672
+[    1647ms] [LOG] [Client Instrumentation Hook] Slow execution detected: 50ms (Note: Code download overhead is not included in this measurement) @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    1676ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    1717ms] [LOG] [HMR] connected @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    1746ms] [INFO] [analytics] NEXT_PUBLIC_POSTHOG_KEY not set — analytics disabled @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    1806ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    1968ms] [LOG] [Fast Refresh] done in 162ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    1969ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    2076ms] [LOG] [Fast Refresh] done in 107ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    2078ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    2083ms] [LOG] [Fast Refresh] done in 5ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    2176ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    2179ms] [LOG] [Fast Refresh] done in 4ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    2268ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    2357ms] [LOG] [Fast Refresh] done in 88ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    2358ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    2444ms] [LOG] [Fast Refresh] done in 86ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    2445ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    2531ms] [LOG] [Fast Refresh] done in 86ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    2532ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    2618ms] [LOG] [Fast Refresh] done in 86ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    2619ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    2710ms] [LOG] [Fast Refresh] done in 91ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    2711ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    2802ms] [LOG] [Fast Refresh] done in 90ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    2803ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    2912ms] [LOG] [Fast Refresh] done in 108ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    2912ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    3208ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    3209ms] [LOG] [Fast Refresh] done in 0ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    3258ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    3259ms] [LOG] [Fast Refresh] done in 2ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    3274ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/dashboard/payments?_rsc=rbrsx:0
+[    3323ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    3365ms] [LOG] [Fast Refresh] done in 41ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    3409ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    3736ms] [LOG] [Fast Refresh] done in 328ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    3744ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    3880ms] [LOG] [Fast Refresh] done in 136ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    4144ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/dashboard/payments:0
+[    4223ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ webpack-internal:///(pages-dir-browser)/./node_modules/react-dom/cjs/react-dom-client.development.js:28004
+[    4259ms] [ERROR] Creating a worker from 'blob:http://localhost:3000/995bdf6a-2c86-4bc7-9d91-b5ce6c8accbe' violates the following Content Security Policy directive: "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://*.sentry.io https://*.posthog.com". Note that 'worker-src' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked. @ webpack-internal:///(pages-dir-browser)/./node_modules/@sentry/replay/build/npm/esm/index.js:5672
+[    4262ms] Error: Manifest file is empty
+    at evalManifest (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/load-manifest.external.js:83:37)
+    at loadManifestFromRelativePath (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/load-manifest.external.js:109:16)
+    at AppPageRouteModule.loadManifests (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:71:36620)
+    at AppPageRouteModule.prepare (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:71:41329)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async Module.handler (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader/index.js?name=app%2Fdashboard%2Fpayments%2Fpage&page=%2Fdashboard%2Fpayments%2Fpage&appPaths=%2Fdashboard%2Fpayments%2Fpage&allNormalizedAppPaths=&pagePath=private-next-app-dir%2Fdashboard%2Fpayments%2Fpage.tsx&appDir=%2FUsers%2Fdaniilkonovalyukpanasyuk%2Fenlaze%2Fapp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=%2FUsers%2Fdaniilkonovalyukpanasyuk%2Fenlaze&isDev=true&tsconfigPath=&basePath=&assetPrefix=&nextConfigOutput=&preferredRegion=&middlewareConfig=e30%3D&isGlobalNotFoundEnabled=!:253:27)
+    at async DevServer.renderToResponseWithComponentsImpl (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/base-server.js:1454:9)
+    at async DevServer.renderPageComponent (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/base-server.js:1506:24)
+    at async DevServer.renderToResponseImpl (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/base-server.js:1556:32)
+    at async DevServer.pipeImpl (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/base-server.js:1043:25)
+    at async NextNodeServer.handleCatchallRenderRequest (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/next-server.js:338:17)
+    at async DevServer.handleRequestImpl (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/base-server.js:934:17)
+    at async (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/dev/next-dev-server.js:394:20)
+    at async Span.traceAsyncFn (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/trace/trace.js:164:20)
+    at async DevServer.handleRequest (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/dev/next-dev-server.js:390:24)
+    at async invokeRender (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/lib/router-server.js:253:21)
+    at async handleRequest (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/lib/router-server.js:452:24)
+    at async requestHandlerImpl (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/lib/router-server.js:501:13)
+    at async Server.requestListener (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/lib/start-server.js:225:13)
+[    4339ms] [LOG] [HMR] connected @ webpack-internal:///(pages-dir-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    4534ms] [WARNING] [Fast Refresh] performing full reload because your application had an unrecoverable error @ webpack-internal:///(pages-dir-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    4575ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(pages-dir-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    5041ms] [WARNING] [Fast Refresh] performing full reload because your application had an unrecoverable error @ webpack-internal:///(pages-dir-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    5076ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(pages-dir-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    5730ms] [ERROR] Creating a worker from 'blob:http://localhost:3000/6b86477a-ae5b-4dc6-bf55-93cbb1e190f9' violates the following Content Security Policy directive: "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://*.sentry.io https://*.posthog.com". Note that 'worker-src' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked. @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/replay/build/npm/esm/index.js:5672
+[    5736ms] [LOG] [Client Instrumentation Hook] Slow execution detected: 46ms (Note: Code download overhead is not included in this measurement) @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    5762ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    5801ms] [LOG] [HMR] connected @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    5821ms] [INFO] [analytics] NEXT_PUBLIC_POSTHOG_KEY not set — analytics disabled @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    5848ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    5998ms] [LOG] [Fast Refresh] done in 150ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    5999ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    6020ms] [LOG] [Fast Refresh] done in 20ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    6117ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    6132ms] [LOG] [Fast Refresh] done in 15ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    6419ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    6436ms] [LOG] [Fast Refresh] done in 16ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    6478ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    6480ms] [LOG] [Fast Refresh] done in 1ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    6500ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/dashboard/payments?_rsc=rbrsx:0
+[    6501ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    7721ms] [ERROR] Creating a worker from 'blob:http://localhost:3000/06905325-b1e1-4bbd-85d7-1afb16a1e23a' violates the following Content Security Policy directive: "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://*.sentry.io https://*.posthog.com". Note that 'worker-src' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked. @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/replay/build/npm/esm/index.js:5672
+[    7727ms] [LOG] [Client Instrumentation Hook] Slow execution detected: 49ms (Note: Code download overhead is not included in this measurement) @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    7754ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    7795ms] [LOG] [HMR] connected @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    7817ms] [INFO] [analytics] NEXT_PUBLIC_POSTHOG_KEY not set — analytics disabled @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    7851ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    7915ms] [LOG] [Fast Refresh] done in 65ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    8068ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    8134ms] [LOG] [Fast Refresh] done in 66ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    8206ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    8225ms] [LOG] [Fast Refresh] done in 19ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    8334ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    8388ms] [LOG] [Fast Refresh] done in 54ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    8440ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    8454ms] [LOG] [Fast Refresh] done in 14ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    8731ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    8745ms] [LOG] [Fast Refresh] done in 14ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    8745ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    8785ms] [LOG] [Fast Refresh] done in 40ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    8799ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    8799ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/dashboard/payments?_rsc=rbrsx:0
+[    9826ms] [ERROR] Creating a worker from 'blob:http://localhost:3000/43591614-c9af-42db-995a-e977fb9114fa' violates the following Content Security Policy directive: "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://*.sentry.io https://*.posthog.com". Note that 'worker-src' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked. @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/replay/build/npm/esm/index.js:5672
+[    9832ms] [LOG] [Client Instrumentation Hook] Slow execution detected: 50ms (Note: Code download overhead is not included in this measurement) @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    9859ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    9892ms] [LOG] [HMR] connected @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    9943ms] [ERROR] Can't perform a React state update on a component that hasn't mounted yet. This indicates that you have a side-effect in your render function that asynchronously tries to update the component. Move this work to useEffect instead. @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[    9947ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   10006ms] [LOG] [Fast Refresh] done in 59ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   10054ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   10070ms] [LOG] [Fast Refresh] done in 15ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   10365ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   10379ms] [LOG] [Fast Refresh] done in 15ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   10421ms] [LOG] [Fast Refresh] done in 57ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   10441ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   10442ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/dashboard/payments?_rsc=rbrsx:0
+[   11311ms] [ERROR] Creating a worker from 'blob:http://localhost:3000/3faef200-3906-460d-9d4b-c86ebe1aa843' violates the following Content Security Policy directive: "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://*.sentry.io https://*.posthog.com". Note that 'worker-src' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked. @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/replay/build/npm/esm/index.js:5672
+[   11317ms] [LOG] [Client Instrumentation Hook] Slow execution detected: 51ms (Note: Code download overhead is not included in this measurement) @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   11345ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   11385ms] [LOG] [HMR] connected @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   11406ms] [INFO] [analytics] NEXT_PUBLIC_POSTHOG_KEY not set — analytics disabled @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   11436ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   11503ms] [LOG] [Fast Refresh] done in 68ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   11604ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   11632ms] [LOG] [Fast Refresh] done in 28ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   11760ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   11810ms] [LOG] [Fast Refresh] done in 50ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   11886ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   11938ms] [LOG] [Fast Refresh] done in 52ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   11995ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   12004ms] [LOG] [Fast Refresh] done in 9ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   12118ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   12128ms] [LOG] [Fast Refresh] done in 10ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   12254ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   12302ms] [LOG] [Fast Refresh] done in 48ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   12359ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   12368ms] [LOG] [Fast Refresh] done in 9ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   12464ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   12480ms] [LOG] [Fast Refresh] done in 16ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   12782ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   12795ms] [LOG] [Fast Refresh] done in 14ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   12800ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   12831ms] [LOG] [Fast Refresh] done in 30ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   12845ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/dashboard/payments?_rsc=rbrsx:0
+[   12857ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   13204ms] Invalid or unexpected token
+[   13848ms] [ERROR] Creating a worker from 'blob:http://localhost:3000/db248136-03f4-4e1c-a204-093b10fabbc5' violates the following Content Security Policy directive: "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://*.sentry.io https://*.posthog.com". Note that 'worker-src' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked. @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/replay/build/npm/esm/index.js:5672
+[   13854ms] [LOG] [Client Instrumentation Hook] Slow execution detected: 49ms (Note: Code download overhead is not included in this measurement) @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   13881ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   13915ms] [LOG] [HMR] connected @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   13973ms] [ERROR] Can't perform a React state update on a component that hasn't mounted yet. This indicates that you have a side-effect in your render function that asynchronously tries to update the component. Move this work to useEffect instead. @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   13978ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   14128ms] [LOG] [Fast Refresh] done in 149ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   14131ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   14193ms] [LOG] [Fast Refresh] done in 62ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   14269ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   14276ms] [LOG] [Fast Refresh] done in 8ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   14396ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   14400ms] [LOG] [Fast Refresh] done in 5ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   14584ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   14600ms] [LOG] [Fast Refresh] done in 16ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   14697ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   14708ms] [LOG] [Fast Refresh] done in 11ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   14855ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   14901ms] [LOG] [Fast Refresh] done in 46ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   14971ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   14976ms] [LOG] [Fast Refresh] done in 6ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   15099ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   15119ms] [LOG] [Fast Refresh] done in 20ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   15222ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   15227ms] [LOG] [Fast Refresh] done in 5ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   15348ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   15355ms] [LOG] [Fast Refresh] done in 6ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   15473ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   15489ms] [LOG] [Fast Refresh] done in 15ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   15590ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   15605ms] [LOG] [Fast Refresh] done in 15ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   15714ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   15721ms] [LOG] [Fast Refresh] done in 7ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   15836ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   15841ms] [LOG] [Fast Refresh] done in 6ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   15967ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   15997ms] [LOG] [Fast Refresh] done in 30ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   16188ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   16204ms] [LOG] [Fast Refresh] done in 17ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   16418ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   16422ms] [LOG] [Fast Refresh] done in 3ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   16537ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   16544ms] [LOG] [Fast Refresh] done in 6ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   16660ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   16665ms] [LOG] [Fast Refresh] done in 4ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   16787ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   16798ms] [LOG] [Fast Refresh] done in 11ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   16908ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   16925ms] [LOG] [Fast Refresh] done in 17ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   17034ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   17042ms] [LOG] [Fast Refresh] done in 7ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   17165ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   17171ms] [LOG] [Fast Refresh] done in 7ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   17287ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   17295ms] [LOG] [Fast Refresh] done in 8ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   17410ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   17417ms] [LOG] [Fast Refresh] done in 8ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   17536ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   17541ms] [LOG] [Fast Refresh] done in 6ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   17659ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   17664ms] [LOG] [Fast Refresh] done in 5ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   17783ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   17788ms] [LOG] [Fast Refresh] done in 5ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   17904ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   17912ms] [LOG] [Fast Refresh] done in 7ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   18029ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   18037ms] [LOG] [Fast Refresh] done in 7ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   18151ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   18159ms] [LOG] [Fast Refresh] done in 7ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   18271ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   18280ms] [LOG] [Fast Refresh] done in 9ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   18428ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   18441ms] [LOG] [Fast Refresh] done in 13ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   18706ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   18714ms] [LOG] [Fast Refresh] done in 9ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   18841ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   18854ms] [LOG] [Fast Refresh] done in 13ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   19053ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   19091ms] [LOG] [Fast Refresh] done in 38ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   19093ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   19098ms] [LOG] [Fast Refresh] done in 5ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   19230ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   19233ms] [LOG] [Fast Refresh] done in 3ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   19358ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   19361ms] [LOG] [Fast Refresh] done in 3ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   19509ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   19514ms] [LOG] [Fast Refresh] done in 5ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   19635ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   19640ms] [LOG] [Fast Refresh] done in 5ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   19762ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   19768ms] [LOG] [Fast Refresh] done in 7ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   19882ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   19887ms] [LOG] [Fast Refresh] done in 5ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   20003ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   20011ms] [LOG] [Fast Refresh] done in 8ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   20120ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   20129ms] [LOG] [Fast Refresh] done in 9ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   20247ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   20254ms] [LOG] [Fast Refresh] done in 6ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   20364ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   20379ms] [LOG] [Fast Refresh] done in 16ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   20494ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   20502ms] [LOG] [Fast Refresh] done in 8ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   20617ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   20622ms] [LOG] [Fast Refresh] done in 5ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   20757ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   20773ms] [LOG] [Fast Refresh] done in 16ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   20976ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   20989ms] [LOG] [Fast Refresh] done in 12ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   21227ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   21233ms] [LOG] [Fast Refresh] done in 5ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   21362ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   21370ms] [LOG] [Fast Refresh] done in 9ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   21492ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   21499ms] [LOG] [Fast Refresh] done in 6ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   21618ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   21623ms] [LOG] [Fast Refresh] done in 6ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   21741ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   21751ms] [LOG] [Fast Refresh] done in 9ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   21865ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   21870ms] [LOG] [Fast Refresh] done in 6ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   21989ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   21998ms] [LOG] [Fast Refresh] done in 9ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   22116ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   22124ms] [LOG] [Fast Refresh] done in 7ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   22242ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   22248ms] [LOG] [Fast Refresh] done in 5ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   22366ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   22374ms] [LOG] [Fast Refresh] done in 7ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   22488ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   22502ms] [LOG] [Fast Refresh] done in 15ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   22614ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   22623ms] [LOG] [Fast Refresh] done in 9ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   22747ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   22770ms] [LOG] [Fast Refresh] done in 23ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   22875ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   22890ms] [LOG] [Fast Refresh] done in 16ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   23002ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   23011ms] [LOG] [Fast Refresh] done in 9ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   23126ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   23140ms] [LOG] [Fast Refresh] done in 15ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   23356ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   23459ms] [LOG] [Fast Refresh] done in 103ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   23708ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   23731ms] [LOG] [Fast Refresh] done in 23ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   23852ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   23865ms] [LOG] [Fast Refresh] done in 14ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   23985ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   23991ms] [LOG] [Fast Refresh] done in 6ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   24123ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   24131ms] [LOG] [Fast Refresh] done in 8ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   24250ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   24309ms] [LOG] [Fast Refresh] done in 59ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   24377ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   24383ms] [LOG] [Fast Refresh] done in 5ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   24544ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   24600ms] [LOG] [Fast Refresh] done in 57ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   24671ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   24676ms] [LOG] [Fast Refresh] done in 6ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   24802ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   24810ms] [LOG] [Fast Refresh] done in 8ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   24937ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   24997ms] [LOG] [Fast Refresh] done in 59ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   25067ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   25072ms] [LOG] [Fast Refresh] done in 5ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   25201ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   25252ms] [LOG] [Fast Refresh] done in 50ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   25329ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   25337ms] [LOG] [Fast Refresh] done in 8ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   25456ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   25462ms] [LOG] [Fast Refresh] done in 6ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   25582ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   25596ms] [LOG] [Fast Refresh] done in 14ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   25710ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   25715ms] [LOG] [Fast Refresh] done in 6ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   25842ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   25857ms] [LOG] [Fast Refresh] done in 16ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   26054ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   26144ms] [LOG] [Fast Refresh] done in 90ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   26265ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   26271ms] [LOG] [Fast Refresh] done in 5ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   26390ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   26395ms] [LOG] [Fast Refresh] done in 5ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   26516ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   26522ms] [LOG] [Fast Refresh] done in 5ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   26642ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   26649ms] [LOG] [Fast Refresh] done in 8ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   26771ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   26827ms] [LOG] [Fast Refresh] done in 57ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   26889ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   26898ms] [LOG] [Fast Refresh] done in 9ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   27010ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   27019ms] [LOG] [Fast Refresh] done in 10ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   27140ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   27145ms] [LOG] [Fast Refresh] done in 6ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   27263ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   27279ms] [LOG] [Fast Refresh] done in 17ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   27393ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   27401ms] [LOG] [Fast Refresh] done in 9ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   27514ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   27523ms] [LOG] [Fast Refresh] done in 10ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   27637ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   27651ms] [LOG] [Fast Refresh] done in 14ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   27758ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   27766ms] [LOG] [Fast Refresh] done in 9ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   27886ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   27942ms] [LOG] [Fast Refresh] done in 57ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   28052ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   28144ms] [LOG] [Fast Refresh] done in 88ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   28160ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   28456ms] [LOG] [Fast Refresh] done in 295ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   28692ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   28702ms] [LOG] [Fast Refresh] done in 11ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   28834ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   28842ms] [LOG] [Fast Refresh] done in 8ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   28971ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   28980ms] [LOG] [Fast Refresh] done in 8ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   29107ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   29115ms] [LOG] [Fast Refresh] done in 7ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   29231ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   29236ms] [LOG] [Fast Refresh] done in 6ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   29353ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   29358ms] [LOG] [Fast Refresh] done in 5ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   29485ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   29492ms] [LOG] [Fast Refresh] done in 8ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   29608ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   29615ms] [LOG] [Fast Refresh] done in 7ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   29820ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   29932ms] [LOG] [Fast Refresh] done in 113ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   30179ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   30279ms] [LOG] [Fast Refresh] done in 99ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   30374ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   30401ms] [LOG] [Fast Refresh] done in 28ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   30530ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   30542ms] [LOG] [Fast Refresh] done in 13ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   30681ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   30696ms] [LOG] [Fast Refresh] done in 15ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   30828ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   30849ms] [LOG] [Fast Refresh] done in 22ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   30983ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   30993ms] [LOG] [Fast Refresh] done in 11ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   31597ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   31633ms] [LOG] [Fast Refresh] done in 37ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   31803ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   31823ms] [LOG] [Fast Refresh] done in 21ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   31946ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   31964ms] [LOG] [Fast Refresh] done in 18ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   32088ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   32097ms] [LOG] [Fast Refresh] done in 9ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   32239ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   32258ms] [LOG] [Fast Refresh] done in 19ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   32377ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   32387ms] [LOG] [Fast Refresh] done in 9ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   32516ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   32526ms] [LOG] [Fast Refresh] done in 10ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   32666ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   32684ms] [LOG] [Fast Refresh] done in 19ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   32799ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   32821ms] [LOG] [Fast Refresh] done in 22ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   32934ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   32942ms] [LOG] [Fast Refresh] done in 9ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   33164ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   33196ms] [LOG] [Fast Refresh] done in 31ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   33198ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   33207ms] [LOG] [Fast Refresh] done in 10ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   33334ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   33369ms] [LOG] [Fast Refresh] done in 34ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   33511ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   33521ms] [LOG] [Fast Refresh] done in 9ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   34637ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/dashboard/payments:0
+[   35243ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ webpack-internal:///(pages-dir-browser)/./node_modules/react-dom/cjs/react-dom-client.development.js:28004
+[   35291ms] [ERROR] Creating a worker from 'blob:http://localhost:3000/9e09788b-4668-4190-b601-adc3eb254df8' violates the following Content Security Policy directive: "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://*.sentry.io https://*.posthog.com". Note that 'worker-src' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked. @ webpack-internal:///(pages-dir-browser)/./node_modules/@sentry/replay/build/npm/esm/index.js:5672
+[   35292ms] [LOG] [Client Instrumentation Hook] Slow execution detected: 16ms (Note: Code download overhead is not included in this measurement) @ webpack-internal:///(pages-dir-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   35315ms] SyntaxError: Unexpected end of JSON input
+    at JSON.parse (<anonymous>)
+    at loadManifest (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/load-manifest.external.js:54:25)
+    at loadManifestFromRelativePath (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/load-manifest.external.js:111:12)
+    at AppPageRouteModule.loadManifests (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:71:33979)
+    at AppPageRouteModule.prepare (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:71:41329)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async Module.handler (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader/index.js?name=app%2Fdashboard%2Fpayments%2Fpage&page=%2Fdashboard%2Fpayments%2Fpage&appPaths=%2Fdashboard%2Fpayments%2Fpage&allNormalizedAppPaths=&pagePath=private-next-app-dir%2Fdashboard%2Fpayments%2Fpage.tsx&appDir=%2FUsers%2Fdaniilkonovalyukpanasyuk%2Fenlaze%2Fapp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=%2FUsers%2Fdaniilkonovalyukpanasyuk%2Fenlaze&isDev=true&tsconfigPath=&basePath=&assetPrefix=&nextConfigOutput=&preferredRegion=&middlewareConfig=e30%3D&isGlobalNotFoundEnabled=!:253:27)
+    at async DevServer.renderToResponseWithComponentsImpl (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/base-server.js:1454:9)
+    at async DevServer.renderPageComponent (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/base-server.js:1506:24)
+    at async DevServer.renderToResponseImpl (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/base-server.js:1556:32)
+    at async DevServer.pipeImpl (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/base-server.js:1043:25)
+    at async NextNodeServer.handleCatchallRenderRequest (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/next-server.js:338:17)
+    at async DevServer.handleRequestImpl (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/base-server.js:934:17)
+    at async (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/dev/next-dev-server.js:394:20)
+    at async Span.traceAsyncFn (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/trace/trace.js:164:20)
+    at async DevServer.handleRequest (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/dev/next-dev-server.js:390:24)
+    at async invokeRender (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/lib/router-server.js:253:21)
+    at async handleRequest (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/lib/router-server.js:452:24)
+    at async requestHandlerImpl (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/lib/router-server.js:501:13)
+    at async Server.requestListener (file:///Users/daniilkonovalyukpanasyuk/enlaze/node_modules/next/dist/server/lib/start-server.js:225:13)
+[   35314ms] [LOG] [HMR] connected @ webpack-internal:///(pages-dir-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   35371ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(pages-dir-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   35712ms] [WARNING] [Fast Refresh] performing full reload because your application had an unrecoverable error @ webpack-internal:///(pages-dir-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   35940ms] [WARNING] [Fast Refresh] performing full reload because your application had an unrecoverable error @ webpack-internal:///(pages-dir-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   35956ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(pages-dir-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   36244ms] [WARNING] [Fast Refresh] performing full reload because your application had an unrecoverable error @ webpack-internal:///(pages-dir-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   36450ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(pages-dir-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   37165ms] [ERROR] Creating a worker from 'blob:http://localhost:3000/52c94247-1420-4a1f-b039-425c655d8186' violates the following Content Security Policy directive: "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://*.sentry.io https://*.posthog.com". Note that 'worker-src' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked. @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/replay/build/npm/esm/index.js:5672
+[   37173ms] [LOG] [Client Instrumentation Hook] Slow execution detected: 67ms (Note: Code download overhead is not included in this measurement) @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   37207ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   37275ms] [LOG] [HMR] connected @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   37294ms] [ERROR] Can't perform a React state update on a component that hasn't mounted yet. This indicates that you have a side-effect in your render function that asynchronously tries to update the component. Move this work to useEffect instead. @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   37303ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   37739ms] [LOG] [Fast Refresh] done in 435ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   37745ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   37826ms] [LOG] [Fast Refresh] done in 81ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   37959ms] [INFO] [analytics] NEXT_PUBLIC_POSTHOG_KEY not set — analytics disabled @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   37967ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   38244ms] [LOG] [Fast Refresh] done in 277ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   38252ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   38347ms] [LOG] [Fast Refresh] done in 95ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   38407ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   38416ms] [LOG] [Fast Refresh] done in 10ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   38756ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
+[   38779ms] [LOG] [Fast Refresh] done in 23ms @ webpack-internal:///(app-pages-browser)/./node_modules/@sentry/core/build/esm/instrument/console.js:53
