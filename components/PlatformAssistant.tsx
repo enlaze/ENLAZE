@@ -409,13 +409,16 @@ export default function PlatformAssistant() {
             : `Te acompaño en ${guide.label}`;
 
   return (
+    /* `pointer-events-none` en el contenedor: su caja es tan ancha como el
+       panel abierto y, aunque esté cerrado, se comía clics del contenido que
+       tiene debajo. Solo la burbuja y el panel reciben puntero. */
     <div
-      className="fixed right-5 z-[60] transition-[bottom] duration-300 ease-out"
+      className="pointer-events-none fixed right-5 z-[60] transition-[bottom] duration-300 ease-out"
       style={{ bottom: "calc(1.25rem + var(--enlaze-price-tracker-offset, 0px))" }}
     >
       {open && (
         <section
-          className="mb-3 flex h-[min(650px,78vh)] w-[min(400px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900"
+          className="pointer-events-auto mb-3 flex h-[min(650px,78vh)] w-[min(400px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900"
           style={{ maxHeight: "calc(100vh - 2.5rem - var(--enlaze-price-tracker-offset, 0px))" }}
         >
           <header className="flex items-center gap-3 border-b border-navy-100 bg-navy-900 px-4 py-3 text-white dark:border-zinc-700">
@@ -572,12 +575,23 @@ export default function PlatformAssistant() {
           setOpen(nextOpen);
           if (!nextOpen) stopConversation();
         }}
-        className="ml-auto flex h-14 items-center gap-2 rounded-full bg-navy-900 px-4 font-bold text-white shadow-xl transition hover:-translate-y-0.5 hover:bg-navy-800 dark:border dark:border-zinc-700 dark:bg-zinc-800"
+        className="group pointer-events-auto ml-auto flex h-14 items-center rounded-full bg-navy-900 px-[18px] font-bold text-white shadow-xl transition-[transform,background-color] hover:-translate-y-0.5 hover:bg-navy-800 dark:border dark:border-zinc-700 dark:bg-zinc-800"
         aria-label={open ? "Cerrar Guía ENLAZE" : "Abrir Guía ENLAZE"}
       >
-        <Bot className="h-5 w-5 text-brand-green" />
-        <span className="text-sm">Ayuda IA</span>
-        {conversationMode && <span className="h-2 w-2 animate-pulse rounded-full bg-brand-green" aria-hidden="true" />}
+        <Bot className="h-5 w-5 shrink-0 text-brand-green" />
+        {/* El rótulo vive dentro de una caja que crece de 0 a su ancho: en
+            reposo la burbuja mide 56px (un círculo) y no invade la columna de
+            contenido; al apuntarla o llegar con el teclado se abre a píldora.
+            El nombre accesible no depende de esto, va en aria-label. */}
+        <span
+          aria-hidden="true"
+          className="max-w-0 overflow-hidden whitespace-nowrap pl-0 text-sm opacity-0 transition-[max-width,opacity,padding] duration-200 ease-out group-hover:max-w-[6rem] group-hover:pl-2 group-hover:opacity-100 group-focus-visible:max-w-[6rem] group-focus-visible:pl-2 group-focus-visible:opacity-100"
+        >
+          Ayuda IA
+        </span>
+        {conversationMode && (
+          <span className="ml-2 h-2 w-2 shrink-0 animate-pulse rounded-full bg-brand-green" aria-hidden="true" />
+        )}
       </button>
     </div>
   );

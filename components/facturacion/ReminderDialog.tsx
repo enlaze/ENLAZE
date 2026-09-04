@@ -11,7 +11,7 @@
  *    enchufarse aquí — no se guarda ningún estado todavía.
  */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { FormField, Input } from "@/components/ui/form-fields";
@@ -35,28 +35,32 @@ function defaultMessage(inv: IssuedInvoice) {
   ].join("\n");
 }
 
-export default function ReminderDialog({
+/**
+ * El borrador (destinatario, asunto y cuerpo) se rellena a partir de la
+ * factura. Antes eso lo hacía un efecto que llamaba a tres `setState` en su
+ * cuerpo: React lo desaconseja (renderizado en cascada) y ESLint lo marcaba
+ * con `react-hooks/set-state-in-effect`.
+ *
+ * En vez de un efecto, el estado nace ya con el valor bueno y el diálogo se
+ * remonta al cambiar de factura, gracias a la `key` de abajo. El
+ * comportamiento es el mismo que antes: abrir el diálogo —o cambiar de
+ * factura sin cerrarlo— repone el borrador; mientras está abierto, lo que
+ * escriba el usuario se conserva.
+ */
+function ReminderForm({
   invoice,
   onClose,
 }: {
-  invoice: IssuedInvoice | null;
+  invoice: IssuedInvoice;
   onClose: () => void;
 }) {
   const toast = useToast();
-  const [to, setTo] = useState("");
-  const [subject, setSubject] = useState("");
-  const [message, setMessage] = useState("");
+  const [to, setTo] = useState(() => invoice.clients?.email || invoice.client_email || "");
+  const [subject, setSubject] = useState(() => defaultSubject(invoice));
+  const [message, setMessage] = useState(() => defaultMessage(invoice));
   const [sending, setSending] = useState(false);
 
-  useEffect(() => {
-    if (!invoice) return;
-    setTo(invoice.clients?.email || invoice.client_email || "");
-    setSubject(defaultSubject(invoice));
-    setMessage(defaultMessage(invoice));
-  }, [invoice]);
-
   async function handleSend() {
-    if (!invoice) return;
     if (!to.trim()) {
       toast.error("Falta el email del cliente", {
         description: "Añádelo aquí o en la ficha del cliente.",
@@ -85,8 +89,6 @@ export default function ReminderDialog({
       setSending(false);
     }
   }
-
-  if (!invoice) return null;
 
   return (
     <Dialog open onClose={onClose} widthClass="max-w-lg" labelledBy="reminder-title" describedBy="reminder-desc">
@@ -148,4 +150,16 @@ export default function ReminderDialog({
       </DialogFooter>
     </Dialog>
   );
+}
+
+export default function ReminderDialog({
+  invoice,
+  onClose,
+}: {
+  invoice: IssuedInvoice | null;
+  onClose: () => void;
+}) {
+  if (!invoice) return null;
+  // La `key` es la que repone el borrador al saltar de una factura a otra.
+  return <ReminderForm key={invoice.id} invoice={invoice} onClose={onClose} />;
 }
