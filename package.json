@@ -17,6 +17,7 @@
     "test:budget-timeline": "node --import tsx --test __tests__/budget-timeline.test.mjs",
     "test:budget-recalculation": "node --test __tests__/budget-recalculation.test.mjs",
     "test:replace-budget-items-migration": "node --test __tests__/replace-budget-items-migration.test.mjs",
+    "test:replace-budget-items-integration": "node --test __tests__/replace-budget-items.integration.test.mjs",
     "test:budget-finalization": "node --import tsx --test __tests__/budget-finalization.test.mjs",
     "test:scheduled": "node --import tsx --test __tests__/scheduled-messages.test.mjs",
     "test:budget-pdf-completion": "node --import tsx --test __tests__/budget-ai-pdf-completion.test.mjs",
@@ -60,6 +61,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
+    "pg": "^8.23.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.7",
     "typescript": "^5"

@@ -1,0 +1,200 @@
+# Ejecuta el banco conductual de `public.replace_budget_items` contra un
+# PostgreSQL 17 levantado y destruido dentro de la propia ejecución.
+#
+# POR QUÉ `docker run` Y NO UN BLOQUE `services:`
+# El banco exige dos cosas que un servicio de GitHub Actions no puede dar. La
+# primera es el parámetro de servidor `-c enlaze.test_cluster_marker=...`: los
+# servicios no admiten argumentos para el proceso de la imagen, sólo variables de
+# entorno y opciones de `docker create`. La segunda es el nombre del contenedor:
+# los servicios reciben un nombre generado, y los pasos de logs y limpieza de
+# abajo necesitan uno fijo. Con `docker run` se controlan ambas.
+#
+# El contenedor NO lleva `--rm` a propósito: si el arranque falla, un contenedor
+# autoborrado se lleva consigo los logs, que son justo lo que hace falta leer. Se
+# elimina explícitamente al final, pase lo que pase.
+#
+# NO HAY SECRETOS AQUÍ. La contraseña `postgres` es la del contenedor efímero de
+# esta ejecución, que nace y muere dentro del runner y no acepta conexiones de
+# fuera —el puerto se publica sólo en 127.0.0.1—. Convertirla en secret sugeriría
+# que protege algo. No protege nada. Este workflow no lee `secrets`, no habla con
+# Supabase y no toca ninguna base externa.
+name: Replace budget items integration
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "supabase/migrations/20260904120000_replace_budget_items.sql"
+      - "__tests__/replace-budget-items.integration.test.mjs"
+      - "__tests__/support/bootstrap-budget-schema.sql"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/replace-budget-items-integration.yml"
+  workflow_dispatch:
+
+# Sólo lectura. Este workflow no comenta, no etiqueta, no publica y no escribe en
+# el repositorio: no hay ninguna razón para pedir más.
+permissions:
+  contents: read
+
+concurrency:
+  group: replace-budget-items-integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  banco-conductual:
+    name: Banco conductual sobre PostgreSQL 17 desechable
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v6
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Levantar el PostgreSQL desechable
+        shell: bash
+        run: |
+          docker run --detach \
+            --name enlaze-replace-items-test \
+            --publish 127.0.0.1:55432:5432 \
+            --env POSTGRES_PASSWORD=postgres \
+            --env POSTGRES_DB=enlaze_replace_items_test \
+            --health-cmd "pg_isready -U postgres -d enlaze_replace_items_test" \
+            --health-interval 2s \
+            --health-timeout 3s \
+            --health-retries 5 \
+            postgres:17 \
+            -c enlaze.test_cluster_marker=replace_items_2f1db
+
+      - name: Esperar a que el contenedor esté healthy
+        shell: bash
+        run: |
+          # `docker run` vuelve mucho antes de que el servidor acepte conexiones:
+          # la imagen ejecuta primero su secuencia de inicialización, que incluye
+          # un arranque interno temporal, y sólo después abre el puerto
+          # publicado. Lanzar el banco en ese hueco produce un fallo de conexión
+          # que no dice nada sobre la RPC. La espera está acotada: 60 intentos de
+          # un segundo.
+          #
+          # `unhealthy` NO ES CONCLUYENTE Y NO TERMINA LA ESPERA. Docker declara
+          # `unhealthy` en cuanto se acumulan `--health-retries` comprobaciones
+          # fallidas seguidas, y durante la inicialización de la imagen oficial es
+          # perfectamente normal que `pg_isready` falle varias veces seguidas: el
+          # servidor arranca primero en modo interno, sin el puerto definitivo, y
+          # sólo al terminar los scripts de inicialización empieza a aceptar
+          # conexiones. Un contenedor que pasa por `unhealthy` y luego llega a
+          # `healthy` es un contenedor sano que tardó; tratar ese `unhealthy` como
+          # veredicto produciría un falso negativo dentro del plazo autorizado.
+          # Por eso `unhealthy` sigue esperando: lo que decide es agotar los 60 s.
+          #
+          # Sólo se sale antes de tiempo por situaciones de las que no se vuelve:
+          # `exited`, `dead` o un contenedor que `docker inspect` ya no encuentra
+          # después de que `docker run` haya terminado bien. Esas no mejoran
+          # esperando, y esperar sólo retrasaría el diagnóstico.
+          #
+          # LA ÚNICA SALIDA CON ÉXITO exige haber observado en la misma iteración
+          # State.Status=running Y State.Health.Status=healthy. No hay ninguna otra
+          # ruta que llegue al paso del banco.
+          ultimo=""
+          estado="desconocido"
+          salud="desconocida"
+
+          for intento in $(seq 1 60); do
+            observacion="$(docker inspect \
+              --format '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}sin-healthcheck{{end}}' \
+              enlaze-replace-items-test 2>/dev/null)" || observacion=""
+
+            if [ -z "$observacion" ]; then
+              echo "::error::docker inspect no encuentra el contenedor enlaze-replace-items-test, aunque docker run terminó correctamente. Ha desaparecido durante la espera; no es un estado del que pueda recuperarse. El banco no se ejecuta."
+              docker logs enlaze-replace-items-test 2>&1 || true
+              exit 1
+            fi
+
+            read -r estado salud <<< "$observacion"
+
+            # Se traza cada CAMBIO de estado, no cada segundo, para que el log
+            # muestre el recorrido real del contenedor sin sesenta líneas iguales.
+            if [ "$observacion" != "$ultimo" ]; then
+              echo "t+${intento}s: State.Status=${estado} State.Health.Status=${salud}"
+              ultimo="$observacion"
+            fi
+
+            case "$estado" in
+              exited|dead)
+                echo "::error::El contenedor terminó en estado '${estado}' (salud '${salud}') tras ${intento} s. De ahí no se vuelve. El banco no se ejecuta."
+                docker logs enlaze-replace-items-test 2>&1 || true
+                exit 1
+                ;;
+            esac
+
+            # running+healthy es la única combinación que autoriza continuar.
+            # `created`, `restarting`, `paused`, `running+starting` y
+            # `running+unhealthy` siguen esperando: ninguno es definitivo dentro
+            # del plazo.
+            if [ "$estado" = "running" ] && [ "$salud" = "healthy" ]; then
+              echo "Contenedor running y healthy tras ${intento} s. Se ejecuta el banco."
+              exit 0
+            fi
+
+            sleep 1
+          done
+
+          echo "::error::Vencido el plazo de 60 s sin observar running+healthy. Último estado: State.Status=${estado} State.Health.Status=${salud}. El banco no se ejecuta."
+          docker logs enlaze-replace-items-test 2>&1 || true
+          exit 1
+
+      - name: Ejecutar el banco conductual
+        shell: bash
+        env:
+          RUN_REPLACE_ITEMS_INTEGRATION_TESTS: "1"
+          REPLACE_ITEMS_TEST_DB_ACK: DISPOSABLE_ONLY
+          REPLACE_ITEMS_TEST_CLUSTER_ACK: DISPOSABLE_CLUSTER
+          TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:55432/enlaze_replace_items_test
+        run: |
+          # El banco ABORTA si encuentra cualquiera de estas variables de libpq en
+          # el entorno, porque `pg` las usa para rellenar lo que la cadena de
+          # conexión no fije y `PGOPTIONS` además permite falsificar por sesión el
+          # marcador `enlaze.test_cluster_marker`. Hoy el runner no las trae, pero
+          # eso no es una garantía: basta con que una acción anterior o una
+          # variable de repositorio las introduzca para que el banco se detenga.
+          # Limpiarlas aquí hace que este paso dependa sólo de lo que declara.
+          env -u PGOPTIONS \
+              -u PGHOST \
+              -u PGHOSTADDR \
+              -u PGPORT \
+              -u PGDATABASE \
+              -u PGUSER \
+              -u PGPASSWORD \
+              -u PGPASSFILE \
+              -u PGSERVICE \
+              -u PGSERVICEFILE \
+              -u PGSSLMODE \
+              npm run test:replace-budget-items-integration
+
+      - name: Mostrar los logs del contenedor
+        if: always()
+        shell: bash
+        run: |
+          # Con `if: always()` para que estén disponibles precisamente cuando el
+          # banco ha fallado. Tolera que el contenedor no exista —el paso de
+          # arranque pudo no llegar a ejecutarse— sin convertir eso en un fallo,
+          # porque este paso diagnostica, no juzga.
+          docker logs enlaze-replace-items-test 2>&1 \
+            || echo "No hay contenedor enlaze-replace-items-test del que leer logs."
+
+      - name: Eliminar el contenedor
+        if: always()
+        shell: bash
+        run: |
+          docker rm --force enlaze-replace-items-test \
+            || echo "El contenedor enlaze-replace-items-test ya no existía."
