@@ -9,11 +9,15 @@
  *   - Los KPIs suben al resumen del hub (BillingSummary), así que aquí no se
  *     repiten.
  *   - Las facturas vencidas ganan la acción de recordatorio de cobro.
+ *
+ * El pulido del rediseño es solo de acabado: rejilla de acciones a 40px,
+ * aviso de vencidas sobre los tokens `danger`, etiquetas de estado con
+ * contraste y celdas de la tabla afinadas. Ni la creación con cadena
+ * Verifactu ni los filtros cambian.
  */
 
 import { useState } from "react";
 import Link from "next/link";
-import Badge from "@/components/ui/badge";
 import EmptyState from "@/components/ui/empty-state";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
@@ -28,6 +32,13 @@ import {
   statusMap,
   type IssuedInvoice,
 } from "./shared";
+import {
+  FactCard,
+  StatusPill,
+  TabToolbar,
+  factBtnPrimary,
+  factBtnSecondary,
+} from "./ui";
 import type { IssuedInvoicesState } from "./useIssuedInvoices";
 
 export default function EmitidasTab({ state }: { state: IssuedInvoicesState }) {
@@ -140,7 +151,7 @@ export default function EmitidasTab({ state }: { state: IssuedInvoicesState }) {
       render: (inv) => (
         <Link
           href={`/dashboard/issued-invoices/${inv.id}`}
-          className="text-navy-900 dark:text-white hover:text-brand-green font-mono font-medium transition"
+          className="font-mono text-[12.5px] font-medium text-navy-900 transition hover:text-brand-green dark:text-white"
           onClick={(e) => e.stopPropagation()}
         >
           {inv.invoice_number}
@@ -153,7 +164,9 @@ export default function EmitidasTab({ state }: { state: IssuedInvoicesState }) {
       sortable: true,
       exportValue: (inv) => inv.clients?.name || inv.client_name || "—",
       render: (inv) => (
-        <span className="text-navy-700 dark:text-zinc-300">{inv.clients?.name || inv.client_name || "—"}</span>
+        <span className="font-semibold text-navy-900 dark:text-white">
+          {inv.clients?.name || inv.client_name || "—"}
+        </span>
       ),
     },
     {
@@ -176,9 +189,11 @@ export default function EmitidasTab({ state }: { state: IssuedInvoicesState }) {
         const overdue = isOverdueInvoice(inv);
         const days = overdue && inv.due_date ? daysSince(inv.due_date) : 0;
         return (
-          <span className={overdue ? "text-red-600 dark:text-red-400 font-medium" : "text-navy-600 dark:text-zinc-400"}>
+          <span
+            className={`tabular-nums ${overdue ? "font-semibold text-danger-ink" : "text-navy-600 dark:text-zinc-400"}`}
+          >
             {fmtDate(inv.due_date)}
-            {overdue && <span className="ml-1 text-xs">({days}d)</span>}
+            {overdue && <span className="ml-1 text-[11px] font-semibold">({days}d)</span>}
           </span>
         );
       },
@@ -201,12 +216,12 @@ export default function EmitidasTab({ state }: { state: IssuedInvoicesState }) {
       sortable: true,
       exportValue: (inv) => statusMap[inv.status]?.label || inv.status,
       render: (inv) => {
-        const st = statusMap[inv.status] || { label: inv.status, variant: "gray" as const };
+        const st = statusMap[inv.status] || { label: inv.status, tone: "neutral" as const };
         return (
-          <div className="flex items-center gap-1.5">
-            <Badge variant={st.variant}>{st.label}</Badge>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <StatusPill tone={st.tone}>{st.label}</StatusPill>
             {isOverdueInvoice(inv) && inv.status !== "overdue" && (
-              <Badge variant="red">Vencida</Badge>
+              <StatusPill tone="danger">Vencida</StatusPill>
             )}
           </div>
         );
@@ -221,7 +236,9 @@ export default function EmitidasTab({ state }: { state: IssuedInvoicesState }) {
       exportValue: (inv) => (inv.verifactu_registered ? "Sí" : "No"),
       render: (inv) =>
         inv.verifactu_registered ? (
-          <span className="text-xs text-green-600 font-medium" title="Hash Verifactu registrado">Sí</span>
+          <span className="text-xs font-semibold text-success-ink" title="Hash Verifactu registrado">
+            Sí
+          </span>
         ) : (
           <span className="text-xs text-navy-400 dark:text-zinc-500">No</span>
         ),
@@ -232,21 +249,27 @@ export default function EmitidasTab({ state }: { state: IssuedInvoicesState }) {
       align: "right",
       alwaysVisible: true,
       render: (inv) => (
-        <div className="flex justify-end gap-3" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-end gap-3.5" onClick={(e) => e.stopPropagation()}>
           {isOverdueInvoice(inv) && (
             <button
               onClick={() => setReminderFor(inv)}
-              className="text-xs font-medium text-red-600 hover:underline dark:text-red-400"
+              className="cursor-pointer text-[13px] font-semibold text-danger-ink hover:underline"
               title="Reclamar el cobro de esta factura"
             >
               Recordar
             </button>
           )}
-          <Link href={`/dashboard/issued-invoices/${inv.id}`} className="text-xs text-brand-green hover:underline">
+          <Link
+            href={`/dashboard/issued-invoices/${inv.id}`}
+            className="text-[13px] font-semibold text-success-ink hover:underline"
+          >
             Detalle
           </Link>
           {inv.status === "draft" && (
-            <button onClick={() => handleDelete(inv.id)} className="text-xs text-red-600 hover:underline dark:text-red-400">
+            <button
+              onClick={() => handleDelete(inv.id)}
+              className="cursor-pointer text-[13px] font-semibold text-danger-ink hover:underline"
+            >
               Eliminar
             </button>
           )}
@@ -270,86 +293,96 @@ export default function EmitidasTab({ state }: { state: IssuedInvoicesState }) {
   const overdue = invoices.filter(isOverdueInvoice);
 
   return (
-    <div>
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-navy-500 dark:text-zinc-400">
-          Facturación a clientes con Verifactu y Facturae
-        </p>
-        <div className="flex gap-2">
-          <Link href="/dashboard/settings/fiscal"
-            className="rounded-xl border border-navy-200 bg-white px-4 py-2.5 text-sm text-navy-700 transition hover:bg-navy-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">
-            Ajustes fiscales
-          </Link>
-          <button onClick={() => setShowForm(!showForm)}
-            className="rounded-xl bg-brand-green px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-green-dark">
-            + Nueva factura
-          </button>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <TabToolbar
+        actions={
+          <>
+            <Link href="/dashboard/settings/fiscal" className={factBtnSecondary}>
+              Ajustes fiscales
+            </Link>
+            <button onClick={() => setShowForm(!showForm)} className={factBtnPrimary}>
+              + Nueva factura
+            </button>
+          </>
+        }
+      >
+        Facturación a clientes con Verifactu y Facturae
+      </TabToolbar>
 
       {/* Aviso de vencidas + entrada al recordatorio de cobro */}
       {overdue.length > 0 && (
-        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900/50 dark:bg-red-950/30">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-medium text-red-900 dark:text-red-200">
-                Tienes {overdue.length} factura{overdue.length > 1 ? "s" : ""} vencida{overdue.length > 1 ? "s" : ""} sin cobrar
-                {" · "}{eur(overdue.reduce((s, i) => s + Number(i.total || 0), 0))}
-              </p>
-              <p className="mt-1 text-xs text-red-700 dark:text-red-300/90">
-                Reclama el cobro desde la tabla. Pronto podrás dejar los recordatorios en automático.
-              </p>
-            </div>
-            <button
-              onClick={() => setReminderFor(overdue[0])}
-              className="shrink-0 rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-red-700"
-            >
-              Reclamar la más antigua
-            </button>
+        <div className="flex flex-col gap-4 rounded-2xl border border-danger/30 bg-danger/8 px-[22px] py-[18px] sm:flex-row sm:items-center sm:gap-5">
+          <div className="flex flex-1 flex-col gap-1">
+            <span className="text-[14.5px] font-semibold text-danger-ink">
+              Tienes {overdue.length} factura{overdue.length > 1 ? "s" : ""} vencida
+              {overdue.length > 1 ? "s" : ""} sin cobrar
+              {" · "}
+              {eur(overdue.reduce((s, i) => s + Number(i.total || 0), 0))}
+            </span>
+            <span className="text-[13.5px] text-danger-ink/85">
+              Reclama el cobro desde la tabla. Pronto podrás dejar los recordatorios en automático.
+            </span>
           </div>
+          <button
+            onClick={() => setReminderFor(overdue[0])}
+            /* En claro el botón es macizo (danger-ink + blanco, como el
+               diseño). En oscuro `--color-danger-ink` es un rojo claro: un
+               botón macizo de ese color gritaría, así que pasa a relleno
+               tintado con aro, que es como el dashboard resuelve el resto de
+               acciones destructivas sobre panel oscuro. */
+            className="inline-flex h-[38px] shrink-0 cursor-pointer items-center justify-center rounded-[10px] bg-danger-ink px-4 text-[13.5px] font-semibold text-white transition-colors hover:bg-danger dark:bg-danger/20 dark:text-danger-ink dark:ring-1 dark:ring-inset dark:ring-danger/40 dark:hover:bg-danger/30"
+          >
+            Reclamar la más antigua
+          </button>
         </div>
       )}
 
       {/* Alta de factura */}
       {showForm && (
-        <div className="mb-6 rounded-2xl border border-navy-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
-          <h3 className="mb-4 text-sm font-semibold text-navy-900 dark:text-white">Nueva factura emitida</h3>
+        <FactCard className="px-6 py-[22px]">
+          <h3 className="mb-4 text-base font-bold tracking-[-0.01em] text-navy-900 dark:text-white">
+            Nueva factura emitida
+          </h3>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
-              <label className="mb-1 block text-xs text-navy-600 dark:text-zinc-400">Cliente *</label>
+              <label className="mb-1.5 block text-xs font-medium text-navy-600 dark:text-zinc-400">Cliente *</label>
               <select value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })} className={inputCls}>
                 <option value="">Seleccionar...</option>
                 {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs text-navy-600 dark:text-zinc-400">Obra</label>
+              <label className="mb-1.5 block text-xs font-medium text-navy-600 dark:text-zinc-400">Obra</label>
               <select value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })} className={inputCls}>
                 <option value="">Sin asignar</option>
                 {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs text-navy-600 dark:text-zinc-400">Fecha emisión</label>
+              <label className="mb-1.5 block text-xs font-medium text-navy-600 dark:text-zinc-400">Fecha emisión</label>
               <input type="date" value={form.issue_date} onChange={(e) => setForm({ ...form, issue_date: e.target.value })} className={inputCls} />
             </div>
             <div>
-              <label className="mb-1 block text-xs text-navy-600 dark:text-zinc-400">Fecha vencimiento</label>
+              <label className="mb-1.5 block text-xs font-medium text-navy-600 dark:text-zinc-400">Fecha vencimiento</label>
               <input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} className={inputCls} />
             </div>
             <div className="md:col-span-2">
-              <label className="mb-1 block text-xs text-navy-600 dark:text-zinc-400">Notas</label>
+              <label className="mb-1.5 block text-xs font-medium text-navy-600 dark:text-zinc-400">Notas</label>
               <input type="text" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className={inputCls} placeholder="Concepto / observaciones" />
             </div>
           </div>
-          <div className="mt-4 flex justify-end gap-3">
-            <button onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-navy-600 hover:text-navy-900 dark:text-zinc-400">Cancelar</button>
-            <button onClick={handleCreate} disabled={saving}
-              className="rounded-lg bg-brand-green px-5 py-2 text-sm font-medium text-white transition hover:bg-brand-green-dark disabled:opacity-50">
+          <div className="mt-5 flex justify-end gap-2.5">
+            <button
+              onClick={() => setShowForm(false)}
+              className="cursor-pointer px-4 text-sm font-medium text-navy-600 transition-colors hover:text-navy-900 dark:text-zinc-400 dark:hover:text-white"
+            >
+              Cancelar
+            </button>
+            <button onClick={handleCreate} disabled={saving} className={factBtnPrimary}>
               {saving ? "Creando..." : "Crear factura"}
             </button>
           </div>
-        </div>
+        </FactCard>
       )}
 
       {invoices.length === 0 ? (
@@ -357,10 +390,7 @@ export default function EmitidasTab({ state }: { state: IssuedInvoicesState }) {
           title="Aún no has emitido facturas"
           description="Crea tu primera factura emitida para empezar a facturar a tus clientes con Verifactu y Facturae."
           action={
-            <button
-              onClick={() => setShowForm(true)}
-              className="rounded-xl bg-brand-green px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-green-dark"
-            >
+            <button onClick={() => setShowForm(true)} className={factBtnPrimary}>
               + Nueva factura
             </button>
           }

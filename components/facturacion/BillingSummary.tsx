@@ -8,10 +8,15 @@
  * emitidas (emitido / cobrado / pendiente / vencidas); aquí solo cambian de
  * sitio y "Vencido" pasa a expresarse en euros además de en número de
  * facturas, porque es el dato que dispara la acción de cobro.
+ *
+ * El pulido del rediseño no toca ni un cálculo: afina las tarjetas (rótulo
+ * pequeño, cifra tabular con el color de su significado) y da al gráfico la
+ * rejilla de 12 columnas, las barras apiladas con la esquina superior
+ * redondeada y la línea de base del diseño.
  */
 
-import { StatCard } from "@/components/ui/card";
 import { eur, isOverdueInvoice, type IssuedInvoice } from "./shared";
+import { FactCard, FactLabel, StatTile } from "./ui";
 
 const MONTHS_SHOWN = 12;
 const MONTH_LABELS = ["E", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
@@ -58,56 +63,78 @@ function MonthlyChart({ invoices }: { invoices: IssuedInvoice[] }) {
   const periodTotal = months.reduce((s, m) => s + m.facturado, 0);
 
   return (
-    <div className="rounded-2xl border border-navy-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
-      <div className="mb-5 flex flex-wrap items-baseline justify-between gap-2">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-navy-500 dark:text-zinc-400">
-            Facturado por mes
-          </p>
-          <p className="mt-1 text-lg font-bold text-navy-900 dark:text-white">
-            {eur(periodTotal)}{" "}
-            <span className="text-xs font-medium text-navy-400 dark:text-zinc-500">
-              últimos 12 meses
+    <FactCard className="px-6 pb-[18px] pt-6">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-5">
+        <div className="flex flex-col gap-2">
+          <FactLabel>Facturado por mes</FactLabel>
+          <span className="flex items-baseline gap-2">
+            <span className="text-[21px] font-bold tracking-[-0.02em] tabular-nums text-navy-900 dark:text-white">
+              {eur(periodTotal)}
             </span>
-          </p>
+            <span className="text-[13px] text-navy-600 dark:text-zinc-400">últimos 12 meses</span>
+          </span>
         </div>
-        <div className="flex items-center gap-4 text-xs text-navy-500 dark:text-zinc-400">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-[3px] bg-brand-green" />
+        <div className="flex items-center gap-[18px] pt-1 text-[12.5px] font-medium text-navy-600 dark:text-zinc-400">
+          <span className="inline-flex items-center gap-[7px]">
+            <span className="h-[9px] w-[9px] rounded-[3px] bg-brand-green" />
             Cobrado
           </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-[3px] bg-brand-green/25" />
+          <span className="inline-flex items-center gap-[7px]">
+            <span className="h-[9px] w-[9px] rounded-[3px] bg-brand-green/25" />
             Pendiente
           </span>
         </div>
       </div>
 
       {max === 0 ? (
-        <div className="flex h-[132px] items-center justify-center rounded-xl border border-dashed border-navy-100 text-sm text-navy-400 dark:border-zinc-800 dark:text-zinc-500">
+        <div className="flex h-[190px] items-center justify-center rounded-xl border border-dashed border-navy-100 text-sm text-navy-400 dark:border-zinc-800 dark:text-zinc-500">
           Todavía no hay facturas emitidas en los últimos 12 meses.
         </div>
       ) : (
-        <div className="flex h-[132px] items-end gap-1.5 sm:gap-2">
-          {months.map((m) => {
-            const heightPct = max > 0 ? (m.facturado / max) * 100 : 0;
-            const paidPct = m.facturado > 0 ? (m.cobrado / m.facturado) * 100 : 0;
-            return (
-              <div key={m.key} className="group flex h-full flex-1 flex-col items-center justify-end gap-1.5">
+        <>
+          <div className="grid h-[190px] grid-cols-12 items-end gap-2 border-b border-navy-50 pb-0.5 sm:gap-3 lg:gap-3.5 dark:border-zinc-800">
+            {months.map((m) => {
+              const pendiente = Math.max(m.facturado - m.cobrado, 0);
+              // Alturas en % de la columna: la barra completa mide lo que
+              // pesa el mes contra el mejor mes del periodo.
+              const paidPct = (m.cobrado / max) * 100;
+              const pendPct = (pendiente / max) * 100;
+              const hasPend = pendPct > 0;
+              return (
                 <div
-                  className="relative flex w-full max-w-[34px] flex-col justify-end overflow-hidden rounded-md bg-brand-green/25 transition-opacity group-hover:opacity-80"
-                  style={{ height: `${Math.max(heightPct, m.facturado > 0 ? 3 : 0)}%`, minHeight: m.facturado > 0 ? 3 : 0 }}
+                  key={m.key}
+                  className="flex h-full flex-col justify-end"
                   title={`${m.monthName}: ${eur(m.facturado)} facturado · ${eur(m.cobrado)} cobrado`}
                 >
-                  <div className="w-full bg-brand-green" style={{ height: `${paidPct}%` }} />
+                  {hasPend && (
+                    <div
+                      className="mx-auto w-full max-w-[44px] rounded-t-lg bg-brand-green/25"
+                      style={{ height: `${Math.max(pendPct, 1.5)}%` }}
+                    />
+                  )}
+                  {paidPct > 0 && (
+                    <div
+                      className={`mx-auto w-full max-w-[44px] bg-brand-green ${hasPend ? "" : "rounded-t-lg"}`}
+                      style={{ height: `${Math.max(paidPct, 1.5)}%` }}
+                    />
+                  )}
                 </div>
-                <span className="text-[10px] font-medium text-navy-400 dark:text-zinc-500">{m.label}</span>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+          <div className="grid grid-cols-12 gap-2 pt-3 sm:gap-3 lg:gap-3.5">
+            {months.map((m) => (
+              <span
+                key={m.key}
+                className="text-center text-xs font-medium text-navy-400 dark:text-zinc-500"
+              >
+                {m.label}
+              </span>
+            ))}
+          </div>
+        </>
       )}
-    </div>
+    </FactCard>
   );
 }
 
@@ -124,16 +151,29 @@ export default function BillingSummary({ invoices }: { invoices: IssuedInvoice[]
   const vencido = overdue.reduce((s, i) => s + Number(i.total || 0), 0);
 
   return (
-    <div className="mb-6 space-y-4">
+    <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Facturado" value={eur(facturado)} accent="blue" detail={`${live.length} factura${live.length === 1 ? "" : "s"}`} />
-        <StatCard label="Cobrado" value={eur(cobrado)} accent="green" detail={facturado > 0 ? `${Math.round((cobrado / facturado) * 100)}% del total` : "—"} />
-        <StatCard label="Pendiente" value={eur(pendiente)} accent="yellow" detail="sin cobrar" />
-        <StatCard
+        <StatTile
+          label="Facturado"
+          value={eur(facturado)}
+          detail={`${live.length} factura${live.length === 1 ? "" : "s"}`}
+        />
+        <StatTile
+          label="Cobrado"
+          value={eur(cobrado)}
+          tone="success"
+          detail={facturado > 0 ? `${Math.round((cobrado / facturado) * 100)}% del total` : "—"}
+        />
+        <StatTile label="Pendiente" value={eur(pendiente)} tone="warning" detail="sin cobrar" />
+        <StatTile
           label="Vencido"
           value={eur(vencido)}
-          accent={overdue.length > 0 ? "red" : "green"}
-          detail={overdue.length > 0 ? `${overdue.length} factura${overdue.length === 1 ? "" : "s"} fuera de plazo` : "nada fuera de plazo"}
+          tone={overdue.length > 0 ? "danger" : "success"}
+          detail={
+            overdue.length > 0
+              ? `${overdue.length} factura${overdue.length === 1 ? "" : "s"} fuera de plazo`
+              : "nada fuera de plazo"
+          }
         />
       </div>
       <MonthlyChart invoices={invoices} />

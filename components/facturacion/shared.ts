@@ -6,6 +6,8 @@
  * negocio nuevas, solo un sitio común donde vivir.
  */
 
+import type { FactTone } from "./ui";
+
 export interface IssuedInvoice {
   id: string; client_id: string | null; project_id: string | null;
   series: string; number: number; invoice_number: string;
@@ -22,14 +24,42 @@ export interface IssuedInvoice {
 export interface Client { id: string; name: string; email: string | null; }
 export interface Project { id: string; name: string; }
 
-export const statusMap: Record<string, { label: string; variant: "gray" | "blue" | "purple" | "green" | "red" | "yellow" | "orange" }> = {
-  draft: { label: "Borrador", variant: "gray" },
-  issued: { label: "Emitida", variant: "blue" },
-  sent: { label: "Enviada", variant: "purple" },
-  paid: { label: "Cobrada", variant: "green" },
-  overdue: { label: "Vencida", variant: "red" },
-  cancelled: { label: "Anulada", variant: "gray" },
-  rectified: { label: "Rectificada", variant: "orange" },
+/**
+ * Estados de una factura emitida.
+ *
+ * El `tone` es el del sistema de tokens (neutral / info / success / warning /
+ * danger), no una utilidad de color suelta: `StatusPill` lo traduce a
+ * `--color-danger`, `--color-warning`... que ya cambian solos entre claro y
+ * oscuro. Antes esto era un `variant` del `Badge` genérico, que pinta con
+ * emerald/amber/purple ajenos a la paleta.
+ */
+export const statusMap: Record<string, { label: string; tone: FactTone }> = {
+  draft: { label: "Borrador", tone: "neutral" },
+  issued: { label: "Emitida", tone: "neutral" },
+  sent: { label: "Enviada", tone: "info" },
+  paid: { label: "Cobrada", tone: "success" },
+  overdue: { label: "Vencida", tone: "danger" },
+  cancelled: { label: "Anulada", tone: "neutral" },
+  rectified: { label: "Rectificada", tone: "warning" },
+};
+
+/**
+ * Estados de una factura recibida.
+ *
+ * Las etiquetas de "Recibidas" venían de `receivedInvoiceStatusLabels`
+ * (lib/suppliers.ts), que trae clases pensadas SOLO para tema oscuro
+ * (`bg-yellow-900/30 text-yellow-300`); sobre fondo claro quedaban lavadas y
+ * casi ilegibles. El hub se queda con las etiquetas de ese mapa —siguen
+ * siendo la fuente de verdad, y las otras pantallas de proveedores lo usan
+ * igual— y sustituye solo el color por un tono del sistema.
+ */
+export const receivedStatusTone: Record<string, FactTone> = {
+  pending: "warning",
+  approved: "neutral",
+  paid: "success",
+  partial: "info",
+  rejected: "danger",
+  overdue: "danger",
 };
 
 export function eur(n: number) {
@@ -54,5 +84,7 @@ export function isOverdueInvoice(inv: IssuedInvoice): boolean {
   );
 }
 
+/** Campo del formulario de alta: mismo alto (42px) y esquina (12px) que los
+    filtros de la tabla, que es lo que alinea la rejilla del rediseño. */
 export const inputCls =
-  "w-full bg-white dark:bg-zinc-900 text-navy-900 dark:text-white placeholder:text-navy-400 dark:placeholder:text-zinc-500 rounded-lg px-4 py-2 border border-navy-200 dark:border-zinc-800 focus:border-brand-green focus:outline-none text-sm";
+  "w-full h-[42px] bg-white dark:bg-zinc-900 text-navy-900 dark:text-white placeholder:text-navy-400 dark:placeholder:text-zinc-500 rounded-xl px-3.5 border border-navy-200 dark:border-zinc-800 focus:border-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/20 transition-colors text-sm";

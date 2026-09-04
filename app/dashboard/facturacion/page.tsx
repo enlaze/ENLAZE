@@ -12,6 +12,10 @@
  *
  * La pestaña activa vive en `?tab=` para que las redirecciones de las rutas
  * antiguas caigan donde el usuario esperaba.
+ *
+ * El `data-fact-surface` no declara paleta: solo engancha la sombra de tarjeta
+ * del rediseño, que globals.css deriva de `--color-navy-900`. Todo el color de
+ * esta pantalla sale de los tokens que ya usa el resto del dashboard.
  */
 
 import { Suspense, useCallback, useState } from "react";
@@ -70,7 +74,7 @@ function FacturacionHub() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div data-fact-surface className="mx-auto max-w-6xl">
       <PageHeader
         title="Facturación"
         description="Lo que emites y lo que recibes, en el mismo sitio"
@@ -83,50 +87,53 @@ function FacturacionHub() {
         }
       />
 
-      {issued.loading ? (
-        <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <SkeletonKpi />
-          <SkeletonKpi />
-          <SkeletonKpi />
-          <SkeletonKpi />
+      {/* Ritmo del rediseño: 32px entre resumen, pestañas y contenido. */}
+      <div className="space-y-8">
+        {issued.loading ? (
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <SkeletonKpi />
+            <SkeletonKpi />
+            <SkeletonKpi />
+            <SkeletonKpi />
+          </div>
+        ) : (
+          <BillingSummary invoices={issued.invoices} />
+        )}
+
+        {/* Pestañas */}
+        <div
+          role="tablist"
+          aria-label="Secciones de facturación"
+          className="flex w-fit max-w-full items-center gap-1.5 overflow-x-auto rounded-2xl border border-navy-100 bg-navy-50/60 p-1.5 dark:border-zinc-800 dark:bg-zinc-950/40"
+        >
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              role="tab"
+              aria-selected={tab === t.key}
+              onClick={() => changeTab(t.key)}
+              className={`inline-flex h-[38px] cursor-pointer items-center whitespace-nowrap rounded-xl border px-4 text-[14.5px] font-semibold transition-colors ${
+                tab === t.key
+                  ? "border-navy-100 bg-white text-navy-900 shadow-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                  : "border-transparent text-navy-600 hover:text-navy-900 dark:text-zinc-400 dark:hover:text-zinc-200"
+              }`}
+            >
+              {t.label}
+              {counts[t.key] !== undefined && (
+                <span className="ml-1.5 text-[13px] font-medium opacity-55">{counts[t.key]}</span>
+              )}
+            </button>
+          ))}
         </div>
-      ) : (
-        <BillingSummary invoices={issued.invoices} />
-      )}
 
-      {/* Pestañas */}
-      <div
-        role="tablist"
-        aria-label="Secciones de facturación"
-        className="mb-6 flex w-fit gap-1 rounded-xl bg-navy-50 p-1 dark:bg-zinc-900/50"
-      >
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            role="tab"
-            aria-selected={tab === t.key}
-            onClick={() => changeTab(t.key)}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-              tab === t.key
-                ? "bg-white text-navy-900 shadow-sm dark:bg-zinc-800 dark:text-white"
-                : "text-navy-500 hover:text-navy-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-            }`}
-          >
-            {t.label}
-            {counts[t.key] !== undefined && (
-              <span className={`ml-1.5 text-xs ${tab === t.key ? "opacity-70" : "text-navy-400 dark:text-zinc-500"}`}>
-                {counts[t.key]}
-              </span>
-            )}
-          </button>
-        ))}
+        <div>
+          {tab === "emitidas" && (issued.loading ? <Loading /> : <EmitidasTab state={issued} />)}
+          {tab === "recibidas" && (
+            <RecibidasTab state={received} onGoToScan={() => changeTab("escanear")} />
+          )}
+          {tab === "escanear" && <EscanearTab state={received} />}
+        </div>
       </div>
-
-      {tab === "emitidas" && (issued.loading ? <Loading /> : <EmitidasTab state={issued} />)}
-      {tab === "recibidas" && (
-        <RecibidasTab state={received} onGoToScan={() => changeTab("escanear")} />
-      )}
-      {tab === "escanear" && <EscanearTab state={received} />}
     </div>
   );
 }

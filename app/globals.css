@@ -537,3 +537,31 @@ html[data-theme="dark"] [data-msg-surface] {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Facturación (hub Emitidas · Recibidas · Escanear) — pulido del
+   rediseño.
+
+   A diferencia de Ajustes y Mensajería, esta superficie NO declara una
+   paleta propia: el diseño se integró mapeando cada color a los tokens
+   que ya existen (`--color-navy-*`, `--color-brand-green*` y los
+   semánticos `--color-danger|success|warning|info`), así que aquí solo
+   queda lo que no cabe en una utilidad de Tailwind: la sombra doble de
+   las tarjetas, derivada del propio navy en vez de un rgba suelto.
+   ───────────────────────────────────────────────────────────── */
+[data-fact-surface] {
+  --fact-shadow:
+    0 1px 2px color-mix(in srgb, var(--color-navy-900) 5%, transparent),
+    0 8px 24px -16px color-mix(in srgb, var(--color-navy-900) 16%, transparent);
+}
+
+/* En oscuro las tarjetas se separan por borde, no por sombra — mismo
+   criterio que `dark:shadow-none` en el resto del dashboard. */
+html.dark [data-fact-surface],
+html[data-theme="dark"] [data-fact-surface] {
+  --fact-shadow: none;
+}
+
+[data-fact-surface] [data-fact-card] {
+  box-shadow: var(--fact-shadow);
+}
