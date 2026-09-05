@@ -15,6 +15,7 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import DataTable, { type Column, type FilterDef } from "@/components/ui/data-table";
 import InfoFlipCard from "@/components/ui/InfoFlipCard";
+import { EMPTY_SUPPLIER_TOTALS, getSuppliersInvoiceTotals } from "@/lib/suppliers";
 
 interface Supplier {
   id: string;
@@ -32,6 +33,9 @@ interface Supplier {
   notes: string;
   status: string;
   rating: number;
+  /* Derivados: la tabla `suppliers` no guarda estos importes. Se rellenan al
+     cargar sumando received_invoices, para que la columna "Facturado" (y su
+     orden y su exportación a CSV) trabajen sobre la fila como el resto. */
   total_invoiced: number;
   total_paid: number;
   created_at: string;
@@ -80,7 +84,12 @@ export default function SuppliersPage() {
 
   async function loadSuppliers() {
     const { data } = await supabase.from("suppliers").select("*").order("name");
-    setSuppliers(data || []);
+    const rows = (data || []) as Supplier[];
+
+    const totals = await getSuppliersInvoiceTotals(supabase, rows.map(s => s.id));
+    setSuppliers(
+      rows.map(s => ({ ...s, ...(totals.get(s.id) ?? EMPTY_SUPPLIER_TOTALS) }))
+    );
   }
 
   useEffect(() => {

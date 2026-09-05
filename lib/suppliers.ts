@@ -24,8 +24,8 @@ export interface Supplier {
   notes: string | null;
   category_id: string | null;
   status: "active" | "inactive" | "blocked";
-  total_invoiced: number;
-  total_paid: number;
+  /* Ojo: `suppliers` NO guarda total_invoiced/total_paid. Los totales se
+     derivan de received_invoices con getSupplierInvoiceTotals(). */
   created_at: string;
   updated_at: string;
 }
@@ -220,6 +220,67 @@ export async function getReceivedInvoices(
   return { data: (data || []) as ReceivedInvoice[], count: count || 0, error };
 }
 
+export interface SupplierInvoiceTotals {
+  total_invoiced: number;
+  total_paid: number;
+  invoice_count: number;
+}
+
+export const EMPTY_SUPPLIER_TOTALS: SupplierInvoiceTotals = {
+  total_invoiced: 0,
+  total_paid: 0,
+  invoice_count: 0,
+};
+
+/**
+ * Totales facturados y pagados de varios proveedores, en una sola consulta.
+ *
+ * `suppliers` no guarda estos importes: se suman sobre received_invoices. La
+ * política RLS `received_invoices_hide_trashed` ya excluye las facturas en la
+ * papelera, así que no hace falta filtrar deleted_at aquí.
+ *
+ * Devuelve un Map indexado por supplier_id. Los proveedores sin facturas no
+ * aparecen en el Map: usa EMPTY_SUPPLIER_TOTALS como valor por defecto.
+ */
+export async function getSuppliersInvoiceTotals(
+  supabase: SupabaseClient,
+  supplierIds: string[]
+): Promise<Map<string, SupplierInvoiceTotals>> {
+  const totals = new Map<string, SupplierInvoiceTotals>();
+  if (supplierIds.length === 0) return totals;
+
+  const { data } = await supabase
+    .from("received_invoices")
+    .select("supplier_id, total, amount_paid")
+    .in("supplier_id", supplierIds);
+
+  const rows = (data || []) as Pick<
+    ReceivedInvoice,
+    "supplier_id" | "total" | "amount_paid"
+  >[];
+
+  for (const invoice of rows) {
+    if (!invoice.supplier_id) continue;
+    const current = totals.get(invoice.supplier_id) ?? EMPTY_SUPPLIER_TOTALS;
+    totals.set(invoice.supplier_id, {
+      total_invoiced: current.total_invoiced + Number(invoice.total || 0),
+      total_paid: current.total_paid + Number(invoice.amount_paid || 0),
+      invoice_count: current.invoice_count + 1,
+    });
+  }
+
+  return totals;
+}
+
+/** Totales de un único proveedor. Misma suma que el listado, un solo sitio. */
+export async function getSupplierInvoiceTotals(
+  supabase: SupabaseClient,
+  supplierId: string
+): Promise<SupplierInvoiceTotals> {
+  const totals = await getSuppliersInvoiceTotals(supabase, [supplierId]);
+  return totals.get(supplierId) ?? EMPTY_SUPPLIER_TOTALS;
+}
+
 export async function getReceivedInvoice(supabase: SupabaseClient, id: string) {
   const { data, error } = await supabase.from("received_invoices").select("*").eq("id", id).single();
   return { data: data as ReceivedInvoice | null, error };
@@ -236,28 +297,9 @@ export async function createReceivedInvoice(supabase: SupabaseClient, invoice: P
     .single();
 
   if (data && invoice.supplier_id) {
-    // Update supplier total_invoiced
-const { error: incrementError } = await supabase.rpc("increment_supplier_invoiced", {
-  p_supplier_id: invoice.supplier_id,
-  p_amount: invoice.total || 0,
-});
-
-if (incrementError) {
-  // Fallback: manual update
-  const { data: s } = await supabase
-    .from("suppliers")
-    .select("total_invoiced")
-    .eq("id", invoice.supplier_id as string)
-    .single();
-
-  if (s) {
-    await supabase
-      .from("suppliers")
-      .update({ total_invoiced: Number(s.total_invoiced) + Number(invoice.total || 0) })
-      .eq("id", invoice.supplier_id as string);
-  }
-}
-
+    /* Antes se incrementaba aquí un contador suppliers.total_invoiced que no
+       existe en la tabla, así que nunca llegó a escribirse nada. El total se
+       calcula ahora al leerlo, con getSupplierInvoiceTotals(). */
     notify(supabase, {
       type: "system",
       severity: "info",
@@ -340,19 +382,8 @@ export async function registerSupplierPayment(
       })
       .eq("id", params.received_invoice_id);
 
-    // Update supplier total_paid
-    const { data: sup } = await supabase
-      .from("suppliers")
-      .select("total_paid")
-      .eq("id", params.supplier_id)
-      .single();
-    if (sup) {
-      await supabase
-        .from("suppliers")
-        .update({ total_paid: Number(sup.total_paid || 0) + params.amount })
-        .eq("id", params.supplier_id);
-    }
-
+    /* Igual que en createReceivedInvoice: suppliers.total_paid no existe.
+       El pagado acumulado sale de sumar received_invoices.amount_paid. */
     notify(supabase, {
       type: "system",
       severity: "success",

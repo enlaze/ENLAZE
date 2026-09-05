@@ -179,7 +179,7 @@ export default function DashboardHome() {
           supabase.from("activity_log").select("id, action, entity_type, created_at, metadata").eq("user_id", user.id).order("created_at", { ascending: false }).limit(8),
           supabase.from("legal_acceptances").select("id").eq("user_id", user.id),
           supabase.from("ai_runs").select("id, human_reviewed").eq("user_id", user.id),
-          supabase.from("security_incidents").select("id, status"),
+          supabase.from("security_incidents").select("id, resolved_at").eq("reported_by", user.id),
           supabase.from("received_invoices").select("id, status, total, amount_paid, due_date, payment_status"),
         ]);
 
@@ -304,7 +304,8 @@ export default function DashboardHome() {
       });
 
       // Security
-      const openIncidents = allIncidents.filter(i => i.status === "open").length;
+      // security_incidents no guarda estado: abierta es la que no tiene resolved_at.
+      const openIncidents = allIncidents.filter(i => !i.resolved_at).length;
       checks.push({
         area: "security",
         label: "Seguridad",
