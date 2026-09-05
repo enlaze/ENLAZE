@@ -226,32 +226,59 @@ export interface SupplierInvoiceTotals {
   invoice_count: number;
 }
 
+export const EMPTY_SUPPLIER_TOTALS: SupplierInvoiceTotals = {
+  total_invoiced: 0,
+  total_paid: 0,
+  invoice_count: 0,
+};
+
 /**
- * Totales facturados y pagados de un proveedor.
+ * Totales facturados y pagados de varios proveedores, en una sola consulta.
  *
  * `suppliers` no guarda estos importes: se suman sobre received_invoices. La
  * política RLS `received_invoices_hide_trashed` ya excluye las facturas en la
  * papelera, así que no hace falta filtrar deleted_at aquí.
+ *
+ * Devuelve un Map indexado por supplier_id. Los proveedores sin facturas no
+ * aparecen en el Map: usa EMPTY_SUPPLIER_TOTALS como valor por defecto.
  */
+export async function getSuppliersInvoiceTotals(
+  supabase: SupabaseClient,
+  supplierIds: string[]
+): Promise<Map<string, SupplierInvoiceTotals>> {
+  const totals = new Map<string, SupplierInvoiceTotals>();
+  if (supplierIds.length === 0) return totals;
+
+  const { data } = await supabase
+    .from("received_invoices")
+    .select("supplier_id, total, amount_paid")
+    .in("supplier_id", supplierIds);
+
+  const rows = (data || []) as Pick<
+    ReceivedInvoice,
+    "supplier_id" | "total" | "amount_paid"
+  >[];
+
+  for (const invoice of rows) {
+    if (!invoice.supplier_id) continue;
+    const current = totals.get(invoice.supplier_id) ?? EMPTY_SUPPLIER_TOTALS;
+    totals.set(invoice.supplier_id, {
+      total_invoiced: current.total_invoiced + Number(invoice.total || 0),
+      total_paid: current.total_paid + Number(invoice.amount_paid || 0),
+      invoice_count: current.invoice_count + 1,
+    });
+  }
+
+  return totals;
+}
+
+/** Totales de un único proveedor. Misma suma que el listado, un solo sitio. */
 export async function getSupplierInvoiceTotals(
   supabase: SupabaseClient,
   supplierId: string
 ): Promise<SupplierInvoiceTotals> {
-  const { data } = await supabase
-    .from("received_invoices")
-    .select("total, amount_paid")
-    .eq("supplier_id", supplierId);
-
-  const rows = (data || []) as Pick<ReceivedInvoice, "total" | "amount_paid">[];
-
-  return rows.reduce<SupplierInvoiceTotals>(
-    (totals, invoice) => ({
-      total_invoiced: totals.total_invoiced + Number(invoice.total || 0),
-      total_paid: totals.total_paid + Number(invoice.amount_paid || 0),
-      invoice_count: totals.invoice_count + 1,
-    }),
-    { total_invoiced: 0, total_paid: 0, invoice_count: 0 }
-  );
+  const totals = await getSuppliersInvoiceTotals(supabase, [supplierId]);
+  return totals.get(supplierId) ?? EMPTY_SUPPLIER_TOTALS;
 }
 
 export async function getReceivedInvoice(supabase: SupabaseClient, id: string) {
