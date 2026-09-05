@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { applySecurityHeaders } from "./lib/security-headers";
 
 /* ─────────────────────────────────────────────────────────
  * Security proxy for Enlaze
@@ -54,50 +55,6 @@ function isPublicApiRoute(pathname: string): boolean {
   return false;
 }
 
-function addSecurityHeaders(response: NextResponse): NextResponse {
-  // Prevent clickjacking
-  response.headers.set("X-Frame-Options", "DENY");
-
-  // Prevent MIME type sniffing
-  response.headers.set("X-Content-Type-Options", "nosniff");
-
-  // Enable XSS protection (legacy browsers)
-  response.headers.set("X-XSS-Protection", "1; mode=block");
-
-  // Referrer policy - don't leak full URLs
-  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-
-  // Permissions policy - restrict browser features
-  response.headers.set(
-    "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=(), payment=()"
-  );
-
-  // HSTS - enforce HTTPS (1 year, include subdomains)
-  response.headers.set(
-    "Strict-Transport-Security",
-    "max-age=31536000; includeSubDomains; preload"
-  );
-
-  // Content Security Policy
-  response.headers.set(
-    "Content-Security-Policy",
-    [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://*.sentry.io https://*.posthog.com",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "font-src 'self' https://fonts.gstatic.com",
-      "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in",
-      "connect-src 'self' https://*.supabase.co https://*.supabase.in https://*.sentry.io https://*.posthog.com wss://*.supabase.co",
-      "frame-ancestors 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-    ].join("; ")
-  );
-
-  return response;
-}
-
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -107,7 +64,7 @@ export async function proxy(request: NextRequest) {
   });
 
   // Always add security headers
-  response = addSecurityHeaders(response);
+  response = applySecurityHeaders(response);
 
   // Skip auth check for public routes and static files
   if (isPublicRoute(pathname)) {
@@ -136,7 +93,7 @@ export async function proxy(request: NextRequest) {
             response = NextResponse.next({
               request: { headers: request.headers },
             });
-            response = addSecurityHeaders(response);
+            response = applySecurityHeaders(response);
             cookiesToSet.forEach(({ name, value, options }) =>
               response.cookies.set(name, value, options)
             );

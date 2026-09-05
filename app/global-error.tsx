@@ -2,6 +2,7 @@
 
 import * as Sentry from "@sentry/nextjs";
 import NextError from "next/error";
+import { safeTelemetry } from "@/lib/telemetry-safe";
 import { useEffect } from "react";
 
 export default function GlobalError({
@@ -10,7 +11,9 @@ export default function GlobalError({
   error: Error & { digest?: string };
 }) {
   useEffect(() => {
-    Sentry.captureException(error);
+    // Última red de seguridad de la app: si el propio Sentry lanza aquí, el
+    // boundary global caería y la pantalla de error quedaría en blanco.
+    safeTelemetry(() => Sentry.captureException(error));
   }, [error]);
 
   return (

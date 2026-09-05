@@ -11,6 +11,7 @@
  */
 
 import * as Sentry from "@sentry/nextjs";
+import { safeTelemetry } from "@/lib/telemetry-safe";
 
 /**
  * Capture an exception in Sentry with optional context.
@@ -23,21 +24,23 @@ export function captureException(
     extra?: Record<string, unknown>;
   }
 ) {
-  Sentry.withScope((scope) => {
-    if (context?.component) scope.setTag("component", context.component);
-    if (context?.action) scope.setTag("action", context.action);
-    if (context?.extra) scope.setExtras(context.extra);
-    Sentry.captureException(error);
-  });
+  safeTelemetry(() =>
+    Sentry.withScope((scope) => {
+      if (context?.component) scope.setTag("component", context.component);
+      if (context?.action) scope.setTag("action", context.action);
+      if (context?.extra) scope.setExtras(context.extra);
+      Sentry.captureException(error);
+    })
+  );
 }
 
 /**
  * Set the current user for Sentry context.
  */
 export function setSentryUser(user: { id: string; email?: string; name?: string } | null) {
-  if (user) {
-    Sentry.setUser({ id: user.id, email: user.email, username: user.name });
-  } else {
-    Sentry.setUser(null);
-  }
+  safeTelemetry(() =>
+    Sentry.setUser(
+      user ? { id: user.id, email: user.email, username: user.name } : null
+    )
+  );
 }
