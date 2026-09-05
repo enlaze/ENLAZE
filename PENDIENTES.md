@@ -3,9 +3,11 @@
 _Lista viva de cosas por arreglar o rematar. Nada urgente salvo que se indique._
 
 ## Bugs conocidos (arreglar cuando toque)
-- **⚠️ Bucle de recarga en el dashboard (prioritario):** todas las páginas del dashboard se recargan solas ~3 veces/segundo. Es un error de JavaScript al arranque (`JSON.parse` sobre algo vacío) que apunta a Sentry (su worker está bloqueado por la política de seguridad). Molesto en desarrollo y, si pasa en producción, manda ruido a Sentry en cada carga. Conviene arreglarlo antes del lanzamiento.
-- **Cumplimiento → Seguridad:** la lista de incidencias sale siempre vacía. El código consulta `security_incidents.user_id`, una columna que **no existe**. → `app/dashboard/compliance/security/page.tsx` (~línea 27)
-- **Ficha de proveedor:** una barra no se pinta nunca porque depende de `supplier.total_invoiced`, que **no existe** en la tabla de proveedores. → `app/dashboard/suppliers/[id]/page.tsx` (~línea 91)
+- ~~Bucle de recarga + login que reinicia~~ ✅ **ARREGLADO** (CSP + aislamiento de Sentry). Login entra a la primera, sin recargas.
+- ~~Cumplimiento → Seguridad (incidencias vacías)~~ ✅ **ARREGLADO** (filtra por `reported_by`; de paso el 400 del dashboard y la tarjeta de Seguridad siempre en verde).
+- ~~Ficha de proveedor (barra no se pintaba)~~ ✅ **ARREGLADO** (totales calculados desde `received_invoices`).
+- ~~Listado de proveedores mostraba 0,00 € en "Facturado"~~ ✅ **ARREGLADO** (totales calculados; de paso arreglado el orden y la exportación CSV de esa columna).
+- **Interfaz `Supplier` desincronizada del esquema:** declara campos que no existen (city, postal_code, province, trade_name, iban, category_id…) → salen vacíos en la ficha. Saneamiento mayor, aparte.
 
 ## Para el lanzamiento (go-live)
 - Desplegar en Vercel + conectar dominio `enlaze.es` (DNS/SSL) + variables de entorno.
