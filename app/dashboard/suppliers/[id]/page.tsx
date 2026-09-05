@@ -13,6 +13,8 @@ import Loading from "@/components/ui/loading";
 import {
   type Supplier,
   type ReceivedInvoice,
+  type SupplierInvoiceTotals,
+  getSupplierInvoiceTotals,
   supplierStatusLabels,
   receivedInvoiceStatusLabels,
   paymentMethodLabels,
@@ -25,6 +27,13 @@ export default function SupplierDetailPage() {
 
   const [supplier, setSupplier] = useState<Supplier | null>(null);
   const [invoices, setInvoices] = useState<ReceivedInvoice[]>([]);
+  /* `suppliers` no guarda los totales: se suman sobre TODAS las facturas del
+     proveedor, no solo sobre las 20 que se listan debajo. */
+  const [totals, setTotals] = useState<SupplierInvoiceTotals>({
+    total_invoiced: 0,
+    total_paid: 0,
+    invoice_count: 0,
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -40,6 +49,8 @@ export default function SupplierDetailPage() {
         .order("issue_date", { ascending: false })
         .limit(20);
       setInvoices((inv || []) as ReceivedInvoice[]);
+
+      setTotals(await getSupplierInvoiceTotals(supabase, id));
       setLoading(false);
     }
     load();
@@ -53,9 +64,9 @@ export default function SupplierDetailPage() {
   if (loading) return <Loading />;
   if (!supplier) return null;
 
-  const pending = Number(supplier.total_invoiced || 0) - Number(supplier.total_paid || 0);
-  const paidPct = Number(supplier.total_invoiced) > 0
-    ? Math.round((Number(supplier.total_paid) / Number(supplier.total_invoiced)) * 100)
+  const pending = totals.total_invoiced - totals.total_paid;
+  const paidPct = totals.total_invoiced > 0
+    ? Math.round((totals.total_paid / totals.total_invoiced) * 100)
     : 0;
 
   const statusBadge = supplierStatusLabels[supplier.status] || { label: supplier.status, color: "bg-zinc-800 text-zinc-400 dark:bg-zinc-900 dark:text-zinc-400" };
@@ -81,14 +92,14 @@ export default function SupplierDetailPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Total facturado" value={fmtMoney(Number(supplier.total_invoiced))} accent="blue" />
-        <StatCard label="Total pagado" value={fmtMoney(Number(supplier.total_paid))} accent="green" />
+        <StatCard label="Total facturado" value={fmtMoney(totals.total_invoiced)} accent="blue" />
+        <StatCard label="Total pagado" value={fmtMoney(totals.total_paid)} accent="green" />
         <StatCard label="Pendiente de pago" value={fmtMoney(pending)} accent={pending > 0 ? "yellow" : "green"} />
-        <StatCard label="Facturas" value={invoices.length} accent="blue" />
+        <StatCard label="Facturas" value={totals.invoice_count} accent="blue" />
       </div>
 
       {/* Progress bar */}
-      {Number(supplier.total_invoiced) > 0 && (
+      {totals.total_invoiced > 0 && (
         <Card className="mb-6">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-navy-600 dark:text-zinc-400">Progreso de pago</span>

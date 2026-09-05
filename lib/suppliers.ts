@@ -24,8 +24,8 @@ export interface Supplier {
   notes: string | null;
   category_id: string | null;
   status: "active" | "inactive" | "blocked";
-  total_invoiced: number;
-  total_paid: number;
+  /* Ojo: `suppliers` NO guarda total_invoiced/total_paid. Los totales se
+     derivan de received_invoices con getSupplierInvoiceTotals(). */
   created_at: string;
   updated_at: string;
 }
@@ -220,6 +220,40 @@ export async function getReceivedInvoices(
   return { data: (data || []) as ReceivedInvoice[], count: count || 0, error };
 }
 
+export interface SupplierInvoiceTotals {
+  total_invoiced: number;
+  total_paid: number;
+  invoice_count: number;
+}
+
+/**
+ * Totales facturados y pagados de un proveedor.
+ *
+ * `suppliers` no guarda estos importes: se suman sobre received_invoices. La
+ * política RLS `received_invoices_hide_trashed` ya excluye las facturas en la
+ * papelera, así que no hace falta filtrar deleted_at aquí.
+ */
+export async function getSupplierInvoiceTotals(
+  supabase: SupabaseClient,
+  supplierId: string
+): Promise<SupplierInvoiceTotals> {
+  const { data } = await supabase
+    .from("received_invoices")
+    .select("total, amount_paid")
+    .eq("supplier_id", supplierId);
+
+  const rows = (data || []) as Pick<ReceivedInvoice, "total" | "amount_paid">[];
+
+  return rows.reduce<SupplierInvoiceTotals>(
+    (totals, invoice) => ({
+      total_invoiced: totals.total_invoiced + Number(invoice.total || 0),
+      total_paid: totals.total_paid + Number(invoice.amount_paid || 0),
+      invoice_count: totals.invoice_count + 1,
+    }),
+    { total_invoiced: 0, total_paid: 0, invoice_count: 0 }
+  );
+}
+
 export async function getReceivedInvoice(supabase: SupabaseClient, id: string) {
   const { data, error } = await supabase.from("received_invoices").select("*").eq("id", id).single();
   return { data: data as ReceivedInvoice | null, error };
@@ -236,28 +270,9 @@ export async function createReceivedInvoice(supabase: SupabaseClient, invoice: P
     .single();
 
   if (data && invoice.supplier_id) {
-    // Update supplier total_invoiced
-const { error: incrementError } = await supabase.rpc("increment_supplier_invoiced", {
-  p_supplier_id: invoice.supplier_id,
-  p_amount: invoice.total || 0,
-});
-
-if (incrementError) {
-  // Fallback: manual update
-  const { data: s } = await supabase
-    .from("suppliers")
-    .select("total_invoiced")
-    .eq("id", invoice.supplier_id as string)
-    .single();
-
-  if (s) {
-    await supabase
-      .from("suppliers")
-      .update({ total_invoiced: Number(s.total_invoiced) + Number(invoice.total || 0) })
-      .eq("id", invoice.supplier_id as string);
-  }
-}
-
+    /* Antes se incrementaba aquí un contador suppliers.total_invoiced que no
+       existe en la tabla, así que nunca llegó a escribirse nada. El total se
+       calcula ahora al leerlo, con getSupplierInvoiceTotals(). */
     notify(supabase, {
       type: "system",
       severity: "info",
@@ -340,19 +355,8 @@ export async function registerSupplierPayment(
       })
       .eq("id", params.received_invoice_id);
 
-    // Update supplier total_paid
-    const { data: sup } = await supabase
-      .from("suppliers")
-      .select("total_paid")
-      .eq("id", params.supplier_id)
-      .single();
-    if (sup) {
-      await supabase
-        .from("suppliers")
-        .update({ total_paid: Number(sup.total_paid || 0) + params.amount })
-        .eq("id", params.supplier_id);
-    }
-
+    /* Igual que en createReceivedInvoice: suppliers.total_paid no existe.
+       El pagado acumulado sale de sumar received_invoices.amount_paid. */
     notify(supabase, {
       type: "system",
       severity: "success",

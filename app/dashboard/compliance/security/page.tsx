@@ -26,7 +26,9 @@ async function loadSecurityIncidents(supabase: any, userId: string): Promise<Sec
   const { data } = await supabase
     .from("security_incidents")
     .select("id, title, severity, description, affected_data, affected_users, detected_at, resolved_at, notified_aepd, notified_users, resolution")
-    .eq("user_id", userId)
+    // La tabla no tiene user_id: quien registra la incidencia va en reported_by
+    // (y es lo que filtra su política RLS).
+    .eq("reported_by", userId)
     .order("detected_at", { ascending: false });
 
   return data || [];
