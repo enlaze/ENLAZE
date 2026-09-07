@@ -878,23 +878,123 @@ describe("FASE 2F-1DB · BLOQUE C — encaje en el historial", () => {
     );
   });
 
-  // La aplicación no la invoca todavía: 2F-1APP es una publicación posterior y
-  // separada. Si alguien adelanta el cliente, este test lo caza aquí.
-  test("ningún fichero de aplicación invoca todavía la RPC", () => {
-    const sospechosos = [
-      "app/dashboard/budgets/generate/_components/BudgetGenerateProvider.tsx",
+  // FASE 2F-1APP — la puerta temporal que había aquí («ningún fichero de
+  // aplicación invoca todavía la RPC») ya no describe la realidad: la
+  // aplicación la invoca desde esta fase. En su lugar quedan seis invariantes
+  // positivas, que dicen no ya *si* se usa, sino *cómo*: por un único punto,
+  // desde un único consumidor y sin que sobreviva ningún escritor directo.
+  //
+  // Es un cambio de signo deliberado, no una relajación: la puerta anterior
+  // solo podía romperse adelantando la publicación; estas se rompen si alguien
+  // dispersa el nombre de la RPC, duplica el helper o reintroduce el par
+  // DELETE + INSERT que 2F-1APP vino a eliminar.
+  const DIRECTORIOS_APP = ["app", "lib", "components", "hooks", "providers"];
+  const IGNORADOS = new Set(["node_modules", ".next", ".git", ".claude", ".test-out", "__tests__"]);
+  const HELPER = "lib/budget-items-writer.ts";
+  const PROVIDER = "app/dashboard/budgets/generate/_components/BudgetGenerateProvider.tsx";
+
+  /** Recorre el código de aplicación y devuelve rutas relativas a la raíz. */
+  function ficherosDeAplicacion() {
+    const encontrados = [];
+    const visitar = (relativo) => {
+      let entradas;
+      try {
+        entradas = readdirSync(join(RAIZ, relativo), { withFileTypes: true });
+      } catch {
+        return; // Un directorio ausente no es un incumplimiento del contrato.
+      }
+      for (const entrada of entradas) {
+        if (IGNORADOS.has(entrada.name)) continue;
+        const ruta = `${relativo}/${entrada.name}`;
+        if (entrada.isDirectory()) visitar(ruta);
+        else if (/\.(ts|tsx|js|jsx|mjs)$/.test(entrada.name)) encontrados.push(ruta);
+      }
+    };
+    for (const dir of DIRECTORIOS_APP) visitar(dir);
+    return encontrados;
+  }
+
+  const leer = (ruta) => readFileSync(join(RAIZ, ruta), "utf8");
+  const cuenta = (texto, aguja) => texto.split(aguja).length - 1;
+
+  test("INVARIANTE 1 — el nombre de la RPC solo aparece en el helper", () => {
+    const nombran = ficherosDeAplicacion().filter((ruta) => /replace_budget_items/.test(leer(ruta)));
+    assert.deepEqual(
+      nombran.sort(),
+      [HELPER],
+      "el nombre de la función SQL debe existir en un único punto del código de aplicación",
+    );
+  });
+
+  test("INVARIANTE 2 — el helper invoca la RPC una sola vez", () => {
+    const helper = leer(HELPER);
+    assert.equal(cuenta(helper, "supabase.rpc("), 1, "una única invocación, sin caminos alternativos");
+    assert.ok(
+      helper.includes('export const REPLACE_BUDGET_ITEMS_RPC = "replace_budget_items";'),
+      "el nombre debe estar declarado una vez y reutilizado",
+    );
+    assert.equal(
+      cuenta(helper, '"replace_budget_items"'),
+      1,
+      "el literal no debe repetirse: la constante es la única fuente",
+    );
+    assert.ok(helper.includes("supabase.rpc(REPLACE_BUDGET_ITEMS_RPC, {"), "debe llamarse a través de la constante");
+  });
+
+  test("INVARIANTE 3 — solo el Provider importa el helper", () => {
+    const importadores = ficherosDeAplicacion().filter(
+      (ruta) => ruta !== HELPER && /budget-items-writer/.test(leer(ruta)),
+    );
+    assert.deepEqual(
+      importadores.sort(),
+      [PROVIDER],
+      "ampliar el conjunto de consumidores es una decisión de diseño, no un detalle",
+    );
+  });
+
+  test("INVARIANTE 4 — el Provider lo invoca exactamente dos veces", () => {
+    // Una en el guardado de borrador y otra en la finalización: son los dos
+    // únicos momentos en que el asistente escribe las líneas.
+    assert.equal(cuenta(leer(PROVIDER), "replaceBudgetItems("), 2);
+  });
+
+  test("INVARIANTE 5 — ningún otro escritor ha adoptado la RPC", () => {
+    const otros = [
       "app/dashboard/budgets/generate/_components/LiveSummaryPanel.tsx",
       "app/dashboard/budgets/generate/page.tsx",
       "app/dashboard/budgets/_components/budget-form.tsx",
       "app/dashboard/budgets/[id]/page.tsx",
     ];
-    for (const ruta of sospechosos) {
-      const contenido = readFileSync(join(RAIZ, ruta), "utf8");
-      assert.equal(
-        /replace_budget_items/.test(contenido),
-        false,
-        `${ruta} ya invoca replace_budget_items: eso pertenece a 2F-1APP`,
-      );
+    for (const ruta of otros) {
+      const contenido = leer(ruta);
+      assert.equal(/replace_budget_items/.test(contenido), false, `${ruta} no debe nombrar la RPC`);
+      assert.equal(/budget-items-writer/.test(contenido), false, `${ruta} no debe importar el helper`);
     }
+  });
+
+  test("INVARIANTE 6 — el Provider ya no escribe budget_items directamente", () => {
+    const provider = leer(PROVIDER);
+    assert.equal(
+      /\.from\(\s*["'`]budget_items["'`]\s*\)/.test(provider),
+      false,
+      "el par DELETE + INSERT que podía quedarse a medias ya no existe",
+    );
+    assert.equal(cuenta(provider, ".delete()"), 0, "no debe quedar ningún borrado suelto");
+
+    // Lo único que puede quedar del nombre de la tabla son comentarios que
+    // expliquen por qué ya no se toca. Cualquier mención en código ejecutable
+    // sería un camino paralelo al helper.
+    const enCodigo = provider
+      .split("\n")
+      .map((linea, i) => [i + 1, linea])
+      .filter(([, linea]) => linea.includes("budget_items"))
+      .filter(([, linea]) => !/^\s*(\/\/|\*)/.test(linea));
+    assert.deepEqual(
+      enCodigo,
+      [],
+      `budget_items solo puede aparecer en comentarios del Provider; encontrado en: ${enCodigo
+        .map(([n]) => n)
+        .join(", ")}`,
+    );
   });
 });

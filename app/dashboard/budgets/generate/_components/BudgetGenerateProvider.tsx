@@ -45,6 +45,7 @@ import {
 } from "@/lib/geographic-costs";
 import { isTraceableCommercialPrice } from "@/lib/price-traceability";
 import { normalizeBudgetItemUnit } from "@/lib/budget-units";
+import { replaceBudgetItems } from "@/lib/budget-items-writer";
 import { canonicalProviderName, providerIdentitySlug } from "@/lib/provider-identity";
 import {
   auditAtomicMaterialName,
@@ -1221,225 +1222,254 @@ export function BudgetGenerateProvider({
 
   /* ─── Persistencia y Borradores ─── */
   // Fingerprint of the budget_items rows last written to the database, so an
-  // unchanged item list never triggers another DELETE + INSERT cycle.
+  // unchanged item list never triggers another replacement cycle.
   const lastSyncedItemsSignature = useRef<string | null>(null);
 
-  const saveDraft = async (manual = false): Promise<string | null> => {
-    // Don't autosave if there's no meaningful data yet
+  // Resultado discriminado del guardado interno. Antes, la omisión legítima de
+  // un autoguardado vacío, la ausencia de usuario y cualquier fallo compartían
+  // el mismo `null`, de modo que el llamante no podía distinguirlos.
+  type SaveDraftOutcome =
+    | { skipped: true; budgetId: null }
+    | { skipped: false; budgetId: string };
+
+  // Guardado interno. No captura nada: cualquier fallo de autenticación,
+  // cabecera, snapshot o partidas se propaga como excepción. La captura, el
+  // estado de error y los toasts viven exclusivamente en el envoltorio público
+  // `saveDraft` y en `finalizeBudget`.
+  const saveDraftOrThrow = async (manual = false): Promise<SaveDraftOutcome> => {
+    // Don't autosave if there's no meaningful data yet. Ésta es la única
+    // omisión legítima: no hay nada que guardar y no se toca ninguna línea.
     if (!manual && !state.title && !state.description && state.partidas.length <= 2) {
-      return null;
+      return { skipped: true, budgetId: null };
     }
 
     if (manual) {
       setState(prev => ({ ...prev, isSavingDraft: true, saveError: null }));
     }
 
+    const supabase = createClient();
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError) throw userError;
+    const user = userData?.user;
+    if (!user) {
+      throw new Error("No hay usuario autenticado");
+    }
+
+    let clientSnapshot = {
+      name: state.clientName || "",
+      email: state.clientEmail || "",
+      phone: state.clientPhone || "",
+      company: state.clientCompany || "",
+    };
+    if (state.clientId) {
+      const { data: selectedClient } = await supabase
+        .from("clients")
+        .select("name, email, phone, company")
+        .eq("id", state.clientId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (selectedClient) {
+        clientSnapshot = {
+          name: selectedClient.name || clientSnapshot.name,
+          email: selectedClient.email || "",
+          phone: selectedClient.phone || "",
+          company: selectedClient.company || "",
+        };
+      }
+    }
+
+    // Build snapshot — exclude circular/transient fields
+    const snapshot = {
+      ...state,
+      isSavingDraft: false,
+      isFinalizing: false,
+      saveError: null,
+      finalizeError: null,
+    };
+    const financials = calculateBudgetFinancials(
+      state.totals.clientPrice,
+      state.ivaPercent,
+      state.discountType,
+      state.discountPercent,
+      state.discountAmount,
+    );
+
+    let draftId = state.draftId;
+
+    if (!draftId) {
+      // Generate budget_number: PRE-{year}-{random5}
+      const year = new Date().getFullYear();
+      const randArray = new Uint32Array(1);
+      crypto.getRandomValues(randArray);
+      const rand = 10000 + (randArray[0] % 90000);
+      const budgetNumber = `PRE-${year}-${rand}`;
+
+      // Insert new draft
+      const { data, error } = await supabase.from("budgets").insert({
+        user_id: user.id,
+        budget_number: budgetNumber,
+        status: "borrador",
+        title: state.title || "Borrador de Presupuesto (Wizard)",
+        client_id: state.clientId || null,
+        client_name: clientSnapshot.name,
+        client_email: clientSnapshot.email,
+        client_phone: clientSnapshot.phone,
+        project_id: state.projectId || null,
+        service_type: state.serviceType || state.sector || "general",
+        subtotal: financials.subtotal,
+        iva_percent: state.ivaPercent,
+        iva_amount: financials.ivaAmount,
+        total: financials.total,
+        notes: state.internalNotes,
+        valid_until: state.validUntil || null,
+        deposit_percent: state.depositPercent,
+        payment_method: state.paymentMethod,
+        payment_iban: state.paymentIban,
+        discount_type: state.discountType,
+        discount_percent: state.discountPercent,
+        discount_amount: financials.discountValue,
+        payment_schedule: state.paymentSchedule,
+        warranty_text: state.warrantyText,
+        execution_deadline_text: state.executionDeadlineText,
+        observations: state.observations,
+        conditions_text: state.conditionsText,
+        wizard_state: snapshot
+      }).select("id").single();
+
+      if (error) throw error;
+      draftId = data.id;
+      // Retener el id aquí mismo, antes de cualquier operación que pueda
+      // fallar, y solo el id: en cuanto el INSERT devuelve el identificador la
+      // fila YA existe en la base. Si falla el snapshot de las líneas
+      // siguientes, o la sincronización de partidas, el reintento tiene que
+      // encontrar esta cabecera y actualizarla, no insertar una segunda. Las
+      // señales de éxito visibles (isSavingDraft, saveError, lastSavedAt) se
+      // establecen mucho más abajo, cuando el guardado esté completo.
+      setState(prev => ({ ...prev, draftId }));
+      // The first snapshot is built before Supabase returns the id. Persist it
+      // immediately so recovering or reopening this budget updates the same row.
+      const { error: snapshotError } = await supabase
+        .from("budgets")
+        .update({ wizard_state: { ...snapshot, draftId } })
+        .eq("id", draftId);
+      if (snapshotError) throw snapshotError;
+    } else {
+      // Update existing draft
+      const { error } = await supabase.from("budgets").update({
+        title: state.title || "Borrador de Presupuesto (Wizard)",
+        client_id: state.clientId || null,
+        client_name: clientSnapshot.name,
+        client_email: clientSnapshot.email,
+        client_phone: clientSnapshot.phone,
+        project_id: state.projectId || null,
+        service_type: state.serviceType || state.sector || "general",
+        subtotal: financials.subtotal,
+        iva_percent: state.ivaPercent,
+        iva_amount: financials.ivaAmount,
+        total: financials.total,
+        notes: state.internalNotes,
+        valid_until: state.validUntil || null,
+        deposit_percent: state.depositPercent,
+        payment_method: state.paymentMethod,
+        payment_iban: state.paymentIban,
+        discount_type: state.discountType,
+        discount_percent: state.discountPercent,
+        discount_amount: financials.discountValue,
+        payment_schedule: state.paymentSchedule,
+        warranty_text: state.warrantyText,
+        execution_deadline_text: state.executionDeadlineText,
+        observations: state.observations,
+        conditions_text: state.conditionsText,
+        wizard_state: { ...snapshot, draftId },
+        updated_at: new Date().toISOString()
+      }).eq("id", draftId);
+
+      if (error) throw error;
+    }
+
+    // A estas alturas la cabecera existe: o venía del estado, o la acabamos de
+    // insertar y leer su id. Si no la tenemos, el guardado no se ha producido y
+    // no podemos seguir hacia las partidas fingiendo que sí.
+    if (!draftId) {
+      throw new Error("No se pudo determinar el borrador tras guardar la cabecera");
+    }
+
+    // Also sync budget_items so the detail page shows partidas
+    if (draftId && (state.partidas.length > 0 || state.materials.some(m => m.included))) {
+      const marginMultiplier = 1 + (state.marginPercent / 100);
+
+      const partidasToInsert = state.partidas.filter(p => p.status !== "opcional").map(p => ({
+        budget_id: draftId,
+        concept: p.concept,
+        description: p.description,
+        quantity: p.quantity,
+        unit: normalizeBudgetItemUnit(p.unit),
+        category: p.category,
+        chapter: p.chapter || p.category || "otros",
+        unit_price: p.unit_price_client,
+        subtotal: p.subtotal_client
+      }));
+
+      const materialsToInsert = state.materials.filter(m => m.included).map(m => ({
+        budget_id: draftId,
+        concept: m.name,
+        description: "Material sugerido",
+        quantity: m.quantity,
+        unit: normalizeBudgetItemUnit(m.unit),
+        category: "material",
+        chapter: m.linkedChapter || "materiales",
+        unit_price: m.unit_price * marginMultiplier,
+        subtotal: m.subtotal * marginMultiplier
+      }));
+
+      // Persist the wizard's own order: partidas first, then materials, each
+      // numbered from zero. The position is assigned before itemsSignature so
+      // the signature represents exactly the rows that will be inserted,
+      // including their persisted sort_order values.
+      const itemsToInsert = [...partidasToInsert, ...materialsToInsert]
+        .map((row, idx) => ({ ...row, sort_order: idx }));
+
+      // Rewriting identical rows is the single most disk-expensive thing this
+      // wizard does (a full replacement churns dead tuples and WAL), so skip
+      // it entirely when nothing changed.
+      // Include the destination budget: two drafts may legitimately contain
+      // identical rows, but both still need their own budget_items records.
+      const itemsSignature = `${draftId}:${JSON.stringify(itemsToInsert)}`;
+      if (itemsSignature !== lastSyncedItemsSignature.current) {
+        // Sustitución atómica: validar, vaciar e insertar ocurren dentro de
+        // una sola transacción. Un conjunto vacío es una operación legítima
+        // (vaciar las líneas), no un motivo para omitir la llamada.
+        await replaceBudgetItems(supabase, draftId, itemsToInsert);
+
+        // Solo después de que la RPC confirme el recuento exacto podemos
+        // dar por sincronizada esta firma; si lanza, la próxima edición
+        // vuelve a intentarlo.
+        lastSyncedItemsSignature.current = itemsSignature;
+      }
+    }
+
+    // Único punto donde el asistente declara el guardado completo: cabecera,
+    // snapshot y partidas ya están persistidos.
+    setState(prev => ({
+      ...prev,
+      isSavingDraft: false,
+      saveError: null,
+      lastSavedAt: new Date().toLocaleTimeString("es-ES", { hour: '2-digit', minute: '2-digit' })
+    }));
+
+    if (manual) {
+      toast.success("Borrador guardado correctamente");
+    }
+    return { skipped: false, budgetId: draftId };
+  };
+
+  // Envoltorio público. Conserva literalmente el contrato histórico
+  // `(manual?: boolean) => Promise<string | null>` para no alterar a ninguno
+  // de sus consumidores actuales, y concentra aquí toda la gestión de errores.
+  const saveDraft = async (manual = false): Promise<string | null> => {
     try {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        if (manual) {
-          setState(prev => ({ ...prev, isSavingDraft: false, saveError: "No hay usuario autenticado" }));
-          toast.error("No hay usuario autenticado");
-        }
-        return null;
-      }
-
-      let clientSnapshot = {
-        name: state.clientName || "",
-        email: state.clientEmail || "",
-        phone: state.clientPhone || "",
-        company: state.clientCompany || "",
-      };
-      if (state.clientId) {
-        const { data: selectedClient } = await supabase
-          .from("clients")
-          .select("name, email, phone, company")
-          .eq("id", state.clientId)
-          .eq("user_id", user.id)
-          .maybeSingle();
-        if (selectedClient) {
-          clientSnapshot = {
-            name: selectedClient.name || clientSnapshot.name,
-            email: selectedClient.email || "",
-            phone: selectedClient.phone || "",
-            company: selectedClient.company || "",
-          };
-        }
-      }
-
-      // Build snapshot — exclude circular/transient fields
-      const snapshot = {
-        ...state,
-        isSavingDraft: false,
-        isFinalizing: false,
-        saveError: null,
-        finalizeError: null,
-      };
-      const financials = calculateBudgetFinancials(
-        state.totals.clientPrice,
-        state.ivaPercent,
-        state.discountType,
-        state.discountPercent,
-        state.discountAmount,
-      );
-
-      let draftId = state.draftId;
-
-      if (!draftId) {
-        // Generate budget_number: PRE-{year}-{random5}
-        const year = new Date().getFullYear();
-        const randArray = new Uint32Array(1);
-        crypto.getRandomValues(randArray);
-        const rand = 10000 + (randArray[0] % 90000);
-        const budgetNumber = `PRE-${year}-${rand}`;
-
-        // Insert new draft
-        const { data, error } = await supabase.from("budgets").insert({
-          user_id: user.id,
-          budget_number: budgetNumber,
-          status: "borrador",
-          title: state.title || "Borrador de Presupuesto (Wizard)",
-          client_id: state.clientId || null,
-          client_name: clientSnapshot.name,
-          client_email: clientSnapshot.email,
-          client_phone: clientSnapshot.phone,
-          project_id: state.projectId || null,
-          service_type: state.serviceType || state.sector || "general",
-          subtotal: financials.subtotal,
-          iva_percent: state.ivaPercent,
-          iva_amount: financials.ivaAmount,
-          total: financials.total,
-          notes: state.internalNotes,
-          valid_until: state.validUntil || null,
-          deposit_percent: state.depositPercent,
-          payment_method: state.paymentMethod,
-          payment_iban: state.paymentIban,
-          discount_type: state.discountType,
-          discount_percent: state.discountPercent,
-          discount_amount: financials.discountValue,
-          payment_schedule: state.paymentSchedule,
-          warranty_text: state.warrantyText,
-          execution_deadline_text: state.executionDeadlineText,
-          observations: state.observations,
-          conditions_text: state.conditionsText,
-          wizard_state: snapshot
-        }).select("id").single();
-
-        if (error) throw error;
-        draftId = data.id;
-        // The first snapshot is built before Supabase returns the id. Persist it
-        // immediately so recovering or reopening this budget updates the same row.
-        const { error: snapshotError } = await supabase
-          .from("budgets")
-          .update({ wizard_state: { ...snapshot, draftId } })
-          .eq("id", draftId);
-        if (snapshotError) throw snapshotError;
-        setState(prev => ({
-          ...prev,
-          draftId,
-          isSavingDraft: false,
-          saveError: null,
-          lastSavedAt: new Date().toLocaleTimeString("es-ES", { hour: '2-digit', minute: '2-digit' })
-        }));
-      } else {
-        // Update existing draft
-        const { error } = await supabase.from("budgets").update({
-          title: state.title || "Borrador de Presupuesto (Wizard)",
-          client_id: state.clientId || null,
-          client_name: clientSnapshot.name,
-          client_email: clientSnapshot.email,
-          client_phone: clientSnapshot.phone,
-          project_id: state.projectId || null,
-          service_type: state.serviceType || state.sector || "general",
-          subtotal: financials.subtotal,
-          iva_percent: state.ivaPercent,
-          iva_amount: financials.ivaAmount,
-          total: financials.total,
-          notes: state.internalNotes,
-          valid_until: state.validUntil || null,
-          deposit_percent: state.depositPercent,
-          payment_method: state.paymentMethod,
-          payment_iban: state.paymentIban,
-          discount_type: state.discountType,
-          discount_percent: state.discountPercent,
-          discount_amount: financials.discountValue,
-          payment_schedule: state.paymentSchedule,
-          warranty_text: state.warrantyText,
-          execution_deadline_text: state.executionDeadlineText,
-          observations: state.observations,
-          conditions_text: state.conditionsText,
-          wizard_state: { ...snapshot, draftId },
-          updated_at: new Date().toISOString()
-        }).eq("id", draftId);
-
-        if (error) throw error;
-
-        setState(prev => ({
-          ...prev,
-          isSavingDraft: false,
-          saveError: null,
-          lastSavedAt: new Date().toLocaleTimeString("es-ES", { hour: '2-digit', minute: '2-digit' })
-        }));
-      }
-
-      // Also sync budget_items so the detail page shows partidas
-      if (draftId && (state.partidas.length > 0 || state.materials.some(m => m.included))) {
-        const marginMultiplier = 1 + (state.marginPercent / 100);
-
-        const partidasToInsert = state.partidas.filter(p => p.status !== "opcional").map(p => ({
-          budget_id: draftId,
-          concept: p.concept,
-          description: p.description,
-          quantity: p.quantity,
-          unit: normalizeBudgetItemUnit(p.unit),
-          category: p.category,
-          chapter: p.chapter || p.category || "otros",
-          unit_price: p.unit_price_client,
-          subtotal: p.subtotal_client
-        }));
-
-        const materialsToInsert = state.materials.filter(m => m.included).map(m => ({
-          budget_id: draftId,
-          concept: m.name,
-          description: "Material sugerido",
-          quantity: m.quantity,
-          unit: normalizeBudgetItemUnit(m.unit),
-          category: "material",
-          chapter: m.linkedChapter || "materiales",
-          unit_price: m.unit_price * marginMultiplier,
-          subtotal: m.subtotal * marginMultiplier
-        }));
-
-        // Persist the wizard's own order: partidas first, then materials, each
-        // numbered from zero. The position is assigned before itemsSignature so
-        // the signature represents exactly the rows that will be inserted,
-        // including their persisted sort_order values.
-        const itemsToInsert = [...partidasToInsert, ...materialsToInsert]
-          .map((row, idx) => ({ ...row, sort_order: idx }));
-
-        // Rewriting identical rows is the single most disk-expensive thing this
-        // wizard does (a full DELETE + INSERT churns dead tuples and WAL), so
-        // skip it entirely when nothing changed.
-        // Include the destination budget: two drafts may legitimately contain
-        // identical rows, but both still need their own budget_items records.
-        const itemsSignature = `${draftId}:${JSON.stringify(itemsToInsert)}`;
-        if (itemsSignature !== lastSyncedItemsSignature.current) {
-          await supabase.from("budget_items").delete().eq("budget_id", draftId);
-
-          if (itemsToInsert.length > 0) {
-            const { error: itemsError } = await supabase.from("budget_items").insert(itemsToInsert);
-            if (itemsError) throw itemsError;
-          }
-
-          lastSyncedItemsSignature.current = itemsSignature;
-        }
-      }
-
-      if (manual) {
-        toast.success("Borrador guardado correctamente");
-      }
-      return draftId;
+      const outcome = await saveDraftOrThrow(manual);
+      return outcome.skipped ? null : outcome.budgetId;
     } catch (err: any) {
       const errorMsg = err?.message || "Error desconocido al guardar";
       console.error("Error saving draft:", err);
@@ -1455,12 +1485,23 @@ export function BudgetGenerateProvider({
       toast.error("No se puede finalizar: el presupuesto esta por debajo del minimo realista de mercado. Ajusta las partidas o genera de nuevo con IA.");
       return null;
     }
-    setState(prev => ({ ...prev, isFinalizing: true, finalizeError: null }));
+    // Limpiar también `saveError`: durante la finalización el canal del fallo
+    // es `finalizeError`, y un error de guardado anterior que siguiera vivo
+    // aquí se leería como si el guardado interno de esta finalización hubiera
+    // fallado. `saveDraftOrThrow` no escribe `saveError` —solo lo hace el
+    // envoltorio público, que aquí no interviene—, así que este es el único
+    // punto donde ese residuo puede desaparecer.
+    setState(prev => ({ ...prev, isFinalizing: true, finalizeError: null, saveError: null }));
     try {
-      const currentDraftId = await saveDraft(false); // Asegurarse de que tenemos el ID y el ultimo estado
+      // Guardar primero, propagando cualquier fallo. Si esto lanza, no se
+      // alcanza nada de lo que viene después: ni versión, ni sustitución de
+      // partidas, ni el cambio a "pendiente", ni snapshot, actividad,
+      // analytics o toast de éxito. El fallback a `state.draftId` solo se usa
+      // en la omisión legítima, nunca tras una operación que pudo fallar.
+      const saved = await saveDraftOrThrow(false);
 
       const supabase = createClient();
-      const budgetId = currentDraftId || state.draftId;
+      const budgetId = saved.skipped ? state.draftId : saved.budgetId;
       if (!budgetId) throw new Error("No hay borrador para finalizar. Guarda un borrador primero.");
       const financials = calculateBudgetFinancials(
         state.totals.clientPrice,
@@ -1473,10 +1514,9 @@ export function BudgetGenerateProvider({
       // 1. Obtener la siguiente versión (si ya existía y lo abrieron, o si es la 1)
       const nextVer = await getNextVersion(supabase, "budget", budgetId);
 
-      // 2. Limpiar items antiguos si hubiera (por si era un presupuesto que se volvió a abrir)
-      await supabase.from("budget_items").delete().eq("budget_id", budgetId);
-
-      // 3. Insertar las partidas reales + materiales
+      // 2. Preparar las partidas reales + materiales. El vaciado de las líneas
+      // antiguas ya no es un DELETE suelto: ocurre dentro de la sustitución
+      // atómica de más abajo, en la misma transacción que la inserción.
       const marginMultiplier = 1 + (state.marginPercent / 100);
 
       const partidasToInsert = state.partidas.filter(p => p.status !== "opcional").map(p => ({
@@ -1508,10 +1548,9 @@ export function BudgetGenerateProvider({
       const itemsToInsert = [...partidasToInsert, ...materialsToInsert]
         .map((row, idx) => ({ ...row, sort_order: idx }));
 
-      if (itemsToInsert.length > 0) {
-        const { error: itemsErr } = await supabase.from("budget_items").insert(itemsToInsert);
-        if (itemsErr) throw itemsErr;
-      }
+      // 3. Sustituir siempre, también con conjunto vacío: finalizar un
+      // presupuesto sin líneas debe dejarlo sin líneas, no con las anteriores.
+      await replaceBudgetItems(supabase, budgetId, itemsToInsert);
 
       // 4. Actualizar el estado a pendiente y la versión
       const { error: upErr } = await supabase.from("budgets").update({
@@ -1645,9 +1684,17 @@ export function BudgetGenerateProvider({
 
       const signatureBeingSaved = autosaveSignature;
       try {
-        await saveDraft(false);
         // Only mark as saved on success, so a failed save retries on next edit.
-        lastSavedSignature.current = signatureBeingSaved;
+        // `saveDraft` devuelve null tanto si omitió como si falló, y en ninguno
+        // de los dos casos hay nada persistido que dar por guardado. Cuando una
+        // partida sin concepto hace que la RPC rechace el conjunto, la firma no
+        // avanza: no se inventa un concepto ni se descarta la línea, y la
+        // siguiente edición válida produce una firma nueva que vuelve a
+        // intentarlo.
+        const savedDraftId = await saveDraft(false);
+        if (savedDraftId) {
+          lastSavedSignature.current = signatureBeingSaved;
+        }
       } finally {
         isAutosaving.current = false;
       }
