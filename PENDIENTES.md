@@ -3,6 +3,7 @@
 _Lista viva de cosas por arreglar o rematar. Nada urgente salvo que se indique._
 
 ## Bugs conocidos (arreglar cuando toque)
+- **🔴 SEGURIDAD (prioritario, antes de lanzar):** la tabla `issued_invoices` tiene una política RLS "Public read" con `USING (true)` → **cualquiera puede leer TODAS las facturas emitidas de TODOS los usuarios.** Fuga de datos. Restringir a `user_id = auth.uid()` antes del go-live.
 - ~~Bucle de recarga + login que reinicia~~ ✅ **ARREGLADO** (CSP + aislamiento de Sentry). Login entra a la primera, sin recargas.
 - ~~Cumplimiento → Seguridad (incidencias vacías)~~ ✅ **ARREGLADO** (filtra por `reported_by`; de paso el 400 del dashboard y la tarjeta de Seguridad siempre en verde).
 - ~~Ficha de proveedor (barra no se pintaba)~~ ✅ **ARREGLADO** (totales calculados desde `received_invoices`).
