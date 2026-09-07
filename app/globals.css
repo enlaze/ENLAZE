@@ -565,3 +565,33 @@ html[data-theme="dark"] [data-fact-surface] {
 [data-fact-surface] [data-fact-card] {
   box-shadow: var(--fact-shadow);
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Clientes (listado · Nuevo cliente · ficha) — integración del
+   rediseño.
+
+   Mismo criterio que `[data-fact-surface]`: esta superficie NO
+   declara paleta propia. El bundle del diseño traía la suya en
+   hexadecimales (`--brand #10b981`, `--blue #0ea5e9`,
+   `--red #e11d48`...) y cada uno se tradujo al token que ya
+   existe — el mapeo completo está documentado en
+   `components/clientes/ui.tsx`. Aquí solo queda lo que no cabe
+   en una utilidad de Tailwind: la sombra doble de las tarjetas,
+   derivada del propio navy en vez de un rgba suelto.
+   ───────────────────────────────────────────────────────────── */
+[data-cli-surface] {
+  --cli-shadow:
+    0 1px 2px color-mix(in srgb, var(--color-navy-900) 5%, transparent),
+    0 8px 24px -16px color-mix(in srgb, var(--color-navy-900) 16%, transparent);
+}
+
+/* En oscuro las tarjetas se separan por borde, no por sombra — mismo
+   criterio que `dark:shadow-none` en el resto del dashboard. */
+html.dark [data-cli-surface],
+html[data-theme="dark"] [data-cli-surface] {
+  --cli-shadow: none;
+}
+
+[data-cli-surface] [data-cli-card] {
+  box-shadow: var(--cli-shadow);
+}

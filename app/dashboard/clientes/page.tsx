@@ -1,61 +1,71 @@
 "use client";
-import { useEffect, useState } from "react";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import PageHeader from "@/components/ui/page-header";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import Badge from "@/components/ui/badge";
-import { FormField, Input, Select, Textarea } from "@/components/ui/form-fields";
 import EmptyState from "@/components/ui/empty-state";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import DataTable, { type Column } from "@/components/ui/data-table";
 import InfoFlipCard from "@/components/ui/InfoFlipCard";
+import ClientForm from "@/components/clientes/ClientForm";
+import { Avatar, StatusPill, type CliTone } from "@/components/clientes/ui";
+import {
+  EMPTY_CLIENT_TOTALS,
+  clientStatusLabels,
+  eur,
+  getClientsInvoiceTotals,
+  initials,
+  type Client,
+  type ClientInvoiceTotals,
+} from "@/lib/clients";
 
-type Client = {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  company: string;
-  notes: string;
-  status: string;
-  created_at: string;
+const statusTone: Record<string, CliTone> = {
+  active: "success",
+  lead: "info",
+  inactive: "neutral",
 };
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
+  const [totals, setTotals] = useState<Map<string, ClientInvoiceTotals>>(new Map());
   const [showForm, setShowForm] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", company: "", notes: "", status: "lead" });
   const supabase = createClient();
   const confirm = useConfirm();
   const toast = useToast();
+  const router = useRouter();
 
-  const fetchClients = async () => {
-    const { data } = await supabase.from("clients").select("*").order("created_at", { ascending: false });
-    if (data) setClients(data);
-  };
+  const fetchClients = useCallback(async () => {
+    const { data } = await supabase
+      .from("clients")
+      .select("*")
+      .order("created_at", { ascending: false });
+    const rows = (data || []) as Client[];
+    setClients(rows);
+    /* El saldo no está en `clients`: se suma sobre las facturas emitidas, de
+       todos los clientes en una sola consulta (no una por fila). */
+    setTotals(await getClientsInvoiceTotals(supabase, rows.map((c) => c.id)));
+  }, [supabase]);
 
-  useEffect(() => { fetchClients(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingClient) {
-      await supabase.from("clients").update(form).eq("id", editingClient.id);
-    } else {
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from("clients").insert({ ...form, user_id: user?.id });
+  /* La carga va dentro de una función async del propio efecto, como en la
+     ficha y en la página de proveedores: los `setState` ocurren después de un
+     `await`, nunca de forma síncrona durante el efecto. */
+  useEffect(() => {
+    async function load() {
+      await fetchClients();
     }
-    setForm({ name: "", email: "", phone: "", company: "", notes: "", status: "lead" });
+    load();
+  }, [fetchClients]);
+
+  const closeForm = () => {
     setShowForm(false);
     setEditingClient(null);
-    await fetchClients();
-    toast.success(editingClient ? "Cliente actualizado" : "Cliente creado");
   };
 
   const handleEdit = (client: Client) => {
-    setForm({ name: client.name, email: client.email || "", phone: client.phone || "", company: client.company || "", notes: client.notes || "", status: client.status });
     setEditingClient(client);
     setShowForm(true);
   };
@@ -68,13 +78,13 @@ export default function ClientsPage() {
       confirmLabel: "Eliminar",
     });
     if (!ok) return;
-    try {
-      await supabase.from("clients").delete().eq("id", id);
-      await fetchClients();
-      toast.success("Cliente eliminado");
-    } catch (error) {
+    const { error } = await supabase.from("clients").delete().eq("id", id);
+    if (error) {
       toast.error("Error al eliminar el cliente");
+      return;
     }
+    await fetchClients();
+    toast.success("Cliente eliminado");
   };
 
   const handleBulkDelete = async (rows: Client[]) => {
@@ -85,67 +95,133 @@ export default function ClientsPage() {
       confirmLabel: "Eliminar",
     });
     if (!ok) return;
-    try {
-      const ids = rows.map((r) => r.id);
-      await supabase.from("clients").delete().in("id", ids);
-      await fetchClients();
-      toast.success(`${rows.length} cliente${rows.length === 1 ? "" : "s"} eliminado${rows.length === 1 ? "" : "s"}`);
-    } catch {
+    const { error } = await supabase
+      .from("clients")
+      .delete()
+      .in("id", rows.map((r) => r.id));
+    if (error) {
       toast.error("Error al eliminar los clientes");
+      return;
     }
+    await fetchClients();
+    toast.success(`${rows.length} cliente${rows.length === 1 ? "" : "s"} eliminado${rows.length === 1 ? "" : "s"}`);
   };
 
-  const statusVariant = (s: string): "green" | "blue" | "gray" =>
-    s === "active" ? "green" : s === "lead" ? "blue" : "gray";
-  const statusLabel = (s: string) => s === "active" ? "Activo" : s === "lead" ? "Lead" : "Inactivo";
+  /* Todas las etiquetas en uso: alimentan el filtro y las sugerencias del
+     formulario, para que el usuario reutilice las que ya tiene en vez de
+     inventar una variante nueva cada vez. */
+  const allTags = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const c of clients) {
+      for (const t of c.tags ?? []) if (!seen.has(t.toLowerCase())) seen.set(t.toLowerCase(), t);
+    }
+    return [...seen.values()].sort((a, b) => a.localeCompare(b, "es"));
+  }, [clients]);
+
+  const totalsFor = (id: string) => totals.get(id) ?? EMPTY_CLIENT_TOTALS;
 
   const columns: Column<Client>[] = [
     {
       key: "name",
-      header: "Nombre",
+      header: "Cliente",
       sortable: true,
       exportValue: (c) => c.name,
       alwaysVisible: true,
       render: (c) => (
-        <span className="font-medium text-navy-900 dark:text-white">{c.name}</span>
+        <div className="flex items-center gap-3">
+          <Avatar>{initials(c.name)}</Avatar>
+          <div className="min-w-0">
+            <div className="truncate font-medium text-navy-900 dark:text-white">{c.name}</div>
+            <div className="truncate text-xs text-navy-500 dark:text-zinc-400">
+              {[c.company, c.phone].filter(Boolean).join(" · ") || "—"}
+            </div>
+          </div>
+        </div>
       ),
+    },
+    {
+      key: "tags",
+      header: "Etiquetas",
+      hidden: "hidden lg:table-cell",
+      exportValue: (c) => (c.tags ?? []).join(", "),
+      render: (c) => {
+        const tags = c.tags ?? [];
+        if (tags.length === 0) return <span className="text-navy-400 dark:text-zinc-500">—</span>;
+        return (
+          <div className="flex flex-wrap gap-1.5">
+            {tags.slice(0, 2).map((t) => (
+              <StatusPill key={t} tone="info">
+                {t}
+              </StatusPill>
+            ))}
+            {tags.length > 2 && (
+              <StatusPill tone="neutral">+{tags.length - 2}</StatusPill>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: "email",
       header: "Email",
       sortable: true,
-      hidden: "hidden md:table-cell",
-      exportValue: (c) => c.email,
+      /* Oculta por defecto: con Etiquetas y Saldo añadidas, el email empujaba
+         la columna de acciones fuera del ancho visible. Sigue disponible en
+         el selector de columnas, en el buscador y en la exportación. */
+      defaultHidden: true,
+      hidden: "hidden xl:table-cell",
+      exportValue: (c) => c.email ?? "",
       render: (c) => (
         <span className="text-navy-600 dark:text-zinc-400">{c.email || "—"}</span>
       ),
     },
     {
-      key: "phone",
-      header: "Teléfono",
-      hidden: "hidden lg:table-cell",
-      exportValue: (c) => c.phone,
-      render: (c) => (
-        <span className="text-navy-600 dark:text-zinc-400">{c.phone || "—"}</span>
-      ),
-    },
-    {
-      key: "company",
-      header: "Empresa",
+      key: "balance",
+      header: "Saldo",
+      align: "right",
       sortable: true,
-      hidden: "hidden md:table-cell",
-      exportValue: (c) => c.company,
-      render: (c) => (
-        <span className="text-navy-600 dark:text-zinc-400">{c.company || "—"}</span>
-      ),
+      /* Número, no cadena: `exportValue` es también el criterio de orden
+         (ver el accessor de DataTable), y "1000" ordena antes que "900" si
+         se compara como texto. */
+      exportValue: (c) => totalsFor(c.id).overdue + totalsFor(c.id).pending,
+      render: (c) => {
+        const t = totalsFor(c.id);
+        const owed = t.overdue + t.pending;
+        return (
+          <div className="text-right">
+            <div
+              className={`text-sm font-bold tabular-nums ${
+                t.overdue > 0
+                  ? "text-danger-ink"
+                  : t.pending > 0
+                    ? "text-warning-ink"
+                    : "text-navy-500 dark:text-zinc-400"
+              }`}
+            >
+              {eur(owed)}
+            </div>
+            <div className="text-xs text-navy-400 dark:text-zinc-500">
+              {t.overdue_count > 0
+                ? `${t.overdue_count} vencida${t.overdue_count === 1 ? "" : "s"}`
+                : t.pending_count > 0
+                  ? `${t.pending_count} pendiente${t.pending_count === 1 ? "" : "s"}`
+                  : t.invoice_count > 0
+                    ? "Al día"
+                    : "Sin facturas"}
+            </div>
+          </div>
+        );
+      },
     },
     {
       key: "status",
       header: "Estado",
       sortable: true,
-      exportValue: (c) => statusLabel(c.status),
+      exportValue: (c) => clientStatusLabels[c.status] ?? c.status,
       render: (c) => (
-        <Badge variant={statusVariant(c.status)}>{statusLabel(c.status)}</Badge>
+        <StatusPill tone={statusTone[c.status] ?? "neutral"}>
+          {clientStatusLabels[c.status] ?? c.status}
+        </StatusPill>
       ),
     },
     {
@@ -156,7 +232,7 @@ export default function ClientsPage() {
       hidden: "hidden lg:table-cell",
       exportValue: (c) => c.created_at,
       render: (c) => (
-        <span className="text-navy-500 dark:text-zinc-500 tabular-nums">
+        <span className="tabular-nums text-navy-500 dark:text-zinc-500">
           {c.created_at ? new Date(c.created_at).toLocaleDateString("es-ES") : "—"}
         </span>
       ),
@@ -170,13 +246,13 @@ export default function ClientsPage() {
         <div className="space-x-3" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={() => handleEdit(c)}
-            className="text-sm text-brand-green hover:text-brand-green-dark font-medium transition-colors"
+            className="text-sm font-medium text-brand-green transition-colors hover:text-brand-green-dark"
           >
             Editar
           </button>
           <button
             onClick={() => handleDelete(c.id)}
-            className="text-sm text-red-600 hover:text-red-700 font-medium transition-colors"
+            className="text-sm font-medium text-danger-ink transition-colors hover:opacity-80"
           >
             Eliminar
           </button>
@@ -186,7 +262,7 @@ export default function ClientsPage() {
   ];
 
   return (
-    <>
+    <div data-cli-surface>
       <PageHeader
         title="Clientes"
         count={clients.length}
@@ -201,9 +277,8 @@ export default function ClientsPage() {
         actions={
           <Button
             onClick={() => {
-              setShowForm(true);
               setEditingClient(null);
-              setForm({ name: "", email: "", phone: "", company: "", notes: "", status: "lead" });
+              setShowForm(true);
             }}
           >
             + Nuevo cliente
@@ -212,98 +287,28 @@ export default function ClientsPage() {
       />
 
       {showForm && (
-        <Card className="mb-8">
-          <h2 className="text-lg font-bold text-navy-900 mb-6 dark:text-white">{editingClient ? "Editar cliente" : "Nuevo cliente"}</h2>
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <FormField label="Nombre" required>
-                <Input
-                  type="text"
-                  value={form.name}
-                  onChange={e => setForm({...form, name: e.target.value})}
-                  required
-                  placeholder="Nombre del cliente"
-                />
-              </FormField>
-              <FormField label="Email">
-                <Input
-                  type="email"
-                  value={form.email}
-                  onChange={e => setForm({...form, email: e.target.value})}
-                  placeholder="email@ejemplo.com"
-                />
-              </FormField>
-              <FormField label="Teléfono">
-                <Input
-                  type="tel"
-                  value={form.phone}
-                  onChange={e => setForm({...form, phone: e.target.value})}
-                  placeholder="+34 600 000 000"
-                />
-              </FormField>
-              <FormField label="Empresa (opcional)">
-                <Input
-                  type="text"
-                  value={form.company}
-                  onChange={e => setForm({...form, company: e.target.value})}
-                  placeholder="Nombre de la empresa"
-                />
-              </FormField>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <FormField label="Estado">
-                <Select
-                  value={form.status}
-                  onChange={e => setForm({...form, status: e.target.value})}
-                >
-                  <option value="lead">Lead</option>
-                  <option value="active">Activo</option>
-                  <option value="inactive">Inactivo</option>
-                </Select>
-              </FormField>
-              <FormField label="Notas">
-                <Textarea
-                  value={form.notes}
-                  onChange={e => setForm({...form, notes: e.target.value})}
-                  placeholder="Notas adicionales"
-                  rows={1}
-                />
-              </FormField>
-            </div>
-
-            <div className="flex gap-3 justify-end pt-2">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setShowForm(false);
-                  setEditingClient(null);
-                }}
-              >
-                Cancelar
-              </Button>
-              <Button type="submit">
-                {editingClient ? "Guardar cambios" : "Agregar cliente"}
-              </Button>
-            </div>
-          </form>
-        </Card>
+        <ClientForm
+          client={editingClient}
+          suggestedTags={allTags}
+          onCancel={closeForm}
+          onSaved={() => {
+            closeForm();
+            fetchClients();
+          }}
+        />
       )}
 
       {clients.length === 0 ? (
-        <EmptyState
-          title="Sin clientes todavía"
-          description="Agrega tu primer cliente para empezar"
-        />
+        <EmptyState title="Sin clientes todavía" description="Agrega tu primer cliente para empezar" />
       ) : (
         <DataTable<Client>
           columns={columns}
           data={clients}
           rowKey={(c) => c.id}
+          onRowClick={(c) => router.push(`/dashboard/clientes/${c.id}`)}
           searchable
           searchPlaceholder="Buscar por nombre, email o empresa..."
-          searchFields={(c) => [c.name, c.email, c.company, c.phone]}
+          searchFields={(c) => [c.name, c.email ?? "", c.company ?? "", c.phone ?? "", ...(c.tags ?? [])]}
           filters={[
             {
               key: "status",
@@ -315,23 +320,31 @@ export default function ClientsPage() {
               ],
               matches: (c, v) => c.status === v,
             },
+            ...(allTags.length > 0
+              ? [
+                  {
+                    /* Tiene que ser el id de la columna: DataTable engancha
+                       cada filtro a su columna por esta clave. Con "tag" la
+                       tabla avisaba "Column with id 'tag' does not exist" y
+                       el filtro no hacía nada. */
+                    key: "tags",
+                    label: "Etiqueta",
+                    options: allTags.map((t) => ({ label: t, value: t })),
+                    matches: (c: Client, v: string) => (c.tags ?? []).includes(v),
+                  },
+                ]
+              : []),
           ]}
           initialSort={{ key: "created_at", dir: "desc" }}
           pageSize={25}
           selectable
-          bulkActions={[
-            {
-              label: "Eliminar",
-              variant: "danger",
-              onClick: handleBulkDelete,
-            },
-          ]}
+          bulkActions={[{ label: "Eliminar", variant: "danger", onClick: handleBulkDelete }]}
           exportable
           exportFileName="clientes"
           toggleableColumns
           emptyMessage="Sin resultados. Prueba con otro término."
         />
       )}
-    </>
+    </div>
   );
 }
