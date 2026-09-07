@@ -245,19 +245,41 @@ describe("FASE 2E-3 · lectores de budget_items · BLOQUE B — inventario", () 
   });
 
   test("CASO R7 — los escritores de budget_items no se han convertido en lectores", () => {
-    // Control negativo del clasificador: los .delete()/.insert() del provider
-    // filtran por budget_id y deben seguir quedando fuera del inventario.
+    // Control negativo del clasificador. Este caso apuntaba al provider del
+    // asistente, cuyos .delete()/.insert() filtraban por budget_id. Desde
+    // FASE 2F-1APP el provider sustituye las líneas con la RPC atómica
+    // `replace_budget_items` y no vuelve a nombrar la tabla, de modo que ya no
+    // queda ninguna cadena suya que clasificar: seguir apuntándole convertiría
+    // este control en una comprobación vacía que pasaría por no encontrar nada.
+    //
+    // El escritor directo que sí sobrevive es la duplicación de la página de
+    // detalle, que inserta las partidas copiadas. Además de escribir, ese mismo
+    // fichero lee, lo que lo hace un control negativo más exigente que el
+    // anterior: obliga al clasificador a separar dos cadenas del mismo fuente,
+    // en lugar de descartar un fichero entero por su nombre.
     const provider = "app/dashboard/budgets/generate/_components/BudgetGenerateProvider.tsx";
-    const cadenas = cadenasBudgetItems(leer(provider));
-    assert.ok(cadenas.length > 0, "el provider debe seguir tocando budget_items");
+    assert.equal(
+      cadenasBudgetItems(leer(provider)).length,
+      0,
+      "el provider ya no escribe budget_items directamente: lo hace a través de la RPC atómica",
+    );
+
+    const cadenas = cadenasBudgetItems(leer(F_DETALLE));
+    const escrituras = cadenas.filter((c) => /\.(insert|update|upsert|delete)\(/.test(c));
+    assert.ok(escrituras.length > 0, "la duplicación debe seguir insertando las partidas copiadas");
+    assert.ok(
+      escrituras.some((c) => c.includes(".insert(")),
+      "el escritor directo que queda es un .insert() de duplicación",
+    );
+    assert.equal(
+      escrituras.filter(esLectura).length,
+      0,
+      "una cadena de escritura no debe clasificarse nunca como lectura",
+    );
     assert.equal(
       cadenas.filter(esLectura).length,
-      0,
-      "el provider es un escritor: no debe aparecer como lector",
-    );
-    assert.ok(
-      !inventarioDeLectores().includes(provider),
-      "el provider no debe entrar en el inventario de lectores",
+      1,
+      "el detalle entra en el inventario por su única cadena lectora, no por la de escritura",
     );
   });
 });
