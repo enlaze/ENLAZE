@@ -27,7 +27,6 @@ declare
   v_numero   numeric;
   v_insertadas integer;
 begin
-  -- ── 1. Argumentos obligatorios ─────────────────────────────────────────────
   if p_budget_id is null then
     raise exception 'replace_budget_items: p_budget_id es obligatorio'
       using errcode = '22004';
@@ -38,21 +37,18 @@ begin
       using errcode = '22004';
   end if;
 
-  -- ── 2. Forma del payload ───────────────────────────────────────────────────
   if jsonb_typeof(p_items) <> 'array' then
     raise exception 'replace_budget_items: p_items debe ser un array JSON (recibido: %)',
       jsonb_typeof(p_items)
       using errcode = '22023';
   end if;
 
-  -- ── 3. Autorización ────────────────────────────────────────────────────────
   v_user_id := auth.uid();
   if v_user_id is null then
     raise exception 'replace_budget_items: no hay sesión autenticada'
       using errcode = '42501';
   end if;
 
-  -- ── 4. Propiedad, borrado lógico y bloqueo ─────────────────────────────────
   select b.id
     into v_budget
     from public.budgets as b
@@ -66,7 +62,6 @@ begin
       using errcode = '42501';
   end if;
 
-  -- ── 5. Validación elemento a elemento, ANTES de escribir nada ──────────────
   for v_item, v_pos in
     select t.item, t.ordinality
       from jsonb_array_elements(p_items) with ordinality as t(item, ordinality)
@@ -121,9 +116,6 @@ begin
         using errcode = '22023';
     end if;
 
-    -- Las columnas de coste son opcionales: una línea sin coste conocido sigue
-    -- siendo válida. Pero si vienen, tienen que ser números de verdad; un NaN
-    -- en el coste falsea el margen del PDF interno en lugar de fallar.
     if nullif(v_item->>'subtotal_cost', '') is not null then
       begin
         v_numero := (v_item->>'subtotal_cost')::numeric;
@@ -157,7 +149,6 @@ begin
     end if;
   end loop;
 
-  -- ── 6. Sustitución ─────────────────────────────────────────────────────────
   delete from public.budget_items
    where budget_id = p_budget_id;
 
@@ -195,11 +186,7 @@ begin
            (nullif(t.item->>'subtotal', ''))::numeric,
            round((t.item->>'quantity')::numeric * (t.item->>'unit_price')::numeric, 2)
          ),
-         -- Coste unitario. Réplica explícita del default de la columna (0)
-         -- porque nombrarla en el INSERT desactiva ese default.
          coalesce((nullif(t.item->>'unit_price_cost', ''))::numeric, 0),
-         -- Coste total de la línea. Si sólo viene el unitario, se deriva de la
-         -- cantidad; el llamante no tiene que enviar los dos.
          coalesce(
            (nullif(t.item->>'subtotal_cost', ''))::numeric,
            round(

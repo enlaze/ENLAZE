@@ -19,8 +19,6 @@ DECLARE
   result json;
   v_caller uuid := auth.uid();
 BEGIN
-  -- service_role (rutas de servidor) mantiene acceso completo; cualquier otro
-  -- llamante sólo puede pedir su propio resumen.
   IF coalesce(auth.role(), '') <> 'service_role' THEN
     IF v_caller IS NULL OR p_user_id IS DISTINCT FROM v_caller THEN
       RAISE EXCEPTION 'forbidden: cannot read another user''s expense summary'

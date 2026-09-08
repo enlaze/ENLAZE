@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
@@ -20,11 +20,35 @@ import { fileURLToPath } from "node:url";
  * dos llamadas concurrentes, o que un `revoke` escrito en el fichero acabó
  * realmente en `pg_proc.proacl`. Eso sólo lo demuestra ejecutarlo.
  *
- * Por eso el control negativo significativo aquí NO es una mutación del texto
- * —eso ya está cubierto, y repetirlo sería decorativo— sino un elemento que
- * SUPERA la validación previa de la RPC y revienta DENTRO del INSERT, es decir,
- * después del DELETE. Es el único fallo que distingue «atómica» de «validada
- * antes de borrar».
+ * Por eso los controles negativos significativos aquí NO son mutaciones del
+ * texto —eso ya está cubierto, y repetirlo sería decorativo—. Son dos, y cada
+ * uno responde a una pregunta distinta sobre si el banco mide algo:
+ *
+ *   · Un elemento que SUPERA la validación previa de la RPC y revienta DENTRO
+ *     del INSERT, es decir, después del DELETE (prueba 1). Es el único fallo que
+ *     distingue «atómica» de «validada antes de borrar».
+ *   · La RPC ANTERIOR puesta en su sitio a propósito, para exigir que la
+ *     cobertura de costes falle contra ella (prueba 8). Sin eso, unas
+ *     comprobaciones que pasan con las dos versiones no dirían nada sobre lo que
+ *     la migración de costes añade.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * QUÉ SE APLICA SOBRE EL ESQUEMA, Y EN QUÉ ORDEN
+ * ───────────────────────────────────────────────────────────────────────────
+ * El bootstrap, y después DOS migraciones, en este orden:
+ *
+ *   1. `20260904120000_replace_budget_items.sql` — crea la función, y con ella
+ *      la autorización manual, el bloqueo, la sustitución atómica y la ACL.
+ *   2. `20260908111706_replace_budget_items_persist_cost.sql` — la redefine para
+ *      transportar `unit_price_cost` y `subtotal_cost`.
+ *
+ * Las dos hacen `create or replace` sobre la misma firma, así que el orden
+ * decide cuál queda en pie. Aplicar sólo la primera —que es lo que este banco
+ * hacía— dejaba probada una función que en producción ya no existe.
+ *
+ * El estado final que se ejercita es el de producción, y de ahí sale también la
+ * definición de las dos columnas de coste en el bootstrap: del catálogo real, no
+ * del fichero de migración, que las nombra pero no las crea.
  *
  * ───────────────────────────────────────────────────────────────────────────
  * CÓMO EJECUTARLO — Y POR QUÉ CUESTA TANTO
@@ -134,13 +158,29 @@ import { fileURLToPath } from "node:url";
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const RUTA_BOOTSTRAP = resolve(AQUI, "support", "bootstrap-budget-schema.sql");
-const RUTA_MIGRACION = resolve(
-  AQUI,
-  "..",
-  "supabase",
-  "migrations",
-  "20260904120000_replace_budget_items.sql"
-);
+// LAS DOS MIGRACIONES QUE DEFINEN LA RPC, EN EL ORDEN EN QUE SE APLICAN.
+//
+// El orden no es una preferencia de estilo: las dos hacen `create or replace` de
+// la MISMA función, así que la última en aplicarse es la que queda. Invertirlas
+// dejaría en pie la versión sin `unit_price_cost` y el banco estaría probando la
+// RPC anterior mientras cree probar la actual —y las pruebas de coste fallarían
+// con un mensaje que no señalaría la causa—. Por eso se aplican recorriendo este
+// array y por eso el array está declarado como constante ordenada y no como
+// conjunto.
+//
+// La segunda lleva el nombre RECONCILIADO. En el repositorio se llamó un tiempo
+// `20260908160000_...`, pero producción la registró como `20260908111706_...`, y
+// el fichero se ha renombrado para que el repositorio reproduzca lo que de
+// verdad se aplicó. Si esta ruta dejara de existir, el banco falla al leerla, que
+// es el comportamiento correcto: no hay una versión «por defecto» aceptable.
+const RUTAS_MIGRACIONES = [
+  "20260904120000_replace_budget_items.sql",
+  "20260908111706_replace_budget_items_persist_cost.sql",
+].map((nombre) => resolve(AQUI, "..", "supabase", "migrations", nombre));
+
+// La original, por separado: el control negativo del final la reaplica a
+// propósito para demostrar que la cobertura de costes la detecta.
+const [RUTA_MIGRACION_ORIGINAL, RUTA_MIGRACION_COSTES] = RUTAS_MIGRACIONES;
 
 // El destino no se «prefiere» local: se exige un ÚNICO destino posible. Ni
 // `localhost` (que puede resolver a cualquier cosa, y en algunos sistemas al
@@ -548,10 +588,19 @@ test("banco conductual de public.replace_budget_items", async (t) => {
   }
 
   const bootstrap = await readFile(RUTA_BOOTSTRAP, "utf8");
-  const migracion = await readFile(RUTA_MIGRACION, "utf8");
+
+  // Se leen las DOS antes de ejecutar ninguna, para que una ruta equivocada se
+  // note antes de tocar la base y no a mitad de la secuencia.
+  const migraciones = [];
+  for (const ruta of RUTAS_MIGRACIONES) {
+    migraciones.push({ ruta, sql: await readFile(ruta, "utf8") });
+  }
 
   await admin.query(bootstrap);
-  await admin.query(migracion);
+  for (const { ruta, sql } of migraciones) {
+    await admin.query(sql);
+    t.diagnostic(`migración aplicada: ${basename(ruta)}`);
+  }
   await admin.query("insert into public.canonical_concepts (canonical_id) values ('cc-banco-001')");
 
   // ── Fixtures ───────────────────────────────────────────────────────────────
@@ -573,23 +622,40 @@ test("banco conductual de public.replace_budget_items", async (t) => {
     return rows[0].id;
   }
 
+  // Los costes sembrados son DISTINTOS DE CERO y distintos entre sí a propósito.
+  // Cero es el default de las columnas, así que sembrar ceros haría indistinguible
+  // «la fila vieja sigue ahí» de «alguien la reescribió sin costes»: las dos fotos
+  // saldrían iguales. Con 3.00 y 6.00 esa confusión ya no es posible.
   async function sembrarPartidas(budgetId, conceptos) {
     for (const [indice, concepto] of conceptos.entries()) {
       await admin.query(
         `insert into public.budget_items
            (budget_id, sort_order, concept, description, quantity, unit, category,
-            unit_price, subtotal)
-         values ($1, $2, $3, 'sembrada por el banco', 2, 'ud', 'otros', 5.00, 10.00)`,
+            unit_price, subtotal, unit_price_cost, subtotal_cost)
+         values ($1, $2, $3, 'sembrada por el banco', 2, 'ud', 'otros', 5.00, 10.00,
+                 3.00, 6.00)`,
         [budgetId, indice, concepto]
       );
     }
   }
 
-  /** Conjunto completo y comparable de las partidas de un presupuesto. */
+  /**
+   * Conjunto completo y comparable de las partidas de un presupuesto.
+   *
+   * Incluye `id` y las DOS columnas de coste a propósito, porque de esta función
+   * salen las dos fotos que comparan las pruebas de «nada ha cambiado». El `id`
+   * es lo que distingue «no se tocó» de «se borró y se volvió a insertar algo
+   * idéntico»: sin él, un DELETE seguido de un INSERT con los mismos valores
+   * pasaría por intacto. Y los costes están porque desde
+   * `20260908111706_replace_budget_items_persist_cost.sql` la RPC los escribe;
+   * dejarlos fuera de la foto haría que una escritura de coste indebida tras un
+   * error autorizado pasase desapercibida.
+   */
   async function partidas(budgetId, cliente = admin) {
     const { rows } = await cliente.query(
       `select id, budget_id, sort_order, concept, description, quantity, unit,
-              category, chapter, unit_price, subtotal, canonical_id,
+              category, chapter, unit_price, subtotal,
+              unit_price_cost, subtotal_cost, canonical_id,
               canonical_status, canonical_confidence, canonical_source,
               canonical_origin, canonical_source_ref, price_type
          from public.budget_items
@@ -1179,4 +1245,239 @@ test("banco conductual de public.replace_budget_items", async (t) => {
     assert.equal(rows[0].n, 1, "authenticated sí puede ejecutarla");
     assert.equal((await partidas(presupuesto)).length, 1);
   });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 7. PERSISTENCIA DEL COSTE
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Lo que añade `20260908111706_replace_budget_items_persist_cost.sql`, y nada
+  // más: transporte de `unit_price_cost` y `subtotal_cost`, derivación del
+  // segundo cuando falta, y rechazo de los dos cuando no son números.
+  //
+  // ESTA COBERTURA ESTÁ EN UNA FUNCIÓN, Y NO INLINE EN EL `t.test`, PORQUE SE
+  // EJECUTA DOS VECES. La prueba 7 la ejecuta contra la RPC actual y espera que
+  // pase; el control negativo de la prueba 8 la ejecuta contra la RPC ANTERIOR y
+  // espera que FALLE. Escribirla dos veces habría permitido que las dos copias
+  // divergieran, y entonces el control negativo dejaría de hablar de esta
+  // cobertura para hablar de otra parecida. Al ser el mismo código, «la RPC
+  // antigua no pasa estas comprobaciones» es literal.
+  //
+  // Crea sus propias fixtures en cada llamada: las dos ejecuciones no pueden
+  // compartir filas ni presupuestos.
+  async function ejercerCoberturaDeCostes() {
+    const usuario = await nuevoUsuario();
+    await comoUsuario(admin, usuario);
+
+    // ── 7.1 Coste ausente, coste explícito y coste derivado, en una llamada ───
+    const presupuesto = await nuevoPresupuesto(usuario);
+    const { rows: escritas } = await llamar(admin, presupuesto, [
+      // (0) Sin ninguna columna de coste. La RPC nombra las dos columnas en su
+      //     INSERT, lo que DESACTIVA su DEFAULT, así que el 0 que debe quedar
+      //     aquí es el `coalesce(..., 0)` de la función y no el default de la
+      //     tabla. Los dos valen 0 y por eso el banco no puede distinguirlos por
+      //     el resultado; lo que sí comprueba es que el hueco no acabe en NULL,
+      //     que es lo que pasaría si la RPC nombrase la columna sin coalesce.
+      { concept: "sin coste", quantity: "2", unit_price: "10.00" },
+      // (1) Los dos costes explícitos, y deliberadamente INCOHERENTES entre sí:
+      //     4.00 × 2 = 8.00, pero se envía 99.99. Si la RPC recalculase en vez
+      //     de transportar, saldría 8.00 y el envío se habría perdido en
+      //     silencio. Dos decimales en la entrada porque numeric(12,2) redondea
+      //     al almacenar y un tercer decimal impediría distinguir transporte de
+      //     recálculo.
+      {
+        concept: "coste explícito",
+        quantity: "2",
+        unit_price: "10.00",
+        unit_price_cost: "4.00",
+        subtotal_cost: "99.99",
+      },
+      // (2) Sólo el unitario: el total se deriva. 3.33 × 1.11 = 3.6963 -> 3.70.
+      {
+        concept: "coste derivado",
+        quantity: "3.33",
+        unit_price: "10.00",
+        unit_price_cost: "1.11",
+      },
+      // (3) Cadenas vacías. El `nullif(..., '')` de la RPC las trata como
+      //     ausencia, no como cero textual ni como error de conversión. Sin ese
+      //     nullif, `''::numeric` reventaría con 22P02 y este elemento sería un
+      //     fallo, no un cero.
+      {
+        concept: "coste vacío",
+        quantity: "2",
+        unit_price: "10.00",
+        unit_price_cost: "",
+        subtotal_cost: "",
+      },
+    ]);
+    assert.equal(escritas[0].n, 4);
+
+    const filas = await partidas(presupuesto);
+    assert.equal(filas.length, 4);
+
+    assert.equal(filas[0].unit_price_cost, "0.00", "coste unitario ausente -> 0");
+    assert.equal(filas[0].subtotal_cost, "0.00", "coste total ausente -> 0");
+    assert.notEqual(filas[0].unit_price_cost, null, "ausente es 0, nunca NULL");
+    assert.notEqual(filas[0].subtotal_cost, null, "ausente es 0, nunca NULL");
+
+    assert.equal(filas[1].unit_price_cost, "4.00", "el coste unitario se transporta");
+    assert.equal(filas[1].subtotal_cost, "99.99", "el coste total se transporta");
+    assert.notEqual(
+      filas[1].subtotal_cost,
+      "8.00",
+      "y NO se recalcula como quantity × unit_price_cost cuando viene dado"
+    );
+
+    // DERIVACIÓN, no redondeo. Esta aserción demuestra que el total sale de
+    // `quantity × unit_price_cost`; NO demuestra quién redondeó. El `round(..., 2)`
+    // de la RPC y el redondeo de numeric(12,2) al almacenar producen el mismo
+    // valor para cualquier entrada, así que el banco no puede separarlos y no se
+    // afirma que lo haga.
+    assert.equal(
+      filas[2].subtotal_cost,
+      "3.70",
+      "3.33 × 1.11 = 3.6963, a dos decimales 3.70"
+    );
+    assert.equal(filas[2].unit_price_cost, "1.11");
+
+    assert.equal(filas[3].unit_price_cost, "0.00", "cadena vacía = ausente");
+    assert.equal(filas[3].subtotal_cost, "0.00", "cadena vacía = ausente");
+
+    // Lo que la migración de costes NO cambia sigue en pie en la misma llamada.
+    assert.deepEqual(
+      filas.map((f) => f.sort_order),
+      [0, 1, 2, 3],
+      "el orden lo sigue fijando el array"
+    );
+    assert.equal(filas[0].subtotal, "20.00", "el subtotal de venta no lo toca el coste");
+
+    // ── 7.2 Rechazo de valores que no son números ─────────────────────────────
+    // Cuatro casos: no numérico y NaN, en cada uno de los dos campos. El NaN
+    // merece caso propio porque `'NaN'::numeric` NO lanza: es un valor numérico
+    // legítimo para PostgreSQL. Sin la comprobación explícita entraría en la
+    // tabla y falsearía el margen del PDF interno en vez de fallar.
+    const CASOS = [
+      { campo: "unit_price_cost", valor: "cuatro euros", cola: "un unit_price_cost no numérico" },
+      { campo: "unit_price_cost", valor: "NaN", cola: "unit_price_cost = NaN" },
+      { campo: "subtotal_cost", valor: "doce", cola: "un subtotal_cost no numérico" },
+      { campo: "subtotal_cost", valor: "NaN", cola: "subtotal_cost = NaN" },
+    ];
+
+    for (const { campo, valor, cola } of CASOS) {
+      const objetivo = await nuevoPresupuesto(usuario, { titulo: `rechazo ${campo}` });
+      await sembrarPartidas(objetivo, ["previa 0", "previa 1"]);
+      const antes = await partidas(objetivo);
+      assert.equal(antes.length, 2, "precondición del caso de rechazo");
+
+      // El elemento envenenado va en la POSICIÓN 1, no en la 0, para que el
+      // índice del mensaje pueda equivocarse y notarse. Con el veneno en la 0,
+      // un error de desplazamiento daría 0 igualmente.
+      const error = await capturar(
+        () =>
+          llamar(admin, objetivo, [
+            PAYLOAD_VALIDO("buena"),
+            PAYLOAD_VALIDO("envenenada", { [campo]: valor }),
+          ]),
+        `22023 por ${campo} = ${JSON.stringify(valor)}`
+      );
+
+      assert.equal(error.code, "22023", `${campo}=${valor}: SQLSTATE`);
+      assert.equal(
+        error.message,
+        `replace_budget_items: el elemento 1 tiene ${cola}`,
+        `${campo}=${valor}: el mensaje debe nombrar el campo y el índice base 0`
+      );
+
+      // La validación es previa al DELETE, así que aquí no basta con que las
+      // filas «sigan estando»: deben ser LAS MISMAS, con los mismos ids y los
+      // mismos costes sembrados. `partidas()` incluye ambas cosas.
+      assert.deepEqual(
+        await partidas(objetivo),
+        antes,
+        `${campo}=${valor}: un payload rechazado no puede haber tocado nada`
+      );
+    }
+  }
+
+  await t.test(
+    "7. la RPC persiste el coste: ausente, explícito, derivado y rechazado",
+    async () => {
+      await ejercerCoberturaDeCostes();
+    }
+  );
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 8. CONTROL NEGATIVO: la RPC ANTERIOR no supera la cobertura de costes
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Una prueba que pasa no dice si prueba algo. Esta responde a esa pregunta:
+  // sustituye la función por la de la migración original —`create or replace`
+  // sobre la misma firma, que es exactamente lo que hace la de costes— y exige
+  // que la MISMA cobertura de la prueba 7 falle.
+  //
+  // Se ejecuta la última a propósito, porque deja la base en un estado
+  // intermedio mientras dura. La restauración va en un `finally` y se COMPRUEBA
+  // después: reaplicar y no verificarlo sería confiar en que el SQL hizo lo que
+  // se esperaba justo en el sitio donde el banco está demostrando que no hay que
+  // confiar.
+  await t.test(
+    "8. la RPC anterior a la persistencia de costes NO pasa la prueba 7",
+    async () => {
+      const sqlOriginal = await readFile(RUTA_MIGRACION_ORIGINAL, "utf8");
+      const sqlCostes = await readFile(RUTA_MIGRACION_COSTES, "utf8");
+
+      let fallo = null;
+      try {
+        await admin.query(sqlOriginal);
+        await ejercerCoberturaDeCostes();
+      } catch (error) {
+        fallo = error;
+      } finally {
+        // Pase lo que pase, la RPC vuelve a ser la actual.
+        await admin.query(sqlCostes);
+      }
+
+      assert.ok(
+        fallo,
+        "la cobertura de costes ha pasado contra la RPC ANTERIOR, que no nombra " +
+          "unit_price_cost ni subtotal_cost en su INSERT. Si pasa con las dos " +
+          "versiones, no está midiendo lo que la migración de costes añade."
+      );
+      assert.ok(
+        fallo instanceof assert.AssertionError,
+        "el fallo debe ser una aserción de la cobertura, no un error de conexión " +
+          `o de SQL ajeno a lo que se mide. Recibido: ${fallo?.stack ?? fallo}`
+      );
+
+      // El punto EXACTO en que cae importa. La RPC anterior no nombra las
+      // columnas de coste, así que su INSERT deja actuar al DEFAULT 0: el caso
+      // «coste ausente -> 0» lo pasa igual que la actual, y por eso no puede ser
+      // ése el que detecte la diferencia. Lo que no puede hacer de ninguna
+      // manera es TRANSPORTAR un coste enviado, y ahí es donde se la espera.
+      assert.match(
+        String(fallo.message),
+        /el coste unitario se transporta/,
+        "el control debe caer en el TRANSPORTE del coste, que es lo que la " +
+          "migración añade, y no en cualquier otra aserción"
+      );
+      t.diagnostic(`control negativo: la RPC anterior falla en «${fallo.message.split("\n")[0]}»`);
+
+      // ── La restauración se comprueba, no se supone ────────────────────────
+      const { rows: definicion } = await admin.query(
+        `select p.prosrc like '%unit_price_cost%' as nombra_el_coste
+           from pg_proc p
+           join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public' and p.proname = 'replace_budget_items'`
+      );
+      assert.equal(definicion.length, 1, "sigue habiendo una sola función");
+      assert.equal(
+        definicion[0].nombra_el_coste,
+        true,
+        "tras el control negativo debe quedar restaurada la RPC CON persistencia " +
+          "de costes"
+      );
+
+      // Y se vuelve a ejercer entera: que el texto mencione la columna no prueba
+      // que la función se comporte.
+      await ejercerCoberturaDeCostes();
+    }
+  );
 });

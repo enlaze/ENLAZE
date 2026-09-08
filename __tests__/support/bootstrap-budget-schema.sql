@@ -58,12 +58,25 @@
 -- sean legibles. La RPC no nombra ninguna otra columna de `budgets`: no las
 -- lee, no las escribe y no puede depender de ellas.
 --
--- `public.budget_items` de producción tiene 22 columnas. Aquí están las 17 que
--- la RPC enumera en su INSERT, más `id` y `created_at`. Las que faltan —`name`,
--- `unit_price_cost`, `subtotal_cost`— tampoco las nombra la RPC desplegada
--- `update_budget_with_items`, que lleva meses insertando en producción sin
--- ellas: si alguna fuese NOT NULL sin default, esa función ya estaría rota. Su
--- ausencia aquí no puede, por tanto, hacer pasar un INSERT que producción
+-- `public.budget_items` de producción tiene 22 columnas. Aquí están las 19 que
+-- la RPC enumera en su INSERT, más `id` y `created_at`.
+--
+-- `unit_price_cost` y `subtotal_cost` ESTÁN AHORA, y este comentario decía antes
+-- lo contrario. Las daba por ausentes de producción, y era falso: existen allí
+-- desde antes de esta reconciliación, y la migración
+-- `20260908111706_replace_budget_items_persist_cost.sql` —ya aplicada en
+-- producción— las añade al INSERT de la RPC. Mientras faltaban aquí, aplicar esa
+-- migración sobre este banco fallaba con «column does not exist»: no era un
+-- banco laxo, era un banco que no arrancaba. Sus definiciones se toman del
+-- catálogo real de producción, no del fichero de migración: `numeric(12,2)`,
+-- ambas NULL-ables y ambas con DEFAULT 0. El default importa para lo que se
+-- prueba, porque nombrar una columna en el INSERT desactiva su DEFAULT, y por
+-- eso la RPC repite el cero con `coalesce(..., 0)` en lugar de confiar en él.
+--
+-- La única que sigue faltando es `name`, y por la razón que ya valía antes: no
+-- la nombra tampoco la RPC desplegada `update_budget_with_items`, que lleva
+-- meses insertando en producción sin ella, así que no puede ser NOT NULL sin
+-- default. Su ausencia aquí no puede hacer pasar un INSERT que producción
 -- rechazaría.
 --
 -- `public.canonical_concepts` aparece REDUCIDA A SU CLAVE. No se reproduce el
@@ -260,7 +273,7 @@ create table public.budgets (
 -- ═════════════════════════════════════════════════════════════════════════════
 -- 7. `public.budget_items`
 -- ═════════════════════════════════════════════════════════════════════════════
--- Columnas: las 17 que enumera el INSERT de la RPC, más `id` y `created_at`.
+-- Columnas: las 19 que enumera el INSERT de la RPC, más `id` y `created_at`.
 --
 -- Tipos tomados de 20260519_align_budget_items_schema.sql. `numeric(12,2)` en
 -- `quantity`, `unit_price` y `subtotal` NO es un detalle cosmético: la columna
@@ -268,6 +281,22 @@ create table public.budgets (
 -- decimales llegaría redondeado y la prueba de transporte no distinguiría
 -- «transportado» de «recalculado». El banco usa por eso valores de dos
 -- decimales en las entradas y reserva el redondeo para el caso que lo prueba.
+--
+-- `unit_price_cost` y `subtotal_cost` NO salen de ninguna migración del
+-- repositorio: se toman del catálogo real de producción —`numeric(12,2)`, NULL
+-- admitido, DEFAULT 0 en ambas—, que es la misma fuente y el mismo método que
+-- ya se defiende arriba para `budget_items_category_check`. La migración
+-- `20260908111706` sólo las nombra; no las crea.
+--
+-- Los dos rasgos que la prueba necesita de ellas son el DEFAULT y la
+-- nulabilidad, y tiran en direcciones opuestas. El DEFAULT 0 es lo que la RPC
+-- REPLICA a mano con `coalesce(..., 0)`, porque nombrar la columna en el INSERT
+-- desactiva su default; si aquí se pusieran sin default, el banco no notaría la
+-- diferencia entre la RPC haciendo su trabajo y la columna haciéndolo por ella.
+-- Y admitir NULL es lo que permite que un NULL guardado sea un fallo visible en
+-- vez de un error de restricción: si se declarasen NOT NULL, cualquier hueco se
+-- convertiría en una excepción y la prueba de «coste ausente ⇒ 0» dejaría de
+-- distinguir el cero escrito por la RPC del cero impuesto por el esquema.
 create table public.budget_items (
   id                   uuid primary key default gen_random_uuid(),
   budget_id            uuid references public.budgets(id) on delete cascade,
@@ -287,6 +316,8 @@ create table public.budget_items (
   canonical_origin     text,
   canonical_source_ref text,
   price_type           text,
+  unit_price_cost      numeric(12,2) default 0,
+  subtotal_cost        numeric(12,2) default 0,
   created_at           timestamptz default now()
 );
 
