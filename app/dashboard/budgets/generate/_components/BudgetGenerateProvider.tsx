@@ -29,6 +29,13 @@ import {
 } from "@/lib/budget-engine";
 import { buildDeterministicBudgetAnalysis } from "@/lib/budget-analysis-fallback";
 import {
+  DEFAULT_MARGIN_PERCENT,
+  clampMarginPercent,
+  fetchMarginPercent,
+  marginMultiplier,
+  type MarginConfigReader,
+} from "@/lib/margins";
+import {
   resolveMarketPricesBatched,
   type PriceAlternative,
   type QualityTier,
@@ -197,12 +204,12 @@ export interface Material {
 }
 
 /** @deprecated Use normalizeBudgetItemsToScope from budget-engine instead */
-const getDetailedConstructionFallback = (areaM2: number, marginMultiplier: number): Partida[] => {
+const getDetailedConstructionFallback = (areaM2: number, multiplier: number): Partida[] => {
   const p = (concept: string, description: string, quantity: number, unit: string, unit_price: number, category: string, id: string): Partida => ({
     id, concept, description, quantity, unit, category, unit_price,
     subtotal_cost: quantity * unit_price,
-    unit_price_client: unit_price * marginMultiplier,
-    subtotal_client: quantity * unit_price * marginMultiplier,
+    unit_price_client: unit_price * multiplier,
+    subtotal_client: quantity * unit_price * multiplier,
     status: "incluida"
   });
 
@@ -492,7 +499,7 @@ function integrateMaterialBasket(
   materials: Material[],
   marginPercent: number,
 ): Partida[] {
-  const marginMultiplier = 1 + marginPercent / 100;
+  const multiplier = marginMultiplier(marginPercent);
   return applyMaterialBasketToItems(
     partidas.map((partida) => ({
       ...partida,
@@ -514,8 +521,38 @@ function integrateMaterialBasket(
       isRealData: Boolean(material.isRealData),
       sourceType: material.sourceType || "estimated",
     })),
-    marginMultiplier,
+    multiplier,
   );
+}
+
+/**
+ * Recalcula el precio de cliente de cada partida a partir de su coste.
+ *
+ * `unit_price` y `subtotal_cost` son coste; los campos `*_client` son lo que ve
+ * el cliente. Cambiar el margen no puede limitarse a mover el número: hay que
+ * volver a derivar los precios, porque los totales del asistente y los dos PDFs
+ * suman `subtotal_client`, no lo recalculan.
+ */
+function repricePartidas(partidas: Partida[], marginPercent: number): Partida[] {
+  const multiplier = marginMultiplier(marginPercent);
+  return partidas.map((partida) => {
+    const unitCost = Number(partida.unit_price) || 0;
+    const subtotalCost = Number(partida.subtotal_cost) || 0;
+    const unitClient = Math.round(unitCost * multiplier * 100) / 100;
+    const subtotalClient = Math.round(subtotalCost * multiplier * 100) / 100;
+    return {
+      ...partida,
+      unit_price_client: unitClient,
+      subtotal_client: subtotalClient,
+      cost_breakdown: partida.cost_breakdown
+        ? {
+            ...partida.cost_breakdown,
+            pvp: subtotalClient,
+            margin: Math.round(subtotalCost * (multiplier - 1) * 100) / 100,
+          }
+        : partida.cost_breakdown,
+    };
+  });
 }
 
 export interface BudgetState {
@@ -550,6 +587,8 @@ export interface BudgetState {
   internalNotes: string;
   ivaPercent: number;
   marginPercent: number;
+  /** Margen que el usuario tiene configurado en Ajustes > Margen comercial. */
+  configuredMarginPercent: number;
 
   validationError: string | null;
 
@@ -660,6 +699,8 @@ interface BudgetContextProps {
   setSelectedProvider: (id: string) => void;
   updateMaterial: (id: string, updates: Partial<Material>) => void;
   setUseSuggestedMaterials: (val: boolean) => void;
+  /** Ajusta el margen de ESTE presupuesto y repropaga los precios de cliente. */
+  setMarginPercent: (percent: number) => void;
   saveDraft: (manual?: boolean) => Promise<string | null>;
   loadDraft: (statePayload: Partial<BudgetState>) => void;
   finalizeBudget: () => Promise<string | null>;
@@ -737,7 +778,8 @@ export function BudgetGenerateProvider({
     conditionsText: DEFAULT_BUDGET_CONDITIONS,
     internalNotes: "",
     ivaPercent: 21,
-    marginPercent: 20,
+    marginPercent: DEFAULT_MARGIN_PERCENT,
+    configuredMarginPercent: DEFAULT_MARGIN_PERCENT,
     validationError: null,
 
     sectorData: {},
@@ -1094,9 +1136,9 @@ export function BudgetGenerateProvider({
     };
 
     // Calculate subtotals based on margin
-    const marginMultiplier = 1 + (state.marginPercent / 100);
+    const multiplier = marginMultiplier(state.marginPercent);
     newPartida.subtotal_cost = newPartida.quantity * newPartida.unit_price;
-    newPartida.unit_price_client = newPartida.unit_price * marginMultiplier;
+    newPartida.unit_price_client = newPartida.unit_price * multiplier;
     newPartida.subtotal_client = newPartida.quantity * newPartida.unit_price_client;
 
     setState(prev => ({ ...prev, partidas: [...prev.partidas, newPartida] }));
@@ -1104,13 +1146,13 @@ export function BudgetGenerateProvider({
 
   const updatePartida = (id: string, updates: Partial<Partida>) => {
     setState(prev => {
-      const marginMultiplier = 1 + (prev.marginPercent / 100);
+      const multiplier = marginMultiplier(prev.marginPercent);
       const newPartidas = prev.partidas.map(p => {
         if (p.id !== id) return p;
         const updated = { ...p, ...updates };
         // Recalculate
         updated.subtotal_cost = updated.quantity * updated.unit_price;
-        updated.unit_price_client = updated.unit_price * marginMultiplier;
+        updated.unit_price_client = updated.unit_price * multiplier;
         updated.subtotal_client = updated.quantity * updated.unit_price_client;
         return updated;
       });
@@ -1223,6 +1265,65 @@ export function BudgetGenerateProvider({
   /* ─── Persistencia y Borradores ─── */
   // Fingerprint of the budget_items rows last written to the database, so an
   // unchanged item list never triggers another replacement cycle.
+  // El margen deja de estar fijado en el código: sale de `margin_config` según
+  // el tipo de servicio. Se bloquea en cuanto el presupuesto tiene identidad
+  // propia — porque el usuario lo ha ajustado a mano, o porque se ha reabierto
+  // un borrador ya guardado — para que la configuración global no reescriba
+  // hacia atrás el margen con el que se cerró un presupuesto concreto.
+  const marginLockedRef = useRef(false);
+
+  const setMarginPercent = useCallback((percent: number) => {
+    const safe = clampMarginPercent(percent);
+    marginLockedRef.current = true;
+    setState(prev => (
+      prev.marginPercent === safe
+        ? prev
+        : { ...prev, marginPercent: safe, partidas: repricePartidas(prev.partidas, safe) }
+    ));
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user || !mounted) return;
+
+        // El cliente generado de Supabase tiene tipos demasiado profundos para
+        // comprobarlos contra la interfaz mínima del helper (TS2589). El helper
+        // solo usa .from().select().eq(), que este cliente cumple.
+        const resolved = await fetchMarginPercent(
+          supabase as unknown as MarginConfigReader,
+          user.id,
+          state.serviceType,
+        );
+        if (!mounted) return;
+
+        setState(prev => {
+          // `configuredMarginPercent` se refresca siempre: el control del
+          // asistente lo muestra como referencia y permite volver a él aunque
+          // este presupuesto lleve un margen propio.
+          const withConfigured = prev.configuredMarginPercent === resolved
+            ? prev
+            : { ...prev, configuredMarginPercent: resolved };
+
+          if (marginLockedRef.current) return withConfigured;
+          if (withConfigured.marginPercent === resolved) return withConfigured;
+
+          return {
+            ...withConfigured,
+            marginPercent: resolved,
+            partidas: repricePartidas(withConfigured.partidas, resolved),
+          };
+        });
+      } catch {
+        // Sin margen configurado se sigue presupuestando con el defecto.
+      }
+    })();
+    return () => { mounted = false; };
+  }, [state.serviceType]);
+
   const lastSyncedItemsSignature = useRef<string | null>(null);
 
   // Resultado discriminado del guardado interno. Antes, la omisión legítima de
@@ -1396,7 +1497,7 @@ export function BudgetGenerateProvider({
 
     // Also sync budget_items so the detail page shows partidas
     if (draftId && (state.partidas.length > 0 || state.materials.some(m => m.included))) {
-      const marginMultiplier = 1 + (state.marginPercent / 100);
+      const multiplier = marginMultiplier(state.marginPercent);
 
       const partidasToInsert = state.partidas.filter(p => p.status !== "opcional").map(p => ({
         budget_id: draftId,
@@ -1407,7 +1508,11 @@ export function BudgetGenerateProvider({
         category: p.category,
         chapter: p.chapter || p.category || "otros",
         unit_price: p.unit_price_client,
-        subtotal: p.subtotal_client
+        subtotal: p.subtotal_client,
+        // Coste real de la línea. Sin esto el PDF interno no puede calcular
+        // margen ni beneficio y tiene que adivinarlos emparejando por nombre.
+        unit_price_cost: p.unit_price,
+        subtotal_cost: p.subtotal_cost
       }));
 
       const materialsToInsert = state.materials.filter(m => m.included).map(m => ({
@@ -1418,8 +1523,11 @@ export function BudgetGenerateProvider({
         unit: normalizeBudgetItemUnit(m.unit),
         category: "material",
         chapter: m.linkedChapter || "materiales",
-        unit_price: m.unit_price * marginMultiplier,
-        subtotal: m.subtotal * marginMultiplier
+        unit_price: m.unit_price * multiplier,
+        subtotal: m.subtotal * multiplier,
+        // El coste del material es su precio sin margen.
+        unit_price_cost: m.unit_price,
+        subtotal_cost: m.subtotal
       }));
 
       // Persist the wizard's own order: partidas first, then materials, each
@@ -1517,7 +1625,7 @@ export function BudgetGenerateProvider({
       // 2. Preparar las partidas reales + materiales. El vaciado de las líneas
       // antiguas ya no es un DELETE suelto: ocurre dentro de la sustitución
       // atómica de más abajo, en la misma transacción que la inserción.
-      const marginMultiplier = 1 + (state.marginPercent / 100);
+      const multiplier = marginMultiplier(state.marginPercent);
 
       const partidasToInsert = state.partidas.filter(p => p.status !== "opcional").map(p => ({
         budget_id: budgetId,
@@ -1528,7 +1636,11 @@ export function BudgetGenerateProvider({
         category: p.category,
         chapter: p.chapter || p.category || "otros",
         unit_price: p.unit_price_client,
-        subtotal: p.subtotal_client
+        subtotal: p.subtotal_client,
+        // Coste real de la línea. Sin esto el PDF interno no puede calcular
+        // margen ni beneficio y tiene que adivinarlos emparejando por nombre.
+        unit_price_cost: p.unit_price,
+        subtotal_cost: p.subtotal_cost
       }));
 
       const materialsToInsert = state.materials.filter(m => m.included).map(m => ({
@@ -1539,8 +1651,11 @@ export function BudgetGenerateProvider({
         unit: normalizeBudgetItemUnit(m.unit),
         category: "material",
         chapter: m.linkedChapter || "materiales",
-        unit_price: m.unit_price * marginMultiplier,
-        subtotal: m.subtotal * marginMultiplier
+        unit_price: m.unit_price * multiplier,
+        subtotal: m.subtotal * multiplier,
+        // El coste del material es su precio sin margen.
+        unit_price_cost: m.unit_price,
+        subtotal_cost: m.subtotal
       }));
 
       // Same ordering contract as saveDraft: partidas first, then materials,
@@ -1622,6 +1737,8 @@ export function BudgetGenerateProvider({
   };
 
   const loadDraft = useCallback((savedState: Partial<BudgetState>) => {
+    // Un presupuesto ya guardado conserva el margen con el que se calculó.
+    if (typeof savedState.marginPercent === "number") marginLockedRef.current = true;
     const savedMaterials = savedState.materials || [];
     const requiresAtomicRecalculation = savedMaterials.some((material) =>
       isCommercialProductMaterial(material) && (
@@ -1833,7 +1950,7 @@ export function BudgetGenerateProvider({
           reason: "El servicio de IA no respondió; cálculo realizado por el motor técnico ENLAZE.",
         });
       }
-      const marginMultiplier = 1 + (state.marginPercent / 100);
+      const multiplier = marginMultiplier(state.marginPercent);
 
       // Map suggested_items to Partidas
       let newPartidas: Partida[] = (data.suggested_items || []).map((item: any, idx: number) => {
@@ -1849,8 +1966,8 @@ export function BudgetGenerateProvider({
           chapter: item.chapter || "Otros",
           unit_price: cost,
           subtotal_cost: qty * cost,
-          unit_price_client: cost * marginMultiplier,
-          subtotal_client: qty * cost * marginMultiplier,
+          unit_price_client: cost * multiplier,
+          subtotal_client: qty * cost * multiplier,
           status: "incluida" as const,
           estimated_hours: Number(item.estimated_hours) || undefined,
         };
@@ -1948,7 +2065,7 @@ export function BudgetGenerateProvider({
           status: (p.status || "incluida") as "incluida" | "estimada" | "opcional",
         }));
 
-        const normalized = normalizeBudgetItemsToScope(engineScope, engineItems, marginMultiplier);
+        const normalized = normalizeBudgetItemsToScope(engineScope, engineItems, multiplier);
 
         // B) Apply cost breakdown and fix categories
         const withCosts = normalized.map(item =>
@@ -2011,7 +2128,7 @@ export function BudgetGenerateProvider({
       if (state.sector === "construccion" && finalPartidas.length < 5) {
         // Use engine to build from scratch based on scope
         const fallbackScope: BudgetScope = engineScope;
-        const built = buildDeterministicBudgetItems(fallbackScope, marginMultiplier);
+        const built = buildDeterministicBudgetItems(fallbackScope, multiplier);
         finalPartidas = built.map(ep => ({
           id: ep.id, concept: ep.concept, description: ep.description,
           quantity: ep.quantity, unit: ep.unit, category: ep.category,
@@ -2057,8 +2174,8 @@ export function BudgetGenerateProvider({
           price_source: factor === 1 ? "base_nacional" : "geographic_adjustment",
           unit_price: adjustedUnitPrice,
           subtotal_cost: adjustedUnitPrice * partida.quantity,
-          unit_price_client: adjustedUnitPrice * marginMultiplier,
-          subtotal_client: adjustedUnitPrice * partida.quantity * marginMultiplier,
+          unit_price_client: adjustedUnitPrice * multiplier,
+          subtotal_client: adjustedUnitPrice * partida.quantity * multiplier,
         };
       });
 
@@ -2235,8 +2352,8 @@ export function BudgetGenerateProvider({
               confidence_score: resolved.confidenceScore,
               unit_price: unitPrice,
               subtotal_cost: unitPrice * partida.quantity,
-              unit_price_client: unitPrice * marginMultiplier,
-              subtotal_client: unitPrice * partida.quantity * marginMultiplier,
+              unit_price_client: unitPrice * multiplier,
+              subtotal_client: unitPrice * partida.quantity * multiplier,
             };
           });
         } else {
@@ -2268,7 +2385,7 @@ export function BudgetGenerateProvider({
           status: partida.status || "incluida",
         })),
         engineMaterialsForBasket,
-        marginMultiplier,
+        multiplier,
       );
 
       // Final coherence pass after every authoritative source has been applied.
@@ -2283,7 +2400,7 @@ export function BudgetGenerateProvider({
         })),
         engineMaterialsForBasket,
         serviceType,
-        marginMultiplier,
+        multiplier,
         true,
       );
 
@@ -2659,7 +2776,7 @@ export function BudgetGenerateProvider({
     <BudgetContext.Provider value={{
       state, updateState, updateSectorData, nextStep, prevStep, goToStep,
       addPartida, updatePartida, removePartida,
-      setSelectedProvider, updateMaterial, setUseSuggestedMaterials,
+      setSelectedProvider, updateMaterial, setUseSuggestedMaterials, setMarginPercent,
       saveDraft, loadDraft, finalizeBudget, analyzeWithAI
     }}>
       {children}

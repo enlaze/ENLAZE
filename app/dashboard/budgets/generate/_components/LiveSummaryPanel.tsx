@@ -5,8 +5,8 @@ import { Building2, BarChart3, Sparkles } from "lucide-react";
 import { useBudgetGenerate } from "./BudgetGenerateProvider";
 
 export function LiveSummaryPanel() {
-  const { state, nextStep, saveDraft, analyzeWithAI } = useBudgetGenerate();
-  const { totals, marginPercent, sector, providerOptions, selectedProviderId, materials, isRealDataMode } = state;
+  const { state, nextStep, saveDraft, analyzeWithAI, setMarginPercent } = useBudgetGenerate();
+  const { totals, marginPercent, configuredMarginPercent, sector, providerOptions, selectedProviderId, materials, isRealDataMode } = state;
   const isConstruction = sector === "construccion";
 
   const totalWithIva = totals.clientPrice * (1 + state.ivaPercent / 100);
@@ -180,11 +180,47 @@ export function LiveSummaryPanel() {
           </p>
         )}
 
-        <div className="flex justify-between items-center text-sm">
-          <span className="text-navy-600 dark:text-zinc-400">
-            Margen sugerido ({marginPercent}%)
-          </span>
-          <span className="font-semibold text-brand-green">+{totals.profit.toFixed(2)} EUR</span>
+        <div className="space-y-1">
+          <div className="flex justify-between items-center text-sm gap-2">
+            <label htmlFor="budget-margin" className="text-navy-600 dark:text-zinc-400 shrink-0">
+              Margen comercial
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="budget-margin"
+                type="number"
+                min="0"
+                max="1000"
+                step="0.5"
+                value={marginPercent}
+                onChange={(e) => {
+                  // Mientras el campo esté vacío se conserva el margen actual:
+                  // borrarlo para teclear otro valor no debe recalcular a coste.
+                  if (e.target.value.trim() === "") return;
+                  setMarginPercent(Number(e.target.value));
+                }}
+                className="w-16 rounded-lg border border-navy-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2 py-1 text-sm text-right text-navy-900 dark:text-white focus:border-brand-green/40 focus:outline-none"
+              />
+              <span className="text-sm text-navy-500 dark:text-zinc-500">%</span>
+              <span className="font-semibold text-brand-green w-24 text-right">+{totals.profit.toFixed(2)} EUR</span>
+            </div>
+          </div>
+          <p className="text-[10px] leading-4 text-navy-400 dark:text-zinc-500 text-right">
+            {marginPercent === configuredMarginPercent ? (
+              <>Tu margen configurado para este servicio.</>
+            ) : (
+              <>
+                Ajustado solo para este presupuesto (configurado: {configuredMarginPercent}%).{" "}
+                <button
+                  type="button"
+                  onClick={() => setMarginPercent(configuredMarginPercent)}
+                  className="underline hover:text-brand-green"
+                >
+                  Restaurar
+                </button>
+              </>
+            )}
+          </p>
         </div>
 
         <div className="pt-4 border-t border-navy-100 dark:border-zinc-800">
