@@ -10,14 +10,14 @@ import { Button } from "@/components/ui/button";
 import Loading from "@/components/ui/loading";
 import { useToast } from "@/components/ui/toast";
 import InfoFlipCard from "@/components/ui/InfoFlipCard";
+import { resolveMarginPercent } from "@/lib/margins";
 
+// Si la configuración del sector no ha cargado, lo único que se puede afirmar
+// sin inventar es que existe un margen general. La lista anterior era de
+// construcción, así que un asesor o un comercio veían "Fontanería" y
+// "Climatización" como si fueran suyas.
 const fallbackServiceTypes = [
   { value: "general", label: "General (todos los servicios)" },
-  { value: "reforma", label: "Reforma integral" },
-  { value: "fontaneria", label: "Fontanería" },
-  { value: "electricidad", label: "Electricidad" },
-  { value: "climatizacion", label: "Climatización" },
-  { value: "multiservicios", label: "Multiservicios" },
 ];
 
 interface MarginEntry {
@@ -91,10 +91,7 @@ export default function MarginsPage() {
   }
 
   function getMargin(serviceType: string): number {
-    const entry = margins.find((m) => m.service_type === serviceType);
-    if (entry) return entry.margin_percent;
-    const general = margins.find((m) => m.service_type === "general");
-    return general ? general.margin_percent : 20;
+    return resolveMarginPercent(margins, serviceType);
   }
 
   function exampleCalc(cost: number, marginPercent: number) {
