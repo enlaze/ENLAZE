@@ -46,6 +46,55 @@ const DIR_MIGRACIONES = "supabase/migrations";
 const FICHERO = "20260904120000_replace_budget_items.sql";
 const RUTA = join(DIR_MIGRACIONES, FICHERO);
 
+// Migración de la que ésta depende de verdad.
+//
+// QUÉ HACE, Y QUÉ NO: 20260901120000 NO crea la columna `sort_order`. Un
+// comentario anterior lo afirmaba y era falso. Lo que hace es RELLENARLA
+// (backfill) y CONVERTIRLA EN FIABLE: fija su `default 0`, la pone `not null` y
+// añade `ck_budget_items_sort_order_non_negative` y
+// `uq_budget_items_budget_id_sort_order`. Esas garantías son justamente de lo
+// que depende esta RPC, que genera el orden con `with ordinality` y confía en
+// que la UNIQUE impida un orden repetido.
+//
+// Dónde se creó la columna no se ha localizado: no hay ningún `add column
+// sort_order` ni en `supabase/migrations` ni en `supabase/migrations_historico`.
+// Eso es una afirmación sobre lo que se ha buscado, no sobre lo que existe, y se
+// enuncia así a propósito.
+const MIGRACION_SORT_ORDER = "20260901120000_budget_items_sort_order.sql";
+
+// Las DOS migraciones que definen la RPC, en el orden en que deben aplicarse.
+// La segunda redefine a la primera para persistir el coste real de cada línea.
+const MIGRACION_COSTES = "20260908111706_replace_budget_items_persist_cost.sql";
+const DEFINIDORAS_ESPERADAS = [FICHERO, MIGRACION_COSTES];
+
+// Firma normalizada. Las dos migraciones la escriben con formato distinto —una
+// en varias líneas, otra en una sola—, así que compararla exige normalizar el
+// espacio; lo que NO se normaliza son los nombres ni los tipos.
+const FIRMA_CANONICA = "p_budget_id uuid, p_items jsonb";
+
+/**
+ * Extrae la lista de argumentos de `create or replace function
+ * public.replace_budget_items(...)`, contando paréntesis para no cortar antes
+ * de tiempo si algún día un argumento lleva un default con paréntesis.
+ */
+function firmaDeReplaceBudgetItems(sql) {
+  const creacion = trocearStatements(sql).find((s) =>
+    /^create\s+or\s+replace\s+function\s+public\.replace_budget_items\b/i.test(s),
+  );
+  if (!creacion) return null;
+  const abre = creacion.indexOf("(");
+  if (abre === -1) return null;
+  let prof = 0;
+  for (let i = abre; i < creacion.length; i++) {
+    if (creacion[i] === "(") prof++;
+    else if (creacion[i] === ")") {
+      prof--;
+      if (prof === 0) return norm(creacion.slice(abre + 1, i));
+    }
+  }
+  return null;
+}
+
 const SQL = readFileSync(join(RAIZ, RUTA), "utf8");
 
 const norm = (s) => s.replace(/\s+/g, " ").trim();
@@ -809,22 +858,128 @@ describe("FASE 2F-1DB · BLOQUE C — encaje en el historial", () => {
     .filter((f) => f.endsWith(".sql"))
     .sort();
 
-  test("el fichero está en supabase/migrations y es el último por timestamp", () => {
-    assert.ok(ficheros.includes(FICHERO), `${FICHERO} no está en ${DIR_MIGRACIONES}`);
-    assert.equal(
-      ficheros[ficheros.length - 1],
-      FICHERO,
-      "la migración nueva debe ordenarse la última; si no, el CLI no la aplicará después del resto",
+  /**
+   * Comprueba que ambas migraciones EXISTEN y sólo entonces compara sus
+   * posiciones.
+   *
+   * EXISTIR SE COMPRUEBA APARTE, Y NO ES CEREMONIA. La formulación anterior era
+   * `ficheros.indexOf(FICHERO) > ficheros.indexOf(MIGRACION_SORT_ORDER)` a
+   * secas, y pasaba INDEBIDAMENTE cuando la dependencia no estaba: `indexOf`
+   * devuelve -1 para lo que no encuentra, y cualquier posición real es mayor
+   * que -1. Es decir, borrar la migración de la que ésta depende ponía la
+   * aserción MÁS verde, no más roja. El control negativo de abajo ejercita
+   * exactamente ese caso.
+   *
+   * Recibe la lista por parámetro, y no la lee del disco, para que el control
+   * negativo pueda pasarle una lista sin la dependencia sin borrar ni renombrar
+   * ningún fichero real.
+   */
+  function comprobarDependenciaDeOrden(lista) {
+    assert.ok(
+      lista.includes(FICHERO),
+      `${FICHERO} no está en ${DIR_MIGRACIONES}`,
     );
+    assert.ok(
+      lista.includes(MIGRACION_SORT_ORDER),
+      `${MIGRACION_SORT_ORDER} no está en ${DIR_MIGRACIONES}. ${FICHERO} depende ` +
+        "de ella —del backfill de `sort_order` y de sus constraints—, así que su " +
+        "ausencia es un fallo por sí misma y NO puede tratarse como orden correcto",
+    );
+    // Sólo aquí, con las dos presentes, comparar posiciones significa algo.
+    assert.ok(
+      lista.indexOf(FICHERO) > lista.indexOf(MIGRACION_SORT_ORDER),
+      `${FICHERO} debe ordenarse después de ${MIGRACION_SORT_ORDER}, de la que depende por sort_order`,
+    );
+  }
+
+  test("el fichero está en supabase/migrations, se ordena tras su dependencia real y su timestamp es único", () => {
+    // La dependencia real de esta migración NO es «ser la última del
+    // repositorio»: es `sort_order`, cuyo backfill y cuyas constraints aporta
+    // 20260901120000. Exigir que fuese la última convertía cada migración
+    // posterior en un fallo de esta suite, que es exactamente lo que ocurrió
+    // cuando llegaron las de tags, RLS, gastos y costes. Se comprueba la
+    // dependencia, no la posición final.
+    comprobarDependenciaDeOrden(ficheros);
+
+    // Un timestamp repetido deja el orden de aplicación a merced del
+    // desempate alfabético del nombre, que nadie controla.
+    const sellos = ficheros.map((f) => f.slice(0, 14));
+    const repetidos = sellos.filter((s, i) => sellos.indexOf(s) !== i);
+    assert.deepEqual(repetidos, [], `timestamps de migración repetidos: ${repetidos.join(", ")}`);
   });
 
-  test("es la única migración que define replace_budget_items", () => {
+  test("control negativo: sin la dependencia, la comprobación de orden FALLA", () => {
+    // Listas construidas en memoria. No se borra, renombra ni escribe ningún
+    // fichero real: el defecto estaba en la lógica, y en la lógica se prueba.
+    const sinDependencia = ficheros.filter((f) => f !== MIGRACION_SORT_ORDER);
+    const sinElFichero = ficheros.filter((f) => f !== FICHERO);
+
+    assert.equal(
+      sinDependencia.length,
+      ficheros.length - 1,
+      "precondición: la lista de control debe haber perdido exactamente la dependencia",
+    );
+
+    // ── Lo que hacía la formulación anterior, para que conste que el agujero
+    //    era real y no hipotético. Con la dependencia fuera, `indexOf` da -1 y
+    //    la comparación desnuda pasa. Si algún día esto dejara de pasar, este
+    //    control negativo perdería su sentido y conviene enterarse.
+    assert.ok(
+      sinDependencia.indexOf(FICHERO) > sinDependencia.indexOf(MIGRACION_SORT_ORDER),
+      "la comparación desnuda debería seguir pasando sin la dependencia (-1); si " +
+        "no pasa, este control ya no describe el defecto que corrigió",
+    );
+
+    // ── Y lo que hace la comprobación corregida: falla, y por el motivo justo.
+    assert.throws(
+      () => comprobarDependenciaDeOrden(sinDependencia),
+      (error) =>
+        error instanceof assert.AssertionError &&
+        error.message.includes(MIGRACION_SORT_ORDER) &&
+        error.message.includes("no está en"),
+      "sin la dependencia la comprobación debe fallar señalándola por su nombre",
+    );
+
+    // La otra mitad de la guarda: que falte el propio fichero tampoco puede
+    // pasar por orden correcto.
+    assert.throws(
+      () => comprobarDependenciaDeOrden(sinElFichero),
+      (error) =>
+        error instanceof assert.AssertionError && error.message.includes(FICHERO),
+      "sin el fichero bajo prueba la comprobación debe fallar igualmente",
+    );
+
+    // Y con la lista real, no falla: un control negativo que fallase siempre no
+    // distinguiría nada.
+    assert.doesNotThrow(() => comprobarDependenciaDeOrden(ficheros));
+  });
+
+  test("las migraciones que definen replace_budget_items son exactamente las dos conocidas, en orden y con la misma firma", () => {
     const definidoras = ficheros.filter((f) =>
-      /create\s+or\s+replace\s+function\s+public\.replace_budget_items/i.test(
-        readFileSync(join(RAIZ, DIR_MIGRACIONES, f), "utf8"),
+      trocearStatements(readFileSync(join(RAIZ, DIR_MIGRACIONES, f), "utf8")).some((s) =>
+        /^create\s+or\s+replace\s+function\s+public\.replace_budget_items\b/i.test(s),
       ),
     );
-    assert.deepEqual(definidoras, [FICHERO]);
+
+    // El orden importa: la de costes redefine la original, así que aplicarlas
+    // al revés dejaría desplegada la versión sin `unit_price_cost`. Comparar la
+    // lista completa —y no `includes`— es lo que hace que una TERCERA
+    // definición inesperada siga saltando aquí en vez de colarse.
+    assert.deepEqual(
+      definidoras,
+      DEFINIDORAS_ESPERADAS,
+      "ha cambiado el conjunto de migraciones que definen replace_budget_items",
+    );
+
+    // Redefinir con otra firma no sustituye: crea una sobrecarga, y entonces
+    // PostgREST tiene dos candidatas y el llamante no elige cuál.
+    for (const f of definidoras) {
+      assert.equal(
+        firmaDeReplaceBudgetItems(readFileSync(join(RAIZ, DIR_MIGRACIONES, f), "utf8")),
+        FIRMA_CANONICA,
+        `${f} define replace_budget_items con otra firma: crearía una sobrecarga en vez de sustituir`,
+      );
+    }
   });
 
   // Si esta migración tocase update_budget_with_items rompería el CASO M4b de

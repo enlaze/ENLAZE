@@ -24,8 +24,23 @@ on:
   pull_request:
     branches:
       - main
+    # LAS DOS MIGRACIONES QUE DEFINEN LA RPC, no sólo la que la creó. Las dos
+    # hacen `create or replace` sobre la misma firma, así que tocar la segunda
+    # cambia la función que el banco ejecuta tanto como tocar la primera. Vigilar
+    # sólo la original dejaba un hueco real: un cambio en la persistencia de
+    # costes no habría disparado este workflow y la regresión habría llegado a
+    # main sin que nadie ejecutara el banco.
+    #
+    # Los nombres se escriben completos, sin comodín. Un `supabase/migrations/**`
+    # dispararía el banco en cada migración del proyecto, la mayoría de las
+    # cuales no toca esta RPC; un filtro que salta siempre acaba ignorándose. El
+    # precio de ser explícito es que RENOMBRAR o AÑADIR una migración de esta
+    # función obliga a tocar también esta lista, y ese precio se paga a
+    # conciencia: la lista es corta y el fallo de olvidarla es visible en la
+    # revisión, mientras que el del comodín es invisible.
     paths:
       - "supabase/migrations/20260904120000_replace_budget_items.sql"
+      - "supabase/migrations/20260908111706_replace_budget_items_persist_cost.sql"
       - "__tests__/replace-budget-items.integration.test.mjs"
       - "__tests__/support/bootstrap-budget-schema.sql"
       - "package.json"
