@@ -3,7 +3,11 @@
 _Lista viva de cosas por arreglar o rematar. Nada urgente salvo que se indique._
 
 ## Bugs conocidos (arreglar cuando toque)
-- **🔴 SEGURIDAD (prioritario, antes de lanzar):** la tabla `issued_invoices` tiene una política RLS "Public read" con `USING (true)` → **cualquiera puede leer TODAS las facturas emitidas de TODOS los usuarios.** Fuga de datos. Restringir a `user_id = auth.uid()` antes del go-live.
+- ~~🔴 SEGURIDAD: lecturas públicas de datos privados~~ ✅ **ARREGLADO** (rama `fix/security-rls`, verificado): 9 tablas (facturas, albaranes, pedidos, obras…) + `agent_connections` (lectura/escritura anónima de credenciales OAuth de Google) + RPC `get_expense_summary` (resumen financiero de cualquiera, era explotable). Todo restringido al dueño; service_role intacto. Falta fusionar a main.
+- **SEGURIDAD — escritura anónima en catálogo de precios `pb_*`:** cualquiera puede ESCRIBIR precios (política de service_role mal aplicada a public). Revisar si n8n escribe con anon key; si usa service_role, bloquear la escritura pública.
+- **🔴 SEGURIDAD — portal de cliente (antes de usar el portal):** usa la anon key en el navegador, `portal_tokens` deja a cualquiera listar todos los tokens, y `project_changes` permite UPDATE público. Además ya estaba roto. Arreglo real = ruta de servidor con service role que valide el token. Es su propia tarea.
+- **SEGURIDAD — escritura pública en `prices` / `n8n_updates`:** cualquiera puede escribir (atado a los flujos de n8n con anon key). Revisar el modelo de n8n antes de restringir.
+- **Go-live:** asegurar `SUPABASE_SERVICE_ROLE_KEY` en el entorno de producción (las rutas `/api/agent/*` caen a la anon key si falta).
 - ~~Bucle de recarga + login que reinicia~~ ✅ **ARREGLADO** (CSP + aislamiento de Sentry). Login entra a la primera, sin recargas.
 - ~~Cumplimiento → Seguridad (incidencias vacías)~~ ✅ **ARREGLADO** (filtra por `reported_by`; de paso el 400 del dashboard y la tarjeta de Seguridad siempre en verde).
 - ~~Ficha de proveedor (barra no se pintaba)~~ ✅ **ARREGLADO** (totales calculados desde `received_invoices`).
