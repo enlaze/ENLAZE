@@ -1,0 +1,447 @@
+# Ejecuta el banco desechable del contrato de conflicto PT409 contra una pila
+# real —PostgreSQL 17 + PostgREST— levantada y destruida dentro de la propia
+# ejecución.
+#
+# QUÉ SE PRUEBA AQUÍ Y QUÉ NO
+# No se prueba el diseño de la FASE 2F-2. Se prueba el MECANISMO en el que ese
+# diseño se apoya: que un SQLSTATE `PT409` lanzado dentro de una función llega
+# al cliente como HTTP 409 con `code = "PT409"`, en UNA sola petición, sin
+# reintento automático y sin haber modificado nada. Todo lo que se crea lleva el
+# prefijo `pt409_bench_` y no guarda parentesco con `budgets` ni con
+# `budget_items`. Este flujo no toca `supabase/migrations`.
+#
+# POR QUÉ `docker run` Y NO UN BLOQUE `services:`
+# Por las mismas dos razones que en `replace-budget-items-integration.yml`: hace
+# falta pasar `-c enlaze.test_cluster_marker=...` al proceso del servidor, cosa
+# que los servicios no permiten, y hacen falta nombres de contenedor fijos para
+# los pasos de logs y limpieza. Aquí se suma una tercera: los dos contenedores
+# tienen que verse entre ellos por DNS en una red propia, y a la vez no ser
+# alcanzables desde fuera del runner.
+#
+# NINGÚN CONTENEDOR LLEVA `--rm`. Si el arranque falla, un contenedor que se
+# autoborra se lleva consigo los logs, que son justo lo que hay que leer. Se
+# eliminan explícitamente al final, pase lo que pase.
+#
+# NO SE LEE NINGÚN SECRETO DE GITHUB. `secrets` no aparece en este fichero. Las
+# TRES credenciales que la pila necesita —el secreto JWT, la contraseña del rol
+# `authenticator` y la del superusuario `postgres` del contenedor— se generan con
+# `openssl rand` DENTRO de esta ejecución y mueren con el runner. Ninguna está
+# escrita en este fichero.
+#
+# LAS TRES SE ENMASCARAN con `::add-mask::`, y las tres antes de escribirse en
+# `$GITHUB_ENV`. Hasta hace poco la del superusuario `postgres` no lo estaba: se
+# generaba en línea dentro del propio `echo` que la exportaba, de modo que no
+# existía ninguna variable que enmascarar antes de escribirla. Importaba porque
+# esa contraseña no se queda quieta: circula por `--env` al contenedor y dentro
+# de `TEST_DATABASE_URL`, así que un volcado de entorno, un `set -x` olvidado o
+# un error del driver que citara la cadena de conexión la habrían impreso en
+# claro. Que el daño estuviera acotado —superusuario de un contenedor efímero
+# que sólo escucha en 127.0.0.1 y se destruye al final— la hacía tolerable, no
+# protegida. Ahora las tres pasan por una variable local, se enmascaran y sólo
+# después se exportan. El enmascarado sigue siendo una red de seguridad y no un
+# permiso para imprimirlas. No hay ninguna conexión externa salvo descargar las
+# imágenes de Docker y las dependencias de npm: este flujo no habla con Supabase
+# ni con ninguna base que no haya creado él mismo.
+name: Budget revision conflict integration
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      # Los ficheros propios del banco.
+      - ".github/workflows/budget-revision-conflict-integration.yml"
+      - "__tests__/budget-revision-conflict.integration.test.mjs"
+      - "__tests__/support/bootstrap-budget-revision-conflict.sql"
+      # Las líneas base congeladas. No se ejecutan, pero si alguien las edita
+      # conviene que el banco corra: son el patrón contra el que 2F-2 tendrá que
+      # demostrar que no mueve ni un céntimo ni un privilegio.
+      - "__tests__/fixtures/budget-economic-golden-vectors.json"
+      - "__tests__/fixtures/budget-acl-baseline.json"
+      # Los futuros contratos de revisión, cuando existan. Hoy no hay ninguna
+      # migración con estos nombres y el patrón simplemente no casa con nada;
+      # está escrito por adelantado para que el banco se dispare solo el día que
+      # aparezcan, en vez de depender de que alguien recuerde ampliar esta lista.
+      - "supabase/migrations/*_budget_revision*.sql"
+      - "supabase/migrations/*_revision_conflict*.sql"
+      - "package.json"
+      - "package-lock.json"
+  workflow_dispatch:
+
+# Sólo lectura. Este flujo no comenta, no etiqueta, no publica y no escribe en el
+# repositorio.
+permissions:
+  contents: read
+
+concurrency:
+  group: budget-revision-conflict-integration-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PT409_RED: enlaze-pt409-bench-net
+  PT409_DB: enlaze-pt409-bench-db
+  PT409_REST: enlaze-pt409-bench-rest
+  PT409_BASE: enlaze_revision_conflict_test
+  # Imágenes ancladas. `postgrest/postgrest:latest` está descartado a propósito:
+  # el contrato que se mide aquí —el mapeo `PT<nnn>` -> HTTP y la forma del
+  # cuerpo de error— depende de la versión, y un `latest` convertiría este banco
+  # en una prueba cuyo sujeto cambia solo.
+  PT409_IMAGEN_DB: postgres:17
+  PT409_IMAGEN_REST: postgrest/postgrest:v12.2.3
+
+jobs:
+  banco-pt409:
+    name: Contrato PT409 sobre PostgreSQL 17 + PostgREST desechables
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v6
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Generar las credenciales de la ejecución
+        shell: bash
+        run: |
+          # `openssl rand -hex` produce sólo [0-9a-f], que cae dentro del
+          # alfabeto cerrado [A-Za-z0-9_-] que exige la guarda del test para la
+          # contraseña de `authenticator`. Eso no es casualidad ni comodidad: esa
+          # contraseña acaba interpolada en un literal SQL dentro del test, y el
+          # alfabeto es lo que hace la interpolación segura por construcción en
+          # vez de segura por cuidado.
+          jwt="$(openssl rand -hex 32)"
+          pw="$(openssl rand -hex 24)"
+
+          # La del superusuario `postgres` se genera AQUÍ, en su propia variable,
+          # y no en línea dentro del `echo` que la exporta. La diferencia no es
+          # cosmética: generada en línea no existe como variable en ningún
+          # momento anterior a su escritura en `$GITHUB_ENV`, y por tanto no hay
+          # nada que enmascarar antes. Ésa era la razón real de que fuese la
+          # única de las tres sin `::add-mask::`.
+          pgpw="$(openssl rand -hex 16)"
+
+          # Enmascarar ANTES de exportar, las TRES. A partir de aquí, si alguno
+          # de los tres valores se colara en un log —un volcado de entorno, un
+          # mensaje de error de PostgREST que citara la cadena de conexión, un
+          # `set -x` olvidado— GitHub lo sustituye por `***`. Es una red de
+          # seguridad, no un permiso para imprimirlos. Ninguno de los tres se
+          # imprime en ningún paso de este flujo.
+          echo "::add-mask::$jwt"
+          echo "::add-mask::$pw"
+          echo "::add-mask::$pgpw"
+
+          {
+            echo "PT409_JWT_SECRET=$jwt"
+            echo "PT409_AUTHENTICATOR_PASSWORD=$pw"
+            echo "PT409_POSTGRES_PASSWORD=$pgpw"
+          } >> "$GITHUB_ENV"
+
+      - name: Crear la red del banco
+        shell: bash
+        run: |
+          # Red propia, no la `bridge` por defecto. Dos motivos. Uno: en una red
+          # definida por el usuario Docker da resolución DNS por nombre de
+          # contenedor, y PostgREST necesita llegar a la base por nombre. Dos: en
+          # la red por defecto todos los contenedores del runner se ven entre
+          # sí; aquí sólo se ven estos dos.
+          docker network create "$PT409_RED"
+
+      - name: Levantar el PostgreSQL desechable
+        shell: bash
+        run: |
+          # El puerto se publica EXCLUSIVAMENTE en 127.0.0.1. Sin ese prefijo
+          # Docker escucharía en 0.0.0.0 y la base quedaría expuesta en todas las
+          # interfaces del runner. El 55433 —y no el 5432— es además lo que la
+          # guarda del test exige, para que apuntar por descuido a un PostgreSQL
+          # local de verdad aborte antes de conectar.
+          docker run --detach \
+            --name "$PT409_DB" \
+            --network "$PT409_RED" \
+            --publish 127.0.0.1:55433:5432 \
+            --env POSTGRES_PASSWORD="$PT409_POSTGRES_PASSWORD" \
+            --env POSTGRES_DB="$PT409_BASE" \
+            --health-cmd "pg_isready -U postgres -d $PT409_BASE" \
+            --health-interval 2s \
+            --health-timeout 3s \
+            --health-retries 5 \
+            "$PT409_IMAGEN_DB" \
+            -c enlaze.test_cluster_marker=revision_conflict_2f2
+
+      - name: Esperar a que la base esté healthy
+        shell: bash
+        run: |
+          # `docker run` vuelve mucho antes de que el servidor acepte conexiones:
+          # la imagen ejecuta primero su secuencia de inicialización, con un
+          # arranque interno temporal, y sólo después abre el puerto publicado.
+          #
+          # `unhealthy` NO ES CONCLUYENTE Y NO TERMINA LA ESPERA. Docker lo
+          # declara en cuanto se acumulan `--health-retries` comprobaciones
+          # fallidas seguidas, y durante la inicialización es normal que
+          # `pg_isready` falle varias veces. Un contenedor que pasa por
+          # `unhealthy` y luego llega a `healthy` es un contenedor sano que
+          # tardó. Sólo se sale antes de tiempo por `exited`, `dead` o un
+          # contenedor que ya no existe: de esos no se vuelve esperando.
+          ultimo=""
+          estado="desconocido"
+          salud="desconocida"
+
+          for intento in $(seq 1 60); do
+            observacion="$(docker inspect \
+              --format '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}sin-healthcheck{{end}}' \
+              "$PT409_DB" 2>/dev/null)" || observacion=""
+
+            if [ -z "$observacion" ]; then
+              echo "::error::docker inspect no encuentra el contenedor $PT409_DB, aunque docker run terminó correctamente. Ha desaparecido durante la espera. El banco no se ejecuta."
+              docker logs "$PT409_DB" 2>&1 || true
+              exit 1
+            fi
+
+            read -r estado salud <<< "$observacion"
+
+            if [ "$observacion" != "$ultimo" ]; then
+              echo "t+${intento}s: State.Status=${estado} State.Health.Status=${salud}"
+              ultimo="$observacion"
+            fi
+
+            case "$estado" in
+              exited|dead)
+                echo "::error::El contenedor de base terminó en estado '${estado}' (salud '${salud}') tras ${intento} s. El banco no se ejecuta."
+                docker logs "$PT409_DB" 2>&1 || true
+                exit 1
+                ;;
+            esac
+
+            if [ "$estado" = "running" ] && [ "$salud" = "healthy" ]; then
+              echo "Base running y healthy tras ${intento} s."
+              exit 0
+            fi
+
+            sleep 1
+          done
+
+          echo "::error::Vencido el plazo de 60 s sin observar running+healthy. Último estado: State.Status=${estado} State.Health.Status=${salud}. El banco no se ejecuta."
+          docker logs "$PT409_DB" 2>&1 || true
+          exit 1
+
+      - name: Precrear los tres roles de PostgREST y sus membresías (aditivo)
+        shell: bash
+        run: |
+          # Hay un problema de orden que conviene dejar escrito, porque la
+          # solución obvia sería la mala.
+          #
+          # PostgREST no arranca de verdad si no puede conectarse, y para
+          # conectarse necesita que el rol `authenticator` exista ya con su
+          # contraseña. Pero quien crea ese rol es el bootstrap, y el bootstrap
+          # es DESTRUCTIVO —borra los esquemas `public` y `auth` enteros— y por
+          # eso tiene que quedar DETRÁS de las guardas del test, no delante.
+          # Aplicarlo desde aquí con un `psql` suelto resolvería el orden
+          # borrando esquemas sin haber comprobado ni los acuses de recibo ni el
+          # host, que es exactamente lo que el diseño quiere impedir.
+          #
+          # Lo que se hace aquí es el mínimo ADITIVO que PostgREST necesita para
+          # poder conectarse, y conviene enumerarlo sin adornos, porque una
+          # descripción demasiado generosa de un paso que toca roles del clúster
+          # es peor que no describirlo:
+          #
+          #   · crea `anon`, `authenticated` y `authenticator` SI NO EXISTEN;
+          #   · fija la contraseña de `authenticator`;
+          #   · CONCEDE LAS MEMBRESÍAS `anon` y `authenticated` A
+          #     `authenticator`. Eso es un GRANT, y hay que llamarlo por su
+          #     nombre. Es la pertenencia a rol sin la que PostgREST no puede
+          #     hacer `set local role` según el claim del JWT, y no es inocua:
+          #     amplía a qué puede cambiarse `authenticator`.
+          #
+          # Lo que NO hace: no borra nada, no crea ni modifica ninguna tabla,
+          # esquema ni función, y no concede ningún privilegio SOBRE OBJETOS
+          # —ni SELECT, ni INSERT, ni UPDATE, ni DELETE, ni EXECUTE, ni USAGE—.
+          # Esa distinción es la que sostiene la afirmación de que el paso es
+          # aditivo: los objetos que el banco mide todavía no existen cuando esto
+          # se ejecuta.
+          #
+          # La membresía es además inofensiva en este punto concreto porque
+          # `authenticator` se crea `noinherit`: pertenecer a `anon` y a
+          # `authenticated` no le da sus privilegios salvo que cambie de rol
+          # explícitamente. Y ambos roles acaban de crearse sin privilegio
+          # alguno.
+          #
+          # La parte destructiva sigue entera dentro del test. El bootstrap
+          # repite este mismo trabajo de forma idempotente —los mismos tres
+          # `create role if not exists`, el mismo `alter role`, el mismo grant de
+          # membresías—, así que ejecutarlo dos veces no diverge.
+          #
+          # El SQL entra por la entrada estándar y no por `-c` ni por `-v`: así
+          # la contraseña no aparece en la línea de órdenes de ningún proceso.
+          # `ON_ERROR_STOP=1` para que un fallo aquí no pase inadvertido.
+          printf '%s\n' \
+            "do \$\$ begin" \
+            "  if not exists (select 1 from pg_roles where rolname = 'anon') then create role anon nologin noinherit; end if;" \
+            "  if not exists (select 1 from pg_roles where rolname = 'authenticated') then create role authenticated nologin noinherit; end if;" \
+            "  if not exists (select 1 from pg_roles where rolname = 'authenticator') then create role authenticator login noinherit; end if;" \
+            "end \$\$;" \
+            "alter role authenticator with password '$PT409_AUTHENTICATOR_PASSWORD';" \
+            "grant anon, authenticated to authenticator;" \
+          | docker exec --interactive \
+              --env PGPASSWORD="$PT409_POSTGRES_PASSWORD" \
+              "$PT409_DB" \
+              psql --username postgres --dbname "$PT409_BASE" \
+                   --no-psqlrc --quiet --set ON_ERROR_STOP=1 --file -
+
+      - name: Levantar el PostgREST desechable
+        shell: bash
+        run: |
+          # `PGRST_OPENAPI_MODE=ignore-privileges` no es cosmético. Con el modo
+          # por omisión, `follow-privileges`, el documento OpenAPI que sirve la
+          # raíz se recorta según los privilegios del rol de la petición, y esa
+          # petición va sin JWT, o sea como `anon`, que en este banco no tiene
+          # NINGÚN privilegio a propósito. La función nunca aparecería y el test
+          # concluiría que PostgREST no ha visto el esquema cuando sí lo ha
+          # visto. Afecta sólo al listado de la raíz; no concede nada.
+          #
+          # `PGRST_DB_CHANNEL_ENABLED=true` NO ES UN EXTRA: está en el camino
+          # crítico, y merece la pena decir por qué en lugar de dejarlo como una
+          # opción más de la lista.
+          #
+          # Este paso arranca PostgREST ANTES de que el bootstrap se haya
+          # aplicado, y no por descuido: el bootstrap es destructivo y lo aplica
+          # el test tras sus guardas, así que no hay ningún orden en el que
+          # PostgREST pueda arrancar después. Consecuencia: PostgREST cachea aquí
+          # el esquema VACÍO que dejó la imagen de PostgreSQL, y más tarde el
+          # bootstrap borra y recrea `public` entero por debajo.
+          #
+          # El `notify pgrst, 'reload schema'` del bootstrap es lo que deshace esa
+          # obsolescencia, y este ajuste es lo que hace que alguien lo escuche.
+          # Sin él, PostgREST serviría 404 para `pt409_bench_apply_change` para
+          # siempre y el banco fallaría entero por una caché rancia teniendo el
+          # esquema correcto delante. El test tampoco lo da por hecho: reintenta
+          # el NOTIFY y espera a ver la función en el OpenAPI antes de afirmar
+          # nada.
+          #
+          # El puerto, otra vez, sólo en 127.0.0.1.
+          docker run --detach \
+            --name "$PT409_REST" \
+            --network "$PT409_RED" \
+            --publish 127.0.0.1:53001:3000 \
+            --env PGRST_DB_URI="postgres://authenticator:${PT409_AUTHENTICATOR_PASSWORD}@${PT409_DB}:5432/${PT409_BASE}" \
+            --env PGRST_DB_SCHEMAS=public \
+            --env PGRST_DB_ANON_ROLE=anon \
+            --env PGRST_DB_CHANNEL_ENABLED=true \
+            --env PGRST_DB_POOL=4 \
+            --env PGRST_JWT_SECRET="$PT409_JWT_SECRET" \
+            --env PGRST_OPENAPI_MODE=ignore-privileges \
+            --env PGRST_SERVER_HOST='*4' \
+            --env PGRST_SERVER_PORT=3000 \
+            --env PGRST_LOG_LEVEL=info \
+            "$PT409_IMAGEN_REST"
+
+      - name: Esperar a que PostgREST escuche
+        shell: bash
+        run: |
+          # Se espera a que HAYA respuesta HTTP, sea cual sea el código. En este
+          # momento el esquema todavía es el vacío que dejó la imagen de
+          # PostgreSQL: el bootstrap aún no se ha aplicado, porque lo aplica el
+          # test después de sus guardas. Exigir aquí un 200 con la función ya
+          # publicada sería exigir algo que todavía no puede ser cierto. Que la
+          # función acabe siendo visible lo comprueba el propio test, que
+          # reintenta el NOTIFY hasta verla en el OpenAPI.
+          for intento in $(seq 1 60); do
+            estado="$(docker inspect --format '{{.State.Status}}' "$PT409_REST" 2>/dev/null)" || estado=""
+
+            case "$estado" in
+              ""|exited|dead)
+                echo "::error::El contenedor de PostgREST está en estado '${estado:-inexistente}' tras ${intento} s. El banco no se ejecuta."
+                docker logs "$PT409_REST" 2>&1 || true
+                exit 1
+                ;;
+            esac
+
+            codigo="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              --max-time 3 http://127.0.0.1:53001/ || echo 000)"
+
+            if [ "$codigo" != "000" ]; then
+              echo "PostgREST responde con HTTP ${codigo} tras ${intento} s."
+              exit 0
+            fi
+
+            sleep 1
+          done
+
+          echo "::error::Vencido el plazo de 60 s sin obtener ninguna respuesta HTTP de PostgREST en 127.0.0.1:53001. El banco no se ejecuta."
+          docker logs "$PT409_REST" 2>&1 || true
+          exit 1
+
+      - name: Ejecutar el banco del contrato PT409
+        shell: bash
+        env:
+          RUN_REVISION_CONFLICT_INTEGRATION_TESTS: "1"
+          REVISION_CONFLICT_TEST_DB_ACK: DISPOSABLE_ONLY
+          REVISION_CONFLICT_TEST_CLUSTER_ACK: DISPOSABLE_CLUSTER
+          TEST_POSTGREST_URL: http://127.0.0.1:53001
+        run: |
+          # `TEST_DATABASE_URL` se compone aquí y no en el bloque `env:` de
+          # arriba porque lleva dentro la contraseña generada en tiempo de
+          # ejecución. Va enmascarada, pero cuanto menos circule, mejor.
+          export TEST_DATABASE_URL="postgres://postgres:${PT409_POSTGRES_PASSWORD}@127.0.0.1:55433/${PT409_BASE}"
+          export TEST_JWT_SECRET="$PT409_JWT_SECRET"
+          export TEST_PGRST_AUTHENTICATOR_PASSWORD="$PT409_AUTHENTICATOR_PASSWORD"
+
+          # El banco ABORTA si encuentra cualquiera de estas variables de libpq
+          # en el entorno, porque `pg` las usa para rellenar lo que la cadena de
+          # conexión no fije, y `PGOPTIONS` además permite falsificar por sesión
+          # el marcador `enlaze.test_cluster_marker`, que es una de las guardas.
+          # Hoy el runner no las trae, pero eso no es garantía: basta con que una
+          # acción anterior o una variable de repositorio las introduzca.
+          # Limpiarlas aquí hace que este paso dependa sólo de lo que declara.
+          env -u PGOPTIONS \
+              -u PGHOST \
+              -u PGHOSTADDR \
+              -u PGPORT \
+              -u PGDATABASE \
+              -u PGUSER \
+              -u PGPASSWORD \
+              -u PGPASSFILE \
+              -u PGSERVICE \
+              -u PGSERVICEFILE \
+              -u PGSSLMODE \
+              npm run test:budget-revision-conflict-integration
+
+      - name: Mostrar los logs de la base
+        if: always()
+        shell: bash
+        run: |
+          docker logs "$PT409_DB" 2>&1 \
+            || echo "No hay contenedor $PT409_DB del que leer logs."
+
+      - name: Mostrar los logs de PostgREST
+        if: always()
+        shell: bash
+        run: |
+          # Los dos volcados van en pasos separados y ambos con `if: always()`.
+          # Si compartieran paso, un fallo al leer el primero podría dejar sin
+          # imprimir el segundo, y el segundo suele ser el que explica un 404 o
+          # un 503 inesperados.
+          docker logs "$PT409_REST" 2>&1 \
+            || echo "No hay contenedor $PT409_REST del que leer logs."
+
+      - name: Eliminar los contenedores y la red
+        if: always()
+        shell: bash
+        run: |
+          # En este orden: primero los contenedores, después la red. Docker se
+          # niega a borrar una red con puntos finales conectados, así que
+          # invertirlo dejaría la red huérfana. Nada de esto es fatal para el
+          # veredicto del banco —de ahí los `|| echo`—, pero un runner que se
+          # reutilice no debe heredar restos de esta ejecución.
+          docker rm --force "$PT409_REST" \
+            || echo "El contenedor $PT409_REST ya no existía."
+          docker rm --force "$PT409_DB" \
+            || echo "El contenedor $PT409_DB ya no existía."
+          docker network rm "$PT409_RED" \
+            || echo "La red $PT409_RED ya no existía."

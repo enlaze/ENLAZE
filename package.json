@@ -18,6 +18,7 @@
     "test:budget-recalculation": "node --test __tests__/budget-recalculation.test.mjs",
     "test:replace-budget-items-migration": "node --test __tests__/replace-budget-items-migration.test.mjs",
     "test:replace-budget-items-integration": "node --test __tests__/replace-budget-items.integration.test.mjs",
+    "test:budget-revision-conflict-integration": "node --test __tests__/budget-revision-conflict.integration.test.mjs",
     "test:budget-items-writer": "node --import tsx --test __tests__/budget-items-writer.test.mjs __tests__/budget-generate-writer-flow.test.mjs",
     "test:budget-finalization": "node --import tsx --test __tests__/budget-finalization.test.mjs",
     "test:scheduled": "node --import tsx --test __tests__/scheduled-messages.test.mjs",
