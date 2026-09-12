@@ -72,14 +72,20 @@ if [ -z "$AGENT_API_KEY" ]; then
   echo "✗ No he encontrado AGENT_API_KEY en $ENV_FILE"
   exit 1
 fi
+# El acceso privado de Vercel SOLO hace falta para que n8n atraviese la
+# protección de la web desplegada. Trabajando en local (ENLAZE_BASE_URL apunta
+# a localhost) no se usa para nada, así que avisamos pero no paramos.
 if [ -z "$VERCEL_AUTOMATION_BYPASS_SECRET" ]; then
-  echo "✗ No he encontrado el acceso privado de n8n en el llavero del Mac"
-  exit 1
+  echo "⚠ Sin acceso privado de Vercel en el llavero."
+  echo "  Solo hace falta para llegar a la web desplegada; en local no se usa."
+  echo ""
 fi
 
 echo "✓ Clave de Claude cargada"
 echo "✓ Clave de ENLAZE cargada"
-echo "✓ Acceso privado de Vercel:    cargado desde el llavero"
+if [ -n "$VERCEL_AUTOMATION_BYPASS_SECRET" ]; then
+  echo "✓ Acceso privado de Vercel:    cargado desde el llavero"
+fi
 echo "✓ URL de ENLAZE:               $ENLAZE_BASE_URL"
 echo "✓ Scraper Puppeteer en n8n:    habilitado (solo acceso local)"
 echo "✓ Zona horaria:                Europe/Madrid"
