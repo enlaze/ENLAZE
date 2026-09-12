@@ -12,7 +12,7 @@
  * Todo aquí falla en silencio: si la caché no está disponible, se recalcula.
  * Un resumen es siempre preferible a un error.
  *
- * Tabla: public.agent_summary_cache (migración 20260912093000).
+ * Tabla: public.agent_summary_cache (migración 20260912133537).
  */
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";

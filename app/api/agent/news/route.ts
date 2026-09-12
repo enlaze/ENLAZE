@@ -47,7 +47,7 @@ interface HaikuRelevancePayload {
  * Este endpoint y /api/agent/ingest escriben los dos en `agent_news`, y el
  * workflow llama a ambos. Ya no importa: la idempotencia diaria la garantiza la
  * BD con un índice UNIQUE (user_id, execution_date, dedupe_key) —migración
- * 20260912143000, dedupe_key derivada de la URL— y las dos vías hacen upsert
+ * 20260912141703, dedupe_key derivada de la URL— y las dos vías hacen upsert
  * contra esa clave. Llamar a las dos con las mismas noticias no duplica nada.
  *
  * `written` cuenta filas escritas (nuevas o refrescadas), no solo nuevas.
@@ -327,7 +327,7 @@ async function persistAgentNews(
   if (items.length === 0) return 0;
 
   // La deduplicación diaria la impone ahora la BD: agent_news tiene un índice
-  // UNIQUE (user_id, execution_date, dedupe_key) — migración 20260912143000 —
+  // UNIQUE (user_id, execution_date, dedupe_key) — migración 20260912141703 —
   // donde dedupe_key se genera a partir de la URL. Eso sustituye al SELECT de
   // «URLs ya insertadas hoy» que había aquí, que además de un round-trip extra
   // tenía una carrera entre la consulta y el INSERT.

@@ -27,13 +27,14 @@ const newsRoute = fs.readFileSync(
   path.join(root, "app/api/agent/news/route.ts"),
   "utf8",
 );
-const migration = fs.readFileSync(
-  path.join(
-    root,
-    "supabase/migrations/20260912143000_agent_ingest_idempotency_all_tables.sql",
-  ),
-  "utf8",
-);
+/* Las dos migraciones del cambio, juntas: agent_reviews va aparte porque su
+   clave no lleva fecha y la expresión generada necesitó otra vuelta. */
+const migration = [
+  "supabase/migrations/20260912141703_agent_ingest_idempotency_all_tables.sql",
+  "supabase/migrations/20260912155346_agent_reviews_content_dedupe_key.sql",
+]
+  .map((rel) => fs.readFileSync(path.join(root, rel), "utf8"))
+  .join("\n");
 
 /* Tabla → clave de conflicto que debe usar el upsert, y por qué.
    Las que NO llevan execution_date son entidades que persisten entre días. */

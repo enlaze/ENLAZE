@@ -108,7 +108,7 @@ async function ingestPayload(
     // 1. Daily summary
     //
     // Upsert, no insert: la clave (user_id, execution_date) tiene un índice
-    // UNIQUE (migración 20260912093000), así que un reintento del workflow
+    // UNIQUE (migración 20260912133537), así que un reintento del workflow
     // sobrescribe el briefing del día en lugar de añadir un duplicado — y no
     // se paga dos veces por el mismo día.
     if (payload.daily_summary) {
@@ -304,7 +304,7 @@ async function ingestPayload(
     // misma tabla y reemite nuestro uuid). La identidad se toma del contenido
     // —plataforma, autor, fecha y texto—, que es lo que define una reseña, en
     // una columna generada con coalesce para que los NULL de `author` y
-    // `review_date` no rompan la unicidad. Ver migración 20260912143000.
+    // `review_date` no rompan la unicidad. Ver migración 20260912141703.
     //
     // Sin fecha de ejecución en la clave: una reseña es un objeto externo fijo,
     // no una foto del día. Una fila por reseña, que se actualiza.
