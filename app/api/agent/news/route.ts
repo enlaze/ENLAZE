@@ -44,11 +44,13 @@ interface HaikuRelevancePayload {
  * Robustez: ante cualquier fallo (RSS caído, Haiku caído, etc.) devuelve
  *   200 { news: [] }. Nunca 500.
  *
- * IMPORTANTE: este endpoint y el ingest pueden ambos escribir noticias en
- * `agent_news`. Para evitar duplicados, n8n debería elegir UNA vía: o
- * llamar aquí con `write=1` (escribimos), o llamar sin `write=1` y luego
- * volcar a `/api/agent/ingest`. La idempotencia diaria se aplica si
- * `write=1` (no duplica misma URL en el mismo día/usuario).
+ * Este endpoint y /api/agent/ingest escriben los dos en `agent_news`, y el
+ * workflow llama a ambos. Ya no importa: la idempotencia diaria la garantiza la
+ * BD con un índice UNIQUE (user_id, execution_date, dedupe_key) —migración
+ * 20260912143000, dedupe_key derivada de la URL— y las dos vías hacen upsert
+ * contra esa clave. Llamar a las dos con las mismas noticias no duplica nada.
+ *
+ * `written` cuenta filas escritas (nuevas o refrescadas), no solo nuevas.
  */
 export async function GET(req: NextRequest) {
   const startedAt = Date.now();
@@ -324,27 +326,23 @@ async function persistAgentNews(
 ): Promise<number> {
   if (items.length === 0) return 0;
 
-  const todayStart = new Date();
-  todayStart.setUTCHours(0, 0, 0, 0);
-  const todayIso = todayStart.toISOString();
-
-  // Look up URLs already inserted today to avoid duplicates
-  const urls = items.map((it) => it.url).filter(Boolean);
-  let existingUrls = new Set<string>();
-  if (urls.length > 0) {
-    const { data: existing } = await supabase
-      .from("agent_news")
-      .select("url")
-      .eq("user_id", userId)
-      .gte("created_at", todayIso)
-      .in("url", urls);
-    if (existing) existingUrls = new Set((existing as Array<{ url: string }>).map((r) => r.url));
-  }
-
-  const rows = items
-    .filter((it) => !existingUrls.has(it.url))
-    .map((it) => ({
+  // La deduplicación diaria la impone ahora la BD: agent_news tiene un índice
+  // UNIQUE (user_id, execution_date, dedupe_key) — migración 20260912143000 —
+  // donde dedupe_key se genera a partir de la URL. Eso sustituye al SELECT de
+  // «URLs ya insertadas hoy» que había aquí, que además de un round-trip extra
+  // tenía una carrera entre la consulta y el INSERT.
+  //
+  // Importa que esta ruta y /api/agent/ingest converjan: las dos escriben
+  // noticias del mismo usuario y el mismo día, y con el upsert eso ya no
+  // duplica nada.
+  const executionDate = new Date().toISOString().split("T")[0];
+  const byUrl = new Map<string, Record<string, unknown>>();
+  for (const it of items) {
+    // Dentro de un mismo lote también hay que deduplicar: Postgres aborta la
+    // sentencia si un INSERT ... ON CONFLICT toca la misma fila dos veces.
+    byUrl.set(it.url || it.title, {
       user_id: userId,
+      execution_date: executionDate,
       title: it.title,
       summary: it.why_relevant || null,
       source: it.source,
@@ -353,7 +351,9 @@ async function persistAgentNews(
       category: it.sector,
       relevance: 5,
       tags: [it.sector],
-    }));
+    });
+  }
+  const rows = [...byUrl.values()];
 
   if (rows.length === 0) return 0;
   let leaseId: string;
@@ -365,7 +365,9 @@ async function persistAgentNews(
   }
   let error: { message: string } | null = null;
   try {
-    const result = await supabase.from("agent_news").insert(rows);
+    const result = await supabase
+      .from("agent_news")
+      .upsert(rows, { onConflict: "user_id,execution_date,dedupe_key" });
     error = result.error;
   } finally {
     await endAccountWriteLease(supabase, leaseId);
