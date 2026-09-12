@@ -204,9 +204,15 @@ export default function EmailSurface() {
     );
   }, [supabase]);
 
-  const loadInbox = useCallback(async () => {
+  /* El endpoint clasifica la bandeja con un modelo, así que del lado del
+     servidor está cacheado ~15 min por usuario: montar este panel ya no cuesta
+     una reclasificación. `force` salta la caché, para cuando el propio usuario
+     acaba de tocar la conexión y quiere el estado real. */
+  const loadInbox = useCallback(async (force = false) => {
     setInboxLoading(true);
-    const json = await fetch("/api/agent/gmail/summary")
+    const json = await fetch(
+      force ? "/api/agent/gmail/summary?refresh=1" : "/api/agent/gmail/summary",
+    )
       .then((r) => r.json())
       .catch(() => null);
     setInbox(json);
@@ -359,7 +365,7 @@ export default function EmailSurface() {
     if (!res || !res.ok) {
       setSending(false);
       toast.error(payload?.error || "No se pudo completar el envío.");
-      if (payload?.code === "gmail_reconnect_required") loadInbox();
+      if (payload?.code === "gmail_reconnect_required") loadInbox(true);
       return;
     }
 

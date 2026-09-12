@@ -13,6 +13,7 @@
     "test:price-tracker-cancel": "node --test __tests__/price-tracker-cancel.test.mjs",
     "test:n8n-construction": "node --test __tests__/n8n-construction-consolidated.test.mjs",
     "test:construction-webhook": "node --test __tests__/construction-webhook-idempotency.test.mjs",
+    "test:agent-briefing": "node --test __tests__/agent-briefing-reliability.test.mjs",
     "test:budget-realism": "node --import tsx --test __tests__/budget-realism.test.mjs",
     "test:budget-timeline": "node --import tsx --test __tests__/budget-timeline.test.mjs",
     "test:budget-recalculation": "node --test __tests__/budget-recalculation.test.mjs",

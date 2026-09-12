@@ -40,6 +40,10 @@ interface AIBriefing {
   model?: string;
   generated_at?: string;
   error?: string;
+  /** "ai" cuando lo escribió el modelo, "mechanical_fallback" cuando falló. */
+  source?: string;
+  /** La salida del modelo se cortó por max_tokens. */
+  truncated?: boolean;
 }
 
 interface DailySummary {
@@ -550,51 +554,63 @@ export function AgentBriefingHero() {
   const ai = summary.raw_payload?.daily_summary?.ai_briefing;
   const aiOk = !!ai && !ai.error;
 
+  // Cuando la IA falla, el workflow rellena ai_briefing con el resumen
+  // mecánico (source === "mechanical_fallback"): titular, una narrativa breve
+  // y las acciones con su motivo. Se muestra igual que el de IA pero SIN el
+  // sello "escrito por tu asistente" — aiOk sigue siendo false, porque ese
+  // texto no lo escribió la IA.
+  const briefing = aiOk
+    ? ai!
+    : ai?.source === "mechanical_fallback"
+      ? ai
+      : null;
+
   const allConnectedLive =
     connections.gmail && connections.calendar && connections.sheets && connections.reputation;
 
   // Strip leftover anglicisms / score talk from stale Claude output, plus
   // sentences that lie about the user's connection state.
-  const rawNarrative = aiOk ? ai!.narrative ?? "" : "";
+  const rawNarrative = briefing?.narrative ?? "";
   const displayNarrative = filterStaleConnectionParagraphs(
     sanitizeProse(rawNarrative),
     connections,
   );
 
   const displayHeadline = sanitizeProse(
-    (aiOk && ai!.headline ? ai!.headline : summary.headline) || "",
+    (briefing?.headline ? briefing.headline : summary.headline) || "",
   );
 
   // Drop actions / watch_outs / opportunities that talk about connecting a
   // module the user already has live. The check runs per-item even when only
   // ONE module is live — we don't need every module connected to know the
   // statement "Gmail no conectado" is false when gmail.connected === true.
-  const filteredActions = (aiOk ? ai!.top_actions || [] : []).filter((a) => {
+  const filteredActions = (briefing?.top_actions || []).filter((a) => {
     const blob = `${a.action || ""} ${a.why || ""}`;
     return !shouldHideForConnections(blob, connections);
   });
 
-  const filteredWatchOuts = (aiOk ? ai!.watch_outs || [] : [])
+  const filteredWatchOuts = (briefing?.watch_outs || [])
     .filter((w) => !shouldHideForConnections(w, connections))
     .map(sanitizeProse);
-  const filteredOpportunities = (aiOk ? ai!.opportunities || [] : [])
+  const filteredOpportunities = (briefing?.opportunities || [])
     .filter((o) => !shouldHideForConnections(o, connections))
     .map(sanitizeProse);
 
   // Map the app's data shape onto the redesigned card's action shape.
   //   action -> título, why -> subtexto, when -> pill, impact -> badge
-  // On the mechanical fallback (aiOk === false) we feed priority_actions as
-  // bare titles — no reason/moment/priority — so the card degrades gracefully.
-  const cardActions: BriefingAction[] = aiOk
-    ? filteredActions.map((a) => ({
-        title: sanitizeProse(a.action),
-        reason: a.why ? sanitizeProse(a.why) : undefined,
-        moment: a.when || undefined,
-        priority: IMPACT_TO_PRIORITY[a.impact ?? ""],
-      }))
-    : summary.priority_actions.map((action) => ({
-        title: sanitizeProse(action),
-      }));
+  // Último recurso (briefings antiguos, sin ai_briefing de ningún tipo):
+  // priority_actions como títulos sueltos, sin motivo ni momento.
+  const cardActions: BriefingAction[] =
+    filteredActions.length > 0
+      ? filteredActions.map((a) => ({
+          title: sanitizeProse(a.action),
+          reason: a.why ? sanitizeProse(a.why) : undefined,
+          moment: a.when || undefined,
+          priority: IMPACT_TO_PRIORITY[a.impact ?? ""],
+        }))
+      : summary.priority_actions.map((action) => ({
+          title: sanitizeProse(action),
+        }));
 
   return (
     <section>

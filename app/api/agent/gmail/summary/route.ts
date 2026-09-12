@@ -10,6 +10,13 @@ import {
 } from "@/lib/agent/intelligence/gmail";
 import { normalizeBusinessSectorKey, getSectorConfig } from "@/lib/agent-prompts";
 import { getSectorIntel } from "@/lib/agent/sector-intel";
+import {
+  invalidateSummaryCache,
+  readSummaryCache,
+  writeSummaryCache,
+} from "@/lib/agent/summary-cache";
+
+const CACHE_MODULE = "gmail";
 
 async function syncModuleState(
   supabase: SupabaseClient,
@@ -93,14 +100,23 @@ function summaryLine(intel: GmailIntel): string {
  * GET /api/agent/gmail/summary?user_id=xxx
  *
  * Returns the enriched Gmail intel payload consumed by the n8n agent and the
- * dev inspector. Heuristic-only (no LLM in this iteration). Degrades to a
- * 200 with a precise `status` when Gmail is unavailable; never 500s.
+ * dev inspector. Degrades to a 200 with a precise `status` when Gmail is
+ * unavailable; never 500s.
+ *
+ * La clasificación de la bandeja pasa por Haiku, así que el resultado se
+ * cachea por usuario durante ~15 min (AGENT_SUMMARY_CACHE_TTL_MINUTES): el
+ * panel de Email lo pedía en cada montaje y cada visita costaba una
+ * reclasificación entera. Con `?refresh=1` se fuerza el recálculo.
  */
 export async function GET(req: NextRequest) {
   try {
     const auth = await verifyAgentOrBrowserRequest(req);
     if (isErrorResponse(auth)) return auth;
     const { supabase, userId } = auth;
+
+    const forceRefresh = ["1", "true", "yes"].includes(
+      (req.nextUrl.searchParams.get("refresh") || "").toLowerCase(),
+    );
 
     const { data: connection } = await supabase
       .from("agent_connections")
@@ -110,6 +126,9 @@ export async function GET(req: NextRequest) {
       .maybeSingle();
 
     if (!connection || !connection.connected) {
+      // Desconectar tiene que notarse al instante: se tira la caché en lugar
+      // de seguir sirviendo la bandeja de cuando sí estaba conectada.
+      await invalidateSummaryCache(userId, CACHE_MODULE);
       const intel = emptyGmailIntel("not_connected", "Gmail not connected");
       return NextResponse.json({
         ok: true,
@@ -120,9 +139,28 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // Gmail está conectado: a partir de aquí el trabajo cuesta dinero (Haiku
+    // clasifica la bandeja), así que primero se mira la caché.
+    if (!forceRefresh) {
+      const cached = await readSummaryCache<Record<string, unknown>>(
+        userId,
+        CACHE_MODULE,
+      );
+      if (cached) {
+        return NextResponse.json({
+          ...cached.payload,
+          cached: true,
+          cached_at: cached.cached_at,
+          cache_expires_at: cached.expires_at,
+        });
+      }
+    }
+
     const tokenInfo = await getAccessTokenInfo(supabase, userId, "gmail");
     if (tokenInfo.status !== "active" || !tokenInfo.token) {
       const gmailStatus = tokenStatusToGmail(tokenInfo.status);
+      // Token caducado o ilegible: la bandeja cacheada ya no es de fiar.
+      await invalidateSummaryCache(userId, CACHE_MODULE);
       await syncModuleState(supabase, userId, "gmail", {
         connected: false,
         status: tokenInfo.status,
@@ -175,12 +213,29 @@ export async function GET(req: NextRequest) {
       error_message: intel.error_message,
     });
 
-    return NextResponse.json({
+    const body = {
       ok: true,
       ...intel,
       summary: summaryLine(intel),
       last_sync_at: new Date().toISOString(),
-    });
+    };
+
+    // Sólo se cachea una lectura buena: los estados de error son baratos de
+    // recalcular y conviene que se recuperen en cuanto el usuario arregle la
+    // conexión, no 15 minutos después.
+    if (intel.connected && intel.status === "ok") {
+      const entry = await writeSummaryCache(userId, CACHE_MODULE, body);
+      if (entry) {
+        return NextResponse.json({
+          ...body,
+          cached: false,
+          cached_at: entry.cached_at,
+          cache_expires_at: entry.expires_at,
+        });
+      }
+    }
+
+    return NextResponse.json({ ...body, cached: false });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[agent/gmail/summary] Unexpected error:", message);

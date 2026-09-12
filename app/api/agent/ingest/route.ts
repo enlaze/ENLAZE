@@ -44,6 +44,28 @@ export async function POST(req: NextRequest) {
   }
 }
 
+/**
+ * Fecha de ejecución del briefing (YYYY-MM-DD).
+ *
+ * Se prefiere la que trae el propio payload — `execution_date` explícito o el
+ * `timestamp` que sella el workflow al arrancar — sobre "hoy". Así un reintento
+ * que cruza la medianoche UTC sigue apuntando al mismo día que el intento
+ * original y el upsert lo reconoce como el mismo briefing en lugar de crear uno
+ * nuevo.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function resolveExecutionDate(payload: any): string {
+  const candidates = [payload?.execution_date, payload?.timestamp];
+  for (const raw of candidates) {
+    if (typeof raw !== "string") continue;
+    const day = raw.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(day) && !Number.isNaN(Date.parse(day))) {
+      return day;
+    }
+  }
+  return new Date().toISOString().split("T")[0];
+}
+
 async function ingestPayload(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
@@ -54,18 +76,31 @@ async function ingestPayload(
     const results: Record<string, { inserted: number; errors: number }> = {};
 
     // 1. Daily summary
+    //
+    // Upsert, no insert: la clave (user_id, execution_date) tiene un índice
+    // UNIQUE (migración 20260912093000), así que un reintento del workflow
+    // sobrescribe el briefing del día en lugar de añadir un duplicado — y no
+    // se paga dos veces por el mismo día.
     if (payload.daily_summary) {
-      const { error } = await supabase.from("agent_daily_summary").insert({
-        user_id: userId,
-        business_id: payload.business_id || null,
-        execution_date: new Date().toISOString().split("T")[0],
-        headline: payload.daily_summary.headline,
-        priority_actions: payload.daily_summary.priority_actions || [],
-        opportunities_count: payload.daily_summary.opportunities_count || 0,
-        risks_count: payload.daily_summary.risks_count || 0,
-        score: payload.daily_summary.score || 0,
-        raw_payload: payload,
-      });
+      const { error } = await supabase
+        .from("agent_daily_summary")
+        .upsert(
+          {
+            user_id: userId,
+            business_id: payload.business_id || null,
+            execution_date: resolveExecutionDate(payload),
+            headline: payload.daily_summary.headline,
+            priority_actions: payload.daily_summary.priority_actions || [],
+            opportunities_count: payload.daily_summary.opportunities_count || 0,
+            risks_count: payload.daily_summary.risks_count || 0,
+            score: payload.daily_summary.score || 0,
+            raw_payload: payload,
+          },
+          { onConflict: "user_id,execution_date" },
+        );
+      if (error) {
+        console.error("[agent/ingest] daily_summary upsert failed:", error.message);
+      }
       results.daily_summary = { inserted: error ? 0 : 1, errors: error ? 1 : 0 };
     }
 
