@@ -1885,3 +1885,43 @@ select count(*)                                                       as filas,
            )::text, '')) as huella
   ) c;
 -- END CHECK_11G
+
+
+-- BLOQUE 12 · E1 / 20260914090000_budgets_lock_version.sql
+-- Ejecutar sólo los bloques delimitados de este apartado; todos son SELECT.
+-- Medir CHECK_12_FINGERPRINT antes y después, con los escritores en reposo.
+-- Los cuatro campos deben coincidir exactamente. No hay recuentos históricos fijos.
+-- No incluye ni imprime contenido personal: las filas completas se agregan en hashes.
+-- BEGIN CHECK_12_FINGERPRINT
+select
+  (select count(*) from public.budgets) as budgets_count,
+  (select md5(coalesce(string_agg((to_jsonb(b) - 'lock_version')::text,
+                                '|' order by b.id), '')) from public.budgets b) as budgets_hash,
+  (select count(*) from public.budget_items) as items_count,
+  (select md5(coalesce(string_agg(to_jsonb(i)::text, '|' order by i.id), ''))
+     from public.budget_items i) as items_hash;
+-- END CHECK_12_FINGERPRINT
+
+-- POST: exactamente una columna integer / NOT NULL / DEFAULT 1 y un CHECK validado.
+-- status y version se informan también: comparar con el PRE, no corregirlos en E1.
+-- BEGIN CHECK_12_SCHEMA
+select a.attname, format_type(a.atttypid, a.atttypmod) as data_type,
+       a.attnotnull as not_null, pg_get_expr(d.adbin, d.adrelid) as default_value,
+       col_description(a.attrelid, a.attnum) as description
+from pg_attribute a
+left join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum
+where a.attrelid = 'public.budgets'::regclass and not a.attisdropped
+  and a.attname in ('lock_version', 'status', 'version') order by a.attname;
+select conname, convalidated, pg_get_constraintdef(oid) as definition
+from pg_constraint where conrelid = 'public.budgets'::regclass
+  and conname = 'ck_budgets_lock_version_positive';
+-- END CHECK_12_SCHEMA
+
+-- Inmediatamente tras E1, antes de clientes nuevos: invalid_rows y not_initial = 0.
+-- Más adelante lock_version > 1 será normal, no un fallo de la migración.
+-- BEGIN CHECK_12_VALUES
+select count(*) as total_rows,
+       count(*) filter (where lock_version is null or lock_version < 1) as invalid_rows,
+       count(*) filter (where lock_version is distinct from 1) as not_initial
+from public.budgets;
+-- END CHECK_12_VALUES

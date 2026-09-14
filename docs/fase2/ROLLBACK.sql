@@ -39,6 +39,47 @@
 
 
 -- ─────────────────────────────────────────────────────────────────────────────────────
+-- BLOQUE 0-2F2-E1 · Revierte 20260914090000_budgets_lock_version.sql
+-- Ejecutar SOLO este bloque, antes de publicar clientes/RPC de revisión.
+-- Requiere autorización operativa explícita en la misma sesión:
+--   SET enlaze.allow_lock_version_rollback = 'before_revision_clients';
+-- La declaración NO demuestra que no haya clientes desplegados: comprobarlo fuera
+-- de SQL. Tras publicar esos clientes, únicamente corrección hacia delante.
+-- Las guardas impiden borrar revisiones usadas o RPC nuevas detectables; sin CASCADE.
+-- BEGIN ROLLBACK_2F2_E1
+begin;
+set local lock_timeout = '5s';
+lock table public.budgets in access exclusive mode;
+do $rollback_e1$
+begin
+  if current_setting('enlaze.allow_lock_version_rollback', true)
+       is distinct from 'before_revision_clients' then
+    raise exception 'E1: falta confirmacion de ausencia de clientes de revision'
+      using errcode = '55000';
+  end if;
+  if exists (select 1 from public.budgets where lock_version is distinct from 1) then
+    raise exception 'E1: hay revisiones usadas; solo correccion hacia delante'
+      using errcode = '55000';
+  end if;
+  if exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in (
+      'create_budget_with_items', 'save_budget', 'finalize_budget',
+      'change_budget_status', 'duplicate_budget', 'portal_respond_to_budget'
+    )
+  ) then
+    raise exception 'E1: existen RPC de revision; revisar dependencias antes de revertir'
+      using errcode = '55000';
+  end if;
+end;
+$rollback_e1$;
+alter table public.budgets drop column lock_version restrict;
+notify pgrst, 'reload schema';
+commit;
+-- END ROLLBACK_2F2_E1
+
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
 -- BLOQUE 0-2E · Revierte 20260901120000_budget_items_sort_order.sql (FASE 2E-2)
 --
 -- Va DELANTE del BLOQUE 1 porque este archivo se ejecuta en orden inverso al de

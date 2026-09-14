@@ -38,8 +38,13 @@
 -- runner del CLI de Supabase no lo verá nunca. No debe aplicarse a ninguna base
 -- que no sea la base local desechable del banco conductual.
 --
--- ES DESTRUCTIVO. Empieza borrando los esquemas `public` y `auth` enteros. Sólo
--- lo ejecuta `__tests__/replace-budget-items.integration.test.mjs`, y sólo
+-- También lo reutiliza `budgets-lock-version.integration.test.mjs`: ese banco
+-- exige sus propios ACK, marcador y destino 127.0.0.1:55434/enlaze_lock_version_test
+-- antes de ejecutar este fichero; después amplía la cabecera con su fixture E1.
+-- No sustituye la definición de producción ni modifica el contrato SQL de aquí.
+--
+-- ES DESTRUCTIVO. Empieza borrando los esquemas `public` y `auth` enteros. El banco
+-- original, `__tests__/replace-budget-items.integration.test.mjs`, lo ejecuta sólo
 -- después de que TODAS sus guardas hayan pasado: opt-in explícito, los DOS acuses
 -- de recibo, entorno sin variables de libpq heredadas, URL con usuario y
 -- contraseña explícitos, host literal 127.0.0.1, puerto 55432 y base exactamente
