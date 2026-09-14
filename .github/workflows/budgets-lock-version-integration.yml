@@ -1,0 +1,80 @@
+name: Budgets lock version integration
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "supabase/migrations/*_budgets_lock_version.sql"
+      - "supabase/migrations/20260904120000_replace_budget_items.sql"
+      - "supabase/migrations/20260908111706_replace_budget_items_persist_cost.sql"
+      - "__tests__/budgets-lock-version*.mjs"
+      - "__tests__/lib/budgets-lock-version-bench.mjs"
+      - "__tests__/lib/sql-toplevel.mjs"
+      - "__tests__/support/bootstrap-budget-schema.sql"
+      - "docs/fase2/CHECKS.sql"
+      - "docs/fase2/ROLLBACK.sql"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/budgets-lock-version-integration.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: budgets-lock-version-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Dependencias fijadas, sin scripts de instalación
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Contrato estático y guardas del banco
+        run: npm run test:budgets-lock-version
+      - name: PostgreSQL aislado, sin secretos ni conexión a Supabase
+        run: |
+          docker run --detach --name enlaze-e1-lock-version \
+            --publish 127.0.0.1:55434:5432 \
+            --env POSTGRES_PASSWORD=e1_disposable_only \
+            --env POSTGRES_DB=enlaze_lock_version_test \
+            --health-cmd 'pg_isready -h 127.0.0.1 -U postgres -d enlaze_lock_version_test' \
+            --health-interval 2s --health-timeout 3s --health-retries 5 \
+            postgres:17 -c enlaze.test_cluster_marker=budgets_lock_version_2f2
+      - name: Esperar al servidor TCP definitivo
+        shell: bash
+        run: |
+          for attempt in $(seq 1 60); do
+            state="$(docker inspect --format '{{.State.Status}} {{.State.Health.Status}}' enlaze-e1-lock-version)"
+            case "$state" in
+              'running healthy') exit 0 ;;
+              exited*|dead*) echo 'El servidor terminó antes de las pruebas'; exit 1 ;;
+            esac
+            sleep 1
+          done
+          echo 'No se observó running healthy en el plazo permitido'
+          exit 1
+      - name: Integración real y controles negativos
+        env:
+          RUN_BUDGET_LOCK_VERSION_INTEGRATION_TESTS: "1"
+          LOCK_VERSION_TEST_DB_ACK: DISPOSABLE_ONLY
+          LOCK_VERSION_TEST_CLUSTER_ACK: DISPOSABLE_CLUSTER
+          TEST_DATABASE_URL: postgres://postgres:e1_disposable_only@127.0.0.1:55434/enlaze_lock_version_test
+        run: |
+          # El banco rechaza cualquier PG* heredado antes de abrir sockets.
+          env -u PGOPTIONS -u PGHOST -u PGHOSTADDR -u PGPORT -u PGDATABASE \
+            -u PGUSER -u PGPASSWORD -u PGPASSFILE -u PGSERVICE -u PGSERVICEFILE \
+            -u PGSSLMODE npm run test:budgets-lock-version-integration
+      - name: Logs del servidor
+        if: always()
+        run: docker logs enlaze-e1-lock-version 2>&1 || true
+      - name: Retirar únicamente el contenedor del banco
+        if: always()
+        run: docker rm --force enlaze-e1-lock-version || true
