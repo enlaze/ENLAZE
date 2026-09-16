@@ -282,3 +282,33 @@ commit;
 -- select count(*) as restricciones_fase2_restantes
 --   from pg_constraint
 --  where conname in ('pb_products_concept_id_fkey','ck_pb_concept_match_type');
+
+-- BLOQUE E2 · compensación de 20260915160000_budget_revision_rpcs.sql
+-- Ejecutar únicamente antes de publicar clientes que llamen a las RPC nuevas.
+-- BEGIN ROLLBACK_2F2_E2
+begin;
+do $guard$
+begin
+  if current_setting('enlaze.allow_revision_rpcs_rollback', true) is distinct from 'before_revision_clients' then
+    raise exception 'Set explicit before_revision_clients acknowledgement; otherwise forward-fix only';
+  end if;
+end $guard$;
+drop function if exists public.portal_respond_to_budget(text, uuid, text, text);
+drop function if exists public.duplicate_budget(uuid);
+drop function if exists public.change_budget_status(uuid, integer, text);
+drop function if exists public.finalize_budget(uuid, integer, jsonb, jsonb);
+drop function if exists public.save_budget(uuid, integer, jsonb, jsonb);
+drop function if exists public.create_budget_with_items(jsonb, jsonb);
+drop function if exists budget_internal.save_core(uuid, integer, jsonb, jsonb, boolean);
+drop function if exists budget_internal.replace_items(uuid, jsonb);
+drop function if exists budget_internal.result(uuid, text);
+drop function if exists budget_internal.document_version(uuid, uuid);
+drop function if exists budget_internal.apply_header(uuid, jsonb);
+drop function if exists budget_internal.validate_payload(jsonb, boolean);
+drop function if exists budget_internal.owned_budget(uuid, integer);
+drop function if exists budget_internal.lock_owner(uuid);
+alter default privileges for role postgres in schema budget_internal grant execute on functions to public;
+drop schema if exists budget_internal;
+notify pgrst, 'reload schema';
+commit;
+-- END ROLLBACK_2F2_E2
