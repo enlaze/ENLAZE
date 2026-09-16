@@ -86,10 +86,20 @@ begin
     'client', (select jsonb_build_object(
       'id',c.id,'name',c.name,'email',c.email,'phone',c.phone,'company',c.company)
       from public.clients c where c.id=v_project.client_id and c.user_id=v_project.user_id),
+    -- can_respond mirrors every condition portal_respond_to_budget enforces.
+    -- The reader also lists budgets linked only by client, which that writer
+    -- refuses, so a link-wide capability alone would still offer dead buttons.
     'budgets', (select coalesce(jsonb_agg(jsonb_build_object(
       'id',b.id,'budget_number',b.budget_number,'title',b.title,
       'service_type',b.service_type,'status',b.status,'subtotal',b.subtotal,
-      'iva_amount',b.iva_amount,'total',b.total,'created_at',b.created_at)
+      'iva_amount',b.iva_amount,'total',b.total,'created_at',b.created_at,
+      'can_respond', v_can_budgets
+        -- is not distinct from: a client-linked budget has a null project_id,
+        -- and "=" would make the whole flag null instead of false.
+        and b.project_id is not distinct from v_project.id
+        and b.status in ('enviado','sent')
+        and exists (select 1 from public.document_versions dv
+          where dv.entity_type='budget' and dv.entity_id=b.id and dv.version=b.version))
       order by b.created_at desc,b.id),'[]'::jsonb)
       from public.budgets b where b.user_id=v_project.user_id and b.deleted_at is null
       and (b.project_id=v_project.id or

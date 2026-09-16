@@ -48,20 +48,31 @@ test("portal link validates without exposing other links", { skip: !enabled, tim
   const legacy = "77777777-7777-4777-8777-777777777777";
   const ownChange = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   const foreignChange = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const ownClient = "99999999-9999-4999-8999-999999999999";
   await db.query("insert into auth.users(id) values($1),($2)", [owner, other]);
-  await db.query(`insert into public.projects(id,user_id,access_token,name)
-    values($1,$2,$3,'Owner project'),($4,$5,$6,'Other project')`,
-    [project, owner, legacy, foreignProject, other, "88888888-8888-4888-8888-888888888888"]);
+  await db.query("insert into public.clients(id,user_id,name) values($1,$2,'Owner client')",
+    [ownClient, owner]);
+  await db.query(`insert into public.projects(id,user_id,access_token,name,client_id)
+    values($1,$2,$3,'Owner project',$7),($4,$5,$6,'Other project',null)`,
+    [project, owner, legacy, foreignProject, other, "88888888-8888-4888-8888-888888888888", ownClient]);
   await db.query(`insert into public.portal_tokens(project_id,token,created_by)
     values($1,$2,$3),($4,$5,$6)`,
     [project, ownToken, owner, foreignProject, foreignToken, other]);
   const sentBudget = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
   const draftBudget = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
-  await db.query(`insert into public.budgets(id,user_id,project_id,title,status)
-    values($1,$2,$3,'Owner budget','enviado'),($4,$5,$6,'Owner draft','borrador'),
-      ($7,$8,$9,'Other budget','enviado')`,
+  // Production's shape: most budgets carry no project and reach the portal only
+  // through the client fallback, which portal_respond_to_budget refuses.
+  const clientOnlyBudget = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+  await db.query(`insert into public.budgets(id,user_id,project_id,client_id,title,status)
+    values($1,$2,$3,null,'Owner budget','enviado'),($4,$5,$6,null,'Owner draft','borrador'),
+      ($7,$8,null,$9,'Client-only budget','enviado'),
+      ($10,$11,$12,null,'Other budget','enviado')`,
     [sentBudget, owner, project, draftBudget, owner, project,
+      clientOnlyBudget, owner, ownClient,
       "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", other, foreignProject]);
+  // Only the project-linked budget has the finalized document the writer demands.
+  await db.query(`insert into public.document_versions(entity_type,entity_id,version)
+    values('budget',$1,1),('budget',$2,1)`, [sentBudget, clientOnlyBudget]);
   await db.query(`insert into public.project_changes(id,user_id,project_id,title,status)
     values($1,$2,$3,'Owner change','proposed'),($4,$5,$6,'Other change','proposed')`,
     [ownChange, owner, project, foreignChange, other, foreignProject]);
@@ -99,7 +110,8 @@ test("portal link validates without exposing other links", { skip: !enabled, tim
   await t.test("a presented token reads only its project and never echoes a secret", async () => {
     const data = await snapshot(ownToken);
     assert.equal(data.project.id, project);
-    assert.deepEqual(data.budgets.map((b) => b.title).sort(), ["Owner budget", "Owner draft"]);
+    assert.deepEqual(data.budgets.map((b) => b.title).sort(),
+      ["Client-only budget", "Owner budget", "Owner draft"]);
     assert.equal(data.invoices.length, 0);
     assert.equal(data.payments.length, 0);
     assert.equal(data.changes.length, 1);
@@ -125,6 +137,31 @@ test("portal link validates without exposing other links", { skip: !enabled, tim
       p_token text, p_budget_id uuid, p_decision text, p_accepted_by_name text)
       returns jsonb language sql as $stub$ select null::jsonb $stub$`);
     assert.deepEqual(await caps(ownToken), { respond_budgets: true, respond_changes: true });
+    await db.query("drop function public.portal_respond_to_budget(text,uuid,text,text)");
+    await db.query(`update public.portal_tokens set permissions='["read"]' where token=$1`, [ownToken]);
+  });
+  await t.test("can_respond repeats every condition the budget writer checks", async () => {
+    const byTitle = async (link) => Object.fromEntries(
+      (await snapshot(link)).budgets.map((b) => [b.title, b.can_respond]));
+    // Without the capability nothing is answerable, however good the budget is.
+    assert.deepEqual(await byTitle(ownToken), {
+      "Owner budget": false, "Owner draft": false, "Client-only budget": false });
+    await db.query(`update public.portal_tokens set permissions='["read","approve_budgets"]'
+      where token=$1`, [ownToken]);
+    await db.query(`create function public.portal_respond_to_budget(
+      p_token text, p_budget_id uuid, p_decision text, p_accepted_by_name text)
+      returns jsonb language sql as $stub$ select null::jsonb $stub$`);
+    // Only the sent, project-linked, finalized budget qualifies. The client-only
+    // one is listed but unanswerable: the writer matches on project_id.
+    assert.deepEqual(await byTitle(ownToken), {
+      "Owner budget": true, "Owner draft": false, "Client-only budget": false });
+    // Drop the finalized document and the same budget stops qualifying.
+    await db.query("delete from public.document_versions where entity_id=$1", [sentBudget]);
+    assert.equal((await byTitle(ownToken))["Owner budget"], false);
+    await db.query(`insert into public.document_versions(entity_type,entity_id,version)
+      values('budget',$1,1)`, [sentBudget]);
+    // A legacy link never answers budgets, even for a qualifying one.
+    assert.equal((await byTitle(legacy))["Owner budget"], false);
     await db.query("drop function public.portal_respond_to_budget(text,uuid,text,text)");
     await db.query(`update public.portal_tokens set permissions='["read"]' where token=$1`, [ownToken]);
   });

@@ -40,6 +40,8 @@ interface Budget {
   iva_amount: number;
   total: number;
   created_at: string;
+  // Decided by the database, which knows what its writer will accept.
+  can_respond?: boolean;
 }
 
 interface Invoice {
@@ -109,7 +111,6 @@ const budgetStatusMap: Record<string, { label: string; color: string }> = {
   rechazado: { label: "Rechazado", color: "bg-red-900/30 text-red-300" },
   rejected: { label: "Rechazado", color: "bg-red-900/30 text-red-300" },
 };
-const BUDGET_ANSWERABLE = ["enviado", "sent"];
 const BUDGET_ACCEPTED = ["aceptado", "accepted"];
 const changeStatusMap: Record<string, { label: string; color: string }> = {
   proposed: { label: "Propuesto", color: "bg-blue-900/30 text-blue-300" },
@@ -148,8 +149,10 @@ function fmtDate(d: string | null) {
 
 type PortalTab = "estado" | "presupuestos" | "cambios" | "facturas";
 
+// Changes need only a link-wide flag: the snapshot lists exactly the changes
+// portal_respond_to_change accepts. Budgets do not — the snapshot also lists
+// budgets linked only by client — so each budget carries its own can_respond.
 interface PortalCapabilities {
-  respond_budgets: boolean;
   respond_changes: boolean;
 }
 
@@ -187,7 +190,7 @@ export default function ClientPortalPage() {
   // Reported by the database, never assumed: a button is offered only when the
   // link actually carries the capability and the writer exists.
   const [capabilities, setCapabilities] = useState<PortalCapabilities>({
-    respond_budgets: false, respond_changes: false,
+    respond_changes: false,
   });
 
   useEffect(() => { loadPortal(); }, []);
@@ -206,10 +209,7 @@ export default function ClientPortalPage() {
         return;
       }
       const caps = (data.capabilities ?? {}) as Partial<PortalCapabilities>;
-      setCapabilities({
-        respond_budgets: caps.respond_budgets === true,
-        respond_changes: caps.respond_changes === true,
-      });
+      setCapabilities({ respond_changes: caps.respond_changes === true });
       setProject(data.project as Project);
       setClient((data.client as Client | null) ?? null);
       setBudgets((data.budgets as Budget[]) ?? []);
@@ -228,7 +228,7 @@ export default function ClientPortalPage() {
   // migration has not run. Both writers live in the database, so neither action
   // is offered here.
   async function loadLegacyPortal() {
-    setCapabilities({ respond_budgets: false, respond_changes: false });
+    setCapabilities({ respond_changes: false });
     let proj: Project | null = null;
     const { data: portalToken } = await supabase.from("portal_tokens")
       .select("project_id").eq("token", token).eq("is_active", true).single();
@@ -501,7 +501,7 @@ export default function ClientPortalPage() {
               <div className="divide-y divide-[var(--color-navy-700)]">
                 {budgets.map((b) => {
                   const st = budgetStatusMap[b.status] || { label: b.status, color: "bg-gray-700 text-gray-300" };
-                  const canAct = capabilities.respond_budgets && BUDGET_ANSWERABLE.includes(b.status);
+                  const canAct = b.can_respond === true;
                   const isLoading = actionLoading === b.id;
                   return (
                     <div key={b.id} className="p-5">

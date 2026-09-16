@@ -14,7 +14,13 @@ alter table public.budgets add column project_id uuid references public.projects
   add column budget_number text,
   add column service_type text, add column subtotal numeric,
   add column iva_amount numeric, add column total numeric,
-  add column viewed_at timestamptz;
+  add column viewed_at timestamptz,
+  add column version integer not null default 1;
+-- can_respond repeats the finalized-document check portal_respond_to_budget makes.
+create table public.document_versions (
+  id uuid primary key default gen_random_uuid(),
+  entity_type text not null, entity_id uuid not null, version integer not null,
+  snapshot jsonb, changed_by uuid references auth.users(id), change_summary text);
 create table public.invoices (
   id uuid primary key, user_id uuid not null references auth.users(id),
   project_id uuid references public.projects(id),client_id uuid references public.clients(id),

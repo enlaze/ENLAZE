@@ -52,6 +52,15 @@ esa capacidad, de modo que nunca ofrece una acción que luego sería rechazada:
   heredado nunca puede responder presupuestos porque esa función de E2 requiere
   fila en `portal_tokens`.
 
+Para presupuestos, la capacidad de enlace no basta: el lector también lista
+presupuestos atados solo por cliente, que `portal_respond_to_budget` rechaza
+porque compara `budgets.project_id` con el proyecto del token. En producción eso
+son 5 de los 7 presupuestos visibles. Por eso cada presupuesto lleva su propio
+`can_respond`, que repite las cinco condiciones del escritor —capacidad, proyecto,
+estado `enviado`/`sent` y versión documental finalizada— y el portal solo dibuja
+el botón con esa señal. Para cambios no hace falta: el snapshot lista exactamente
+los que `portal_respond_to_change` acepta.
+
 ### Sin fallback silencioso
 
 El portal ya no escribe nunca directamente sobre `budgets` ni sobre
@@ -89,8 +98,12 @@ contabilidad que antes hacía el lector con políticas abiertas:
   cambio (`loadPortal` usado antes de declararse). El repo arrastra 219 errores de
   lint previos, así que no es una puerta limpia; la de CI es `tsc`.
 - Banco PostgreSQL 17.11 desechable (cluster local por socket, marcador
-  `budget_revision_rpcs_2f2`, sin TCP): **8 PASS**, incluidas las pruebas nuevas
-  de capacidades y de contabilidad de accesos.
+  `budget_revision_rpcs_2f2`, sin TCP): **9 PASS**, incluidas las pruebas nuevas
+  de capacidades, contabilidad de accesos y `can_respond`.
+
+La prueba de `can_respond` encontró un fallo real antes de subirlo: con
+`project_id` nulo, `b.project_id = v_project.id` devolvía `null` y no `false`, así
+que el campo salía como `null` en el JSON. Corregido con `is not distinct from`.
 
 Dos defectos del propio banco salieron a la luz y se corrigieron:
 
@@ -117,3 +130,9 @@ Pendiente antes de fusionar:
 - Queda abierta una decisión de producto: el snapshot devuelve también los
   presupuestos en `borrador`, por lo que el cliente los ve. Es comportamiento
   previo, no una regresión de esta rama, y no se ha cambiado aquí.
+
+Las dos decisiones que bloquean el despliegue —visibilidad de borradores y
+respuesta a presupuestos desde enlaces heredados— están documentadas con datos de
+producción y opciones en `DECISIONES-PORTAL-20260916.md`. El preflight de E2,
+corregido tras confirmar que E1 ya está aplicada, está en
+`PREFLIGHT-E2-20260916.md`.
