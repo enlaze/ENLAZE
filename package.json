@@ -21,6 +21,8 @@
     "test:replace-budget-items-integration": "node --test __tests__/replace-budget-items.integration.test.mjs",
     "test:budget-revision-conflict-integration": "node --test __tests__/budget-revision-conflict.integration.test.mjs",
     "test:budgets-lock-version": "node --test __tests__/budgets-lock-version-migration.test.mjs",
+    "test:budget-revision-rpcs": "node --test __tests__/budget-revision-rpcs-migration.test.mjs",
+    "test:budget-revision-rpcs-integration": "node --test __tests__/budget-revision-rpcs.integration.test.mjs && node --test __tests__/budget-revision-rpcs-http.integration.test.mjs",
     "test:budgets-lock-version-integration": "node --test __tests__/budgets-lock-version.integration.test.mjs",
     "test:budget-items-writer": "node --import tsx --test __tests__/budget-items-writer.test.mjs __tests__/budget-generate-writer-flow.test.mjs",
     "test:budget-finalization": "node --import tsx --test __tests__/budget-finalization.test.mjs",
