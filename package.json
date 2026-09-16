@@ -22,6 +22,7 @@
     "test:budget-revision-conflict-integration": "node --test __tests__/budget-revision-conflict.integration.test.mjs",
     "test:budgets-lock-version": "node --test __tests__/budgets-lock-version-migration.test.mjs",
     "test:budgets-lock-version-integration": "node --test __tests__/budgets-lock-version.integration.test.mjs",
+    "test:portal-token-access": "node --test __tests__/portal-token-access.integration.test.mjs",
     "test:budget-items-writer": "node --import tsx --test __tests__/budget-items-writer.test.mjs __tests__/budget-generate-writer-flow.test.mjs",
     "test:budget-finalization": "node --import tsx --test __tests__/budget-finalization.test.mjs",
     "test:scheduled": "node --import tsx --test __tests__/scheduled-messages.test.mjs",
