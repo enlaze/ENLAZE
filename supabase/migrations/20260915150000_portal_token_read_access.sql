@@ -22,6 +22,7 @@ declare
   v_now timestamptz := now();
   v_can_changes boolean;
   v_can_budgets boolean;
+  v_client_single boolean;
 begin
   -- A malformed or unknown link must have the same externally visible result.
   begin
@@ -48,6 +49,19 @@ begin
   end if;
   if not found then return null; end if;
 
+  -- A budget with no project reaches a portal only by sharing the link's client.
+  -- When that client has one project the link can only mean that project; when it
+  -- has several there is nothing in the data that says which, and showing it in
+  -- all of them attributes the budget to projects it may have nothing to do with.
+  -- So it is shown only in the unambiguous case. Approved 2026-09-16; the effect
+  -- is measured in docs/fase2/CIERRE-DECISIONES-PR14.md. Once such a budget gets
+  -- a project_id it is visible again through the direct branch.
+  v_client_single := v_project.client_id is not null
+    and (select count(*) from public.projects q
+      where q.client_id = v_project.client_id
+        and q.user_id = v_project.user_id
+        and q.deleted_at is null) = 1;
+
   -- Capabilities are reported so the portal never offers an action the database
   -- would refuse. A legacy access_token answers changes (it predates the
   -- permission model) but can never answer budgets, which require a token row.
@@ -71,8 +85,10 @@ begin
   update public.budgets set viewed_at = v_now
     where user_id = v_project.user_id and deleted_at is null and viewed_at is null
       and status in ('enviado','sent')
+      -- Same visibility rule as the list below: stamping a budget the client was
+      -- never shown would put a false "Visualizado" on the acceptance timeline.
       and (project_id = v_project.id or
-        (v_project.client_id is not null and project_id is null and client_id = v_project.client_id));
+        (v_client_single and project_id is null and client_id = v_project.client_id));
 
   return jsonb_build_object(
     'capabilities', jsonb_build_object(
@@ -107,7 +123,7 @@ begin
       and b.status in ('pendiente','pending','enviado','sent',
         'aceptado','accepted','rechazado','rejected')
       and (b.project_id=v_project.id or
-        (v_project.client_id is not null and b.project_id is null and b.client_id=v_project.client_id))),
+        (v_client_single and b.project_id is null and b.client_id=v_project.client_id))),
     'invoices', (select coalesce(jsonb_agg(jsonb_build_object(
       'id',i.id,'invoice_number',i.invoice_number,'invoice_date',i.invoice_date,
       'base_amount',i.base_amount,'iva_amount',i.iva_amount,

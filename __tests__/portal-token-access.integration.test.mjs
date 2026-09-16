@@ -54,8 +54,12 @@ test("portal link validates without exposing other links", { skip: !enabled, tim
   const foreignChange = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
   const ownClient = "99999999-9999-4999-8999-999999999999";
   await db.query("insert into auth.users(id) values($1),($2)", [owner, other]);
-  await db.query("insert into public.clients(id,user_id,name) values($1,$2,'Owner client')",
-    [ownClient, owner]);
+  // A second client of the same owner, with no project of its own. Nothing of
+  // this client may ever surface through the first client's link.
+  const otherClient = "9b9b9b9b-9b9b-4b9b-8b9b-9b9b9b9b9b9b";
+  await db.query(`insert into public.clients(id,user_id,name)
+    values($1,$2,'Owner client'),($3,$4,'Another client of the same owner')`,
+    [ownClient, owner, otherClient, owner]);
   await db.query(`insert into public.projects(id,user_id,access_token,name,client_id)
     values($1,$2,$3,'Owner project',$7),($4,$5,$6,'Other project',null)`,
     [project, owner, legacy, foreignProject, other, "88888888-8888-4888-8888-888888888888", ownClient]);
@@ -72,10 +76,12 @@ test("portal link validates without exposing other links", { skip: !enabled, tim
     values($1,$2,$3,null,'Owner budget','enviado'),($4,$5,$6,null,'Owner draft','borrador'),
       ($7,$8,null,$9,'Client-only budget','enviado'),
       ($10,$11,$12,null,'Unknown state budget','plantilla'),
-      ($13,$14,$15,null,'Other budget','enviado')`,
+      ($13,$14,null,$15,'Another client budget','enviado'),
+      ($16,$17,$18,null,'Other budget','enviado')`,
     [sentBudget, owner, project, draftBudget, owner, project,
       clientOnlyBudget, owner, ownClient,
       oddBudget, owner, project,
+      "1c1c1c1c-1c1c-4c1c-8c1c-1c1c1c1c1c1c", owner, otherClient,
       "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", other, foreignProject]);
   // Only the project-linked budget has the finalized document the writer demands.
   await db.query(`insert into public.document_versions(entity_type,entity_id,version)
@@ -249,6 +255,45 @@ test("portal link validates without exposing other links", { skip: !enabled, tim
     assert.equal(Number((await db.query(
       "select count(*)::integer as n from public.budgets where id in ($1,$2)",
       [draftBudget, oddBudget])).rows[0].n), 2);
+  });
+  await t.test("a project-less budget shows only where its client is unambiguous", async () => {
+    const titles = async (link) => (await snapshot(link)).budgets.map((b) => b.title);
+    const viewed = async (id) => (await db.query(
+      "select viewed_at from public.budgets where id=$1", [id])).rows[0].viewed_at;
+
+    // The rule never reaches across clients: this one belongs to another client
+    // of the same owner and has no project, so no link of this client may show it.
+    assert.ok(!(await titles(ownToken)).includes("Another client budget"));
+    assert.ok(!(await titles(legacy)).includes("Another client budget"));
+    assert.equal(await viewed("1c1c1c1c-1c1c-4c1c-8c1c-1c1c1c1c1c1c"), null);
+    // Nor across owners: the other owner's project and budget stay invisible.
+    assert.doesNotMatch(JSON.stringify(await snapshot(ownToken)), /Other project|Other budget/);
+
+    // One project for this client, so the link can only mean that project.
+    assert.ok((await titles(ownToken)).includes("Client-only budget"));
+
+    await db.query("savepoint ambiguous");
+    try {
+      await db.query(`insert into public.projects(id,user_id,name,client_id)
+        values($1,$2,'Second project, same client',$3)`,
+        ["2d2d2d2d-2d2d-4d2d-8d2d-2d2d2d2d2d2d", owner, ownClient]);
+      const after = await titles(ownToken);
+      assert.ok(!after.includes("Client-only budget"),
+        "with two projects for the client there is nothing that says which one");
+      // The point of the rule is attribution, not hiding: what belongs to this
+      // project by project_id is untouched, so the portal is not emptied.
+      assert.ok(after.includes("Owner budget"));
+      assert.equal((await snapshot(ownToken)).changes.length, 1);
+      // And a budget the client is no longer shown must not be stamped as seen.
+      await db.query("update public.budgets set viewed_at=null where id=$1", [clientOnlyBudget]);
+      await snapshot(ownToken);
+      assert.equal(await viewed(clientOnlyBudget), null,
+        "a withheld budget must not get a Visualizado stamp");
+    } finally {
+      await db.query("rollback to savepoint ambiguous");
+    }
+    // Rolled back: the unambiguous case is intact for the rest of the suite.
+    assert.ok((await titles(ownToken)).includes("Client-only budget"));
   });
   await t.test("capabilities never offer an action the database would refuse", async () => {
     const caps = async (link) => (await snapshot(link)).capabilities;

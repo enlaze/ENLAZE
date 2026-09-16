@@ -136,6 +136,15 @@ Pendiente antes de fusionar:
   vacíos y los tres son del propio titular.
 - **Resuelto el 2026-09-16:** la respuesta a presupuestos desde enlaces heredados
   no se habilita todavía. No hizo falta cambiar nada: es lo que la rama ya hacía.
+- **Resuelto el 2026-09-16:** un presupuesto sin `project_id` se muestra solo si el
+  cliente del enlace tiene un único proyecto vivo. Cuando tiene varios no hay dato
+  que diga a cuál pertenece, y enseñarlo en todos lo atribuía a proyectos que
+  pueden no tener nada que ver. Tras la regla quedan 3 pares visibles, sin cruzar
+  cliente ni propietario, y ningún portal pierde un presupuesto atado a su
+  proyecto. Las **facturas** conservan la vía por cliente sin esta regla: 1 de las
+  2 vivas se ve desde más de un enlace. Pendiente de decisión propia.
+- **Resuelto el 2026-09-16:** un enlace heredado conserva lectura y respuesta a
+  cambios de obra, y no gana ninguna capacidad sobre presupuestos.
 
 Las dos decisiones que bloquean el despliegue —visibilidad de borradores y
 respuesta a presupuestos desde enlaces heredados— están documentadas con datos de

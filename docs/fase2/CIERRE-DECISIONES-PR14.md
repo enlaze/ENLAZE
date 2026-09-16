@@ -101,16 +101,41 @@ Detalle por enlace de la opción 2: «reforma» conserva 1, «reforma local» co
 2, «prueba» y «Pintura casa María López» pasan de 1 a 0, y los tres portales del
 propio titular siguen en 0 por el filtro de borradores ya aprobado.
 
-#### Recomendación
+#### Decisión tomada: opción 2 (aprobada el 2026-09-16)
 
-**Opción 2.** Es la única que elimina la clase entera con pérdida mínima y sin
-migrar datos, y no prejuzga la asignación de proyecto: cuando esos presupuestos
-tengan `project_id`, volverán a verse por la vía directa. Es una condición en el
-snapshot y queda cubierta por el banco.
+Implementada en `20260915150000`. `portal_read_snapshot` calcula una vez por
+lectura si el cliente del enlace tiene exactamente un proyecto vivo del mismo
+propietario, y solo en ese caso muestra presupuestos sin `project_id`. La misma
+condición gobierna el sellado de `viewed_at`, porque marcar como «Visualizado» un
+presupuesto que el cliente no llegó a ver falsearía el timeline de aceptación.
 
-Si preferís no tocar `150000` otra vez, la opción 1 es defendible **porque no hay
-fuga entre clientes**; en ese caso conviene registrar el caso de «Maria» como
-deuda conocida.
+Efecto medido contra producción con la regla ya escrita:
+
+| Proyecto | Cliente único | Visibles tras la regla | Detalle |
+|---|---|---:|---|
+| reforma | sí | 1 | PRE-2026-53806 (aceptado) |
+| reforma local | sí | 2 | PRE-2026-14306 (pendiente), PRE-2026-19087 (aceptado) |
+| prueba | no | 0 | — |
+| Pintura casa María López | no | 0 | — |
+| prueba 2 / prueba 3 / Reforma vivienda integral | no | 0 | ya vacíos por el filtro de borradores |
+
+Total: 3 pares, 3 presupuestos distintos, **0 cruces de cliente y 0 de
+propietario**. Los dos portales que pasan a 0 son los de «Maria», y lo único que
+contenían era el presupuesto ambiguo PRE-2026-18088; **ningún portal pierde un
+presupuesto atribuido directamente a su proyecto**. «reforma» y «reforma local»
+conservan los suyos, incluidos dos aceptados que la opción 3 habría escondido.
+
+PRE-2026-18088 vuelve a verse en cuanto se le asigne un `project_id`: la regla no
+prejuzga esa asignación, solo deja de adivinarla.
+
+#### Asimetría medida que queda fuera de alcance
+
+El ajuste se limitó a presupuestos, como se pidió. **Las facturas conservan la vía
+por cliente sin la regla**: 2 facturas vivas, ambas sin `project_id`, 3 pares
+visibles, todos por la vía cliente, y **1 factura visible desde más de un enlace**.
+Misma clase de mala atribución, mismo argumento de que no cruza cliente ni
+propietario, y misma solución de una línea si se decide. No es un fallo nuevo:
+es el alcance que no se tocó. Requiere su propia decisión.
 
 ### C2. Qué puede hacer un enlace heredado
 
@@ -138,11 +163,12 @@ legítimas:
   entonces los siete enlaces vivos se quedan sin aprobar extras hasta que exista
   emisión de tokens modernos.
 
-**Recomendación: mantenerla en `150000`.** Aplicar la migración ya es una mejora
-estricta sobre el estado actual, y retirar la capacidad se puede hacer después sin
-prisa, junto con la emisión. Retirarla ahora dejaría a los clientes sin una
-función que hoy tienen, para cerrar un riesgo que la propia migración ya reduce
-drásticamente.
+**Decisión tomada: mantenerla (aprobada el 2026-09-16).** No requiere ningún
+cambio de código: es lo que `150000` ya hace. Un enlace heredado conserva lectura
+y respuesta a cambios de obra, restringida por la migración a quien posea el
+enlace válido de ese proyecto, y **no gana ninguna capacidad sobre presupuestos**.
+No se concede nada retroactivo: la migración reduce el alcance de una política que
+hoy es `USING(true)`.
 
 ### C3. No se reabre
 
@@ -153,9 +179,10 @@ estados visibles). No he encontrado evidencia nueva que justifique reabrirla.
 
 ## Orden propuesto
 
-1. Responder C1 y C2.
-2. Si C1 = opción 2, enmendar `150000` en este PR y volver a pasar el banco.
-3. Fusionar #14.
+1. ~~Responder C1 y C2.~~ Resueltas el 2026-09-16: C1 opción 2, C2 mantener.
+2. ~~Enmendar `150000`.~~ Hecho; banco 13/13 y dos mutantes que fallan la suite.
+3. Revisar el CI del commit nuevo antes de cualquier decisión de integración.
+4. Fusionar #14.
 4. Aplicar **`140000` sola** y comprobar que el panel sigue listando enlaces y que
    el borrado de cuenta sigue funcionando.
 5. Aplicar `150000`. El portal vuelve en lectura, con respuesta a cambios y con
