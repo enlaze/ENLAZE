@@ -130,9 +130,12 @@ begin
       'total_amount',i.total_amount,'category',i.category,
       'payment_status',i.payment_status)
       order by i.invoice_date desc,i.id),'[]'::jsonb)
+      -- Same rule as the budgets above, approved for invoices on 2026-09-16: an
+      -- invoice carrying a project belongs to that project alone, and one without
+      -- is attributed to the link's project only when the client leaves no doubt.
       from public.invoices i where i.user_id=v_project.user_id and i.deleted_at is null
       and (i.project_id=v_project.id or
-        (v_project.client_id is not null and i.project_id is null and i.client_id=v_project.client_id))),
+        (v_client_single and i.project_id is null and i.client_id=v_project.client_id))),
     'payments', (select coalesce(jsonb_agg(jsonb_build_object(
       'id',pay.id,'amount',pay.amount,'payment_date',pay.payment_date,
       'payment_method',pay.payment_method,'concept',pay.concept)

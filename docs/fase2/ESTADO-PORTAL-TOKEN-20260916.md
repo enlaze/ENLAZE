@@ -141,8 +141,12 @@ Pendiente antes de fusionar:
   que diga a cuál pertenece, y enseñarlo en todos lo atribuía a proyectos que
   pueden no tener nada que ver. Tras la regla quedan 3 pares visibles, sin cruzar
   cliente ni propietario, y ningún portal pierde un presupuesto atado a su
-  proyecto. Las **facturas** conservan la vía por cliente sin esta regla: 1 de las
-  2 vivas se ve desde más de un enlace. Pendiente de decisión propia.
+  proyecto.
+- **Resuelto el 2026-09-16:** la misma regla se aplica a las **facturas**. De las 2
+  vivas, ambas sin proyecto, la única que llegaba al portal (`031-0011-983717`,
+  62,51 €, ya cobrada) se veía desde tres enlaces del propio titular y ahora no se
+  ve en ninguno; la otra no tiene cliente y nunca fue visible. 0 cruces de cliente
+  y 0 de propietario. Una factura con proyecto sigue viéndose solo en su proyecto.
 - **Resuelto el 2026-09-16:** un enlace heredado conserva lectura y respuesta a
   cambios de obra, y no gana ninguna capacidad sobre presupuestos.
 

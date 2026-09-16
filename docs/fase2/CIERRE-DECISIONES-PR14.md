@@ -128,14 +128,24 @@ conservan los suyos, incluidos dos aceptados que la opción 3 habría escondido.
 PRE-2026-18088 vuelve a verse en cuanto se le asigne un `project_id`: la regla no
 prejuzga esa asignación, solo deja de adivinarla.
 
-#### Asimetría medida que queda fuera de alcance
+#### Facturas: misma regla, aprobada después
 
-El ajuste se limitó a presupuestos, como se pidió. **Las facturas conservan la vía
-por cliente sin la regla**: 2 facturas vivas, ambas sin `project_id`, 3 pares
-visibles, todos por la vía cliente, y **1 factura visible desde más de un enlace**.
-Misma clase de mala atribución, mismo argumento de que no cruza cliente ni
-propietario, y misma solución de una línea si se decide. No es un fallo nuevo:
-es el alcance que no se tocó. Requiere su propia decisión.
+La asimetría se señaló al aplicar la regla a presupuestos y se resolvió el mismo
+día extendiéndola a facturas: una factura sin `project_id` se muestra solo si el
+cliente del enlace tiene exactamente un proyecto vivo del mismo propietario, y una
+factura con `project_id` sigue viéndose solo en su proyecto.
+
+Efecto medido con las dos facturas vivas, ambas sin `project_id`:
+
+| Factura | Importe | Estado | Cliente | Antes | Después |
+|---|---:|---|---|---|---|
+| `031-0011-983717` | 62,51 € | `paid` | Alvaro Miralles (3 proyectos, los 3 con enlace) | visible en «prueba 2», «prueba 3» y «Reforma vivienda integral» | **oculta en las tres** |
+| *(sin número)* | 0,00 € | `pending` | sin cliente | nunca visible | sin cambio |
+
+Total: 3 pares antes, **0 después**; 1 factura en varios enlaces antes, **0
+después**; 0 cruces de cliente y 0 de propietario. La única factura afectada es de
+la ficha de cliente del propio titular, así que **ningún cliente real pierde
+nada**, y vuelve a verse en cuanto se le asigne un proyecto.
 
 ### C2. Qué puede hacer un enlace heredado
 

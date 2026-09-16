@@ -86,6 +86,17 @@ test("portal link validates without exposing other links", { skip: !enabled, tim
   // Only the project-linked budget has the finalized document the writer demands.
   await db.query(`insert into public.document_versions(entity_type,entity_id,version)
     values('budget',$1,1),('budget',$2,1)`, [sentBudget, clientOnlyBudget]);
+  // Invoices travel the same client route as budgets and follow the same rule.
+  await db.query(`insert into public.invoices
+    (id,user_id,project_id,client_id,invoice_number,invoice_date,total_amount)
+    values($1,$2,$3,null,'FAC-PROJECT','2026-09-01',1000),
+      ($4,$5,null,$6,'FAC-CLIENT','2026-09-02',2000),
+      ($7,$8,null,$9,'FAC-OTHER-CLIENT','2026-09-03',3000),
+      ($10,$11,$12,null,'FAC-FOREIGN','2026-09-04',4000)`,
+    ["3a3a3a3a-3a3a-4a3a-8a3a-3a3a3a3a3a3a", owner, project,
+     "3b3b3b3b-3b3b-4b3b-8b3b-3b3b3b3b3b3b", owner, ownClient,
+     "3c3c3c3c-3c3c-4c3c-8c3c-3c3c3c3c3c3c", owner, otherClient,
+     "3d3d3d3d-3d3d-4d3d-8d3d-3d3d3d3d3d3d", other, foreignProject]);
   await db.query(`insert into public.project_changes(id,user_id,project_id,title,status)
     values($1,$2,$3,'Owner change','proposed'),($4,$5,$6,'Other change','proposed')`,
     [ownChange, owner, project, foreignChange, other, foreignProject]);
@@ -235,7 +246,9 @@ test("portal link validates without exposing other links", { skip: !enabled, tim
     // The draft and the unknown-state budget are withheld from the client.
     assert.deepEqual(data.budgets.map((b) => b.title).sort(),
       ["Client-only budget", "Owner budget"]);
-    assert.equal(data.invoices.length, 0);
+    // Its own invoice plus the unambiguous client one; nothing of another client.
+    assert.deepEqual(data.invoices.map((i) => i.invoice_number).sort(),
+      ["FAC-CLIENT", "FAC-PROJECT"]);
     assert.equal(data.payments.length, 0);
     assert.equal(data.changes.length, 1);
     assert.equal(data.changes[0].title, "Owner change");
@@ -294,6 +307,35 @@ test("portal link validates without exposing other links", { skip: !enabled, tim
     }
     // Rolled back: the unambiguous case is intact for the rest of the suite.
     assert.ok((await titles(ownToken)).includes("Client-only budget"));
+  });
+  await t.test("an invoice follows the same project rule as a budget", async () => {
+    const invoices = async (link) => (await snapshot(link)).invoices.map((i) => i.invoice_number);
+    const secondProject = "4e4e4e4e-4e4e-4e4e-8e4e-4e4e4e4e4e4e";
+    const secondToken = "4f4f4f4f-4f4f-4f4f-8f4f-4f4f4f4f4f4f";
+
+    // One project for this client, so the project-less invoice is unambiguous.
+    assert.deepEqual((await invoices(ownToken)).sort(), ["FAC-CLIENT", "FAC-PROJECT"]);
+    // Never across clients, never across owners, in either direction.
+    assert.ok(!(await invoices(ownToken)).includes("FAC-OTHER-CLIENT"));
+    assert.ok(!(await invoices(ownToken)).includes("FAC-FOREIGN"));
+    assert.deepEqual(await invoices(foreignToken), ["FAC-FOREIGN"]);
+
+    await db.query("savepoint ambiguous_invoice");
+    try {
+      await db.query(`insert into public.projects(id,user_id,name,client_id)
+        values($1,$2,'Second project, same client',$3)`, [secondProject, owner, ownClient]);
+      await db.query(`insert into public.portal_tokens(project_id,token,created_by)
+        values($1,$2,$3)`, [secondProject, secondToken, owner]);
+      // The ambiguous invoice must appear in neither link — not in both.
+      assert.ok(!(await invoices(ownToken)).includes("FAC-CLIENT"));
+      assert.ok(!(await invoices(secondToken)).includes("FAC-CLIENT"));
+      // An invoice that names a project stays in that project, and only there.
+      assert.deepEqual(await invoices(ownToken), ["FAC-PROJECT"]);
+      assert.deepEqual(await invoices(secondToken), []);
+    } finally {
+      await db.query("rollback to savepoint ambiguous_invoice");
+    }
+    assert.deepEqual((await invoices(ownToken)).sort(), ["FAC-CLIENT", "FAC-PROJECT"]);
   });
   await t.test("capabilities never offer an action the database would refuse", async () => {
     const caps = async (link) => (await snapshot(link)).capabilities;
