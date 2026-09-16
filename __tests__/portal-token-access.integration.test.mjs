@@ -33,7 +33,11 @@ test("portal link validates without exposing other links", { skip: !enabled, tim
   assert.equal(Math.floor(identity.version / 10000), 17);
   assert.equal(identity.superuser, true);
   assert.equal(identity.other_dbs, 0);
-  assert.ok(socket ? identity.address === null : identity.address === "127.0.0.1");
+  // Docker's loopback-published port reaches PostgreSQL through its bridge,
+  // so inet_server_addr() is the container IP, not necessarily 127.0.0.1.
+  // The exact client URL, database name and cluster marker are checked above.
+  if (socket) assert.equal(identity.address, null);
+  else assert.notEqual(identity.address, null);
 
   await db.query("begin");
   await db.query(sql("__tests__/support/bootstrap-budget-schema.sql"));
