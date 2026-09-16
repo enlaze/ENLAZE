@@ -1,0 +1,58 @@
+name: Portal token access integration
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "app/portal/[token]/page.tsx"
+      - "supabase/migrations/*portal_token_read_access.sql"
+      - "__tests__/portal-token-access.integration.test.mjs"
+      - "__tests__/support/portal-token-access-schema.sql"
+      - ".github/workflows/portal-token-access-integration.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RUN_PORTAL_TOKEN_INTEGRATION: "1"
+      PORTAL_TEST_ACK: DISPOSABLE_CLUSTER
+      TEST_DATABASE_URL: postgres://postgres:e2_disposable_database_only@127.0.0.1:55435/enlaze_revision_rpcs_test
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Typecheck portal page
+        run: npx tsc --noEmit --incremental false
+      - name: Start isolated PostgreSQL 17
+        run: |
+          docker run --detach --name enlaze-portal-test-db \
+            --publish 127.0.0.1:55435:5432 \
+            --env POSTGRES_PASSWORD=e2_disposable_database_only \
+            --env POSTGRES_DB=enlaze_revision_rpcs_test \
+            --health-cmd 'pg_isready -h 127.0.0.1 -U postgres -d enlaze_revision_rpcs_test' \
+            --health-interval 2s --health-timeout 3s --health-retries 5 \
+            postgres:17 -c enlaze.test_cluster_marker=budget_revision_rpcs_2f2
+      - name: Wait for database
+        run: |
+          for attempt in $(seq 1 60); do
+            state="$(docker inspect --format '{{.State.Status}} {{.State.Health.Status}}' enlaze-portal-test-db)"
+            case "$state" in
+              'running healthy') exit 0 ;;
+              exited*|dead*) exit 1 ;;
+            esac
+            sleep 1
+          done
+          exit 1
+      - name: Test token isolation and legacy links
+        run: node --test __tests__/portal-token-access.integration.test.mjs
+      - name: Remove disposable database
+        if: always()
+        run: docker rm --force enlaze-portal-test-db || true

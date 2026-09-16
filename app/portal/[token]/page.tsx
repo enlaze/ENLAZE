@@ -160,97 +160,79 @@ export default function ClientPortalPage() {
 
   async function loadPortal() {
     try {
-      // Try portal_tokens first, then fall back to projects.access_token (legacy)
-      let proj = null;
-
-      const { data: portalToken } = await supabase
-        .from("portal_tokens")
-        .select("project_id, id")
-        .eq("token", token)
-        .eq("is_active", true)
-        .single();
-
-      if (portalToken) {
-        // Record access on portal_token (fire-and-forget)
-        supabase.from("portal_tokens").update({
-          last_accessed_at: new Date().toISOString(),
-          access_count: (portalToken as unknown as Record<string, number>).access_count
-            ? (portalToken as unknown as Record<string, number>).access_count + 1
-            : 1,
-        }).eq("id", portalToken.id).then(() => {});
-
-        const { data: p } = await supabase
-          .from("projects").select("*").eq("id", portalToken.project_id).single();
-        if (p) proj = p;
+      const { data, error } = await supabase.rpc("portal_read_snapshot", { p_token: token });
+      if (error?.code === "PGRST202") {
+        // A deployed page can precede the database migration. Preserve the
+        // previous reader only until PostgREST knows the new function.
+        await loadLegacyPortal();
+        return;
       }
-
-      // Fallback: legacy access_token on projects
-      if (!proj) {
-        const { data: p, error: pErr } = await supabase
-          .from("projects").select("*").eq("access_token", token).single();
-        if (pErr || !p) { setNotFound(true); setLoading(false); return; }
-        proj = p;
+      if (error || !data || typeof data !== "object" || !data.project) {
+        setNotFound(true);
+        return;
       }
-
-      if (!proj) { setNotFound(true); setLoading(false); return; }
-      setProject(proj);
-
-      const pid = proj.id;
-      const cid = proj.client_id;
-
-      const budgetFilter = cid
-        ? `project_id.eq.${pid},and(client_id.eq.${cid},project_id.is.null)`
-        : `project_id.eq.${pid}`;
-      const invoiceFilter = cid
-        ? `project_id.eq.${pid},and(client_id.eq.${cid},project_id.is.null)`
-        : `project_id.eq.${pid}`;
-
-      const [clientRes, budgetsRes, invoicesRes, paymentsRes, changesRes, milestonesRes] =
-        await Promise.all([
-          cid
-            ? supabase.from("clients").select("id, name, email, phone, company").eq("id", cid).single()
-            : Promise.resolve({ data: null }),
-          supabase.from("budgets")
-            .select("id, budget_number, title, service_type, status, subtotal, iva_amount, total, created_at")
-            .or(budgetFilter).order("created_at", { ascending: false }),
-          supabase.from("invoices")
-            .select("id, invoice_number, invoice_date, base_amount, iva_amount, total_amount, category, payment_status")
-            .or(invoiceFilter).order("invoice_date", { ascending: false }),
-          supabase.from("payments")
-            .select("id, amount, payment_date, payment_method, concept")
-            .eq("project_id", pid).order("payment_date", { ascending: false }),
-          supabase.from("project_changes")
-            .select("id, title, description, economic_impact, time_impact_days, status, client_approved, notes, created_at")
-            .eq("project_id", pid).order("created_at", { ascending: false }),
-          supabase.from("project_milestones")
-            .select("id, title, planned_date, actual_date, status, sort_order, notes")
-            .eq("project_id", pid).order("sort_order", { ascending: true }),
-        ]);
-
-      if (clientRes.data) setClient(clientRes.data as Client);
-      const budgetsList = (budgetsRes.data as Budget[]) || [];
-      setBudgets(budgetsList);
-      setInvoices((invoicesRes.data as Invoice[]) || []);
-      setPayments((paymentsRes.data as Payment[]) || []);
-      setChanges((changesRes.data as ProjectChange[]) || []);
-      setMilestones((milestonesRes.data as Milestone[]) || []);
-
-      // Fire-and-forget: mark un-viewed budgets as viewed_at
-      const now = new Date().toISOString();
-      const unviewedIds = budgetsList
-        .filter((b) => !(b as unknown as Record<string, unknown>).viewed_at)
-        .map((b) => b.id);
-      if (unviewedIds.length > 0) {
-        supabase.from("budgets")
-          .update({ viewed_at: now })
-          .in("id", unviewedIds)
-          .then(() => {});
-      }
+      setProject(data.project as Project);
+      setClient((data.client as Client | null) ?? null);
+      setBudgets((data.budgets as Budget[]) ?? []);
+      setInvoices((data.invoices as Invoice[]) ?? []);
+      setPayments((data.payments as Payment[]) ?? []);
+      setChanges((data.changes as ProjectChange[]) ?? []);
+      setMilestones((data.milestones as Milestone[]) ?? []);
     } catch {
       setNotFound(true);
     } finally {
       setLoading(false);
     }
+  }
+
+  async function loadLegacyPortal() {
+    let proj: Project | null = null;
+    const { data: portalToken } = await supabase.from("portal_tokens")
+      .select("project_id").eq("token", token).eq("is_active", true).single();
+    if (portalToken) {
+      const { data: p } = await supabase.from("projects")
+        .select("*").eq("id", portalToken.project_id).single();
+      proj = p as Project | null;
+    }
+    if (!proj) {
+      const { data: p } = await supabase.from("projects")
+        .select("*").eq("access_token", token).single();
+      proj = p as Project | null;
+    }
+    if (!proj) { setNotFound(true); return; }
+    setProject(proj);
+    const pid = proj.id;
+    const cid = proj.client_id;
+    const linked = cid
+      ? `project_id.eq.${pid},and(client_id.eq.${cid},project_id.is.null)`
+      : `project_id.eq.${pid}`;
+    const [clientRes, budgetsRes, invoicesRes, paymentsRes, changesRes, milestonesRes] =
+      await Promise.all([
+        cid ? supabase.from("clients")
+          .select("id,name,email,phone,company").eq("id", cid).single()
+          : Promise.resolve({ data: null }),
+        supabase.from("budgets")
+          .select("id,budget_number,title,service_type,status,subtotal,iva_amount,total,created_at")
+          .or(linked).order("created_at", { ascending: false }),
+        supabase.from("invoices")
+          .select("id,invoice_number,invoice_date,base_amount,iva_amount,total_amount,category,payment_status")
+          .or(linked).order("invoice_date", { ascending: false }),
+        supabase.from("payments")
+          .select("id,amount,payment_date,payment_method,concept")
+          .eq("project_id", pid).order("payment_date", { ascending: false }),
+        supabase.from("project_changes")
+          .select("id,title,description,economic_impact,time_impact_days,status,client_approved,notes,created_at")
+          .eq("project_id", pid).order("created_at", { ascending: false }),
+        supabase.from("project_milestones")
+          .select("id,title,planned_date,actual_date,status,sort_order,notes")
+          .eq("project_id", pid).order("sort_order", { ascending: true }),
+      ]);
+    setClient((clientRes.data as Client | null) ?? null);
+    setBudgets((budgetsRes.data as Budget[]) ?? []);
+    setInvoices((invoicesRes.data as Invoice[]) ?? []);
+    setPayments((paymentsRes.data as Payment[]) ?? []);
+    setChanges((changesRes.data as ProjectChange[]) ?? []);
+    setMilestones((milestonesRes.data as Milestone[]) ?? []);
   }
 
   /* ── Actions: Approve/Reject budget ── */
@@ -262,10 +244,22 @@ export default function ClientPortalPage() {
       ? { accepted_at: now, rejected_at: null }
       : { rejected_at: now, accepted_at: null };
 
-    const { error } = await supabase.from("budgets").update({
-      status: newStatus,
-      ...timestampFields,
-    }).eq("id", id);
+    let { error } = await supabase.rpc("portal_respond_to_budget", {
+      p_token: token,
+      p_budget_id: id,
+      p_decision: newStatus,
+      p_accepted_by_name: null,
+    });
+
+    // Keep old links usable during the staged rollout. Once the RPC exists,
+    // all budget responses go through its capability and ownership checks.
+    if (error?.code === "PGRST202") {
+      const legacy = await supabase.from("budgets").update({
+        status: newStatus,
+        ...timestampFields,
+      }).eq("id", id);
+      error = legacy.error;
+    }
     if (error) {
       toast.error("Error", { description: error.message });
     } else {
@@ -279,18 +273,25 @@ export default function ClientPortalPage() {
 
   async function handleChangeAction(id: string, approve: boolean) {
     setActionLoading(id);
-    const newStatus = approve ? "approved" : "rejected";
-    const { error } = await supabase.from("project_changes").update({
-      status: newStatus,
-      client_approved: approve,
-      approved_date: approve ? new Date().toISOString().split("T")[0] : null,
-      updated_at: new Date().toISOString(),
-    }).eq("id", id);
-    if (error) {
-      toast.error("Error", { description: error.message });
+    let { data, error } = await supabase.rpc("portal_respond_to_change", {
+      p_token: token, p_change_id: id, p_approve: approve,
+    });
+    if (error?.code === "PGRST202") {
+      // During rollout only: the database still runs the previous portal writer.
+      const status = approve ? "approved" : "rejected";
+      const legacy = await supabase.from("project_changes").update({
+        status, client_approved: approve,
+        approved_date: approve ? new Date().toISOString().split("T")[0] : null,
+        updated_at: new Date().toISOString(),
+      }).eq("id", id);
+      error = legacy.error;
+      data = error ? null : { status };
+    }
+    if (error || !data) {
+      toast.error("Error", { description: error?.message ?? "El cambio ya no está disponible para responder." });
     } else {
       setChanges((prev) => prev.map((c) =>
-        c.id === id ? { ...c, status: newStatus, client_approved: approve } : c
+        c.id === id ? { ...c, status: data.status as string, client_approved: approve } : c
       ));
       toast.success(approve ? "Cambio aprobado" : "Cambio rechazado");
     }
