@@ -98,8 +98,9 @@ contabilidad que antes hacía el lector con políticas abiertas:
   cambio (`loadPortal` usado antes de declararse). El repo arrastra 219 errores de
   lint previos, así que no es una puerta limpia; la de CI es `tsc`.
 - Banco PostgreSQL 17.11 desechable (cluster local por socket, marcador
-  `budget_revision_rpcs_2f2`, sin TCP): **9 PASS**, incluidas las pruebas nuevas
-  de capacidades, contabilidad de accesos y `can_respond`.
+  `budget_revision_rpcs_2f2`, sin TCP): **10 PASS**, incluidas las pruebas nuevas
+  de capacidades, contabilidad de accesos, `can_respond` y ocultación de
+  borradores y estados no reconocidos.
 
 La prueba de `can_respond` encontró un fallo real antes de subirlo: con
 `project_id` nulo, `b.project_id = v_project.id` devolvía `null` y no `false`, así
@@ -127,9 +128,14 @@ Pendiente antes de fusionar:
 - No existe todavía ningún flujo que cree `portal_tokens` ni que conceda
   `approve_changes`/`approve_budgets`; mientras siga así, todos los enlaces son
   heredados y no pueden responder presupuestos.
-- Queda abierta una decisión de producto: el snapshot devuelve también los
-  presupuestos en `borrador`, por lo que el cliente los ve. Es comportamiento
-  previo, no una regresión de esta rama, y no se ha cambiado aquí.
+- **Resuelto el 2026-09-16:** el snapshot ya no devuelve borradores. Muestra solo
+  estados de cara al cliente mediante lista explícita (`pendiente`/`pending`,
+  `enviado`/`sent`, `aceptado`/`accepted`, `rechazado`/`rejected`), no por
+  exclusión de `borrador`, porque `status` es nullable y un estado futuro no debe
+  llegar al cliente por defecto. Tras el filtro, tres de los siete portales quedan
+  vacíos y los tres son del propio titular.
+- **Resuelto el 2026-09-16:** la respuesta a presupuestos desde enlaces heredados
+  no se habilita todavía. No hizo falta cambiar nada: es lo que la rama ya hacía.
 
 Las dos decisiones que bloquean el despliegue —visibilidad de borradores y
 respuesta a presupuestos desde enlaces heredados— están documentadas con datos de

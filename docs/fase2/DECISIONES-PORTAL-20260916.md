@@ -1,10 +1,15 @@
 # Decisiones pendientes antes de restaurar el portal — 2026-09-16
 
-Dos decisiones bloquean el despliegue de `20260915150000_portal_token_read_access.sql`.
-Ninguna se ha aplicado: este documento aporta los datos y las opciones, no la decisión.
+Dos decisiones bloqueaban el despliegue de
+`20260915150000_portal_token_read_access.sql`. **Ambas fueron resueltas por el
+titular del producto el 2026-09-16**: se ocultan los borradores (decisión 1,
+opción B) y no se habilita todavía la respuesta a presupuestos desde enlaces
+heredados (decisión 2, opción E). Este documento conserva los datos y las opciones
+que sustentaron cada una.
+
 Todas las cifras salen de lecturas sobre el proyecto `dsgnymebkxxkslyeotee` el
-2026-09-16; no se escribió nada, no se creó ningún token y no se asignó ninguna
-capacidad.
+2026-09-16; no se escribió nada en producción, no se creó ningún token y no se
+asignó ninguna capacidad.
 
 ## El marco cambió: el portal no está expuesto, está caído
 
@@ -94,14 +99,33 @@ apareciendo en dos portales distintos. Es una decisión separada.
 - **D — B + C.** Solo `reforma local` mostraría algo. Demasiado agresivo sin
   limpiar datos primero.
 
-### Recomendación
+### Decisión tomada: B
 
-**B ahora, C después de limpiar datos.** B cierra la ventana mientras no cuesta
-nada, y deja el reparto por cliente como una decisión con su propio trabajo de
-datos detrás.
+Aprobada el 2026-09-16. Implementada como **lista explícita de estados visibles**
+(`pendiente`, `pending`, `enviado`, `sent`, `aceptado`, `accepted`, `rechazado`,
+`rejected`) y no como exclusión de `borrador`: la columna `status` es nullable, así
+que una exclusión dejaría pasar tanto un nulo como cualquier estado futuro. Con una
+lista, un estado nuevo tiene que añadirse a conciencia para llegar al cliente.
 
-> No aplicado. Cambiar la visibilidad es política de producto y necesita tu
-> aprobación expresa.
+Efecto verificado contra producción con el filtro ya escrito:
+
+| Proyecto | Visibles | Detalle |
+|---|---:|---|
+| reforma local | 2 | PRE-2026-14306 (pendiente), PRE-2026-19087 (aceptado) |
+| Pintura casa María López | 1 | PRE-2026-18088 (pendiente) |
+| prueba | 1 | PRE-2026-18088 (pendiente) |
+| reforma | 1 | PRE-2026-53806 (aceptado) |
+| prueba 2 | 0 | — |
+| prueba 3 | 0 | — |
+| Reforma vivienda integral c/ alcalde jose luis lassaletta | 0 | — |
+
+Los tres portales que quedan vacíos son los del propio titular. Ningún cliente real
+pierde nada. Los presupuestos no se borran: solo dejan de salir por el portal, y la
+prueba `a client never sees a draft or an unrecognised state` lo comprueba.
+
+**C queda pendiente**, y sigue necesitando atar antes los presupuestos a su
+proyecto. Ocultar borradores no la resuelve: `PRE-2026-18088` sigue apareciendo en
+dos portales, como se ve en la tabla.
 
 ---
 
@@ -166,13 +190,19 @@ desbloquearía ni un solo presupuesto.
 Mientras los presupuestos no estén atados a un proyecto (`project_id`), el punto 3
 los deja fuera. Atarlos es trabajo de datos que ninguna de las opciones evita.
 
-### Recomendación
+### Decisión tomada: E
 
-**E ahora; C cuando exista la emisión (E4), con A como puente solo si hay que
-conservar las URLs en circulación.** Y antes que cualquiera de las dos, atar los
-presupuestos a su proyecto.
+Aprobada el 2026-09-16. **No requiere ningún cambio de código**: es exactamente lo
+que la rama ya hace. El portal se restaura en lectura y con respuesta a cambios, y
+la respuesta a presupuestos queda bloqueada con aviso explícito hasta que exista
+`portal_respond_to_budget` y un enlace con capacidad.
 
-> No aplicado. No se ha creado ningún token ni asignado ninguna capacidad.
+No se ha creado ningún token ni asignado ninguna capacidad.
+
+Cuando se retome, el orden sigue siendo **C** (emisión con caducidad y capacidades
+explícitas, en E4), con **A** como puente solo si hay que conservar las URLs en
+circulación. Y antes que cualquiera de las dos, atar los presupuestos a su
+proyecto: sin `project_id` el punto 3 los deja fuera igualmente.
 
 ---
 

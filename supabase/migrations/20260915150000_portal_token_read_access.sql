@@ -102,6 +102,10 @@ begin
           where dv.entity_type='budget' and dv.entity_id=b.id and dv.version=b.version))
       order by b.created_at desc,b.id),'[]'::jsonb)
       from public.budgets b where b.user_id=v_project.user_id and b.deleted_at is null
+      -- Client-facing states only. An allowlist, not "except borrador": status is
+      -- nullable and a future state must not reach a client by default.
+      and b.status in ('pendiente','pending','enviado','sent',
+        'aceptado','accepted','rechazado','rejected')
       and (b.project_id=v_project.id or
         (v_project.client_id is not null and b.project_id is null and b.client_id=v_project.client_id))),
     'invoices', (select coalesce(jsonb_agg(jsonb_build_object(

@@ -63,12 +63,15 @@ test("portal link validates without exposing other links", { skip: !enabled, tim
   // Production's shape: most budgets carry no project and reach the portal only
   // through the client fallback, which portal_respond_to_budget refuses.
   const clientOnlyBudget = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+  const oddBudget = "0a0a0a0a-0a0a-4a0a-8a0a-0a0a0a0a0a0a";
   await db.query(`insert into public.budgets(id,user_id,project_id,client_id,title,status)
     values($1,$2,$3,null,'Owner budget','enviado'),($4,$5,$6,null,'Owner draft','borrador'),
       ($7,$8,null,$9,'Client-only budget','enviado'),
-      ($10,$11,$12,null,'Other budget','enviado')`,
+      ($10,$11,$12,null,'Unknown state budget','plantilla'),
+      ($13,$14,$15,null,'Other budget','enviado')`,
     [sentBudget, owner, project, draftBudget, owner, project,
       clientOnlyBudget, owner, ownClient,
+      oddBudget, owner, project,
       "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", other, foreignProject]);
   // Only the project-linked budget has the finalized document the writer demands.
   await db.query(`insert into public.document_versions(entity_type,entity_id,version)
@@ -110,8 +113,9 @@ test("portal link validates without exposing other links", { skip: !enabled, tim
   await t.test("a presented token reads only its project and never echoes a secret", async () => {
     const data = await snapshot(ownToken);
     assert.equal(data.project.id, project);
+    // The draft and the unknown-state budget are withheld from the client.
     assert.deepEqual(data.budgets.map((b) => b.title).sort(),
-      ["Client-only budget", "Owner budget", "Owner draft"]);
+      ["Client-only budget", "Owner budget"]);
     assert.equal(data.invoices.length, 0);
     assert.equal(data.payments.length, 0);
     assert.equal(data.changes.length, 1);
@@ -121,6 +125,17 @@ test("portal link validates without exposing other links", { skip: !enabled, tim
     assert.doesNotMatch(JSON.stringify(data), /Other project|Other budget/);
     assert.equal((await snapshot(foreignToken)).project.id, foreignProject);
     assert.equal((await snapshot(legacy)).project.id, project);
+  });
+  await t.test("a client never sees a draft or an unrecognised state", async () => {
+    for (const link of [ownToken, legacy]) {
+      const titles = (await snapshot(link)).budgets.map((b) => b.title);
+      assert.ok(!titles.includes("Owner draft"), `draft leaked into ${link}`);
+      assert.ok(!titles.includes("Unknown state budget"), `unknown state leaked into ${link}`);
+    }
+    // Withheld from the portal, not deleted: the owner still has both rows.
+    assert.equal(Number((await db.query(
+      "select count(*)::integer as n from public.budgets where id in ($1,$2)",
+      [draftBudget, oddBudget])).rows[0].n), 2);
   });
   await t.test("capabilities never offer an action the database would refuse", async () => {
     const caps = async (link) => (await snapshot(link)).capabilities;
@@ -145,7 +160,7 @@ test("portal link validates without exposing other links", { skip: !enabled, tim
       (await snapshot(link)).budgets.map((b) => [b.title, b.can_respond]));
     // Without the capability nothing is answerable, however good the budget is.
     assert.deepEqual(await byTitle(ownToken), {
-      "Owner budget": false, "Owner draft": false, "Client-only budget": false });
+      "Owner budget": false, "Client-only budget": false });
     await db.query(`update public.portal_tokens set permissions='["read","approve_budgets"]'
       where token=$1`, [ownToken]);
     await db.query(`create function public.portal_respond_to_budget(
@@ -154,7 +169,7 @@ test("portal link validates without exposing other links", { skip: !enabled, tim
     // Only the sent, project-linked, finalized budget qualifies. The client-only
     // one is listed but unanswerable: the writer matches on project_id.
     assert.deepEqual(await byTitle(ownToken), {
-      "Owner budget": true, "Owner draft": false, "Client-only budget": false });
+      "Owner budget": true, "Client-only budget": false });
     // Drop the finalized document and the same budget stops qualifying.
     await db.query("delete from public.document_versions where entity_id=$1", [sentBudget]);
     assert.equal((await byTitle(ownToken))["Owner budget"], false);
