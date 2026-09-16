@@ -1,5 +1,7 @@
 -- Validate a presented portal link without making every active link enumerable.
--- This migration precedes 20260915160000_budget_revision_rpcs.sql.
+-- This migration precedes 20260915160000_budget_revision_rpcs.sql, which owns
+-- portal_respond_to_budget. Until that migration runs the snapshot reports the
+-- budget response as unavailable instead of letting the portal write directly.
 begin;
 set local lock_timeout = '5s';
 
@@ -16,6 +18,10 @@ declare
   v_token uuid;
   v_link public.portal_tokens%rowtype;
   v_project public.projects%rowtype;
+  v_modern boolean := false;
+  v_now timestamptz := now();
+  v_can_changes boolean;
+  v_can_budgets boolean;
 begin
   -- A malformed or unknown link must have the same externally visible result.
   begin
@@ -28,9 +34,10 @@ begin
   select * into v_link from public.portal_tokens where token = v_token;
   if found then
     if v_link.is_active is distinct from true or v_link.revoked_at is not null
-       or (v_link.expires_at is not null and v_link.expires_at <= now()) then
+       or (v_link.expires_at is not null and v_link.expires_at <= v_now) then
       return null;
     end if;
+    v_modern := true;
     select * into v_project from public.projects
       where id = v_link.project_id and deleted_at is null;
   else
@@ -41,7 +48,35 @@ begin
   end if;
   if not found then return null; end if;
 
+  -- Capabilities are reported so the portal never offers an action the database
+  -- would refuse. A legacy access_token answers changes (it predates the
+  -- permission model) but can never answer budgets, which require a token row.
+  v_can_changes := case
+    when not v_modern then true
+    when jsonb_typeof(v_link.permissions) is distinct from 'array' then false
+    else v_link.permissions @> '["approve_changes"]'::jsonb end;
+  v_can_budgets := v_modern
+    and jsonb_typeof(v_link.permissions) is not distinct from 'array'
+    and v_link.permissions @> '["approve_budgets"]'::jsonb
+    and to_regprocedure('public.portal_respond_to_budget(text,uuid,text,text)') is not null;
+
+  -- Access accounting the reader used to perform through open RLS policies.
+  if v_modern then
+    update public.portal_tokens
+      set last_accessed_at = v_now, access_count = coalesce(access_count, 0) + 1
+      where id = v_link.id;
+  end if;
+  -- "Visualizado" in the acceptance timeline means the client opened a budget we
+  -- had already sent; a draft must never be stamped.
+  update public.budgets set viewed_at = v_now
+    where user_id = v_project.user_id and deleted_at is null and viewed_at is null
+      and status in ('enviado','sent')
+      and (project_id = v_project.id or
+        (v_project.client_id is not null and project_id is null and client_id = v_project.client_id));
+
   return jsonb_build_object(
+    'capabilities', jsonb_build_object(
+      'respond_budgets', v_can_budgets, 'respond_changes', v_can_changes),
     'project', jsonb_build_object(
       'id',v_project.id, 'name',v_project.name, 'address',v_project.address,
       'description',v_project.description, 'status',v_project.status,
@@ -120,7 +155,8 @@ begin
       or (v_link.expires_at is not null and v_link.expires_at <= now()) then
       return null;
     end if;
-    if not (v_link.permissions @> '["approve_changes"]'::jsonb) then
+    if jsonb_typeof(v_link.permissions) is distinct from 'array'
+      or not (v_link.permissions @> '["approve_changes"]'::jsonb) then
       return null;
     end if;
     select * into v_project from public.projects

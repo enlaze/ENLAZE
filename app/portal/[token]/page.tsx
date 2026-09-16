@@ -94,12 +94,23 @@ const statusColorMap: Record<string, string> = {
   in_progress: "bg-yellow-900/30 text-yellow-300", paused: "bg-orange-900/30 text-orange-300",
   completed: "bg-green-900/30 text-green-300", cancelled: "bg-red-900/30 text-red-300",
 };
+// Canonical budget vocabulary is Spanish (borrador → pendiente → enviado →
+// aceptado/rechazado). The English spellings are legacy rows and the column
+// default, so both resolve to the same label.
 const budgetStatusMap: Record<string, { label: string; color: string }> = {
+  borrador: { label: "Borrador", color: "bg-gray-700 text-gray-300" },
+  draft: { label: "Borrador", color: "bg-gray-700 text-gray-300" },
+  pendiente: { label: "Pendiente", color: "bg-yellow-900/30 text-yellow-300" },
   pending: { label: "Pendiente", color: "bg-yellow-900/30 text-yellow-300" },
+  enviado: { label: "Enviado", color: "bg-blue-900/30 text-blue-300" },
   sent: { label: "Enviado", color: "bg-blue-900/30 text-blue-300" },
+  aceptado: { label: "Aceptado", color: "bg-green-900/30 text-green-300" },
   accepted: { label: "Aceptado", color: "bg-green-900/30 text-green-300" },
+  rechazado: { label: "Rechazado", color: "bg-red-900/30 text-red-300" },
   rejected: { label: "Rechazado", color: "bg-red-900/30 text-red-300" },
 };
+const BUDGET_ANSWERABLE = ["enviado", "sent"];
+const BUDGET_ACCEPTED = ["aceptado", "accepted"];
 const changeStatusMap: Record<string, { label: string; color: string }> = {
   proposed: { label: "Propuesto", color: "bg-blue-900/30 text-blue-300" },
   approved: { label: "Aprobado", color: "bg-green-900/30 text-green-300" },
@@ -137,6 +148,24 @@ function fmtDate(d: string | null) {
 
 type PortalTab = "estado" | "presupuestos" | "cambios" | "facturas";
 
+interface PortalCapabilities {
+  respond_budgets: boolean;
+  respond_changes: boolean;
+}
+
+const PENDING_WRITER = "Esta acción todavía no está disponible en este enlace. Contacta con nosotros para confirmarla.";
+
+// PostgREST reports an absent function as PGRST202. The portal must never fall
+// back to writing the table directly: the policies that allowed it are gone, so
+// the write would affect no rows and report no error.
+function writerMessage(error: { code?: string; message: string } | null) {
+  if (!error) return "No se pudo registrar la respuesta. Vuelve a intentarlo.";
+  if (error.code === "PGRST202") return PENDING_WRITER;
+  if (error.code === "42501") return "Este enlace no permite responder a este documento.";
+  if (error.code === "PT409") return "Este documento ya no está pendiente de respuesta.";
+  return error.message;
+}
+
 export default function ClientPortalPage() {
   const params = useParams();
   const token = params.token as string;
@@ -155,6 +184,11 @@ export default function ClientPortalPage() {
   const [notFound, setNotFound] = useState(false);
   const [activeTab, setActiveTab] = useState<PortalTab>("estado");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  // Reported by the database, never assumed: a button is offered only when the
+  // link actually carries the capability and the writer exists.
+  const [capabilities, setCapabilities] = useState<PortalCapabilities>({
+    respond_budgets: false, respond_changes: false,
+  });
 
   useEffect(() => { loadPortal(); }, []);
 
@@ -171,6 +205,11 @@ export default function ClientPortalPage() {
         setNotFound(true);
         return;
       }
+      const caps = (data.capabilities ?? {}) as Partial<PortalCapabilities>;
+      setCapabilities({
+        respond_budgets: caps.respond_budgets === true,
+        respond_changes: caps.respond_changes === true,
+      });
       setProject(data.project as Project);
       setClient((data.client as Client | null) ?? null);
       setBudgets((data.budgets as Budget[]) ?? []);
@@ -185,7 +224,11 @@ export default function ClientPortalPage() {
     }
   }
 
+  // Read-only compatibility for the window where this page is deployed but the
+  // migration has not run. Both writers live in the database, so neither action
+  // is offered here.
   async function loadLegacyPortal() {
+    setCapabilities({ respond_budgets: false, respond_changes: false });
     let proj: Project | null = null;
     const { data: portalToken } = await supabase.from("portal_tokens")
       .select("project_id").eq("token", token).eq("is_active", true).single();
@@ -237,34 +280,23 @@ export default function ClientPortalPage() {
 
   /* ── Actions: Approve/Reject budget ── */
 
-  async function handleBudgetAction(id: string, newStatus: "accepted" | "rejected") {
+  async function handleBudgetAction(id: string, decision: "aceptado" | "rechazado") {
     setActionLoading(id);
-    const now = new Date().toISOString();
-    const timestampFields: Record<string, string | null> = newStatus === "accepted"
-      ? { accepted_at: now, rejected_at: null }
-      : { rejected_at: now, accepted_at: null };
-
-    let { error } = await supabase.rpc("portal_respond_to_budget", {
+    // portal_respond_to_budget ships with 20260915160000_budget_revision_rpcs.
+    // Until it exists the action stays blocked: there is no table write to fall
+    // back to, and pretending otherwise would confirm a response we never saved.
+    const { data, error } = await supabase.rpc("portal_respond_to_budget", {
       p_token: token,
       p_budget_id: id,
-      p_decision: newStatus,
+      p_decision: decision,
       p_accepted_by_name: null,
     });
-
-    // Keep old links usable during the staged rollout. Once the RPC exists,
-    // all budget responses go through its capability and ownership checks.
-    if (error?.code === "PGRST202") {
-      const legacy = await supabase.from("budgets").update({
-        status: newStatus,
-        ...timestampFields,
-      }).eq("id", id);
-      error = legacy.error;
-    }
-    if (error) {
-      toast.error("Error", { description: error.message });
+    if (error || !data) {
+      toast.error("No se registró la respuesta", { description: writerMessage(error) });
     } else {
-      setBudgets((prev) => prev.map((b) => b.id === id ? { ...b, status: newStatus } : b));
-      toast.success(newStatus === "accepted" ? "Presupuesto aceptado" : "Presupuesto rechazado");
+      const saved = (data as { status?: string }).status ?? decision;
+      setBudgets((prev) => prev.map((b) => b.id === id ? { ...b, status: saved } : b));
+      toast.success(decision === "aceptado" ? "Presupuesto aceptado" : "Presupuesto rechazado");
     }
     setActionLoading(null);
   }
@@ -273,25 +305,19 @@ export default function ClientPortalPage() {
 
   async function handleChangeAction(id: string, approve: boolean) {
     setActionLoading(id);
-    let { data, error } = await supabase.rpc("portal_respond_to_change", {
+    // Same rule as budgets: the RPC is the only writer. A null result means the
+    // database refused the response, so it must never be reported as saved.
+    const { data, error } = await supabase.rpc("portal_respond_to_change", {
       p_token: token, p_change_id: id, p_approve: approve,
     });
-    if (error?.code === "PGRST202") {
-      // During rollout only: the database still runs the previous portal writer.
-      const status = approve ? "approved" : "rejected";
-      const legacy = await supabase.from("project_changes").update({
-        status, client_approved: approve,
-        approved_date: approve ? new Date().toISOString().split("T")[0] : null,
-        updated_at: new Date().toISOString(),
-      }).eq("id", id);
-      error = legacy.error;
-      data = error ? null : { status };
-    }
     if (error || !data) {
-      toast.error("Error", { description: error?.message ?? "El cambio ya no está disponible para responder." });
+      toast.error("No se registró la respuesta", {
+        description: error ? writerMessage(error) : "El cambio ya no está disponible para responder.",
+      });
     } else {
+      const saved = (data as { status?: string }).status ?? (approve ? "approved" : "rejected");
       setChanges((prev) => prev.map((c) =>
-        c.id === id ? { ...c, status: data.status as string, client_approved: approve } : c
+        c.id === id ? { ...c, status: saved, client_approved: approve } : c
       ));
       toast.success(approve ? "Cambio aprobado" : "Cambio rechazado");
     }
@@ -302,7 +328,7 @@ export default function ClientPortalPage() {
 
   const kpis = useMemo(() => {
     const totalPresupuestado = budgets.reduce((s, b) => s + Number(b.total || 0), 0);
-    const totalAprobado = budgets.filter((b) => b.status === "accepted")
+    const totalAprobado = budgets.filter((b) => BUDGET_ACCEPTED.includes(b.status))
       .reduce((s, b) => s + Number(b.total || 0), 0);
     const extrasAprobados = changes
       .filter((c) => c.status === "approved" || c.status === "executed")
@@ -475,7 +501,7 @@ export default function ClientPortalPage() {
               <div className="divide-y divide-[var(--color-navy-700)]">
                 {budgets.map((b) => {
                   const st = budgetStatusMap[b.status] || { label: b.status, color: "bg-gray-700 text-gray-300" };
-                  const canAct = b.status === "sent" || b.status === "pending";
+                  const canAct = capabilities.respond_budgets && BUDGET_ANSWERABLE.includes(b.status);
                   const isLoading = actionLoading === b.id;
                   return (
                     <div key={b.id} className="p-5">
@@ -497,13 +523,13 @@ export default function ClientPortalPage() {
                             <div className="flex gap-2">
                               <button
                                 disabled={isLoading}
-                                onClick={() => handleBudgetAction(b.id, "accepted")}
+                                onClick={() => handleBudgetAction(b.id, "aceptado")}
                                 className="px-4 py-2 bg-[var(--color-brand-green)] text-[var(--color-navy-900)] rounded-lg text-sm font-medium hover:opacity-90 transition disabled:opacity-50">
                                 {isLoading ? "..." : "Aceptar"}
                               </button>
                               <button
                                 disabled={isLoading}
-                                onClick={() => handleBudgetAction(b.id, "rejected")}
+                                onClick={() => handleBudgetAction(b.id, "rechazado")}
                                 className="px-4 py-2 bg-red-600/20 text-red-300 border border-red-500/30 rounded-lg text-sm font-medium hover:bg-red-600/30 transition disabled:opacity-50">
                                 {isLoading ? "..." : "Rechazar"}
                               </button>
@@ -531,7 +557,7 @@ export default function ClientPortalPage() {
             <div className="space-y-3">
               {changes.map((c) => {
                 const st = changeStatusMap[c.status] || { label: c.status, color: "bg-gray-700 text-gray-300" };
-                const canAct = c.status === "proposed";
+                const canAct = capabilities.respond_changes && c.status === "proposed";
                 const isLoading = actionLoading === c.id;
                 const impactColor = c.economic_impact > 0 ? "text-red-400" : c.economic_impact < 0 ? "text-green-400" : "text-[var(--color-navy-400)]";
                 return (

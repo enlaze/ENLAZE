@@ -55,8 +55,13 @@ test("portal link validates without exposing other links", { skip: !enabled, tim
   await db.query(`insert into public.portal_tokens(project_id,token,created_by)
     values($1,$2,$3),($4,$5,$6)`,
     [project, ownToken, owner, foreignProject, foreignToken, other]);
-  await db.query("insert into public.budgets(user_id,project_id,title) values($1,$2,'Owner budget'),($3,$4,'Other budget')",
-    [owner, project, other, foreignProject]);
+  const sentBudget = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const draftBudget = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+  await db.query(`insert into public.budgets(id,user_id,project_id,title,status)
+    values($1,$2,$3,'Owner budget','enviado'),($4,$5,$6,'Owner draft','borrador'),
+      ($7,$8,$9,'Other budget','enviado')`,
+    [sentBudget, owner, project, draftBudget, owner, project,
+      "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", other, foreignProject]);
   await db.query(`insert into public.project_changes(id,user_id,project_id,title,status)
     values($1,$2,$3,'Owner change','proposed'),($4,$5,$6,'Other change','proposed')`,
     [ownChange, owner, project, foreignChange, other, foreignProject]);
@@ -64,8 +69,10 @@ test("portal link validates without exposing other links", { skip: !enabled, tim
   const asRole = async (role, uid, query, params = []) => {
     await db.query("select set_config('request.jwt.claim.sub',$1,true)", [uid ?? ""]);
     await db.query("set local role " + role);
+    // Swallow the reset failure: once the body aborts the transaction this also
+    // fails, and its error would replace the one that actually explains why.
     try { return await db.query(query, params); }
-    finally { await db.query("reset role"); }
+    finally { await db.query("reset role").catch(() => {}); }
   };
   const countLinks = async (role, uid) =>
     Number((await asRole(role, uid, "select count(*)::integer as n from public.portal_tokens")).rows[0].n);
@@ -92,8 +99,7 @@ test("portal link validates without exposing other links", { skip: !enabled, tim
   await t.test("a presented token reads only its project and never echoes a secret", async () => {
     const data = await snapshot(ownToken);
     assert.equal(data.project.id, project);
-    assert.equal(data.budgets.length, 1);
-    assert.equal(data.budgets[0].title, "Owner budget");
+    assert.deepEqual(data.budgets.map((b) => b.title).sort(), ["Owner budget", "Owner draft"]);
     assert.equal(data.invoices.length, 0);
     assert.equal(data.payments.length, 0);
     assert.equal(data.changes.length, 1);
@@ -103,6 +109,45 @@ test("portal link validates without exposing other links", { skip: !enabled, tim
     assert.doesNotMatch(JSON.stringify(data), /Other project|Other budget/);
     assert.equal((await snapshot(foreignToken)).project.id, foreignProject);
     assert.equal((await snapshot(legacy)).project.id, project);
+  });
+  await t.test("capabilities never offer an action the database would refuse", async () => {
+    const caps = async (link) => (await snapshot(link)).capabilities;
+    // Default permissions are ["read"], so a modern link answers nothing.
+    assert.deepEqual(await caps(ownToken), { respond_budgets: false, respond_changes: false });
+    // A legacy access_token predates the permission model, but budgets always
+    // need a token row, so it can never answer one.
+    assert.deepEqual(await caps(legacy), { respond_budgets: false, respond_changes: true });
+    await db.query(`update public.portal_tokens
+      set permissions='["read","approve_changes","approve_budgets"]' where token=$1`, [ownToken]);
+    // The capability is granted but 20260915160000 has not run: still no button.
+    assert.deepEqual(await caps(ownToken), { respond_budgets: false, respond_changes: true });
+    await db.query(`create function public.portal_respond_to_budget(
+      p_token text, p_budget_id uuid, p_decision text, p_accepted_by_name text)
+      returns jsonb language sql as $stub$ select null::jsonb $stub$`);
+    assert.deepEqual(await caps(ownToken), { respond_budgets: true, respond_changes: true });
+    await db.query("drop function public.portal_respond_to_budget(text,uuid,text,text)");
+    await db.query(`update public.portal_tokens set permissions='["read"]' where token=$1`, [ownToken]);
+  });
+  await t.test("access accounting survives the closed policies", async () => {
+    const counters = async () => (await db.query(
+      "select access_count, last_accessed_at from public.portal_tokens where token=$1", [ownToken])).rows[0];
+    const viewed = async (id) => (await db.query(
+      "select viewed_at from public.budgets where id=$1", [id])).rows[0].viewed_at;
+    const before = await counters();
+    await snapshot(ownToken);
+    const after = await counters();
+    assert.equal(after.access_count, before.access_count + 1);
+    assert.ok(after.last_accessed_at);
+    // "Visualizado" means the client opened a budget we had sent; never a draft.
+    assert.ok(await viewed(sentBudget));
+    assert.equal(await viewed(draftBudget), null);
+    const stamped = await viewed(sentBudget);
+    await snapshot(ownToken);
+    assert.deepEqual(await viewed(sentBudget), stamped, "viewed_at records the first visit only");
+    // A legacy link has no token row to account on and must not fail for it.
+    const beforeLegacy = (await counters()).access_count;
+    assert.equal((await snapshot(legacy)).project.id, project);
+    assert.equal((await counters()).access_count, beforeLegacy);
   });
   await t.test("only a valid project link can answer its proposed change", async () => {
     const respond = (link, change, approve) => asRole("anon", null,

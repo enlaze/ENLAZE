@@ -13,7 +13,8 @@ alter table public.budgets add column project_id uuid references public.projects
   add column client_id uuid references public.clients(id),
   add column budget_number text,
   add column service_type text, add column subtotal numeric,
-  add column iva_amount numeric, add column total numeric;
+  add column iva_amount numeric, add column total numeric,
+  add column viewed_at timestamptz;
 create table public.invoices (
   id uuid primary key, user_id uuid not null references auth.users(id),
   project_id uuid references public.projects(id),client_id uuid references public.clients(id),
@@ -40,7 +41,8 @@ create table public.portal_tokens (
   token uuid unique not null default gen_random_uuid(),
   permissions jsonb default '["read"]'::jsonb,
   is_active boolean default true, revoked_at timestamptz,
-  expires_at timestamptz, created_by uuid references auth.users(id));
+  expires_at timestamptz, created_by uuid references auth.users(id),
+  last_accessed_at timestamptz, access_count integer default 0);
 alter table public.portal_tokens enable row level security;
 alter table public.projects enable row level security;
 alter table public.project_changes enable row level security;
@@ -62,3 +64,7 @@ create policy "Public update budget status" on public.budgets
   for update using(true) with check(true);
 grant select on public.portal_tokens,public.projects to anon,authenticated;
 grant select,update on public.project_changes to anon,authenticated;
+-- Production grants anon these table privileges, so RLS is the only thing that
+-- stops a portal write. Without the grant the direct-write assertions would
+-- pass for the wrong reason: a missing privilege instead of a missing policy.
+grant select,update on public.budgets to anon;
