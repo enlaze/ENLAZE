@@ -6,6 +6,7 @@ on:
     paths:
       - "app/portal/[token]/page.tsx"
       - "supabase/migrations/*portal_token_read_access.sql"
+      - "supabase/migrations/*portal_tokens_owner_only.sql"
       - "__tests__/portal-token-access.integration.test.mjs"
       - "__tests__/support/portal-token-access-schema.sql"
       - ".github/workflows/portal-token-access-integration.yml"

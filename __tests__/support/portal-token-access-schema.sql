@@ -69,6 +69,10 @@ create policy "Public update change approval" on public.project_changes
 create policy "Public update budget status" on public.budgets
   for update using(true) with check(true);
 grant select on public.portal_tokens,public.projects to anon,authenticated;
+-- Production's real grants on portal_tokens. Without the write privileges the
+-- tenant-isolation assertions would pass because the privilege is missing, not
+-- because the policy refuses — which is how the defect survived until now.
+grant insert,update,delete on public.portal_tokens to anon,authenticated;
 grant select,update on public.project_changes to anon,authenticated;
 -- Production grants anon these table privileges, so RLS is the only thing that
 -- stops a portal write. Without the grant the direct-write assertions would

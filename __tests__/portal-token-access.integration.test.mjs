@@ -100,6 +100,115 @@ test("portal link validates without exposing other links", { skip: !enabled, tim
   await t.test("baseline policy really enumerates active links", async () => {
     assert.equal(await countLinks("anon", null), 2);
   });
+  const forged = "12121212-1212-4121-8121-121212121212";
+  const forge = (role, uid, created_by, target) => asRole(role, uid,
+    `insert into public.portal_tokens(project_id,token,permissions,created_by)
+     values($1,$2,'["read","approve_budgets"]'::jsonb,$3)`, [target, forged, created_by]);
+  // Everything here runs in one transaction, so an expected failure would poison
+  // it. The savepoint also rewinds the SET LOCAL ROLE the attempt left behind.
+  const refuses = async (fn, code, message) => {
+    await db.query("savepoint attempt");
+    await assert.rejects(fn, (e) => e.code === code,
+      `${message} (esperado ${code})`);
+    await db.query("rollback to savepoint attempt");
+  };
+  await t.test("baseline: the FOR ALL policies really do let a stranger forge a link", async () => {
+    // Guard against the assertions below passing for the wrong reason: the role
+    // must actually hold the privilege production grants it.
+    assert.equal((await db.query(
+      "select has_table_privilege('authenticated','public.portal_tokens','INSERT') as ok")).rows[0].ok, true);
+    // created_by = auth.uid() satisfies the OR on its own, so the project may be
+    // anyone's. This is the defect 20260915140000 closes.
+    await forge("authenticated", other, other, project);
+    assert.equal(Number((await db.query(
+      "select count(*)::integer as n from public.portal_tokens where token=$1", [forged])).rows[0].n), 1);
+    await db.query("delete from public.portal_tokens where token=$1", [forged]);
+  });
+  const isolation = sql("supabase/migrations/20260915140000_portal_tokens_owner_only.sql");
+  assert.match(isolation, /\nbegin;\n/i);
+  assert.match(isolation, /\ncommit;\s*$/i);
+  await db.query(isolation.replace(/\nbegin;\n/i, "\n").replace(/\ncommit;\s*$/i, "\n"));
+  await t.test("a portal link cannot be issued, read or revoked across projects", async () => {
+    const privilege = async (p) => (await db.query(
+      "select has_table_privilege('authenticated','public.portal_tokens',$1) as ok", [p])).rows[0].ok;
+    // Least privilege: nothing writes this table directly any more.
+    assert.equal(await privilege("SELECT"), true);
+    assert.equal(await privilege("INSERT"), false);
+    assert.equal(await privilege("UPDATE"), false);
+    assert.equal(await privilege("DELETE"), false);
+
+    // The point of this block: prove the refusal survives the privilege. Hand the
+    // role back exactly what production grants it, so what rejects the write is
+    // the policy and the trigger, not a missing GRANT.
+    await db.query("grant insert,update,delete on public.portal_tokens to authenticated");
+    try {
+      assert.equal(await privilege("INSERT"), true);
+      // The policy must refuse on its own. With the trigger still armed this
+      // whole block would pass even with the permissive created_by branch back
+      // in place, because the trigger would be the one rejecting.
+      const policies = (await db.query(`select polname,
+        pg_get_expr(polqual, polrelid) as using_expr,
+        pg_get_expr(polwithcheck, polrelid) as check_expr
+        from pg_policy where polrelid='public.portal_tokens'::regclass`)).rows;
+      assert.deepEqual(policies.map((p) => p.polname), ["portal_tokens_owner"]);
+      assert.ok(policies[0].check_expr, "WITH CHECK must be explicit, not inherited");
+      for (const expr of [policies[0].using_expr, policies[0].check_expr]) {
+        assert.doesNotMatch(expr, /created_by/,
+          "the permissive created_by branch must be gone from both expressions");
+        assert.match(expr, /project_id/);
+      }
+      await db.query("alter table public.portal_tokens disable trigger portal_tokens_require_owner");
+      try {
+        await refuses(() => forge("authenticated", other, other, project),
+          "42501", "the policy alone must refuse a link for another project");
+      } finally {
+        await db.query("alter table public.portal_tokens enable trigger portal_tokens_require_owner");
+      }
+
+      await refuses(() => forge("authenticated", other, other, project),
+        "42501", "a stranger must not issue a link for another project");
+      // Naming the victim as created_by does not help either: the WITH CHECK is
+      // about who is writing, not about what the row claims.
+      await refuses(() => forge("authenticated", other, owner, project),
+        "42501", "claiming the owner as created_by must not help");
+      // Reading, updating and revoking someone else's link are equally refused.
+      // Enumeration closes here, not in 20260915150000: this migration has to
+      // stand on its own.
+      assert.equal(await countLinks("anon", null), 0);
+      assert.equal(await countLinks("authenticated", other), 1);
+      assert.equal(await countLinks("authenticated", owner), 1);
+      assert.equal((await asRole("authenticated", other,
+        "update public.portal_tokens set revoked_at=now() where token=$1", [ownToken])).rowCount, 0);
+      assert.equal((await asRole("authenticated", other,
+        "delete from public.portal_tokens where token=$1", [ownToken])).rowCount, 0);
+
+      // A legitimate issuance by the project's own owner still works.
+      const mine = "13131313-1313-4131-8131-131313131313";
+      await asRole("authenticated", owner,
+        `insert into public.portal_tokens(project_id,token,created_by) values($1,$2,$3)`,
+        [project, mine, owner]);
+      assert.equal(Number((await db.query(
+        "select count(*)::integer as n from public.portal_tokens where token=$1", [mine])).rows[0].n), 1);
+      await db.query("delete from public.portal_tokens where token=$1", [mine]);
+
+      // RLS is bypassed inside a SECURITY DEFINER function, so the invariant has
+      // to hold at the table too. Superuser here stands in for such a function.
+      await refuses(() => db.query(
+        `insert into public.portal_tokens(project_id,token,created_by) values($1,$2,$3)`,
+        [project, forged, other]),
+        "42501", "a definer-rights writer must not forge either");
+      await refuses(() => db.query(
+        `insert into public.portal_tokens(project_id,token,created_by) values($1,$2,null)`,
+        [project, forged]),
+        "23502", "created_by must be present");
+      // Repointing an existing link at another project is the same forgery.
+      await refuses(() => db.query(
+        "update public.portal_tokens set project_id=$1 where token=$2", [foreignProject, ownToken]),
+        "42501", "a link must not be repointed at another project");
+    } finally {
+      await db.query("revoke insert,update,delete on public.portal_tokens from authenticated");
+    }
+  });
   const migration = sql("supabase/migrations/20260915150000_portal_token_read_access.sql");
   assert.match(migration, /\nbegin;\n/i);
   assert.match(migration, /\ncommit;\s*$/i);
