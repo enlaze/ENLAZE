@@ -1,0 +1,97 @@
+name: Budget revision RPCs integration
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "supabase/migrations/*budget_revision_rpcs.sql"
+      - "supabase/migrations/*budgets_lock_version.sql"
+      - "supabase/migrations/*portal_tokens_owner_only.sql"
+      - "supabase/migrations/*replace_budget_items*.sql"
+      - "__tests__/budget-revision-rpcs*.mjs"
+      - "__tests__/lib/budget-revision-rpcs-bench.mjs"
+      - "__tests__/lib/sql-toplevel.mjs"
+      - "__tests__/support/budget-revision-rpcs-schema.sql"
+      - "__tests__/support/prepare-budget-revision-rpcs.mjs"
+      - "__tests__/support/bootstrap-budget-schema.sql"
+      - "__tests__/fixtures/budget-economic-golden-vectors.json"
+      - "docs/fase2/CHECKS.sql"
+      - "docs/fase2/ROLLBACK.sql"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/budget-revision-rpcs-integration.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: budget-revision-rpcs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RUN_REVISION_RPCS_INTEGRATION_TESTS: "1"
+      REVISION_RPCS_DB_ACK: DISPOSABLE_ONLY
+      REVISION_RPCS_CLUSTER_ACK: DISPOSABLE_CLUSTER
+      TEST_DATABASE_URL: postgres://postgres:e2_disposable_database_only@127.0.0.1:55435/enlaze_revision_rpcs_test
+      E2_AUTHENTICATOR_PASSWORD: e2_disposable_authenticator_only
+      E2_JWT_SECRET: e2_synthetic_disposable_jwt_secret_not_for_production
+      E2_REST_URL: http://127.0.0.1:53002
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Locked dependencies without installation scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Static contract and disposable-cluster guards
+        run: npm run test:budget-revision-rpcs
+      - name: Dedicated PostgreSQL 17 cluster, no production secrets
+        run: |
+          docker network create enlaze-e2-revision-network
+          docker run --detach --name enlaze-e2-revision-db --network enlaze-e2-revision-network \
+            --publish 127.0.0.1:55435:5432 \
+            --env POSTGRES_PASSWORD=e2_disposable_database_only \
+            --env POSTGRES_DB=enlaze_revision_rpcs_test \
+            --health-cmd 'pg_isready -h 127.0.0.1 -U postgres -d enlaze_revision_rpcs_test' \
+            --health-interval 2s --health-timeout 3s --health-retries 5 \
+            postgres:17 -c enlaze.test_cluster_marker=budget_revision_rpcs_2f2
+      - name: Wait for final TCP server
+        shell: bash
+        run: |
+          for attempt in $(seq 1 60); do
+            state="$(docker inspect --format '{{.State.Status}} {{.State.Health.Status}}' enlaze-e2-revision-db)"
+            case "$state" in
+              'running healthy') exit 0 ;;
+              exited*|dead*) exit 1 ;;
+            esac
+            sleep 1
+          done
+          exit 1
+      - name: Guarded schema bootstrap and authenticator
+        run: node __tests__/support/prepare-budget-revision-rpcs.mjs
+      - name: PostgREST 12.2.3 on isolated database network
+        run: |
+          docker run --detach --name enlaze-e2-revision-rest --network enlaze-e2-revision-network \
+            --publish 127.0.0.1:53002:3000 \
+            --env PGRST_DB_URI=postgres://e2_authenticator:e2_disposable_authenticator_only@enlaze-e2-revision-db:5432/enlaze_revision_rpcs_test \
+            --env PGRST_DB_SCHEMAS=public --env PGRST_DB_ANON_ROLE=anon \
+            --env PGRST_JWT_SECRET="$E2_JWT_SECRET" \
+            postgrest/postgrest:v12.2.3
+      - name: Real SQL, rollback, negative controls, HTTP 409 and Supabase client
+        run: npm run test:budget-revision-rpcs-integration
+      - name: Disposable server logs
+        if: always()
+        run: |
+          docker logs enlaze-e2-revision-db 2>&1 || true
+          docker logs enlaze-e2-revision-rest 2>&1 || true
+      - name: Remove only this job's disposable services
+        if: always()
+        run: |
+          docker rm --force enlaze-e2-revision-rest enlaze-e2-revision-db || true
+          docker network rm enlaze-e2-revision-network || true

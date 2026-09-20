@@ -1925,3 +1925,14 @@ select count(*) as total_rows,
        count(*) filter (where lock_version is distinct from 1) as not_initial
 from public.budgets;
 -- END CHECK_12_VALUES
+
+-- BLOQUE E2 · inventario de funciones y privilegios (SELECT solamente)
+-- BEGIN CHECK_E2_SCHEMA
+select n.nspname, p.proname, pg_get_function_identity_arguments(p.oid) as arguments,
+       has_function_privilege('anon', p.oid, 'execute') as anon_execute,
+       has_function_privilege('authenticated', p.oid, 'execute') as authenticated_execute
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where (n.nspname = 'public' and p.proname in ('create_budget_with_items','save_budget','finalize_budget','change_budget_status','duplicate_budget','portal_respond_to_budget'))
+   or n.nspname = 'budget_internal'
+order by n.nspname, p.proname;
+-- END CHECK_E2_SCHEMA
