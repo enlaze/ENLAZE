@@ -33,10 +33,17 @@ create table public.document_versions(
   entity_id uuid not null, version integer not null, snapshot jsonb not null,
   changed_by uuid references auth.users, change_summary text, created_at timestamptz default now(),
   unique(entity_type,entity_id,version));
+-- Production's shape and privileges BEFORE 20260915140000, which the bench then
+-- applies: created_by is required by that migration's trigger, and the write
+-- grants have to be present for its revoke to mean anything.
 create table public.portal_tokens(
   id uuid primary key default gen_random_uuid(), project_id uuid not null references public.projects,
   token uuid unique not null default gen_random_uuid(), permissions jsonb default '["read"]',
-  is_active boolean default true, expires_at timestamptz, revoked_at timestamptz);
+  is_active boolean default true, expires_at timestamptz, revoked_at timestamptz,
+  created_by uuid references auth.users, created_at timestamptz default now(),
+  last_accessed_at timestamptz, access_count integer default 0, label text);
+alter table public.portal_tokens enable row level security;
+grant select,insert,update,delete on public.portal_tokens to anon,authenticated;
 -- Modern PostgREST sets request.jwt.claims, direct tests set the legacy sub GUC.
 create or replace function auth.uid() returns uuid language sql stable as $$
   select coalesce(nullif(current_setting('request.jwt.claim.sub',true),''),

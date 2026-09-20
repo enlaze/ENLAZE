@@ -6,6 +6,9 @@ export const MIGRATION = "20260915160000_budget_revision_rpcs.sql";
 export const DATABASE = "enlaze_revision_rpcs_test";
 export const MARKER = "budget_revision_rpcs_2f2";
 export const read = p => readFileSync(new URL(p, ROOT), "utf8");
+// The bench runs one transaction, so a migration that carries its own top-level
+// control has to be stripped: its commit would end the bench's transaction.
+export const inlined = p => read(p).replace(/\nbegin;\n/i, "\n").replace(/\ncommit;\s*$/i, "\n");
 export function config(env) {
   assert.equal(env.RUN_REVISION_RPCS_INTEGRATION_TESTS, "1");
   assert.equal(env.REVISION_RPCS_DB_ACK, "DISPOSABLE_ONLY");
@@ -41,6 +44,9 @@ export async function setup(db, candidate = read("supabase/migrations/"+MIGRATIO
     await db.query(read("__tests__/support/budget-revision-rpcs-schema.sql"));
     await db.query(read("supabase/migrations/20260908111706_replace_budget_items_persist_cost.sql"));
     await db.query(read("supabase/migrations/20260914090000_budgets_lock_version.sql"));
+    // Applied and verified in production before E2. The bench mirrors that chain
+    // so the snapshot below proves E2 leaves the portal hardening untouched.
+    await db.query(inlined("supabase/migrations/20260915140000_portal_tokens_owner_only.sql"));
     const unchanged = async () => (await db.query("select (select jsonb_agg(jsonb_build_array(c.relname,c.relacl,c.relrowsecurity) order by c.relname) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r') as tables, (select prosrc from pg_proc where oid='public.replace_budget_items(uuid,jsonb)'::regprocedure) as legacy")).rows[0];
     const before = await unchanged();
     await db.query(candidate);

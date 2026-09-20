@@ -6,6 +6,7 @@ on:
     paths:
       - "supabase/migrations/*budget_revision_rpcs.sql"
       - "supabase/migrations/*budgets_lock_version.sql"
+      - "supabase/migrations/*portal_tokens_owner_only.sql"
       - "supabase/migrations/*replace_budget_items*.sql"
       - "__tests__/budget-revision-rpcs*.mjs"
       - "__tests__/lib/budget-revision-rpcs-bench.mjs"

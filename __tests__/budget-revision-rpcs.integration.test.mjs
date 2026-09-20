@@ -170,7 +170,13 @@ test("E2 / PostgreSQL 17: real authorization, atomicity and revisions", {skip:!e
   await t.test("portal scopes budget/owner/project, read-only and revoked tokens fail closed",async()=>{
     const b=await create(),other=await create();
     await call("finalize_budget",[b.budget_id,1,edit,items]);await call("change_budget_status",[b.budget_id,2,"enviado"]);
-    const token=(await db.query("insert into public.portal_tokens(project_id) values($1) returning token",[PROJECT])).rows[0].token;
+    // 20260915140000 requires created_by to own the project, so a token the
+    // portal could ever present is necessarily issued by that project's owner.
+    const token=(await db.query("insert into public.portal_tokens(project_id,created_by) values($1,$2) returning token",[PROJECT,OWNER])).rows[0].token;
+    // The invariant E2 leans on: it trusts any portal_tokens row, so a row whose
+    // created_by does not own the project must be impossible to write at all.
+    await assert.rejects(()=>db.query("insert into public.portal_tokens(project_id,created_by) values($1,$2)",[PROJECT,OTHER]),{code:"42501"});
+    await assert.rejects(()=>db.query("insert into public.portal_tokens(project_id) values($1)",[PROJECT]),{code:"23502"});
     const respond=(id=b.budget_id,decision="accepted",tok=token)=>call("portal_respond_to_budget",[tok,id,decision,"Synthetic signer"],null,db,"anon");
     await assert.rejects(()=>respond(),{code:"42501"});
     await db.query('update public.portal_tokens set permissions=\'["approve_budgets"]\' where token=$1',[token]);

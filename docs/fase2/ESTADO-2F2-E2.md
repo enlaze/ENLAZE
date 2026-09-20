@@ -1,9 +1,42 @@
 # 2F-2 / E2 — RPC transaccionales de presupuestos
 
-Fecha: 2026-09-16. Estado: **verificación local completada; pendiente CI y revisión del PR**.
-Base: `c475ec6629f773f33472179fd1c92aa7061a9f9d`, comprobada contra main remoto.
-Rama: `codex/budget-revision-rpcs-2f2-e2`.
-Migración nueva: `20260915160000_budget_revision_rpcs.sql`. No aplicada en producción.
+Fecha: 2026-09-20. Estado: **rama integrada con `main`; pendiente CI y revisión del PR**.
+Rama: `codex/budget-revision-rpcs-2f2-e2`, con `origin/main`
+`61a0b4452dc6925772d529696287bcd269ce6bc6` (merge del PR #14) integrado por merge,
+sin rebase ni reescritura de commits.
+Migración nueva: `20260915160000_budget_revision_rpcs.sql`. **No aplicada en producción.**
+
+## Estado real de producción, comprobado por lectura el 2026-09-20
+
+| Migración | Estado |
+|---|---|
+| `20260914090000` (E1, `lock_version`) | aplicada y registrada |
+| `20260915140000` (aislamiento de `portal_tokens`) | aplicada y registrada |
+| `20260915150000` (lector del portal) | aplicada y registrada |
+| `20260915160000` (**este lote**) | **pendiente, única pendiente** |
+
+Verificado además que en producción el esquema `budget_internal` **no existe** y que
+**ninguna** de las seis firmas públicas de E2 está creada, que es la condición que el
+preflight exige antes de aplicar. Las dependencias que E2 necesita sí están:
+`account_deletion_locks`, `document_versions`, las 10 columnas de `budgets` y las 19 de
+`budget_items` que usa el INSERT.
+
+E2 no modifica ni reaplica E1, `140000` ni `150000`: el merge las trae desde `main`
+byte a byte, y el banco comprueba que aplicar E2 no altera ACL ni RLS de las tablas
+existentes.
+
+### Encaje con el contrato ya desplegado
+
+- La firma `public.portal_respond_to_budget(text,uuid,text,text)` coincide **exactamente**
+  con la que `150000` sondea por `to_regprocedure`, así que el portal habilita la respuesta
+  a presupuestos en cuanto E2 se aplique, sin desplegar aplicación.
+- `140000` exige que toda fila de `portal_tokens` tenga `created_by` y que ese usuario sea
+  el dueño del proyecto. E2 solo **lee** esa tabla, nunca la escribe, así que se apoya en
+  esa invariante sin poder romperla. El banco de E2 aplica ahora `140000` para que el
+  fixture refleje ese contrato, y comprueba que un token forjado no puede ni existir.
+- E2 no ofrece ninguna vía para enlaces heredados: exige fila en `portal_tokens` con
+  `approve_budgets`, coincidencia exacta de `project_id`, estado `enviado`/`sent` y versión
+  documental finalizada.
 
 ## Alcance y contrato que debe revisarse antes de E4
 
@@ -101,6 +134,10 @@ El workflow nuevo ejecuta SQL y HTTP secuencialmente en PostgreSQL 17/PostgREST
 sobre el commit del PR; la prueba local no equivale a ese resultado.
 
 ## Despliegue y compensación
+
+Ya no hay que esperar a E1 ni al portal: `20260914090000`, `20260915140000` y
+`20260915150000` están aplicadas y registradas, y **E2 es la única migración pendiente**.
+El orden ya es el correcto por nombre; E2 debe ir después de `150000`, nunca antes.
 
 Antes de aplicar: CI verde, revisión del contrato, inventario SELECT actualizado
 de tablas/columnas/privilegios y funciones, hashes de datos, comparación del historial
