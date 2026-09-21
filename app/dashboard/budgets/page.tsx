@@ -66,7 +66,27 @@ export default function BudgetsPage() {
 
   const updateStatus = async (id: string, status: string) => {
     const budget = budgets.find(b => b.id === id);
-    await supabase.from("budgets").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
+    const now = new Date().toISOString();
+    // The acceptance timeline reads these stamps and nothing else in the app
+    // writes them, so a budget marked sent here never showed as sent. Same
+    // semantics as change_budget_status.
+    const stamps =
+      status === "enviado" ? { sent_at: now }
+      : status === "aceptado" ? { accepted_at: now, rejected_at: null }
+      : status === "rechazado" ? { rejected_at: now, accepted_at: null }
+      : {};
+    // select() so a write that matches no row is not mistaken for success: an
+    // update blocked by RLS reports no error, it just changes nothing.
+    const { data, error } = await supabase.from("budgets")
+      .update({ status, updated_at: now, ...stamps })
+      .eq("id", id)
+      .select("id");
+    if (error || !data?.length) {
+      toast.error("No se pudo cambiar el estado", {
+        description: error?.message ?? "El presupuesto ya no está disponible.",
+      });
+      return;
+    }
     analytics.budgetStatusChanged(id, budget?.status ?? "unknown", status);
     await fetchBudgets();
   };
