@@ -60,6 +60,52 @@ describe("budget revision writer", () => {
     }
   });
 
+  test("explica en castellano que un presupuesto antiguo debe guardarse antes de enviarse", async () => {
+    // Mensaje y código reales de change_budget_status, reproducidos contra
+    // PostgreSQL 17 con un presupuesto en pendiente y sin versión documental.
+    const raised = { code: "22023", message: "Finalize the budget before changing its status" };
+    const f = fake({ data: null, error: raised });
+    try {
+      await changeBudgetStatus(f.client, result.budget_id, 1, "enviado");
+      assert.fail("debería rechazar");
+    } catch (error) {
+      const shown = budgetRevisionErrorMessage(error);
+      assert.doesNotMatch(shown, /Finalize|status/i, "no debe filtrarse el mensaje en inglés");
+      // La salida comprobada en el banco: guardar una vez crea la versión.
+      assert.match(shown, /guárdalo una vez/);
+      assert.match(shown, /enviado/);
+    }
+  });
+
+  test("traduce el resto de rechazos que la interfaz puede provocar", async () => {
+    const cases = [
+      ["Invalid budget status transition", /no es posible desde el estado actual/],
+      ["Use the contractual revision flow for this budget", /no puede editarse como un borrador/],
+      ["A contractual budget with positive total requires items", /sin partidas/],
+      ["Account deletion in progress", /borrado de cuenta/],
+      ["Budget is not available", /ya no está disponible/],
+    ];
+    for (const [message, expected] of cases) {
+      const f = fake({ data: null, error: { code: "22023", message } });
+      try {
+        await changeBudgetStatus(f.client, result.budget_id, 1, "enviado");
+        assert.fail("debería rechazar");
+      } catch (error) {
+        assert.match(budgetRevisionErrorMessage(error), expected);
+      }
+    }
+  });
+
+  test("un mensaje desconocido se muestra tal cual, sin inventar una causa", async () => {
+    const f = fake({ data: null, error: { code: "XX000", message: "algo inesperado" } });
+    try {
+      await changeBudgetStatus(f.client, result.budget_id, 1, "enviado");
+      assert.fail("debería rechazar");
+    } catch (error) {
+      assert.match(budgetRevisionErrorMessage(error), /algo inesperado/);
+    }
+  });
+
   test("rechaza respuestas incompletas aunque PostgREST no devuelva error", async () => {
     const f = fake({ data: { budget_id: result.budget_id }, error: null });
     await assert.rejects(

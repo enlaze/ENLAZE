@@ -84,11 +84,39 @@ export function isBudgetRevisionConflict(error: unknown): boolean {
     (error as { code?: unknown }).code === "PT409";
 }
 
+/**
+ * The RPCs raise in English, for operators reading logs. Anything a person can
+ * trigger from the interface needs its own wording, saying what to do next
+ * rather than naming the check that failed.
+ */
+const DATABASE_MESSAGES: ReadonlyArray<readonly [string, string]> = [
+  // Every budget created before the revision RPCs is in this state.
+  ["Finalize the budget before changing its status",
+    "Este presupuesto todavía no tiene una versión finalizada, así que aún no puede marcarse como enviado. Ábrelo y guárdalo una vez: con eso queda finalizado y ya podrás enviarlo."],
+  ["Invalid budget status transition",
+    "Ese cambio de estado no es posible desde el estado actual. Recarga la página para ver en qué estado está ahora."],
+  ["Use the contractual revision flow for this budget",
+    "Este presupuesto ya se envió o ya tiene respuesta, así que no puede editarse como un borrador."],
+  ["A contractual budget with positive total requires items",
+    "Un presupuesto con importe no puede quedarse sin partidas."],
+  ["Account deletion in progress",
+    "Hay un borrado de cuenta en curso, así que ahora mismo no se puede modificar ningún presupuesto."],
+  ["Client is not available", "El cliente asociado ya no está disponible."],
+  ["Project is not available", "La obra asociada ya no está disponible."],
+  // Kept last: the checks above raise the same code with a more precise message.
+  ["Budget is not available",
+    "Este presupuesto ya no está disponible. Puede que se haya movido a la papelera desde otra sesión."],
+];
+
 export function budgetRevisionErrorMessage(error: unknown): string {
   if (isBudgetRevisionConflict(error)) {
     return "Este presupuesto ha cambiado en otra pestaña o sesión. Recarga la página antes de volver a guardar.";
   }
-  return errorMessage(error);
+  const raw = errorMessage(error);
+  for (const [raised, readable] of DATABASE_MESSAGES) {
+    if (raw.includes(raised)) return readable;
+  }
+  return raw;
 }
 
 export function createBudgetWithItems(
