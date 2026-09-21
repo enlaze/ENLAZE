@@ -64,7 +64,19 @@ jobs:
       - name: Client writer and budget workflow regressions
         run: |
           npm run test:budget-revision-writer
-          node --import tsx --test __tests__/budget-*.test.mjs __tests__/replace-budget-items-migration.test.mjs
+          node --import tsx --test \
+            __tests__/budget-ai-pdf-completion.test.mjs \
+            __tests__/budget-duplicate-writer-safety.test.mjs \
+            __tests__/budget-finalization.test.mjs \
+            __tests__/budget-generate-writer-flow.test.mjs \
+            __tests__/budget-items-sort-order-migration.test.mjs \
+            __tests__/budget-items-sort-order-readers.test.mjs \
+            __tests__/budget-items-sort-order-writers-only.test.mjs \
+            __tests__/budget-items-writer.test.mjs \
+            __tests__/budget-realism.test.mjs \
+            __tests__/budget-recalculation.test.mjs \
+            __tests__/budget-timeline.test.mjs \
+            __tests__/replace-budget-items-migration.test.mjs
       - name: Dedicated PostgreSQL 17 cluster, no production secrets
         run: |
           docker network create enlaze-e2-revision-network
