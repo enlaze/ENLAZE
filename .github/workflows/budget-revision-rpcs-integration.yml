@@ -18,6 +18,7 @@ on:
       - "__tests__/budget-realism.test.mjs"
       - "__tests__/replace-budget-items-migration.test.mjs"
       - "__tests__/lib/budget-revision-rpcs-bench.mjs"
+      - "__tests__/lib/disposable-target-guard.mjs"
       - "__tests__/lib/sql-toplevel.mjs"
       - "__tests__/support/budget-revision-rpcs-schema.sql"
       - "__tests__/support/prepare-budget-revision-rpcs.mjs"
@@ -51,6 +52,9 @@ jobs:
       E2_AUTHENTICATOR_PASSWORD: e2_disposable_authenticator_only
       E2_JWT_SECRET: e2_synthetic_disposable_jwt_secret_not_for_production
       E2_REST_URL: http://127.0.0.1:53002
+      # Locally the lifecycle skips its supabase-js transport when there is no
+      # PostgREST. Here PostgREST always runs, so a skip would be a silent gap.
+      REQUIRE_REST_LIFECYCLE: "1"
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
