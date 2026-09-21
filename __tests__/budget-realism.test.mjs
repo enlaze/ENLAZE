@@ -136,7 +136,8 @@ test("a finalized smart budget can be reopened with its complete wizard state", 
   ]);
   assert.match(pageSource, /budgetIdFromLocation/);
   assert.match(pageSource, /draftId: budget\.id/);
-  assert.match(providerSource, /wizard_state: \{[\s\S]*draftId: budgetId/);
+  assert.match(providerSource, /wizard_state: \{[\s\S]*draftId,/);
+  assert.match(providerSource, /revisionPayload\(budgetId\)/);
   assert.doesNotMatch(providerSource, /Selecciona una obra\/proyecto o crea una nueva para continuar/);
   assert.match(detailSource, /Abrir en Presupuesto inteligente/);
   assert.match(editSource, /Editar alcance, partidas y proveedores/);

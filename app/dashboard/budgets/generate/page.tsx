@@ -48,6 +48,7 @@ function ExistingBudgetLoader() {
       loadDraft({
         ...saved,
         draftId: budget.id,
+        lockVersion: Number(budget.lock_version),
         currentStep: typeof requestedStep === "number" && Number.isInteger(requestedStep) && requestedStep >= 0 && requestedStep <= 2
           ? requestedStep
           : Number(saved.currentStep) || 0,
@@ -99,7 +100,7 @@ function DraftRecoveryManager() {
       if (!user) return;
       
       const { data } = await supabase.from('budgets')
-        .select('id, title, updated_at, wizard_state')
+        .select('id, title, updated_at, wizard_state, lock_version')
         .eq('user_id', user.id)
         .eq('status', 'borrador')
         .order('updated_at', { ascending: false });
@@ -128,7 +129,11 @@ function DraftRecoveryManager() {
               key={d.id}
               onClick={() => {
                 // Inyectamos el estado crudo tal cual se guardó
-                loadDraft({ ...(d.wizard_state || {}), draftId: d.id });
+                loadDraft({
+                  ...(d.wizard_state || {}),
+                  draftId: d.id,
+                  lockVersion: Number(d.lock_version),
+                });
                 analytics.budgetDraftRecovered();
                 setShowModal(false);
               }}

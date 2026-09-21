@@ -5,7 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { useSector } from "@/lib/sector-context";
 import AcceptanceTimeline from "@/components/AcceptanceTimeline";
-import { saveDocumentVersion, getNextVersion } from "@/lib/document-versions";
 import { printPDF } from "@/lib/pdf-generator";
 import { logActivity } from "@/lib/activity-log";
 import { notify } from "@/lib/notifications";
@@ -17,7 +16,11 @@ import Badge from "@/components/ui/badge";
 import Loading from "@/components/ui/loading";
 import Breadcrumbs from "@/components/ui/breadcrumbs";
 import Link from "next/link";
-import { normalizeBudgetItemUnit } from "@/lib/budget-units";
+import {
+  budgetRevisionErrorMessage,
+  changeBudgetStatus,
+  duplicateBudgetRevision,
+} from "@/lib/budget-revision-writer";
 
 interface BudgetItem {
   id: string;
@@ -52,6 +55,7 @@ interface Budget {
   created_at: string;
   // Compliance Phase 2
   version: number;
+  lock_version: number;
   sent_at: string | null;
   viewed_at: string | null;
   accepted_at: string | null;
@@ -168,16 +172,6 @@ export default function BudgetDetailPage() {
       } as Budget;
       setBudget(hydratedBudget);
       setItems(bi || []);
-      if (selectedClient) {
-        void supabase
-          .from("budgets")
-          .update({
-            client_name: hydratedBudget.client_name,
-            client_email: hydratedBudget.client_email,
-            client_phone: hydratedBudget.client_phone,
-          })
-          .eq("id", b.id);
-      }
     } catch {
       router.push("/dashboard/budgets");
     } finally {
@@ -196,13 +190,20 @@ export default function BudgetDetailPage() {
     if (newStatus === "aceptado" && !budget.accepted_at) timestampUpdates.accepted_at = now;
     if (newStatus === "rechazado" && !budget.rejected_at) timestampUpdates.rejected_at = now;
 
-    const { error } = await supabase
-      .from("budgets")
-      .update({ status: newStatus, ...timestampUpdates })
-      .eq("id", budget.id);
-
-    if (!error) {
-      const updated = { ...budget, status: newStatus, ...timestampUpdates };
+    try {
+      const result = await changeBudgetStatus(
+        supabase,
+        budget.id,
+        budget.lock_version,
+        newStatus,
+      );
+      const updated = {
+        ...budget,
+        status: result.status,
+        version: result.version,
+        lock_version: result.lock_version,
+        ...timestampUpdates,
+      };
       setBudget(updated);
 
       // Fire-and-forget: log activity + save version snapshot + notify
@@ -227,13 +228,9 @@ export default function BudgetDetailPage() {
         });
       }
 
-      const nextVer = await getNextVersion(supabase, "budget", budget.id);
-      saveDocumentVersion(supabase, {
-        entity_type: "budget",
-        entity_id: budget.id,
-        version: nextVer,
-        snapshot: updated as unknown as Record<string, unknown>,
-        change_summary: `Estado cambiado de "${budget.status}" a "${newStatus}"`,
+    } catch (error) {
+      toast.error("No se pudo cambiar el estado", {
+        description: budgetRevisionErrorMessage(error),
       });
     }
     setUpdating(false);
@@ -265,102 +262,15 @@ export default function BudgetDetailPage() {
 
   async function duplicateBudget() {
     if (!budget) return;
-
-    // The owner of the copy comes from the session, never from the source
-    // budget's data: the row is written under the INSERT policy on budgets,
-    // which requires auth.uid() = user_id. Without user_id the comparison is
-    // NULL, the policy rejects the row, and nothing is created.
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-    const user = authData?.user;
-    if (authError || !user) {
-      toast.error("No se pudo verificar tu sesión. Vuelve a iniciar sesión para duplicar.");
-      return;
+    try {
+      const result = await duplicateBudgetRevision(supabase, budget.id);
+      toast.success("Presupuesto duplicado como borrador");
+      router.push(`/dashboard/budgets/${result.budget_id}`);
+    } catch (error) {
+      toast.error("No se pudo duplicar el presupuesto", {
+        description: budgetRevisionErrorMessage(error),
+      });
     }
-
-    const year = new Date().getFullYear();
-    const rand = Math.floor(10000 + Math.random() * 90000);
-    const newNumber = `PRE-${year}-${rand}`;
-
-    const { data: newB, error } = await supabase
-      .from("budgets")
-      .insert({
-        user_id: user.id,
-        project_id: budget.project_id ?? null,
-        budget_number: newNumber,
-        title: budget.title + " (copia)",
-        client_id: budget.client_id || null,
-        client_name: budget.client_name,
-        client_email: budget.client_email,
-        client_phone: budget.client_phone,
-        client_address: budget.client_address,
-        client_nif: budget.client_nif || "",
-        service_type: budget.service_type,
-        status: "pendiente",
-        subtotal: budget.subtotal,
-        iva_percent: budget.iva_percent,
-        iva_amount: budget.iva_amount,
-        total: budget.total,
-        notes: budget.notes,
-        valid_until: budget.valid_until,
-        deposit_percent: budget.deposit_percent,
-        payment_method: budget.payment_method,
-        payment_iban: budget.payment_iban,
-        warranty_text: budget.warranty_text,
-        execution_deadline_text: budget.execution_deadline_text,
-        observations: budget.observations,
-        conditions_text: budget.conditions_text,
-        discount_type: budget.discount_type,
-        discount_percent: budget.discount_percent,
-        discount_amount: budget.discount_amount,
-        payment_schedule: budget.payment_schedule,
-      })
-      .select()
-      .single();
-
-    if (error || !newB) {
-      toast.error("Error al duplicar");
-      return;
-    }
-
-    // The copy is renumbered from zero rather than carrying over the source's
-    // sort_order: the original may be historical, may not have been backfilled,
-    // or may otherwise not yet satisfy the contiguous-from-zero contract, and
-    // the duplicate should satisfy it regardless. The rows go in as one batch so
-    // a failure is all-or-nothing among the items and can actually be reported,
-    // instead of one silent insert per row leaving a half-copied budget behind.
-    const itemsToInsert = items.map((item, idx) => ({
-      budget_id: newB.id,
-      concept: item.concept,
-      description: item.description,
-      quantity: item.quantity,
-      unit: normalizeBudgetItemUnit(item.unit),
-      category: item.category,
-      unit_price: item.unit_price,
-      subtotal: item.subtotal,
-      sort_order: idx,
-    }));
-
-    if (itemsToInsert.length > 0) {
-      const { error: itemsError } = await supabase
-        .from("budget_items")
-        .insert(itemsToInsert);
-
-      if (itemsError) {
-        // The header already exists at this point, so the message must not say
-        // that nothing was created. It names the copy and sends the user to it,
-        // so nobody presses Duplicar again believing the click did nothing.
-        // Deleting the header automatically is deliberately left out: making the
-        // header and its items atomic needs a transactional design, and
-        // improvising a rollback here would be worse than reporting the truth.
-        toast.error(
-          `Se creó el presupuesto ${newNumber} pero no se copiaron sus partidas. Revísalo antes de volver a duplicar.`
-        );
-        router.push(`/dashboard/budgets/${newB.id}`);
-        return;
-      }
-    }
-
-    router.push(`/dashboard/budgets/${newB.id}`);
   }
 
   const [exportingPDF, setExportingPDF] = useState<"client" | "internal" | null>(null);
@@ -477,11 +387,15 @@ export default function BudgetDetailPage() {
           </span>
           {Object.entries(statusConfig).map(([key, val]) => {
             const isCurrent = budget.status === key;
+            const canTransition =
+              ((budget.status === "pendiente" || budget.status === "pending") && key === "enviado") ||
+              ((budget.status === "enviado" || budget.status === "sent") &&
+                (key === "aceptado" || key === "rechazado"));
             return (
               <button
                 key={key}
                 onClick={() => updateStatus(key)}
-                disabled={updating || isCurrent}
+                disabled={updating || !canTransition}
                 className={
                   isCurrent
                     ? "cursor-default rounded-lg border border-brand-green/30 bg-brand-green/10 px-3 py-1.5 text-xs font-semibold text-brand-green"

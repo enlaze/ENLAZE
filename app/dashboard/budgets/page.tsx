@@ -14,6 +14,10 @@ import { useToast } from "@/components/ui/toast";
 import DataTable, { type Column, type FilterDef } from "@/components/ui/data-table";
 import InfoFlipCard from "@/components/ui/InfoFlipCard";
 import { analytics } from "@/lib/analytics";
+import {
+  budgetRevisionErrorMessage,
+  changeBudgetStatus,
+} from "@/lib/budget-revision-writer";
 
 type Budget = {
   id: string;
@@ -24,6 +28,7 @@ type Budget = {
   iva_amount: number;
   total: number;
   status: string;
+  lock_version: number;
   created_at: string;
   clients: { name: string; company: string } | null;
 };
@@ -66,9 +71,16 @@ export default function BudgetsPage() {
 
   const updateStatus = async (id: string, status: string) => {
     const budget = budgets.find(b => b.id === id);
-    await supabase.from("budgets").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
-    analytics.budgetStatusChanged(id, budget?.status ?? "unknown", status);
-    await fetchBudgets();
+    if (!budget) return;
+    try {
+      await changeBudgetStatus(supabase, id, budget.lock_version, status);
+      analytics.budgetStatusChanged(id, budget.status, status);
+      await fetchBudgets();
+    } catch (error) {
+      toast.error("No se pudo cambiar el estado", {
+        description: budgetRevisionErrorMessage(error),
+      });
+    }
   };
 
   const statusVariant = (s: string): "green" | "blue" | "yellow" | "red" | "gray" => {
@@ -186,7 +198,7 @@ export default function BudgetsPage() {
           <LinkButton href={`/dashboard/budgets/${b.id}`} variant="secondary" size="sm">
             Ver
           </LinkButton>
-          {(b.status === "pending" || b.status === "pendiente" || b.status === "borrador") && (
+          {(b.status === "pending" || b.status === "pendiente") && (
             <Button onClick={() => updateStatus(b.id, "enviado")} variant="secondary" size="sm">
               Enviado
             </Button>

@@ -1096,21 +1096,21 @@ describe("FASE 2F-1DB · BLOQUE C — encaje en el historial", () => {
     assert.ok(helper.includes("supabase.rpc(REPLACE_BUDGET_ITEMS_RPC, {"), "debe llamarse a través de la constante");
   });
 
-  test("INVARIANTE 3 — solo el Provider importa el helper", () => {
+  test("INVARIANTE 3 — E2 ya no importa el helper legado", () => {
     const importadores = ficherosDeAplicacion().filter(
       (ruta) => ruta !== HELPER && /budget-items-writer/.test(leer(ruta)),
     );
     assert.deepEqual(
       importadores.sort(),
-      [PROVIDER],
-      "ampliar el conjunto de consumidores es una decisión de diseño, no un detalle",
+      [],
+      "el helper queda disponible para compatibilidad, no para los escritores E2",
     );
   });
 
-  test("INVARIANTE 4 — el Provider lo invoca exactamente dos veces", () => {
-    // Una en el guardado de borrador y otra en la finalización: son los dos
-    // únicos momentos en que el asistente escribe las líneas.
-    assert.equal(cuenta(leer(PROVIDER), "replaceBudgetItems("), 2);
+  test("INVARIANTE 4 — el Provider guarda y finaliza a través de E2", () => {
+    assert.equal(cuenta(leer(PROVIDER), "replaceBudgetItems("), 0);
+    assert.equal(cuenta(leer(PROVIDER), "await saveBudgetRevision("), 1);
+    assert.equal(cuenta(leer(PROVIDER), "await finalizeBudgetRevision("), 1);
   });
 
   test("INVARIANTE 5 — ningún otro escritor ha adoptado la RPC", () => {

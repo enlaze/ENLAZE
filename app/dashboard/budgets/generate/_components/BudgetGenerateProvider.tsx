@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, ReactNode, useEffect, useCa
 import { normalizeSector } from "@/lib/sector-config";
 import { createClient } from "@/lib/supabase-browser";
 import { useToast } from "@/components/ui/toast";
-import { saveDocumentVersion, getNextVersion } from "@/lib/document-versions";
 import { logActivity } from "@/lib/activity-log";
 import {
   type BudgetScope,
@@ -52,7 +51,12 @@ import {
 } from "@/lib/geographic-costs";
 import { isTraceableCommercialPrice } from "@/lib/price-traceability";
 import { normalizeBudgetItemUnit } from "@/lib/budget-units";
-import { replaceBudgetItems } from "@/lib/budget-items-writer";
+import {
+  budgetRevisionErrorMessage,
+  createBudgetWithItems,
+  finalizeBudgetRevision,
+  saveBudgetRevision,
+} from "@/lib/budget-revision-writer";
 import { canonicalProviderName, providerIdentitySlug } from "@/lib/provider-identity";
 import {
   auditAtomicMaterialName,
@@ -557,6 +561,7 @@ function repricePartidas(partidas: Partida[], marginPercent: number): Partida[] 
 
 export interface BudgetState {
   draftId: string | null;
+  lockVersion: number | null;
   lastSavedAt: string | null;
   currentStep: number;
   sector: string;
@@ -717,6 +722,7 @@ const BudgetContext = createContext<BudgetContextProps | undefined>(undefined);
  */
 const AUTOSAVE_IGNORED_KEYS = new Set<string>([
   "draftId",
+  "lockVersion",
   "lastSavedAt",
   "isSavingDraft",
   "isFinalizing",
@@ -750,6 +756,7 @@ export function BudgetGenerateProvider({
   const toast = useToast();
   const [state, setState] = useState<BudgetState>({
     draftId: null,
+    lockVersion: null,
     lastSavedAt: null,
     currentStep: 0,
     sector: normalizeSector(initialSector),
@@ -1271,6 +1278,10 @@ export function BudgetGenerateProvider({
   // un borrador ya guardado — para que la configuración global no reescriba
   // hacia atrás el margen con el que se cerró un presupuesto concreto.
   const marginLockedRef = useRef(false);
+  const lockVersionRef = useRef<number | null>(null);
+  const draftIdRef = useRef<string | null>(null);
+  const isFinalizingRef = useRef(false);
+  const isFinalizedRef = useRef(false);
 
   const setMarginPercent = useCallback((percent: number) => {
     const safe = clampMarginPercent(percent);
@@ -1324,23 +1335,108 @@ export function BudgetGenerateProvider({
     return () => { mounted = false; };
   }, [state.serviceType]);
 
-  const lastSyncedItemsSignature = useRef<string | null>(null);
-
   // Resultado discriminado del guardado interno. Antes, la omisión legítima de
   // un autoguardado vacío, la ausencia de usuario y cualquier fallo compartían
   // el mismo `null`, de modo que el llamante no podía distinguirlos.
   type SaveDraftOutcome =
     | { skipped: true; budgetId: null }
-    | { skipped: false; budgetId: string };
+    | { skipped: false; budgetId: string; lockVersion: number };
+  const revisionSaveInFlight = useRef<Promise<SaveDraftOutcome> | null>(null);
+
+  const revisionItems = () => {
+    const multiplier = marginMultiplier(state.marginPercent);
+    const partidas = state.partidas.filter(p => p.status !== "opcional").map(p => ({
+      concept: p.concept,
+      description: p.description,
+      quantity: p.quantity,
+      unit: normalizeBudgetItemUnit(p.unit),
+      category: p.category,
+      chapter: p.chapter || p.category || "otros",
+      unit_price: p.unit_price_client,
+      subtotal: p.subtotal_client,
+      unit_price_cost: p.unit_price,
+      subtotal_cost: p.subtotal_cost,
+    }));
+    const materials = state.materials.filter(m => m.included).map(m => ({
+      concept: m.name,
+      description: "Material sugerido",
+      quantity: m.quantity,
+      unit: normalizeBudgetItemUnit(m.unit),
+      category: "material",
+      chapter: m.linkedChapter || "materiales",
+      unit_price: m.unit_price * multiplier,
+      subtotal: m.subtotal * multiplier,
+      unit_price_cost: m.unit_price,
+      subtotal_cost: m.subtotal,
+    }));
+    return [...partidas, ...materials];
+  };
+
+  const revisionPayload = (
+    draftId: string | null,
+    clientSnapshot?: { name: string; email: string; phone: string },
+  ) => {
+    const financials = calculateBudgetFinancials(
+      state.totals.clientPrice,
+      state.ivaPercent,
+      state.discountType,
+      state.discountPercent,
+      state.discountAmount,
+    );
+    return {
+      title: state.title || "Borrador de Presupuesto (Wizard)",
+      client_id: state.clientId || null,
+      project_id: state.projectId || null,
+      ...(clientSnapshot ? {
+        client_name: clientSnapshot.name,
+        client_email: clientSnapshot.email,
+        client_phone: clientSnapshot.phone,
+      } : {}),
+      service_type: state.serviceType || state.sector || "general",
+      subtotal: financials.subtotal,
+      iva_percent: state.ivaPercent,
+      iva_amount: financials.ivaAmount,
+      total: financials.total,
+      notes: state.internalNotes,
+      valid_until: state.validUntil || null,
+      deposit_percent: state.depositPercent,
+      payment_method: state.paymentMethod,
+      payment_iban: state.paymentIban,
+      discount_type: state.discountType,
+      discount_percent: state.discountPercent,
+      discount_amount: financials.discountValue,
+      payment_schedule: state.paymentSchedule,
+      warranty_text: state.warrantyText,
+      execution_deadline_text: state.executionDeadlineText,
+      observations: state.observations,
+      conditions_text: state.conditionsText,
+      wizard_state: {
+        ...state,
+        draftId,
+        isSavingDraft: false,
+        isFinalizing: false,
+        saveError: null,
+        finalizeError: null,
+      },
+    };
+  };
 
   // Guardado interno. No captura nada: cualquier fallo de autenticación,
   // cabecera, snapshot o partidas se propaga como excepción. La captura, el
   // estado de error y los toasts viven exclusivamente en el envoltorio público
   // `saveDraft` y en `finalizeBudget`.
-  const saveDraftOrThrow = async (manual = false): Promise<SaveDraftOutcome> => {
+  const performDraftSaveOrThrow = async (manual = false): Promise<SaveDraftOutcome> => {
+    // The URL identifies an existing budget, but its asynchronous loader may
+    // not have supplied the id/version yet. Never create a new budget from the
+    // empty provider state while that read is pending (or after it fails).
+    if (typeof window !== "undefined" &&
+        new URLSearchParams(window.location.search).has("budgetId") &&
+        !autosaveReady.current) {
+      throw new Error("El presupuesto aún no se ha cargado. Recarga la página antes de guardar.");
+    }
     // Don't autosave if there's no meaningful data yet. Ésta es la única
     // omisión legítima: no hay nada que guardar y no se toca ninguna línea.
-    if (!manual && !state.title && !state.description && state.partidas.length <= 2) {
+    if (!manual && !draftIdRef.current && !state.draftId && !state.title && !state.description && state.partidas.length <= 2) {
       return { skipped: true, budgetId: null };
     }
 
@@ -1379,23 +1475,9 @@ export function BudgetGenerateProvider({
       }
     }
 
-    // Build snapshot — exclude circular/transient fields
-    const snapshot = {
-      ...state,
-      isSavingDraft: false,
-      isFinalizing: false,
-      saveError: null,
-      finalizeError: null,
-    };
-    const financials = calculateBudgetFinancials(
-      state.totals.clientPrice,
-      state.ivaPercent,
-      state.discountType,
-      state.discountPercent,
-      state.discountAmount,
-    );
-
-    let draftId = state.draftId;
+    let draftId = draftIdRef.current ?? state.draftId;
+    let lockVersion = lockVersionRef.current ?? state.lockVersion;
+    const items = revisionItems();
 
     if (!draftId) {
       // Generate budget_number: PRE-{year}-{random5}
@@ -1405,87 +1487,25 @@ export function BudgetGenerateProvider({
       const rand = 10000 + (randArray[0] % 90000);
       const budgetNumber = `PRE-${year}-${rand}`;
 
-      // Insert new draft
-      const { data, error } = await supabase.from("budgets").insert({
-        user_id: user.id,
+      const result = await createBudgetWithItems(supabase, {
+        ...revisionPayload(null, clientSnapshot),
         budget_number: budgetNumber,
-        status: "borrador",
-        title: state.title || "Borrador de Presupuesto (Wizard)",
-        client_id: state.clientId || null,
-        client_name: clientSnapshot.name,
-        client_email: clientSnapshot.email,
-        client_phone: clientSnapshot.phone,
-        project_id: state.projectId || null,
-        service_type: state.serviceType || state.sector || "general",
-        subtotal: financials.subtotal,
-        iva_percent: state.ivaPercent,
-        iva_amount: financials.ivaAmount,
-        total: financials.total,
-        notes: state.internalNotes,
-        valid_until: state.validUntil || null,
-        deposit_percent: state.depositPercent,
-        payment_method: state.paymentMethod,
-        payment_iban: state.paymentIban,
-        discount_type: state.discountType,
-        discount_percent: state.discountPercent,
-        discount_amount: financials.discountValue,
-        payment_schedule: state.paymentSchedule,
-        warranty_text: state.warrantyText,
-        execution_deadline_text: state.executionDeadlineText,
-        observations: state.observations,
-        conditions_text: state.conditionsText,
-        wizard_state: snapshot
-      }).select("id").single();
-
-      if (error) throw error;
-      draftId = data.id;
-      // Retener el id aquí mismo, antes de cualquier operación que pueda
-      // fallar, y solo el id: en cuanto el INSERT devuelve el identificador la
-      // fila YA existe en la base. Si falla el snapshot de las líneas
-      // siguientes, o la sincronización de partidas, el reintento tiene que
-      // encontrar esta cabecera y actualizarla, no insertar una segunda. Las
-      // señales de éxito visibles (isSavingDraft, saveError, lastSavedAt) se
-      // establecen mucho más abajo, cuando el guardado esté completo.
-      setState(prev => ({ ...prev, draftId }));
-      // The first snapshot is built before Supabase returns the id. Persist it
-      // immediately so recovering or reopening this budget updates the same row.
-      const { error: snapshotError } = await supabase
-        .from("budgets")
-        .update({ wizard_state: { ...snapshot, draftId } })
-        .eq("id", draftId);
-      if (snapshotError) throw snapshotError;
+      }, items);
+      draftId = result.budget_id;
+      draftIdRef.current = result.budget_id;
+      lockVersion = result.lock_version;
+      lockVersionRef.current = result.lock_version;
     } else {
-      // Update existing draft
-      const { error } = await supabase.from("budgets").update({
-        title: state.title || "Borrador de Presupuesto (Wizard)",
-        client_id: state.clientId || null,
-        client_name: clientSnapshot.name,
-        client_email: clientSnapshot.email,
-        client_phone: clientSnapshot.phone,
-        project_id: state.projectId || null,
-        service_type: state.serviceType || state.sector || "general",
-        subtotal: financials.subtotal,
-        iva_percent: state.ivaPercent,
-        iva_amount: financials.ivaAmount,
-        total: financials.total,
-        notes: state.internalNotes,
-        valid_until: state.validUntil || null,
-        deposit_percent: state.depositPercent,
-        payment_method: state.paymentMethod,
-        payment_iban: state.paymentIban,
-        discount_type: state.discountType,
-        discount_percent: state.discountPercent,
-        discount_amount: financials.discountValue,
-        payment_schedule: state.paymentSchedule,
-        warranty_text: state.warrantyText,
-        execution_deadline_text: state.executionDeadlineText,
-        observations: state.observations,
-        conditions_text: state.conditionsText,
-        wizard_state: { ...snapshot, draftId },
-        updated_at: new Date().toISOString()
-      }).eq("id", draftId);
-
-      if (error) throw error;
+      if (!lockVersion) throw new Error("Falta la revisión del presupuesto. Recarga la página antes de guardar.");
+      const result = await saveBudgetRevision(
+        supabase,
+        draftId,
+        lockVersion,
+        revisionPayload(draftId, clientSnapshot),
+        items,
+      );
+      lockVersion = result.lock_version;
+      lockVersionRef.current = result.lock_version;
     }
 
     // A estas alturas la cabecera existe: o venía del estado, o la acabamos de
@@ -1495,71 +1515,11 @@ export function BudgetGenerateProvider({
       throw new Error("No se pudo determinar el borrador tras guardar la cabecera");
     }
 
-    // Also sync budget_items so the detail page shows partidas
-    if (draftId && (state.partidas.length > 0 || state.materials.some(m => m.included))) {
-      const multiplier = marginMultiplier(state.marginPercent);
-
-      const partidasToInsert = state.partidas.filter(p => p.status !== "opcional").map(p => ({
-        budget_id: draftId,
-        concept: p.concept,
-        description: p.description,
-        quantity: p.quantity,
-        unit: normalizeBudgetItemUnit(p.unit),
-        category: p.category,
-        chapter: p.chapter || p.category || "otros",
-        unit_price: p.unit_price_client,
-        subtotal: p.subtotal_client,
-        // Coste real de la línea. Sin esto el PDF interno no puede calcular
-        // margen ni beneficio y tiene que adivinarlos emparejando por nombre.
-        unit_price_cost: p.unit_price,
-        subtotal_cost: p.subtotal_cost
-      }));
-
-      const materialsToInsert = state.materials.filter(m => m.included).map(m => ({
-        budget_id: draftId,
-        concept: m.name,
-        description: "Material sugerido",
-        quantity: m.quantity,
-        unit: normalizeBudgetItemUnit(m.unit),
-        category: "material",
-        chapter: m.linkedChapter || "materiales",
-        unit_price: m.unit_price * multiplier,
-        subtotal: m.subtotal * multiplier,
-        // El coste del material es su precio sin margen.
-        unit_price_cost: m.unit_price,
-        subtotal_cost: m.subtotal
-      }));
-
-      // Persist the wizard's own order: partidas first, then materials, each
-      // numbered from zero. The position is assigned before itemsSignature so
-      // the signature represents exactly the rows that will be inserted,
-      // including their persisted sort_order values.
-      const itemsToInsert = [...partidasToInsert, ...materialsToInsert]
-        .map((row, idx) => ({ ...row, sort_order: idx }));
-
-      // Rewriting identical rows is the single most disk-expensive thing this
-      // wizard does (a full replacement churns dead tuples and WAL), so skip
-      // it entirely when nothing changed.
-      // Include the destination budget: two drafts may legitimately contain
-      // identical rows, but both still need their own budget_items records.
-      const itemsSignature = `${draftId}:${JSON.stringify(itemsToInsert)}`;
-      if (itemsSignature !== lastSyncedItemsSignature.current) {
-        // Sustitución atómica: validar, vaciar e insertar ocurren dentro de
-        // una sola transacción. Un conjunto vacío es una operación legítima
-        // (vaciar las líneas), no un motivo para omitir la llamada.
-        await replaceBudgetItems(supabase, draftId, itemsToInsert);
-
-        // Solo después de que la RPC confirme el recuento exacto podemos
-        // dar por sincronizada esta firma; si lanza, la próxima edición
-        // vuelve a intentarlo.
-        lastSyncedItemsSignature.current = itemsSignature;
-      }
-    }
-
-    // Único punto donde el asistente declara el guardado completo: cabecera,
-    // snapshot y partidas ya están persistidos.
+    if (!lockVersion) throw new Error("La base de datos no devolvió la revisión guardada");
     setState(prev => ({
       ...prev,
+      draftId,
+      lockVersion,
       isSavingDraft: false,
       saveError: null,
       lastSavedAt: new Date().toLocaleTimeString("es-ES", { hour: '2-digit', minute: '2-digit' })
@@ -1568,18 +1528,35 @@ export function BudgetGenerateProvider({
     if (manual) {
       toast.success("Borrador guardado correctamente");
     }
-    return { skipped: false, budgetId: draftId };
+    return { skipped: false, budgetId: draftId, lockVersion };
+  };
+
+  const saveDraftOrThrow = async (manual = false): Promise<SaveDraftOutcome> => {
+    // A pending autosave, manual save or finalization must never overlap a
+    // second create/save in the same tab. The database handles other tabs.
+    const previous = revisionSaveInFlight.current;
+    const current = (async () => {
+      if (previous) await previous.catch(() => undefined);
+      return performDraftSaveOrThrow(manual);
+    })();
+    revisionSaveInFlight.current = current;
+    try {
+      return await current;
+    } finally {
+      if (revisionSaveInFlight.current === current) revisionSaveInFlight.current = null;
+    }
   };
 
   // Envoltorio público. Conserva literalmente el contrato histórico
   // `(manual?: boolean) => Promise<string | null>` para no alterar a ninguno
   // de sus consumidores actuales, y concentra aquí toda la gestión de errores.
   const saveDraft = async (manual = false): Promise<string | null> => {
+    if (isFinalizingRef.current || isFinalizedRef.current) return null;
     try {
       const outcome = await saveDraftOrThrow(manual);
       return outcome.skipped ? null : outcome.budgetId;
     } catch (err: any) {
-      const errorMsg = err?.message || "Error desconocido al guardar";
+      const errorMsg = budgetRevisionErrorMessage(err);
       console.error("Error saving draft:", err);
       setState(prev => ({ ...prev, isSavingDraft: false, saveError: errorMsg }));
       if (manual) toast.error("Error al guardar: " + errorMsg);
@@ -1588,6 +1565,7 @@ export function BudgetGenerateProvider({
   };
 
   const finalizeBudget = async (): Promise<string | null> => {
+    if (isFinalizingRef.current || isFinalizedRef.current) return null;
     // Block finalization if budget is undervalued
     if (state.isUndervalued) {
       toast.error("No se puede finalizar: el presupuesto esta por debajo del minimo realista de mercado. Ajusta las partidas o genera de nuevo con IA.");
@@ -1599,121 +1577,41 @@ export function BudgetGenerateProvider({
     // fallado. `saveDraftOrThrow` no escribe `saveError` —solo lo hace el
     // envoltorio público, que aquí no interviene—, así que este es el único
     // punto donde ese residuo puede desaparecer.
+    isFinalizingRef.current = true;
+    if (saveTimeout.current) clearTimeout(saveTimeout.current);
     setState(prev => ({ ...prev, isFinalizing: true, finalizeError: null, saveError: null }));
     try {
-      // Guardar primero, propagando cualquier fallo. Si esto lanza, no se
-      // alcanza nada de lo que viene después: ni versión, ni sustitución de
-      // partidas, ni el cambio a "pendiente", ni snapshot, actividad,
-      // analytics o toast de éxito. El fallback a `state.draftId` solo se usa
-      // en la omisión legítima, nunca tras una operación que pudo fallar.
-      const saved = await saveDraftOrThrow(false);
-
       const supabase = createClient();
-      const budgetId = saved.skipped ? state.draftId : saved.budgetId;
+      // Wait for any previous autosave to settle before reading the newest
+      // revision. For an existing draft, finalize_budget itself saves header
+      // and items in ONE transaction; a separate save would leave changes
+      // behind if finalization subsequently failed.
+      if (revisionSaveInFlight.current) await revisionSaveInFlight.current;
+      let budgetId = draftIdRef.current ?? state.draftId;
+      let expectedLockVersion = lockVersionRef.current ?? state.lockVersion;
+      if (!budgetId) {
+        // A brand-new wizard needs an identity before it can be finalized.
+        // If finalization fails afterwards this new budget remains a draft,
+        // never a falsely finalized or half-written budget.
+        const created = await saveDraftOrThrow(false);
+        if (!created.skipped) {
+          budgetId = created.budgetId;
+          expectedLockVersion = created.lockVersion;
+        }
+      }
       if (!budgetId) throw new Error("No hay borrador para finalizar. Guarda un borrador primero.");
-      const financials = calculateBudgetFinancials(
-        state.totals.clientPrice,
-        state.ivaPercent,
-        state.discountType,
-        state.discountPercent,
-        state.discountAmount,
+      if (!expectedLockVersion) {
+        throw new Error("Falta la revisión del presupuesto. Recarga la página antes de finalizar.");
+      }
+      const result = await finalizeBudgetRevision(
+        supabase,
+        budgetId,
+        expectedLockVersion,
+        revisionPayload(budgetId),
+        revisionItems(),
       );
-
-      // 1. Obtener la siguiente versión (si ya existía y lo abrieron, o si es la 1)
-      const nextVer = await getNextVersion(supabase, "budget", budgetId);
-
-      // 2. Preparar las partidas reales + materiales. El vaciado de las líneas
-      // antiguas ya no es un DELETE suelto: ocurre dentro de la sustitución
-      // atómica de más abajo, en la misma transacción que la inserción.
-      const multiplier = marginMultiplier(state.marginPercent);
-
-      const partidasToInsert = state.partidas.filter(p => p.status !== "opcional").map(p => ({
-        budget_id: budgetId,
-        concept: p.concept,
-        description: p.description,
-        quantity: p.quantity,
-        unit: normalizeBudgetItemUnit(p.unit),
-        category: p.category,
-        chapter: p.chapter || p.category || "otros",
-        unit_price: p.unit_price_client,
-        subtotal: p.subtotal_client,
-        // Coste real de la línea. Sin esto el PDF interno no puede calcular
-        // margen ni beneficio y tiene que adivinarlos emparejando por nombre.
-        unit_price_cost: p.unit_price,
-        subtotal_cost: p.subtotal_cost
-      }));
-
-      const materialsToInsert = state.materials.filter(m => m.included).map(m => ({
-        budget_id: budgetId,
-        concept: m.name,
-        description: "Material sugerido",
-        quantity: m.quantity,
-        unit: normalizeBudgetItemUnit(m.unit),
-        category: "material",
-        chapter: m.linkedChapter || "materiales",
-        unit_price: m.unit_price * multiplier,
-        subtotal: m.subtotal * multiplier,
-        // El coste del material es su precio sin margen.
-        unit_price_cost: m.unit_price,
-        subtotal_cost: m.subtotal
-      }));
-
-      // Same ordering contract as saveDraft: partidas first, then materials,
-      // numbered from zero over the already-filtered rows.
-      const itemsToInsert = [...partidasToInsert, ...materialsToInsert]
-        .map((row, idx) => ({ ...row, sort_order: idx }));
-
-      // 3. Sustituir siempre, también con conjunto vacío: finalizar un
-      // presupuesto sin líneas debe dejarlo sin líneas, no con las anteriores.
-      await replaceBudgetItems(supabase, budgetId, itemsToInsert);
-
-      // 4. Actualizar el estado a pendiente y la versión
-      const { error: upErr } = await supabase.from("budgets").update({
-        status: "pendiente",
-        version: nextVer,
-        title: state.title || "Borrador de Presupuesto (Wizard)",
-        client_id: state.clientId || null,
-        project_id: state.projectId || null,
-        service_type: state.serviceType || state.sector || "general",
-        subtotal: financials.subtotal,
-        iva_percent: state.ivaPercent,
-        iva_amount: financials.ivaAmount,
-        total: financials.total,
-        notes: state.internalNotes,
-        valid_until: state.validUntil || null,
-        deposit_percent: state.depositPercent,
-        payment_method: state.paymentMethod,
-        payment_iban: state.paymentIban,
-        discount_type: state.discountType,
-        discount_percent: state.discountPercent,
-        discount_amount: financials.discountValue,
-        payment_schedule: state.paymentSchedule,
-        warranty_text: state.warrantyText,
-        execution_deadline_text: state.executionDeadlineText,
-        observations: state.observations,
-        conditions_text: state.conditionsText,
-        wizard_state: {
-          ...state,
-          draftId: budgetId,
-          isSavingDraft: false,
-          isFinalizing: false,
-          saveError: null,
-          finalizeError: null,
-        },
-        updated_at: new Date().toISOString()
-      }).eq("id", budgetId);
-      if (upErr) throw upErr;
-
-      // 5. Guardar Snapshot de Version y Activity Log
-      const { data: finalBudget } = await supabase.from("budgets").select("*").eq("id", budgetId).single();
-
-      saveDocumentVersion(supabase, {
-        entity_type: "budget",
-        entity_id: budgetId,
-        version: nextVer,
-        snapshot: finalBudget as unknown as Record<string, unknown>,
-        change_summary: `Versión ${nextVer} generada desde el Asistente.`
-      });
+      lockVersionRef.current = result.lock_version;
+      isFinalizedRef.current = true;
 
       logActivity(supabase, {
         action: `budget.status_changed`,
@@ -1722,23 +1620,48 @@ export function BudgetGenerateProvider({
         metadata: { from: "borrador", to: "pendiente" },
       });
 
-      setState(prev => ({ ...prev, isFinalizing: false, finalizeError: null }));
+      setState(prev => ({
+        ...prev,
+        lockVersion: result.lock_version,
+        isFinalizing: false,
+        finalizeError: null,
+      }));
       toast.success("Presupuesto finalizado correctamente");
       analytics.budgetFinalized(budgetId, state.totals.clientPrice * (1 + state.ivaPercent / 100));
       return budgetId;
 
     } catch (err: any) {
-      const errorMsg = err?.message || "Error desconocido al finalizar";
+      const errorMsg = budgetRevisionErrorMessage(err);
       console.error("Error finalizing budget:", err);
       setState(prev => ({ ...prev, isFinalizing: false, finalizeError: errorMsg }));
       toast.error("Error al finalizar: " + errorMsg);
       return null;
+    } finally {
+      isFinalizingRef.current = false;
     }
   };
 
+  const isFirstRender = useRef(true);
+  const saveTimeout = useRef<NodeJS.Timeout | null>(null);
+  const lastSavedSignature = useRef<string | null>(null);
+  const isAutosaving = useRef(false);
+  const autosaveReady = useRef(false);
+  const pendingHydration = useRef(false);
+
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has("budgetId")) {
+      autosaveReady.current = true;
+    }
+  }, []);
+
   const loadDraft = useCallback((savedState: Partial<BudgetState>) => {
+    autosaveReady.current = false;
+    pendingHydration.current = true;
+    if (saveTimeout.current) clearTimeout(saveTimeout.current);
     // Un presupuesto ya guardado conserva el margen con el que se calculó.
     if (typeof savedState.marginPercent === "number") marginLockedRef.current = true;
+    if (savedState.draftId) draftIdRef.current = savedState.draftId;
+    if (typeof savedState.lockVersion === "number") lockVersionRef.current = savedState.lockVersion;
     const savedMaterials = savedState.materials || [];
     const requiresAtomicRecalculation = savedMaterials.some((material) =>
       isCommercialProductMaterial(material) && (
@@ -1748,18 +1671,18 @@ export function BudgetGenerateProvider({
       )
     );
     setState(prev => ({
-      ...prev,
-      ...savedState,
-      sectorData: { ...prev.sectorData, ...(savedState.sectorData || {}) },
-      priceVerification: {
-        ...prev.priceVerification,
-        ...(savedState.priceVerification || {}),
-      },
-      realismAudit: {
-        ...prev.realismAudit,
-        ...(savedState.realismAudit || {}),
-      },
-      analysisDirty: Boolean(savedState.analysisDirty || requiresAtomicRecalculation),
+        ...prev,
+        ...savedState,
+        sectorData: { ...prev.sectorData, ...(savedState.sectorData || {}) },
+        priceVerification: {
+          ...prev.priceVerification,
+          ...(savedState.priceVerification || {}),
+        },
+        realismAudit: {
+          ...prev.realismAudit,
+          ...(savedState.realismAudit || {}),
+        },
+        analysisDirty: Boolean(savedState.analysisDirty || requiresAtomicRecalculation),
     }));
   }, []);
 
@@ -1770,14 +1693,18 @@ export function BudgetGenerateProvider({
   // produces a brand new state object on every save. Depending on `state` made
   // the effect retrigger itself every 1.5s indefinitely, rewriting the same rows
   // (DELETE + INSERT of every budget_item) until the database ran out of disk IO.
-  const isFirstRender = useRef(true);
-  const saveTimeout = useRef<NodeJS.Timeout | null>(null);
-  const lastSavedSignature = useRef<string | null>(null);
-  const isAutosaving = useRef(false);
-
   const autosaveSignature = useMemo(() => buildAutosaveSignature(state), [state]);
 
   useEffect(() => {
+    if (pendingHydration.current) {
+      // React has committed the asynchronously loaded state. Its first
+      // signature is a baseline, not an edit to write back to the database.
+      lastSavedSignature.current = autosaveSignature;
+      isFirstRender.current = false;
+      pendingHydration.current = false;
+      autosaveReady.current = true;
+      return;
+    }
     // First render: record the baseline, don't save what we just loaded.
     if (isFirstRender.current) {
       isFirstRender.current = false;
@@ -1785,12 +1712,17 @@ export function BudgetGenerateProvider({
       return;
     }
 
+    // Existing budgets are loaded after the first render. Do not persist the
+    // blank/default provider state while that read is still in flight.
+    if (!autosaveReady.current || isFinalizingRef.current || isFinalizedRef.current) return;
+
     // Nothing the user cares about changed since the last successful save.
     if (autosaveSignature === lastSavedSignature.current) return;
 
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
 
     const runAutosave = async () => {
+      if (isFinalizingRef.current || isFinalizedRef.current || !autosaveReady.current) return;
       // Re-entrancy guard: never overlap two autosaves. If one is already in
       // flight, retry shortly instead of dropping this edit on the floor.
       if (isAutosaving.current) {
