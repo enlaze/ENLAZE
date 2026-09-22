@@ -111,7 +111,15 @@ async function openWizard(budgetId, expectedTitle = "Base E2E") {
       `networkErrors=${JSON.stringify(networkErrors.slice(-10))} ` +
       `Next=${JSON.stringify(nextLog.slice(-3000))}`, { cause: error });
   }
-  await waitFor(async () => page.$eval('input[placeholder="Ej: Reforma baño completo"]', (node) => node.value) === expectedTitle, "wizard hydration");
+  try {
+    await waitFor(async () => page.$eval('input[placeholder="Ej: Reforma baño completo"]', (node) => node.value) === expectedTitle, "wizard hydration", 30000);
+  } catch (error) {
+    const actualTitle = await page.$eval('input[placeholder="Ej: Reforma baño completo"]', (node) => node.value);
+    const visibleText = await page.evaluate(() => document.body?.innerText?.slice(0, 900) ?? "");
+    throw Error(`Wizard hydration failed. expected=${expectedTitle} actual=${JSON.stringify(actualTitle)} ` +
+      `URL=${page.url()} text=${JSON.stringify(visibleText)} requests=${JSON.stringify(requests.slice(-30))} ` +
+      `pageErrors=${JSON.stringify(pageErrors)} networkErrors=${JSON.stringify(networkErrors.slice(-10))}`, { cause: error });
+  }
   assert.deepEqual(pageErrors, [], "page must not throw during hydration");
   return { page, pageErrors };
 }
@@ -138,7 +146,6 @@ try {
     const target = new URL(url.pathname.slice("/rest/v1".length) + url.search, restOrigin);
     const chunks = [];
     for await (const chunk of request) chunks.push(chunk);
-    requests.push({ method: request.method, path: target.pathname });
     try {
       const upstream = await fetch(target, {
         method: request.method,
@@ -149,9 +156,15 @@ try {
       });
       const headers = Object.fromEntries([...upstream.headers].filter(([name]) =>
         !["content-length", "content-encoding", "transfer-encoding", "connection"].includes(name)));
+      const body = Buffer.from(await upstream.arrayBuffer());
+      requests.push({ method: request.method, path: target.pathname, status: upstream.status,
+        error: upstream.ok ? undefined : body.toString().slice(0, 300) });
       response.writeHead(upstream.status, { ...headers, "access-control-allow-origin": appOrigin });
-      response.end(Buffer.from(await upstream.arrayBuffer()));
-    } catch (error) { reply(response, 502, { error: String(error) }); }
+      response.end(body);
+    } catch (error) {
+      requests.push({ method: request.method, path: target.pathname, status: 502, error: String(error) });
+      reply(response, 502, { error: String(error) });
+    }
   });
   await new Promise((resolve) => gateway.listen(53003, "127.0.0.1", resolve));
 
