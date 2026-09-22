@@ -91,7 +91,14 @@ async function openWizard(budgetId, expectedTitle = "Base E2E") {
     waitUntil: "domcontentloaded", timeout: 90000,
   });
   assert.equal(response.status(), 200, `wizard response: ${await page.content()}`);
-  await page.waitForSelector('input[placeholder="Ej: Reforma baño completo"]', { timeout: 60000 });
+  try {
+    await page.waitForSelector('input[placeholder="Ej: Reforma baño completo"]', { timeout: 30000 });
+  } catch (error) {
+    const visibleText = await page.evaluate(() => document.body?.innerText?.slice(0, 1600) ?? "");
+    throw Error(`Wizard did not render. URL=${page.url()} text=${JSON.stringify(visibleText)} ` +
+      `pageErrors=${JSON.stringify(pageErrors)} requests=${JSON.stringify(requests.slice(-20))} ` +
+      `Next=${JSON.stringify(nextLog.slice(-3000))}`, { cause: error });
+  }
   await waitFor(async () => page.$eval('input[placeholder="Ej: Reforma baño completo"]', (node) => node.value) === expectedTitle, "wizard hydration");
   assert.deepEqual(pageErrors, [], "page must not throw during hydration");
   return { page, pageErrors };
@@ -106,6 +113,7 @@ try {
     const url = new URL(request.url, gatewayOrigin);
     if (request.method === "OPTIONS") { reply(response, 200, {}); return; }
     if (url.pathname === "/auth/v1/user") {
+      requests.push({ method: request.method, path: url.pathname });
       if (request.headers.authorization !== `Bearer ${accessToken}`) {
         reply(response, 401, { error: "invalid synthetic session" }); return;
       }
