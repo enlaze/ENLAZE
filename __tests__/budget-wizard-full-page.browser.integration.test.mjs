@@ -57,7 +57,7 @@ function reply(response, status, body, headers = {}) {
   response.writeHead(status, {
     "content-type": "application/json", "access-control-allow-origin": appOrigin,
     "access-control-allow-methods": "GET,POST,PATCH,PUT,DELETE,OPTIONS",
-    "access-control-allow-headers": "authorization,apikey,content-type,x-client-info,prefer,accept-profile,content-profile",
+    "access-control-allow-headers": "authorization,apikey,content-type,x-client-info,x-supabase-api-version,prefer,accept-profile,content-profile",
     ...headers,
   });
   response.end(JSON.stringify(body));
@@ -74,7 +74,14 @@ async function openWizard(budgetId, expectedTitle = "Base E2E") {
   const page = await browser.newPage();
   pages.push(page);
   const pageErrors = [];
+  const networkErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") networkErrors.push(message.text().slice(0, 300));
+  });
+  page.on("requestfailed", (request) => {
+    networkErrors.push(`${new URL(request.url()).pathname}: ${request.failure()?.errorText}`);
+  });
   await page.setRequestInterception(true);
   page.on("request", (request) => {
     const origin = new URL(request.url()).origin;
@@ -97,6 +104,7 @@ async function openWizard(budgetId, expectedTitle = "Base E2E") {
     const visibleText = await page.evaluate(() => document.body?.innerText?.slice(0, 1600) ?? "");
     throw Error(`Wizard did not render. URL=${page.url()} text=${JSON.stringify(visibleText)} ` +
       `pageErrors=${JSON.stringify(pageErrors)} requests=${JSON.stringify(requests.slice(-20))} ` +
+      `networkErrors=${JSON.stringify(networkErrors.slice(-10))} ` +
       `Next=${JSON.stringify(nextLog.slice(-3000))}`, { cause: error });
   }
   await waitFor(async () => page.$eval('input[placeholder="Ej: Reforma baño completo"]', (node) => node.value) === expectedTitle, "wizard hydration");
