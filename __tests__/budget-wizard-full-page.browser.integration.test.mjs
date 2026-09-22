@@ -210,13 +210,21 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 1800));
   assert.deepEqual(await snapshot(), baseline, "opening an existing budget must not autosave it");
   const second = await openWizard(budgetId);
-  if (!await first.page.$('input[placeholder="Ej: Reforma baño completo"]')) {
+  // Next dev can briefly replace an already-mounted tab with its loading
+  // boundary while compiling the second request. Wait for the first tab to
+  // rehydrate before simulating an edit; a transient loading frame is not a
+  // disappeared budget.
+  try {
+    await first.page.waitForSelector('input[placeholder="Ej: Reforma baño completo"]', { timeout: 30000 });
+  } catch (error) {
     const firstText = await first.page.evaluate(() => document.body?.innerText?.slice(0, 1200) ?? "");
     const secondText = await second.page.evaluate(() => document.body?.innerText?.slice(0, 500) ?? "");
     throw Error(`First tab lost the editable wizard. URL=${first.page.url()} text=${JSON.stringify(firstText)} ` +
       `secondURL=${second.page.url()} secondText=${JSON.stringify(secondText)} ` +
-      `requests=${JSON.stringify(requests.slice(-25))} Next=${JSON.stringify(nextLog.slice(-1200))}`);
+      `requests=${JSON.stringify(requests.slice(-25))} Next=${JSON.stringify(nextLog.slice(-1200))}`, { cause: error });
   }
+  await waitFor(async () => (await first.page.$eval('input[placeholder="Ej: Reforma baño completo"]', (node) => node.value)) === "Base E2E", "first tab after dev reload", 15000);
+  assert.deepEqual(await snapshot(), baseline, "second tab must not cause a revision write");
   await first.page.type('input[placeholder="Ej: Reforma baño completo"]', " editado");
   await waitFor(async () => (await snapshot()).lock_version === 2, "first real autosave", 15000);
   assert.equal((await snapshot()).title, "Base E2E editado");
