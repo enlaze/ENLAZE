@@ -10,6 +10,7 @@ on:
       - "supabase/migrations/*replace_budget_items*.sql"
       - "__tests__/budget-revision-rpcs*.mjs"
       - "__tests__/budget-revision-writer.test.mjs"
+      - "__tests__/budget-provider-autosave.browser.test.mjs"
       - "__tests__/budget-generate-writer-flow.test.mjs"
       - "__tests__/budget-duplicate-writer-safety.test.mjs"
       - "__tests__/budget-finalization.test.mjs"
@@ -81,6 +82,10 @@ jobs:
             __tests__/budget-recalculation.test.mjs \
             __tests__/budget-timeline.test.mjs \
             __tests__/replace-budget-items-migration.test.mjs
+      - name: Install Chrome for isolated React browser test
+        run: ./node_modules/.bin/puppeteer browsers install chrome
+      - name: React hydration and autosave debounce on loopback only
+        run: npm run test:budget-provider-autosave-browser
       - name: Dedicated PostgreSQL 17 cluster, no production secrets
         run: |
           docker network create enlaze-e2-revision-network
