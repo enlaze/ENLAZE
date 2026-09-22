@@ -73,6 +73,10 @@ async function waitFor(predicate, label, timeout = 90000) {
 async function openWizard(budgetId, expectedTitle = "Base E2E") {
   const page = await browser.newPage();
   pages.push(page);
+  // Production CSP deliberately allows hosted Supabase rather than this
+  // disposable loopback origin. Bypass only CSP in this synthetic browser;
+  // the request interceptor below still refuses every non-loopback origin.
+  await page.setBypassCSP(true);
   const pageErrors = [];
   const networkErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
