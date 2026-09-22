@@ -11,6 +11,7 @@ on:
       - "__tests__/budget-revision-rpcs*.mjs"
       - "__tests__/budget-revision-writer.test.mjs"
       - "__tests__/budget-provider-autosave.browser.test.mjs"
+      - "__tests__/budget-wizard-full-page.browser.integration.test.mjs"
       - "__tests__/budget-generate-writer-flow.test.mjs"
       - "__tests__/budget-duplicate-writer-safety.test.mjs"
       - "__tests__/budget-finalization.test.mjs"
@@ -120,6 +121,8 @@ jobs:
             postgrest/postgrest:v12.2.3
       - name: Real SQL, rollback, negative controls, HTTP 409 and Supabase client
         run: npm run test:budget-revision-rpcs-integration
+      - name: Full Next wizard on disposable PostgreSQL and PostgREST
+        run: npm run test:budget-wizard-full-page-browser
       - name: Disposable server logs
         if: always()
         run: |
