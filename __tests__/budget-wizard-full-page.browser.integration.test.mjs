@@ -112,7 +112,7 @@ async function openWizard(budgetId, expectedTitle = "Base E2E") {
       `Next=${JSON.stringify(nextLog.slice(-3000))}`, { cause: error });
   }
   try {
-    await waitFor(async () => page.$eval('input[placeholder="Ej: Reforma baño completo"]', (node) => node.value) === expectedTitle, "wizard hydration", 30000);
+    await waitFor(async () => (await page.$eval('input[placeholder="Ej: Reforma baño completo"]', (node) => node.value)) === expectedTitle, "wizard hydration", 30000);
   } catch (error) {
     const actualTitle = await page.$eval('input[placeholder="Ej: Reforma baño completo"]', (node) => node.value);
     const visibleText = await page.evaluate(() => document.body?.innerText?.slice(0, 900) ?? "");

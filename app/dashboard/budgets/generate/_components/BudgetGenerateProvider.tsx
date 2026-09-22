@@ -729,6 +729,14 @@ const AUTOSAVE_IGNORED_KEYS = new Set<string>([
   "saveError",
   "finalizeError",
   "validationError",
+  // These are computed from editable fields (or fetched reference settings).
+  // Their post-hydration effects must not count as a human edit to an existing
+  // budget and cause an otherwise empty revision write.
+  "totals",
+  "clientView",
+  "internalView",
+  "realisticTimeline",
+  "configuredMarginPercent",
 ]);
 
 /** Stable fingerprint of the user-meaningful parts of the wizard state. */
