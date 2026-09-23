@@ -235,11 +235,11 @@ export default function BudgetDetailPage() {
         toast.error("El presupuesto cambió en otra sesión", {
           description: "La ficha se ha actualizado. Revisa el estado actual antes de intentarlo de nuevo.",
         });
-        return;
+      } else {
+        toast.error("No se pudo cambiar el estado", {
+          description: budgetRevisionErrorMessage(error),
+        });
       }
-      toast.error("No se pudo cambiar el estado", {
-        description: budgetRevisionErrorMessage(error),
-      });
     }
     setUpdating(false);
   }

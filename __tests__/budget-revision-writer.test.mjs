@@ -78,7 +78,7 @@ describe("budget revision writer", () => {
     );
     assert.match(
       budgetDetailPage,
-      /if \(isBudgetRevisionConflict\(error\)\) \{\s*await loadBudget\(\);[\s\S]*?La ficha se ha actualizado\.[\s\S]*?return;/,
+      /if \(isBudgetRevisionConflict\(error\)\) \{\s*await loadBudget\(\);[\s\S]*?La ficha se ha actualizado\.[\s\S]*?\} else \{[\s\S]*?\}\s*\}\s*setUpdating\(false\);/,
       "la ficha debe reemplazar su lock_version obsoleto con una lectura nueva",
     );
     assert.match(budgetListPage, /budgets\.find\([\s\S]*?budget\.lock_version/);
