@@ -6,6 +6,8 @@
  *   - profile + module connection state (gmail / calendar / sheets / reputation)
  *   - module summary payloads (the same shape the n8n "Run User Modules" node ingests)
  *   - synthetic `ctx` mirroring "Build Claude Prompt"
+ *   - el bloque de HECHOS que el modelo lee de verdad (el ctx ya no se envía
+ *     en JSON: se envía resuelto en texto, ver lib/agent/briefing-facts.ts)
  *   - last 5 daily summaries this user actually got
  *   - coherence alerts (e.g. agent_connections.connected=true but last briefing
  *     said "no conectado")
@@ -18,7 +20,8 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
-import { buildInspectionContext } from "@/lib/agent/build-context";
+import { buildInspectionContext, buildInspectionFacts } from "@/lib/agent/build-context";
+import { getSectorIntel } from "@/lib/agent/sector-intel";
 
 export const dynamic = "force-dynamic";
 
@@ -226,6 +229,8 @@ export default async function AgentInspectorPage({ searchParams }: { searchParam
     reputation: reputation.body,
   });
 
+  const facts = buildInspectionFacts(ctx, getSectorIntel(profile?.business_sector));
+
   const endpointResults = { gmail, calendar, sheets, reputation };
   const alerts = detectCoherenceAlerts({
     connections,
@@ -384,9 +389,20 @@ export default async function AgentInspectorPage({ searchParams }: { searchParam
         </div>
       </Section>
 
-      {/* Synthesized ctx */}
-      <Section title="ctx que se enviaría a Claude (próxima ejecución)">
-        <details open>
+      {/* Lo que el modelo lee de verdad */}
+      <Section title="Hechos que se enviarían a Claude (próxima ejecución)">
+        <p className="mb-2 text-sm text-navy-500 dark:text-zinc-400">
+          Esto es literalmente lo que va en el prompt. Los números ya vienen
+          resueltos: el modelo solo redacta.
+        </p>
+        <pre className="overflow-x-auto whitespace-pre-wrap rounded bg-navy-900 dark:bg-zinc-950 text-zinc-100 p-3 text-[11.5px] leading-snug">
+          {facts}
+        </pre>
+      </Section>
+
+      {/* Synthesized ctx: la entrada del motor de hechos, ya no viaja al modelo */}
+      <Section title="ctx en crudo (entrada del motor de hechos, ya no se envía)">
+        <details>
           <summary className="cursor-pointer text-sm font-semibold mb-2">Ver JSON completo</summary>
           <pre className="overflow-x-auto rounded bg-navy-900 dark:bg-zinc-950 text-zinc-100 p-3 text-[11.5px] leading-snug">
             {JSON.stringify(ctx, null, 2)}

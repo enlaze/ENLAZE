@@ -8,9 +8,15 @@
  *   - buildSpanishCalendarContext() inside the "Build Claude Prompt" node
  *   - buildSpanishRetailCalendar()  inside the "Run User Modules" node
  *
+ * El ctx ya NO se envía en JSON al modelo: desde el enfoque híbrido lo que
+ * viaja es el bloque de hechos de lib/agent/briefing-facts.ts. Por eso el
+ * inspector renderiza `buildInspectionFacts(ctx)` además del ctx en crudo.
+ *
  * If the n8n versions drift, the inspector will quietly lie. There is no
  * runtime check, so review this file when touching the workflow.
  */
+
+import { buildBriefingFacts, type FactsContext } from "./briefing-facts";
 
 export interface RetailEvent {
   key: string;
@@ -164,4 +170,53 @@ export function buildInspectionContext(args: {
       reputation: args.reputation,
     },
   };
+}
+
+/* ─── Los hechos, tal y como los verá el modelo ──────────────────────────── */
+
+/**
+ * Proyecta el ctx del inspector sobre la entrada del motor de hechos.
+ *
+ * Desde el enfoque híbrido, al prompt ya NO va el ctx en JSON: va el bloque de
+ * texto que devuelve `buildBriefingFacts`. Para que el inspector siga
+ * enseñando lo que el modelo va a leer de verdad, tiene que pasar por aquí.
+ */
+export function toFactsContext(
+  ctx: AgentInspectionContext,
+  sectorIntel: FactsContext["sector_intel"] = null,
+): FactsContext {
+  const { gmail, calendar, sheets, reputation } = ctx.module_payloads;
+  const reviews = reputation?.reviews ?? null;
+  return {
+    config: ctx.config,
+    date: ctx.date,
+    weekday_today: ctx.weekday_today,
+    can_suggest_connecting_tools: ctx.weekday_today === "lunes",
+    modules_state: ctx.modules_state,
+    gmail_intel: gmail?.connected ? gmail : { status: gmail?.status ?? "not_connected" },
+    calendar_intel: calendar?.connected ? calendar : { status: calendar?.status ?? "not_connected" },
+    sales_intel: sheets?.connected
+      ? { ...sheets, active_sheet_name: sheets?.active_sheet?.name ?? null }
+      : { status: sheets?.status ?? "not_connected" },
+    reputation_urgent: reviews?.urgent ?? [],
+    reputation_stats: reviews
+      ? {
+          current_rating: reviews.current_rating ?? null,
+          total_reviews: reviews.total_reviews ?? null,
+          new_reviews_count: reviews.new_reviews_count ?? null,
+          trend: reviews.trend ?? null,
+        }
+      : null,
+    upcoming_retail_events: ctx.upcoming_retail_events,
+    recently_passed_retail_events: ctx.recently_passed_retail_events,
+    sector_intel: sectorIntel,
+  };
+}
+
+/** El bloque de hechos que recibiría el modelo en la próxima ejecución. */
+export function buildInspectionFacts(
+  ctx: AgentInspectionContext,
+  sectorIntel: FactsContext["sector_intel"] = null,
+): string {
+  return buildBriefingFacts(toFactsContext(ctx, sectorIntel));
 }

@@ -1,0 +1,285 @@
+{
+  "_comment": "Payload realista de 'Run User Modules' para un día con las cuatro integraciones conectadas. Se usa para medir tokens (scripts/medir-briefing-tokens.mjs), para comparar la calidad del briefing viejo contra el nuevo (scripts/comparar-briefing.mjs) y en los tests del motor de hechos.",
+  "user_id": "u-demo-panaderia",
+  "business_id": "u-demo-panaderia",
+  "business_name": "Panadería San Juan",
+  "business_type": "panadería",
+  "city": "Valencia",
+  "sector": "comercio",
+  "agent": "comercio_local",
+  "version": "6.3",
+  "timestamp": "2026-09-23T06:15:00.000Z",
+  "daily_summary": {
+    "headline": "3 acción(es) urgente(s) para Panadería San Juan | 2 alerta(s) de costes | 2 oportunidad(es).",
+    "business_health_score": 58,
+    "score_label": "Día normal",
+    "top_priorities": [
+      { "action": "Responder: Factura F-2026-018 vencida", "why": "Puede afectar ventas o servicio", "category": "operativo", "time": "3 min" },
+      { "action": "Coste: Electricidad cara: 112 EUR/MWh", "why": "Impacto directo en margen", "category": "proteger_margen", "time": "15 min" },
+      { "action": "Responder reseña de Ana G.", "why": "15% clientes miran reseñas antes de comprar", "category": "proteger_reputacion", "time": "5 min" }
+    ],
+    "time_to_complete": "Unos 45 minutos si lo haces del tirón",
+    "estimated_minutes": 45,
+    "priority_actions": [
+      "🔴 3 urgente(s) — impacto directo en ventas o margen",
+      "💰 2 alerta(s) de costes — revisar márgenes",
+      "⭐ 2 reseña(s) negativa(s) — responder hoy",
+      "📧 4 email(s) pendiente(s)",
+      "📋 1 normativa(s) — revisar cumplimiento",
+      "📣 2 campaña(s) sugerida(s)",
+      "💶 2 ayuda(s) disponible(s)"
+    ],
+    "opportunities_count": 2,
+    "risks_count": 4,
+    "tasks_total": 11,
+    "tasks_high": 3,
+    "tasks_medium": 5,
+    "margin_pressure": "high",
+    "modules_connected": ["Gmail", "Calendar", "Reputación", "Sheets"],
+    "modules_pending": [],
+    "tip": "Todos los módulos activos."
+  },
+  "recommendations": [
+    {
+      "category": "proteger_margen",
+      "priority": "high",
+      "title": "Presión de costes alta — actuar ya",
+      "action": "Revisa escandallos de tus 5 productos más vendidos.",
+      "steps": ["1. Lista tus 5 productos/servicios de mayor venta", "2. Recalcula coste real con precios actualizados", "3. Sube precio 3-5% donde sea posible o reduce porción", "4. Comunica al cliente: \"Calidad que vale la pena\""],
+      "estimated_impact": "Proteger 2-5% de margen neto",
+      "time_estimate": "1 hora",
+      "timeframe": "esta semana"
+    },
+    {
+      "category": "proteger_reputacion",
+      "priority": "high",
+      "title": "2 reseña(s) sin responder",
+      "action": "Responde hoy. Cada día sin responder pierde clientes.",
+      "steps": ["1. Abre Google Business Profile", "2. Responde con nombre, disculpa concreta y solución", "3. Invita al cliente a volver: \"Nos encantaría una segunda oportunidad\""],
+      "estimated_impact": "Protección reputación — 15% clientes miran reseñas antes de entrar",
+      "time_estimate": "5 min por reseña",
+      "timeframe": "hoy"
+    },
+    {
+      "category": "oportunidad",
+      "priority": "medium",
+      "title": "2 ayuda(s) disponible(s)",
+      "action": "Revisa requisitos antes de que caduquen.",
+      "steps": ["1. Lee el resumen de cada ayuda en tu panel", "2. Verifica si cumples los requisitos", "3. Si dudas, consulta con tu asesor/gestoría"],
+      "estimated_impact": "Financiación potencial directa",
+      "time_estimate": "15 min",
+      "timeframe": "esta semana"
+    },
+    {
+      "category": "vender_mas",
+      "priority": "medium",
+      "title": "Activar huecos libres",
+      "action": "Tienes 3 huecos. Oferta flash ahora.",
+      "steps": ["1. Abre WhatsApp Business", "2. Envía mensaje a lista \"Clientes frecuentes\"", "3. Oferta: descuento 10% o extra gratis solo hoy"],
+      "estimated_impact": "+5-15% facturación día",
+      "time_estimate": "10 min",
+      "timeframe": "hoy"
+    },
+    {
+      "category": "estacional",
+      "priority": "medium",
+      "title": "Preparar campaña de otoño",
+      "action": "Ajusta surtido a producto de temporada.",
+      "steps": ["1. Revisa qué producto de temporada entra", "2. Ajusta pedido al proveedor", "3. Comunica la novedad en redes"],
+      "estimated_impact": "Mejor rotación de temporada",
+      "time_estimate": "30 min",
+      "timeframe": "esta semana"
+    }
+  ],
+  "tasks": {
+    "items": [
+      { "type": "email_reply", "title": "Responder: Factura F-2026-018 vencida", "source": "gmail", "priority": "high", "due_date": "2026-09-23", "category": "operativo", "estimated_impact": "Puede afectar ventas o servicio", "time_estimate": "3 min", "entity_id": "th-1", "description": "Pendiente" },
+      { "type": "cost_review", "title": "Coste: Electricidad cara: 112 EUR/MWh", "source": "energia", "priority": "high", "due_date": "2026-09-23", "category": "proteger_margen", "estimated_impact": "Impacto directo en margen", "time_estimate": "15 min", "description": "Concentrar uso intensivo en horas valle. Revisar contrato eléctrico." },
+      { "type": "review_reply", "title": "Responder reseña de Ana G.", "source": "google_business", "priority": "high", "due_date": "2026-09-23", "category": "proteger_reputacion", "estimated_impact": "15% clientes miran reseñas antes de comprar", "time_estimate": "5 min", "description": "Reseña 2★ — responde con profesionalidad" },
+      { "type": "regulation_review", "title": "Normativa: Nueva obligación de etiquetado de alérgenos en obrador", "source": "boe", "priority": "medium", "due_date": "2026-09-23", "category": "cumplimiento", "estimated_impact": "Riesgo sanción", "time_estimate": "10 min", "description": "Revisar requisitos, plazos y adaptación operativa" },
+      { "type": "subsidy_check", "title": "Ayuda: Digitalización de comercio minorista 2026", "source": "boe", "priority": "medium", "due_date": "2026-09-23", "category": "oportunidad", "estimated_impact": "Financiación potencial", "time_estimate": "15 min", "description": "subvención — Pymes y autónomos" },
+      { "type": "email_reply", "title": "Responder: Pedido semanal de harina", "source": "gmail", "priority": "medium", "due_date": "2026-09-23", "category": "operativo", "estimated_impact": "Relación cliente/proveedor", "time_estimate": "3 min", "description": "Pendiente" },
+      { "type": "price_review", "title": "Precios: Subida del precio mayorista de la mantequilla", "source": "market", "priority": "medium", "due_date": "2026-09-23", "category": "proteger_margen", "estimated_impact": "Revisar precio final", "time_estimate": "10 min", "description": "El lácteo sube por tercera semana consecutiva." },
+      { "type": "campaign_launch", "title": "Lanzar: Lote desayuno vuelta a la rutina", "source": "marketing", "priority": "medium", "due_date": "2026-09-23", "category": "vender_mas", "estimated_impact": "Visibilidad", "time_estimate": "15 min", "description": "Canal: whatsapp, instagram" }
+    ],
+    "time_summary": { "total_estimated_minutes": 76, "interpretation": "Unos 45 minutos si lo haces del tirón" }
+  },
+  "price_catalog": { "margin_pressure": { "index": 2.4, "level": "high", "data_points": 6, "interpretation": "Costes subiendo significativamente — proteger márgenes ya" } },
+  "radar": {
+    "news": [
+      { "id": "news_a", "title": "El consumo de pan artesano crece un 9% en España", "summary": "Los datos del sector apuntan a un trasvase del pan industrial al obrador de barrio, con mayor ticket medio y más compra de fin de semana.", "source": "Google News", "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTE1x", "date": "2026-09-22", "category": "noticias" },
+      { "id": "news_b", "title": "Valencia aprueba nuevas ayudas al comercio de proximidad", "summary": "El ayuntamiento destina 1,2 millones a la modernización de locales comerciales del centro histórico.", "source": "Google News", "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTE1y", "date": "2026-09-21", "category": "noticias" },
+      { "id": "news_c", "title": "La harina se estabiliza tras seis meses al alza", "summary": "Los mayoristas anticipan precios planos hasta final de año.", "source": "Google News", "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTE1z", "date": "2026-09-20", "category": "noticias" }
+    ],
+    "subsidies": [
+      { "id": "sub_1", "title": "Digitalización de comercio minorista 2026 — convocatoria abierta", "type": "subvención", "amount_range": "", "deadline": "", "target": "Pymes y autónomos", "url": "https://www.boe.es/diario_boe/txt.php?id=BOE-B-2026-12345", "status": "abierta" },
+      { "id": "sub_2", "title": "Ayudas a la eficiencia energética en pequeño comercio", "type": "ayuda", "amount_range": "", "deadline": "", "target": "Pymes y autónomos", "url": "https://www.boe.es/diario_boe/txt.php?id=BOE-B-2026-12399", "status": "abierta" }
+    ],
+    "regulations": [
+      { "id": "reg_1", "title": "Nueva obligación de etiquetado de alérgenos en obrador", "type": "normativa", "summary": "Se amplía la obligación de informar sobre alérgenos al producto vendido a granel en establecimientos con obrador propio.", "url": "https://www.boe.es/diario_boe/txt.php?id=BOE-A-2026-9876", "impact": "high", "action_required": "Revisar requisitos, plazos y adaptación operativa" }
+    ]
+  },
+  "competitive": {
+    "signals": [
+      { "id": "comp_1", "title": "Cierra la panadería La Espiga, en el barrio de Russafa", "summary": "Tras 24 años, el obrador de la calle Cuba echa el cierre por jubilación de los propietarios.", "source": "Inteligencia-Competitiva", "url": "https://example.com/1", "type": "competitor_exit", "is_local": true, "relevance": 9, "date": "2026-09-22", "counter_actions": ["Campaña de captación en la zona"] },
+      { "id": "comp_2", "title": "Una cadena de supermercados lanza pan de masa madre a 1,20 €", "summary": "La promoción arranca esta semana en toda la Comunidad Valenciana.", "source": "Inteligencia-Competitiva", "url": "https://example.com/2", "type": "competitor_promo", "is_local": false, "relevance": 6, "date": "2026-09-21", "counter_actions": ["No bajar precio, comunicar valor"] }
+    ]
+  },
+  "cost_monitor": {
+    "alerts": [
+      { "category": "energia", "severity": "high", "title": "Electricidad cara: 112 EUR/MWh", "recommendation": "Concentrar uso intensivo en horas valle. Revisar contrato eléctrico." },
+      { "category": "costes_producto", "severity": "high", "title": "Mantequilla y lácteos: +3.2%", "recommendation": "Revisar precios de venta o buscar proveedor alternativo." },
+      { "category": "costes_logistica", "severity": "medium", "title": "Transporte: +1.4%", "recommendation": "Agrupar pedidos. Revisar costes de reparto." }
+    ],
+    "recommendations": [{ "priority": "high", "action": "Revisión urgente de escandallos y márgenes", "detail": "Varias alertas de costes altos simultáneas." }],
+    "summary": "2 alerta(s) alta(s), 1 media(s)."
+  },
+  "market": {
+    "connected": true,
+    "has_competitors": true,
+    "competitors_count": 3,
+    "price_signals": [
+      { "id": "ps1", "title": "Subida del precio mayorista de la mantequilla (tercera semana)", "summary": "Los precios del lácteo acumulan una subida del 9% desde agosto según los datos del MAPA publicados esta semana.", "impact": "high", "detected_at": "2026-09-22T08:00:00Z", "action": "Revisar escandallo de bollería" },
+      { "id": "ps2", "title": "Bajada del precio del aceite de girasol", "summary": "El girasol cede un 4% en origen tras la campaña.", "impact": "medium", "detected_at": "2026-09-21T08:00:00Z", "action": null },
+      { "id": "ps3", "title": "Incremento del coste del envase de papel", "summary": "El papel kraft sube por el encarecimiento de la celulosa.", "impact": "medium", "detected_at": "2026-09-20T08:00:00Z", "action": null }
+    ],
+    "competitor_signals": [
+      { "id": "cs1", "competitor": "Panadería La Espiga", "title": "Cese de actividad confirmado", "summary": "Cierra el 30 de septiembre tras 24 años.", "opportunity": "Captación de clientes de la zona", "detected_at": "2026-09-22T09:00:00Z" }
+    ],
+    "market_signals": [
+      { "id": "ms1", "title": "Fiesta mayor del barrio de Russafa el fin de semana", "summary": "Se esperan 12.000 asistentes en el recinto del mercado.", "action": "Ampliar producción de fin de semana", "detected_at": "2026-09-22T09:00:00Z" }
+    ],
+    "supplier_alerts": [
+      { "id": "sa1", "supplier": "Harinas del Turia", "title": "Retraso confirmado en la entrega del jueves", "summary": "El proveedor avisa de una incidencia logística que retrasa 48h el pedido.", "impact": "high", "alternative": "Molinos Levante tiene stock", "detected_at": "2026-09-22T10:00:00Z" }
+    ],
+    "price_analysis": {
+      "trending_up": [
+        { "id": "ps1", "title": "Subida del precio mayorista de la mantequilla (tercera semana)", "summary": "Los precios del lácteo acumulan una subida del 9% desde agosto según los datos del MAPA publicados esta semana.", "impact": "high", "detected_at": "2026-09-22T08:00:00Z", "action": "Revisar escandallo de bollería" },
+        { "id": "ps3", "title": "Incremento del coste del envase de papel", "summary": "El papel kraft sube por el encarecimiento de la celulosa.", "impact": "medium", "detected_at": "2026-09-20T08:00:00Z", "action": null }
+      ],
+      "trending_down": [
+        { "id": "ps2", "title": "Bajada del precio del aceite de girasol", "summary": "El girasol cede un 4% en origen tras la campaña.", "impact": "medium", "detected_at": "2026-09-21T08:00:00Z", "action": null }
+      ],
+      "recommendations": [
+        { "type": "review_prices", "title": "Revisar precios de venta", "description": "2 señal(es) de subida de costes. Valora ajustar precios para mantener margen.", "priority": "high" },
+        { "type": "check_suppliers", "title": "Evaluar proveedores alternativos", "description": "1 alerta(s) de proveedor. Valora alternativas para mantener márgenes.", "priority": "medium" }
+      ]
+    },
+    "action_items": [
+      { "type": "price_review", "title": "Revisar 3 señal(es) de precio/margen", "priority": "high", "description": "Señales de precio detectadas que pueden afectar tus márgenes." },
+      { "type": "competitor_analysis", "title": "Analizar 1 movimiento(s) de competencia", "priority": "medium", "description": "Actividad de competidores detectada. Revisa oportunidades y amenazas." },
+      { "type": "market_opportunity", "title": "1 evento(s) local(es) detectado(s)", "priority": "medium", "description": "Eventos locales que pueden generar tráfico para tu negocio." }
+    ],
+    "summary": "Monitorizando 3 competidor(es). 3 señal(es) de precio, 1 de competencia."
+  },
+  "reputation": {
+    "connected": true,
+    "reviews": {
+      "current_rating": 4.3,
+      "total_reviews": 187,
+      "new_reviews_count": 3,
+      "trend": "bajando",
+      "urgent": [
+        { "id": "rv1", "author": "Ana G.", "rating": 2, "text": "Fui el sábado a media mañana y no quedaba prácticamente nada. Además esperé más de quince minutos para que me atendieran y nadie se disculpó.", "date": "2026-09-21", "themes": [], "responded": false },
+        { "id": "rv2", "author": "Miguel R.", "rating": 1, "text": "El pan estaba duro y me lo cobraron como recién hecho.", "date": "2026-09-19", "themes": [], "responded": false }
+      ],
+      "recurring_themes": [{ "theme": "esperas", "count": 4 }],
+      "trend_detail": "3 reseñas nuevas, media de las últimas 10: 3,4"
+    }
+  },
+  "inbox": {
+    "connected": true,
+    "status": "ok",
+    "error_message": null,
+    "total_unread": 34,
+    "emails_processed": 28,
+    "fetched_range_days": 7,
+    "importance_counts": { "critical": 1, "important": 2, "normal": 4, "noise": 21 },
+    "threads_awaiting_reply": [
+      { "thread_id": "th-1", "from_name": "Distribuciones Pérez", "from_email": "admin@distpérez.es", "subject": "Factura F-2026-018 vencida — segundo aviso", "snippet": "Te recordamos que la factura sigue pendiente de pago desde el día 18.", "hours_waiting": 107, "is_recurring_contact": true, "category": "supplier", "priority_signal": "urgent", "importance": "critical", "importance_reason": "Proveedor habitual reclamando una factura vencida desde hace 4 días", "classified_by": "haiku" },
+      { "thread_id": "th-2", "from_name": "Colegio Santa Ana", "from_email": "secretaria@colegiosantaana.es", "subject": "Presupuesto desayunos escolares curso 2026/27", "snippet": "Nos gustaría cerrar el encargo esta semana si podéis confirmar cantidades.", "hours_waiting": 52, "is_recurring_contact": false, "category": "lead", "priority_signal": "high", "importance": "important", "importance_reason": "Petición de presupuesto de un cliente nuevo con volumen recurrente", "classified_by": "haiku" },
+      { "thread_id": "th-3", "from_name": "Harinas del Turia", "from_email": "pedidos@harinasdelturia.es", "subject": "Pedido semanal de harina — confirmar cantidades", "snippet": "Necesitamos la confirmación antes del miércoles para servir el jueves.", "hours_waiting": 30, "is_recurring_contact": true, "category": "supplier", "priority_signal": "high", "importance": "important", "importance_reason": "Proveedor habitual esperando confirmación con fecha límite", "classified_by": "heuristic" },
+      { "thread_id": "th-4", "from_name": "Ayuntamiento de Valencia", "from_email": "comercio@valencia.es", "subject": "Inscripción a la feria de comercio local", "snippet": "El plazo de inscripción termina el 30 de septiembre.", "hours_waiting": 20, "is_recurring_contact": false, "category": "internal", "priority_signal": "normal", "importance": "normal", "importance_reason": "Convocatoria con plazo abierto", "classified_by": "heuristic" },
+      { "thread_id": "th-5", "from_name": "Newsletter Panadería Hoy", "from_email": "news@panaderiahoy.es", "subject": "Las 10 tendencias del pan en 2026", "snippet": "Descubre lo que viene.", "hours_waiting": 12, "is_recurring_contact": false, "category": "spam", "priority_signal": "low", "importance": "noise", "importance_reason": "Boletín comercial", "classified_by": "heuristic" }
+    ],
+    "classified_threads": [],
+    "top_senders_30d": [
+      { "email": "pedidos@harinasdelturia.es", "name": "Harinas del Turia", "count": 11, "is_customer": false },
+      { "email": "admin@distpérez.es", "name": "Distribuciones Pérez", "count": 7, "is_customer": false },
+      { "email": "secretaria@colegiosantaana.es", "name": "Colegio Santa Ana", "count": 3, "is_customer": true }
+    ],
+    "threads_count_by_category": { "customer": 6, "supplier": 9, "lead": 2, "internal": 4, "spam": 7, "unknown": 0 },
+    "invoices_detected": [
+      { "thread_id": "th-1", "supplier": "Distribuciones Pérez", "amount": 2480.5, "due_date": "2026-09-18", "snippet": "Factura F-2026-018, vencimiento 18/09/2026." },
+      { "thread_id": "th-6", "supplier": "Harinas del Turia", "amount": 1310.0, "due_date": "2026-09-30", "snippet": "Factura mensual de harinas." }
+    ],
+    "meeting_requests": [
+      { "thread_id": "th-2", "from": "Colegio Santa Ana", "proposed_dates": ["2026-09-25", "2026-09-26"], "snippet": "¿Os viene bien el viernes o el sábado por la mañana?" }
+    ]
+  },
+  "calendar": {
+    "connected": true,
+    "status": "ok",
+    "error_message": null,
+    "today": {
+      "date": "2026-09-23",
+      "events": [
+        { "start": "2026-09-23T08:00:00+02:00", "end": "2026-09-23T09:30:00+02:00", "title": "Descarga del pedido de harina", "location": "Obrador", "attendees": 2, "is_recurring": true },
+        { "start": "2026-09-23T11:00:00+02:00", "end": "2026-09-23T12:00:00+02:00", "title": "Visita del comercial de Lácteos Ribera", "location": "Tienda", "attendees": 2, "is_recurring": false },
+        { "start": "2026-09-23T17:00:00+02:00", "end": "2026-09-23T19:00:00+02:00", "title": "Inventario de fin de mes", "location": "Obrador", "attendees": 1, "is_recurring": false }
+      ],
+      "total_events": 3,
+      "total_busy_hours": 4.5,
+      "free_blocks": [
+        { "start": "2026-09-23T09:30:00+02:00", "end": "2026-09-23T11:00:00+02:00", "duration_hours": 1.5 },
+        { "start": "2026-09-23T12:00:00+02:00", "end": "2026-09-23T17:00:00+02:00", "duration_hours": 5 }
+      ],
+      "is_packed": false
+    },
+    "tomorrow": {
+      "date": "2026-09-24",
+      "events": [
+        { "start": "2026-09-24T09:00:00+02:00", "end": "2026-09-24T10:00:00+02:00", "title": "Reunión con la gestoría", "location": null, "attendees": 2, "is_recurring": false }
+      ],
+      "total_events": 1,
+      "total_busy_hours": 1,
+      "free_blocks": [{ "start": "2026-09-24T10:00:00+02:00", "end": "2026-09-24T14:00:00+02:00", "duration_hours": 4 }],
+      "is_packed": false
+    },
+    "this_week": { "total_events": 9, "busiest_day": { "date": "2026-09-25", "count": 4 }, "quietest_day": { "date": "2026-09-27", "count": 0 } },
+    "upcoming_important": [
+      { "date": "2026-09-30", "title": "Renovación del seguro del local", "why_important": "Vence la póliza y sube la prima si no se renegocia antes", "days_until": 7 },
+      { "date": "2026-10-02", "title": "Inspección de sanidad programada", "why_important": "Revisión anual del obrador", "days_until": 9 }
+    ],
+    "recurring_patterns": [
+      { "description": "Descarga del pedido de harina, los miércoles", "occurrences": 8 },
+      { "description": "Cierre de caja a las 20:30", "occurrences": 20 }
+    ]
+  },
+  "sheets": {
+    "connected": true,
+    "status": "ok",
+    "error_message": null,
+    "active_sheet": { "id": "sh-1", "name": "Ventas 2026", "last_modified": "2026-09-22T21:10:00Z", "column_schema_detected": [{ "name": "Fecha", "type": "date", "role": "date" }, { "name": "Producto", "type": "string", "role": "product" }, { "name": "Uds", "type": "number", "role": "quantity" }, { "name": "Importe", "type": "number", "role": "revenue" }] },
+    "sales_summary": {
+      "today": null,
+      "yesterday": { "revenue": 842.3, "units": 396, "transactions": 154 },
+      "this_week": { "revenue": 2418.9, "units": 1120, "transactions": 447, "vs_last_week_pct": -12.4 },
+      "this_month": { "revenue": 14320.75, "units": 6680, "vs_last_month_pct": 4.1 }
+    },
+    "top_products_7d": [
+      { "name": "Pan de masa madre 1 kg", "units": 320, "revenue": 1216, "trend": "up", "vs_previous_pct": 22.5 },
+      { "name": "Barra rústica", "units": 410, "revenue": 492, "trend": "flat", "vs_previous_pct": 1.2 },
+      { "name": "Bollería de mantequilla", "units": 96, "revenue": 288, "trend": "down", "vs_previous_pct": -18.3 },
+      { "name": "Empanada de atún", "units": 54, "revenue": 189, "trend": "down", "vs_previous_pct": -6.1 }
+    ],
+    "alerts": [
+      { "type": "product_declining", "message": "La bollería de mantequilla lleva tres semanas cayendo", "data": { "product": "Bollería de mantequilla", "weeks": 3 } },
+      { "type": "anomaly_low", "message": "El sábado se vendió un 30% menos de lo habitual", "data": { "date": "2026-09-20" } }
+    ],
+    "rows_analyzed": 4120,
+    "detection_confidence": "high",
+    "is_fallback": false
+  },
+  "connections": { "gmail_connected": true, "google_calendar_connected": true, "google_business_connected": true, "google_sheets_connected": true }
+}
