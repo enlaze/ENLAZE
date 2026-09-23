@@ -53,15 +53,17 @@ test("every deterministic construction material can be finalized", () => {
   assert.ok(materials.every((material) => material.unit !== "lotes"));
 });
 
-test("the budget wizard normalizes both items and materials before inserts", async () => {
+test("the budget wizard normalizes items and materials in the shared RPC payload", async () => {
   const source = await readFile(
     new URL("../app/dashboard/budgets/generate/_components/BudgetGenerateProvider.tsx", import.meta.url),
     "utf8",
   );
   const normalizationCalls = source.match(/unit: normalizeBudgetItemUnit\([pm]\.unit\)/g) || [];
 
-  assert.ok(normalizationCalls.length >= 4, `found ${normalizationCalls.length} normalization calls`);
-  assert.match(source, /if \(itemsError\) throw itemsError/);
+  assert.equal(normalizationCalls.length, 2, `found ${normalizationCalls.length} normalization calls`);
+  assert.match(source, /return \[\.\.\.partidas, \.\.\.materials\]/);
+  assert.match(source, /await finalizeBudgetRevision\(/);
+  assert.doesNotMatch(source, /\.from\("budget_items"\)\.insert\(/);
 });
 
 test("PDF preparation no longer invokes Python or pip at runtime", async () => {

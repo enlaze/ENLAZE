@@ -6,7 +6,7 @@ import { PartyPopper } from "lucide-react";
 import { useSector } from "@/lib/sector-context";
 import { normalizeSector } from "@/lib/sector-config";
 import PageHeader from "@/components/ui/page-header";
-import { BudgetGenerateProvider, useBudgetGenerate } from "./_components/BudgetGenerateProvider";
+import { BudgetGenerateProvider, partidasFromBudgetItems, useBudgetGenerate, type Partida } from "./_components/BudgetGenerateProvider";
 import { GenerateLayout } from "./_components/GenerateLayout";
 import { GenerateStepper, StepDef } from "./_components/GenerateStepper";
 import { ScopeStep } from "./_components/steps/ScopeStep";
@@ -20,6 +20,31 @@ import { analytics } from "@/lib/analytics";
 function budgetIdFromLocation() {
   if (typeof window === "undefined") return null;
   return new URLSearchParams(window.location.search).get("budgetId");
+}
+
+/**
+ * An array — empty included — is the wizard's own record and is taken as given:
+ * an empty one means the user removed every line. Anything else means this
+ * budget predates the wizard storing them, so its real lines are read back from
+ * budget_items. When that read fails we report it instead of hydrating an empty
+ * set, and the writer then refuses to empty the budget.
+ */
+async function hydratePartidas(
+  supabase: ReturnType<typeof createClient>,
+  budgetId: string,
+  savedState: Record<string, unknown>,
+): Promise<{ partidas: Partida[] | null; itemsAuthoritative: boolean }> {
+  if (Array.isArray(savedState?.partidas)) {
+    return { partidas: savedState.partidas as Partida[], itemsAuthoritative: true };
+  }
+  const { data: rows, error } = await supabase
+    .from("budget_items")
+    .select("*")
+    .eq("budget_id", budgetId)
+    .order("sort_order", { ascending: true })
+    .order("id", { ascending: true });
+  if (error || !rows) return { partidas: null, itemsAuthoritative: false };
+  return { partidas: partidasFromBudgetItems(rows), itemsAuthoritative: true };
 }
 
 function ExistingBudgetLoader() {
@@ -43,11 +68,16 @@ function ExistingBudgetLoader() {
       const saved = budget.wizard_state && typeof budget.wizard_state === "object"
         ? budget.wizard_state
         : {};
+
+      const { partidas, itemsAuthoritative } = await hydratePartidas(supabase, budget.id, saved);
+      if (!active) return;
       const requestedStepValue = new URLSearchParams(window.location.search).get("step");
       const requestedStep = requestedStepValue === null ? null : Number(requestedStepValue);
       loadDraft({
         ...saved,
+        ...(partidas === null ? {} : { partidas }),
         draftId: budget.id,
+        lockVersion: Number(budget.lock_version),
         currentStep: typeof requestedStep === "number" && Number.isInteger(requestedStep) && requestedStep >= 0 && requestedStep <= 2
           ? requestedStep
           : Number(saved.currentStep) || 0,
@@ -72,7 +102,7 @@ function ExistingBudgetLoader() {
         conditionsText: saved.conditionsText || budget.conditions_text || "",
         internalNotes: saved.internalNotes || budget.notes || "",
         ivaPercent: saved.ivaPercent ?? budget.iva_percent ?? 21,
-      });
+      }, { itemsAuthoritative });
       setLoadedId(budgetId);
     }
 
@@ -99,7 +129,7 @@ function DraftRecoveryManager() {
       if (!user) return;
       
       const { data } = await supabase.from('budgets')
-        .select('id, title, updated_at, wizard_state')
+        .select('id, title, updated_at, wizard_state, lock_version')
         .eq('user_id', user.id)
         .eq('status', 'borrador')
         .order('updated_at', { ascending: false });
@@ -126,9 +156,18 @@ function DraftRecoveryManager() {
           {drafts.map(d => (
             <button 
               key={d.id}
-              onClick={() => {
-                // Inyectamos el estado crudo tal cual se guardó
-                loadDraft({ ...(d.wizard_state || {}), draftId: d.id });
+              onClick={async () => {
+                // Un borrador recuperado aquí es igual de antiguo que uno abierto
+                // por URL: si su wizard_state no guarda partidas, se leen de
+                // budget_items antes de hidratar.
+                const saved = d.wizard_state || {};
+                const { partidas, itemsAuthoritative } = await hydratePartidas(supabase, d.id, saved);
+                loadDraft({
+                  ...saved,
+                  ...(partidas === null ? {} : { partidas }),
+                  draftId: d.id,
+                  lockVersion: Number(d.lock_version),
+                }, { itemsAuthoritative });
                 analytics.budgetDraftRecovered();
                 setShowModal(false);
               }}
@@ -256,6 +295,28 @@ function WizardContent() {
     <>
       <ExistingBudgetLoader />
       <DraftRecoveryManager />
+
+      {state.hasRevisionConflict && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-navy-950/70 p-4 backdrop-blur-sm"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="budget-revision-conflict-title"
+          aria-describedby="budget-revision-conflict-description"
+        >
+          <div className="w-full max-w-lg rounded-2xl border border-red-200 bg-white p-6 shadow-2xl dark:border-red-900 dark:bg-zinc-900">
+            <h2 id="budget-revision-conflict-title" className="text-xl font-bold text-navy-900 dark:text-white">
+              Este presupuesto cambió en otra sesión
+            </h2>
+            <p id="budget-revision-conflict-description" className="mt-3 text-sm leading-6 text-navy-600 dark:text-zinc-300">
+              {state.saveError || "Recarga la página para trabajar con la versión más reciente antes de continuar."}
+            </p>
+            <Button className="mt-6 w-full" onClick={() => window.location.reload()}>
+              Recargar presupuesto
+            </Button>
+          </div>
+        </div>
+      )}
       
       <div className="flex justify-between items-center mb-6">
         <GenerateStepper steps={steps} />
@@ -271,13 +332,13 @@ function WizardContent() {
               Error: {state.saveError}
             </span>
           )}
-          <Button variant="secondary" onClick={() => saveDraft(true)} disabled={state.isSavingDraft}>
+          <Button variant="secondary" onClick={() => saveDraft(true)} disabled={state.isSavingDraft || state.hasRevisionConflict}>
             {state.isSavingDraft ? "Guardando..." : "Guardar borrador"}
           </Button>
           <Button
             className="bg-brand-green hover:bg-brand-green/90 text-navy-900 font-bold border-0 shadow-md"
             onClick={handleFinalize}
-            disabled={state.isFinalizing || state.partidas.length === 0 || !state.title}
+            disabled={state.hasRevisionConflict || state.isFinalizing || state.partidas.length === 0 || !state.title}
             title={!state.title ? "Completa el titulo en el Paso 1" : state.partidas.length === 0 ? "Añade al menos una partida" : ""}
           >
             {state.isFinalizing ? "Finalizando..." : "Finalizar presupuesto"}

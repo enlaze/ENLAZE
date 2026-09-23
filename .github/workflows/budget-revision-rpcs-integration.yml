@@ -9,7 +9,18 @@ on:
       - "supabase/migrations/*portal_tokens_owner_only.sql"
       - "supabase/migrations/*replace_budget_items*.sql"
       - "__tests__/budget-revision-rpcs*.mjs"
+      - "__tests__/budget-revision-writer.test.mjs"
+      - "__tests__/budget-provider-autosave.browser.test.mjs"
+      - "__tests__/budget-wizard-full-page.browser.integration.test.mjs"
+      - "__tests__/budget-generate-writer-flow.test.mjs"
+      - "__tests__/budget-duplicate-writer-safety.test.mjs"
+      - "__tests__/budget-finalization.test.mjs"
+      - "__tests__/budget-items-sort-order-*.test.mjs"
+      - "__tests__/budget-recalculation.test.mjs"
+      - "__tests__/budget-realism.test.mjs"
+      - "__tests__/replace-budget-items-migration.test.mjs"
       - "__tests__/lib/budget-revision-rpcs-bench.mjs"
+      - "__tests__/lib/disposable-target-guard.mjs"
       - "__tests__/lib/sql-toplevel.mjs"
       - "__tests__/support/budget-revision-rpcs-schema.sql"
       - "__tests__/support/prepare-budget-revision-rpcs.mjs"
@@ -19,6 +30,8 @@ on:
       - "docs/fase2/ROLLBACK.sql"
       - "package.json"
       - "package-lock.json"
+      - "lib/budget-revision-writer.ts"
+      - "app/dashboard/budgets/**"
       - ".github/workflows/budget-revision-rpcs-integration.yml"
   workflow_dispatch:
 
@@ -41,6 +54,9 @@ jobs:
       E2_AUTHENTICATOR_PASSWORD: e2_disposable_authenticator_only
       E2_JWT_SECRET: e2_synthetic_disposable_jwt_secret_not_for_production
       E2_REST_URL: http://127.0.0.1:53002
+      # Locally the lifecycle skips its supabase-js transport when there is no
+      # PostgREST. Here PostgREST always runs, so a skip would be a silent gap.
+      REQUIRE_REST_LIFECYCLE: "1"
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -51,6 +67,26 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Static contract and disposable-cluster guards
         run: npm run test:budget-revision-rpcs
+      - name: Client writer and budget workflow regressions
+        run: |
+          npm run test:budget-revision-writer
+          node --import tsx --test \
+            __tests__/budget-ai-pdf-completion.test.mjs \
+            __tests__/budget-duplicate-writer-safety.test.mjs \
+            __tests__/budget-finalization.test.mjs \
+            __tests__/budget-generate-writer-flow.test.mjs \
+            __tests__/budget-items-sort-order-migration.test.mjs \
+            __tests__/budget-items-sort-order-readers.test.mjs \
+            __tests__/budget-items-sort-order-writers-only.test.mjs \
+            __tests__/budget-items-writer.test.mjs \
+            __tests__/budget-realism.test.mjs \
+            __tests__/budget-recalculation.test.mjs \
+            __tests__/budget-timeline.test.mjs \
+            __tests__/replace-budget-items-migration.test.mjs
+      - name: Install Chrome for isolated React browser test
+        run: ./node_modules/.bin/puppeteer browsers install chrome
+      - name: React hydration and autosave debounce on loopback only
+        run: npm run test:budget-provider-autosave-browser
       - name: Dedicated PostgreSQL 17 cluster, no production secrets
         run: |
           docker network create enlaze-e2-revision-network
@@ -85,6 +121,8 @@ jobs:
             postgrest/postgrest:v12.2.3
       - name: Real SQL, rollback, negative controls, HTTP 409 and Supabase client
         run: npm run test:budget-revision-rpcs-integration
+      - name: Full Next wizard on disposable PostgreSQL and PostgREST
+        run: npm run test:budget-wizard-full-page-browser
       - name: Disposable server logs
         if: always()
         run: |

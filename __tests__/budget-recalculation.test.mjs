@@ -60,11 +60,13 @@ test("commercial and BC3 candidate searches use their full-text indexes", () => 
   assert.doesNotMatch(priceRoute, /technical_price_items"\)[\s\S]{0,300}\.select\([^)]*company_id/);
 });
 
-test("autosave cannot retrigger itself or rewrite unchanged budget items", () => {
+test("autosave cannot retrigger itself or write before draft hydration", () => {
   assert.match(provider, /const autosaveSignature = useMemo\(\(\) => buildAutosaveSignature\(state\), \[state\]\)/);
-  assert.match(provider, /\}, \[autosaveSignature\]\);/);
+  assert.match(provider, /\}, \[autosaveSignature, hydrationRevision\]\);/);
   assert.doesNotMatch(provider, /\}, \[state\]\);/);
   assert.match(provider, /if \(autosaveSignature === lastSavedSignature\.current\) return/);
-  assert.match(provider, /const itemsSignature = `\$\{draftId\}:\$\{JSON\.stringify\(itemsToInsert\)\}`/);
-  assert.match(provider, /if \(itemsSignature !== lastSyncedItemsSignature\.current\)/);
+  assert.match(provider, /if \(!autosaveReady\.current \|\| revisionConflictRef\.current \|\| isFinalizingRef\.current \|\| isFinalizedRef\.current\) return/);
+  assert.match(provider, /if \(pendingHydration\.current\) \{[\s\S]*lastSavedSignature\.current = autosaveSignature/);
+  assert.match(provider, /await saveBudgetRevision\(/);
+  assert.doesNotMatch(provider, /replaceBudgetItems\(/);
 });

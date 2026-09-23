@@ -532,7 +532,7 @@ export function LiveSummaryPanel() {
         </button>
         <button
           onClick={() => saveDraft(true)}
-          disabled={state.isSavingDraft}
+          disabled={state.isSavingDraft || state.hasRevisionConflict}
           className="w-full py-2 bg-transparent text-navy-600 dark:text-zinc-400 font-medium hover:text-navy-900 dark:hover:text-white transition text-sm disabled:opacity-50"
         >
           {state.isSavingDraft ? "Guardando..." : "Guardar borrador"}

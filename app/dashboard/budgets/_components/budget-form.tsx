@@ -10,8 +10,13 @@ import PageHeader from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { analytics } from "@/lib/analytics";
-import { saveDocumentVersion } from "@/lib/document-versions";
 import { normalizeBudgetItemUnit } from "@/lib/budget-units";
+import {
+  budgetRevisionErrorMessage,
+  createBudgetWithItems,
+  finalizeBudgetRevision,
+  saveBudgetRevision,
+} from "@/lib/budget-revision-writer";
 
 const fallbackServiceTypes = [
   { value: "reforma", label: "Reforma integral" },
@@ -120,6 +125,7 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
 
   const [saving, setSaving] = useState(false);
   const [loadingExisting, setLoadingExisting] = useState(Boolean(editBudgetId));
+  const [lockVersion, setLockVersion] = useState<number | null>(null);
   const [userId, setUserId] = useState("");
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
@@ -207,6 +213,7 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
         }
 
         setSelectedClientId(existingBudget.client_id || "");
+        setLockVersion(Number(existingBudget.lock_version));
         setSelectedProjectId(existingBudget.project_id || "");
         setTitle(existingBudget.title || "");
         setClientName(existingBudget.client_name || "");
@@ -330,63 +337,65 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
 
     setSaving(true);
     const selectedClient = clients.find((client) => client.id === selectedClientId);
+    const itemsForRpc = partidas.map((p) => ({
+      concept: p.concept,
+      description: p.description,
+      quantity: p.quantity,
+      unit: normalizeBudgetItemUnit(p.unit),
+      category: p.category,
+      unit_price: p.unit_price,
+      subtotal: p.subtotal,
+    }));
+    const budgetData = {
+      client_id: selectedClientId || null,
+      project_id: selectedProjectId || null,
+      title,
+      client_name: clientName || selectedClient?.name || "",
+      client_email: clientEmail,
+      client_phone: clientPhone,
+      client_address: clientAddress,
+      service_type: serviceType,
+      subtotal,
+      iva_percent: ivaPercent,
+      iva_amount: ivaAmount,
+      total,
+      notes,
+      valid_until: validUntil || null,
+      deposit_percent: depositPercent,
+      payment_method: paymentMethod,
+      payment_iban: paymentIban,
+      discount_type: discountType,
+      discount_percent: discountPercent,
+      discount_amount: discountValue,
+      payment_schedule: paymentSchedule,
+      warranty_text: warrantyText,
+      execution_deadline_text: executionDeadlineText,
+      observations,
+      conditions_text: conditionsText,
+    };
 
     if (editBudgetId) {
-      // The RPC receives the items already numbered from zero, following the
-      // order the form displays them in. That numbering is the contract: the
-      // array's index is the row's persisted position.
-      const itemsForRpc = partidas.map((p, idx) => ({ ...p, sort_order: idx }));
-
-      const { data: updatedBudget, error: updateError } = await supabase.rpc(
-        "update_budget_with_items",
-        {
-          p_budget_id: editBudgetId,
-          p_budget_data: {
-            client_id: selectedClientId || null,
-            project_id: selectedProjectId || null,
-            title,
-            client_name: clientName || selectedClient?.name || "",
-            client_email: clientEmail,
-            client_phone: clientPhone,
-            client_address: clientAddress,
-            service_type: serviceType,
-            iva_percent: ivaPercent,
-            notes,
-            valid_until: validUntil || null,
-            deposit_percent: depositPercent,
-            payment_method: paymentMethod,
-            payment_iban: paymentIban,
-            discount_type: discountType,
-            discount_percent: discountPercent,
-            discount_amount: discountAmount,
-            payment_schedule: paymentSchedule,
-            warranty_text: warrantyText,
-            execution_deadline_text: executionDeadlineText,
-            observations,
-            conditions_text: conditionsText,
-          },
-          p_items: itemsForRpc,
-        }
-      );
-
-      if (updateError || !updatedBudget) {
+      if (!lockVersion) {
+        toast.error("Falta la revisión del presupuesto. Recarga la página antes de guardar.");
+        setSaving(false);
+        return;
+      }
+      try {
+        const updatedBudget = await saveBudgetRevision(
+          supabase,
+          editBudgetId,
+          lockVersion,
+          budgetData,
+          itemsForRpc,
+        );
+        setLockVersion(updatedBudget.lock_version);
+      } catch (error) {
         toast.error("No se pudieron guardar los cambios", {
-          description: updateError?.message || "Error desconocido",
+          description: budgetRevisionErrorMessage(error),
         });
         setSaving(false);
         return;
       }
-
-      saveDocumentVersion(supabase, {
-        entity_type: "budget",
-        entity_id: editBudgetId,
-        version: Number(updatedBudget.version || 1),
-        snapshot: {
-          ...updatedBudget,
-          items: partidas,
-        } as Record<string, unknown>,
-        change_summary: "Presupuesto editado manualmente",
-      });
       toast.success("Presupuesto actualizado");
       router.push(`/dashboard/budgets/${editBudgetId}`);
       return;
@@ -398,65 +407,33 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
     const rand = 10000 + (randArray[0] % 90000);
     const budgetNumber = "PRE-" + year + "-" + rand;
 
-    const { data: budget, error } = await supabase
-      .from("budgets")
-      .insert({
-        user_id: userId,
-        client_id: selectedClientId || null,
-        project_id: selectedProjectId || null,
-        budget_number: budgetNumber,
-        title,
-        client_name: clientName || selectedClient?.name || "",
-        client_email: clientEmail,
-        client_phone: clientPhone,
-        client_address: clientAddress,
-        service_type: serviceType,
-        status: "pendiente",
-        subtotal,
-        iva_percent: ivaPercent,
-        iva_amount: ivaAmount,
-        total,
-        notes,
-        valid_until: validUntil || null,
-        deposit_percent: depositPercent,
-        payment_method: paymentMethod,
-        payment_iban: paymentIban,
-        discount_type: discountType,
-        discount_percent: discountPercent,
-        discount_amount: discountValue,
-        payment_schedule: paymentSchedule,
-        warranty_text: warrantyText,
-        execution_deadline_text: executionDeadlineText,
-        observations,
-        conditions_text: conditionsText,
-      })
-      .select()
-      .single();
-
-    if (error || !budget) {
-      toast.error("Error al guardar", { description: error?.message || "Error desconocido" });
+    let createdId: string | null = null;
+    try {
+      const created = await createBudgetWithItems(
+        supabase,
+        { ...budgetData, budget_number: budgetNumber },
+        itemsForRpc,
+      );
+      createdId = created.budget_id;
+      const finalized = await finalizeBudgetRevision(
+        supabase,
+        created.budget_id,
+        created.lock_version,
+        budgetData,
+        itemsForRpc,
+      );
+      analytics.budgetCreated("manual", serviceType);
+      router.push("/dashboard/budgets/" + finalized.budget_id);
+    } catch (error) {
+      const description = budgetRevisionErrorMessage(error);
+      if (createdId) {
+        toast.error("El borrador se creó, pero no pudo finalizarse", { description });
+        router.push(`/dashboard/budgets/${createdId}/edit`);
+      } else {
+        toast.error("Error al guardar", { description });
+      }
       setSaving(false);
-      return;
     }
-
-    // Each row is written with its position in the form's order, numbered from
-    // zero, so the insertion sequence stops being the only record of it.
-    for (const [idx, p] of partidas.entries()) {
-      await supabase.from("budget_items").insert({
-        budget_id: budget.id,
-        concept: p.concept,
-        description: p.description,
-        quantity: p.quantity,
-        unit: normalizeBudgetItemUnit(p.unit),
-        category: p.category,
-        unit_price: p.unit_price,
-        subtotal: p.subtotal,
-        sort_order: idx,
-      });
-    }
-
-    analytics.budgetCreated("manual", serviceType);
-    router.push("/dashboard/budgets/" + budget.id);
   }
 
   if (loadingExisting) {

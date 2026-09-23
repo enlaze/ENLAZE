@@ -112,23 +112,37 @@ const esLectura = (cadena) =>
   cadena.includes('.eq("budget_id"') &&
   !/\.(insert|update|upsert|delete)\(/.test(cadena);
 
-function lecturaUnica(ruta) {
-  const lecturas = cadenasBudgetItems(leer(ruta)).filter(esLectura);
-  assert.equal(
-    lecturas.length,
-    1,
-    `${ruta} debe contener exactamente una consulta lectora de budget_items, se han encontrado ${lecturas.length}`,
+// Un fichero puede tener mas de un lector legitimo: generate/page.tsx lee las
+// partidas para el PDF del asistente y tambien para rehidratar un presupuesto
+// antiguo cuyo wizard_state no las guarda. Lo que no admite excepcion es que
+// CADA lectura ordene por sort_order, asi que se comprueban todas.
+function lecturas(ruta) {
+  const encontradas = cadenasBudgetItems(leer(ruta)).filter(esLectura);
+  assert.ok(
+    encontradas.length >= 1,
+    `${ruta} debe contener al menos una consulta lectora de budget_items`,
   );
-  return lecturas[0];
+  return encontradas;
 }
 
 // ---------------------------------------------------------------------------
 // BLOQUE A — cada lector, por separado
 // ---------------------------------------------------------------------------
 
-function compruebaLector(ruta) {
-  const cadena = lecturaUnica(ruta);
+function compruebaLector(ruta, filtro = null) {
+  const todas = lecturas(ruta);
+  for (const candidata of todas) verificaOrden(ruta, candidata);
+  if (!filtro) {
+    assert.equal(todas.length, 1,
+      `${ruta}: hay ${todas.length} lecturas; indica cual se comprueba con un filtro`);
+    return todas[0];
+  }
+  const elegida = todas.find((candidata) => filtro.test(candidata));
+  assert.ok(elegida, `${ruta}: ninguna lectura de budget_items casa con ${filtro}`);
+  return elegida;
+}
 
+function verificaOrden(ruta, cadena) {
   const iSelect = cadena.indexOf('.select("*")');
   const iEq = cadena.indexOf('.eq("budget_id"');
   const iSort = cadena.indexOf('.order("sort_order", { ascending: true })');
@@ -164,6 +178,7 @@ function compruebaLector(ruta) {
   return cadena;
 }
 
+
 describe("FASE 2E-3 · lectores de budget_items · BLOQUE A — cada lector ordena por sort_order", () => {
   test("CASO R1 — budget-form.tsx hidrata la edicion por sort_order", () => {
     const cadena = compruebaLector(F_FORM);
@@ -171,7 +186,7 @@ describe("FASE 2E-3 · lectores de budget_items · BLOQUE A — cada lector orde
   });
 
   test("CASO R2 — generate/page.tsx exporta el PDF del asistente por sort_order", () => {
-    const cadena = compruebaLector(F_GENERATE);
+    const cadena = compruebaLector(F_GENERATE, /finalizedId/);
     assert.match(cadena, /\.eq\("budget_id", finalizedId\)/);
   });
 
@@ -244,42 +259,21 @@ describe("FASE 2E-3 · lectores de budget_items · BLOQUE B — inventario", () 
     }
   });
 
-  test("CASO R7 — los escritores de budget_items no se han convertido en lectores", () => {
-    // Control negativo del clasificador. Este caso apuntaba al provider del
-    // asistente, cuyos .delete()/.insert() filtraban por budget_id. Desde
-    // FASE 2F-1APP el provider sustituye las líneas con la RPC atómica
-    // `replace_budget_items` y no vuelve a nombrar la tabla, de modo que ya no
-    // queda ninguna cadena suya que clasificar: seguir apuntándole convertiría
-    // este control en una comprobación vacía que pasaría por no encontrar nada.
-    //
-    // El escritor directo que sí sobrevive es la duplicación de la página de
-    // detalle, que inserta las partidas copiadas. Además de escribir, ese mismo
-    // fichero lee, lo que lo hace un control negativo más exigente que el
-    // anterior: obliga al clasificador a separar dos cadenas del mismo fuente,
-    // en lugar de descartar un fichero entero por su nombre.
+  test("CASO R7 — los escritores E2 no añaden consultas lectoras de partidas", () => {
     const provider = "app/dashboard/budgets/generate/_components/BudgetGenerateProvider.tsx";
     assert.equal(
       cadenasBudgetItems(leer(provider)).length,
       0,
-      "el provider ya no escribe budget_items directamente: lo hace a través de la RPC atómica",
+      "el provider escribe por las RPC de revisión",
     );
 
     const cadenas = cadenasBudgetItems(leer(F_DETALLE));
     const escrituras = cadenas.filter((c) => /\.(insert|update|upsert|delete)\(/.test(c));
-    assert.ok(escrituras.length > 0, "la duplicación debe seguir insertando las partidas copiadas");
-    assert.ok(
-      escrituras.some((c) => c.includes(".insert(")),
-      "el escritor directo que queda es un .insert() de duplicación",
-    );
-    assert.equal(
-      escrituras.filter(esLectura).length,
-      0,
-      "una cadena de escritura no debe clasificarse nunca como lectura",
-    );
+    assert.equal(escrituras.length, 0, "duplicar ya es una RPC transaccional, no un INSERT directo");
     assert.equal(
       cadenas.filter(esLectura).length,
       1,
-      "el detalle entra en el inventario por su única cadena lectora, no por la de escritura",
+      "el detalle conserva exactamente su consulta lectora ordenada",
     );
   });
 });
