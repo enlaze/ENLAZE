@@ -15,6 +15,7 @@ import {
   budgetRevisionErrorMessage,
   createBudgetWithItems,
   finalizeBudgetRevision,
+  isBudgetRevisionConflict,
   saveBudgetRevision,
 } from "@/lib/budget-revision-writer";
 
@@ -124,6 +125,10 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
   const { serviceTypes, budgetCategories, options } = useSector();
 
   const [saving, setSaving] = useState(false);
+  // Una vez que la base rechaza esta revisión, la pestaña ya no puede guardar:
+  // su lock_version quedó atrás y adoptar el nuevo en silencio escribiría estos
+  // datos encima de los de la otra sesión. Solo una recarga la devuelve al día.
+  const [revisionConflict, setRevisionConflict] = useState(false);
   const [loadingExisting, setLoadingExisting] = useState(Boolean(editBudgetId));
   const [lockVersion, setLockVersion] = useState<number | null>(null);
   const [userId, setUserId] = useState("");
@@ -326,6 +331,7 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (revisionConflict) return;
     if (!userId) {
       toast.error("No se pudo identificar el usuario.");
       return;
@@ -390,6 +396,13 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
         );
         setLockVersion(updatedBudget.lock_version);
       } catch (error) {
+        // El conflicto no es un error más: no se reintenta, no se adopta la
+        // revisión nueva, no se navega y no se comunica éxito.
+        if (isBudgetRevisionConflict(error)) {
+          setRevisionConflict(true);
+          setSaving(false);
+          return;
+        }
         toast.error("No se pudieron guardar los cambios", {
           description: budgetRevisionErrorMessage(error),
         });
@@ -446,6 +459,32 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
 
   return (
     <div className="max-w-4xl mx-auto">
+      {revisionConflict && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-navy-950/70 p-4 backdrop-blur-sm"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="budget-form-conflict-title"
+          aria-describedby="budget-form-conflict-description"
+        >
+          <div className="w-full max-w-lg rounded-2xl border border-red-200 bg-white p-6 shadow-2xl dark:border-red-900 dark:bg-zinc-900">
+            <h2 id="budget-form-conflict-title" className="text-xl font-bold text-navy-900 dark:text-white">
+              Este presupuesto cambió en otra sesión
+            </h2>
+            <p id="budget-form-conflict-description" className="mt-3 text-sm leading-6 text-navy-600 dark:text-zinc-300">
+              Para continuar tienes que recargar la versión más reciente. Al recargar se
+              descartarán los cambios sin guardar de esta pestaña.
+            </p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="mt-6 w-full rounded-xl bg-brand-green py-3 font-bold text-navy-900 transition hover:opacity-90"
+            >
+              Recargar versión más reciente
+            </button>
+          </div>
+        </div>
+      )}
       <Link
         href="/dashboard/budgets"
         className="text-sm text-navy-500 hover:text-brand-green mb-3 inline-block dark:text-zinc-400"
@@ -916,7 +955,7 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
         <div className="flex gap-3">
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || revisionConflict}
             className="flex-1 bg-brand-green text-navy-900 font-bold py-3 rounded-xl hover:opacity-90 transition disabled:opacity-50"
           >
             {saving
