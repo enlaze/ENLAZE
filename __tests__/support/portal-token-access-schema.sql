@@ -48,7 +48,9 @@ create table public.portal_tokens (
   permissions jsonb default '["read"]'::jsonb,
   is_active boolean default true, revoked_at timestamptz,
   expires_at timestamptz, created_by uuid references auth.users(id),
-  last_accessed_at timestamptz, access_count integer default 0);
+  last_accessed_at timestamptz, access_count integer default 0,
+  -- Presentes en producción; las RPC del ciclo de vida (E4) las escriben.
+  label text, created_at timestamptz default now());
 alter table public.portal_tokens enable row level security;
 alter table public.projects enable row level security;
 alter table public.project_changes enable row level security;
