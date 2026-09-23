@@ -1,5 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   BudgetRevisionError,
   budgetRevisionErrorMessage,
@@ -10,6 +11,15 @@ import {
   isBudgetRevisionConflict,
   saveBudgetRevision,
 } from "../lib/budget-revision-writer.ts";
+
+const budgetListPage = readFileSync(
+  new URL("../app/dashboard/budgets/page.tsx", import.meta.url),
+  "utf8",
+);
+const budgetDetailPage = readFileSync(
+  new URL("../app/dashboard/budgets/[id]/page.tsx", import.meta.url),
+  "utf8",
+);
 
 const result = {
   budget_id: "00000000-0000-4000-8000-000000000001",
@@ -58,6 +68,21 @@ describe("budget revision writer", () => {
       assert.equal(isBudgetRevisionConflict(error), true);
       assert.match(budgetRevisionErrorMessage(error), /Recarga la página/);
     }
+  });
+
+  test("refresca las vistas sin cambios locales tras PT409 antes de permitir otro intento", () => {
+    assert.match(
+      budgetListPage,
+      /if \(isBudgetRevisionConflict\(error\)\) \{\s*await fetchBudgets\(\);[\s\S]*?La lista se ha actualizado\.[\s\S]*?return;/,
+      "la lista debe reemplazar su lock_version obsoleto con una lectura nueva",
+    );
+    assert.match(
+      budgetDetailPage,
+      /if \(isBudgetRevisionConflict\(error\)\) \{\s*await loadBudget\(\);[\s\S]*?La ficha se ha actualizado\.[\s\S]*?return;/,
+      "la ficha debe reemplazar su lock_version obsoleto con una lectura nueva",
+    );
+    assert.match(budgetListPage, /budgets\.find\([\s\S]*?budget\.lock_version/);
+    assert.match(budgetDetailPage, /changeBudgetStatus\([\s\S]*?budget\.lock_version/);
   });
 
   test("explica en castellano que un presupuesto antiguo debe guardarse antes de enviarse", async () => {

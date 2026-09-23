@@ -17,6 +17,7 @@ import { analytics } from "@/lib/analytics";
 import {
   budgetRevisionErrorMessage,
   changeBudgetStatus,
+  isBudgetRevisionConflict,
 } from "@/lib/budget-revision-writer";
 
 type Budget = {
@@ -77,6 +78,13 @@ export default function BudgetsPage() {
       analytics.budgetStatusChanged(id, budget.status, status);
       await fetchBudgets();
     } catch (error) {
+      if (isBudgetRevisionConflict(error)) {
+        await fetchBudgets();
+        toast.error("El presupuesto cambió en otra sesión", {
+          description: "La lista se ha actualizado. Revisa el estado actual antes de intentarlo de nuevo.",
+        });
+        return;
+      }
       toast.error("No se pudo cambiar el estado", {
         description: budgetRevisionErrorMessage(error),
       });
