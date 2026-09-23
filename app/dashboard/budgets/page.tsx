@@ -42,8 +42,10 @@ export default function BudgetsPage() {
   const toast = useToast();
 
   const fetchBudgets = async () => {
-    const { data } = await supabase.from("budgets").select("*, clients(name, company)").order("created_at", { ascending: false });
-    if (data) setBudgets(data as Budget[]);
+    const { data, error } = await supabase.from("budgets").select("*, clients(name, company)").order("created_at", { ascending: false });
+    if (error || !data) return false;
+    setBudgets(data as Budget[]);
+    return true;
   };
 
   useEffect(() => { fetchBudgets(); }, []);
@@ -79,15 +81,17 @@ export default function BudgetsPage() {
       await fetchBudgets();
     } catch (error) {
       if (isBudgetRevisionConflict(error)) {
-        await fetchBudgets();
+        const refreshed = await fetchBudgets();
         toast.error("El presupuesto cambió en otra sesión", {
-          description: "La lista se ha actualizado. Revisa el estado actual antes de intentarlo de nuevo.",
+          description: refreshed
+            ? "La lista se ha actualizado. Revisa el estado actual antes de intentarlo de nuevo."
+            : "No se pudo actualizar la lista. Recarga la página antes de intentarlo de nuevo.",
         });
-        return;
+      } else {
+        toast.error("No se pudo cambiar el estado", {
+          description: budgetRevisionErrorMessage(error),
+        });
       }
-      toast.error("No se pudo cambiar el estado", {
-        description: budgetRevisionErrorMessage(error),
-      });
     }
   };
 

@@ -73,8 +73,13 @@ describe("budget revision writer", () => {
   test("refresca las vistas sin cambios locales tras PT409 antes de permitir otro intento", () => {
     assert.match(
       budgetListPage,
-      /if \(isBudgetRevisionConflict\(error\)\) \{\s*await fetchBudgets\(\);[\s\S]*?La lista se ha actualizado\.[\s\S]*?return;/,
+      /if \(isBudgetRevisionConflict\(error\)\) \{\s*const refreshed = await fetchBudgets\(\);[\s\S]*?refreshed[\s\S]*?La lista se ha actualizado\.[\s\S]*?No se pudo actualizar la lista\.[\s\S]*?\} else \{/,
       "la lista debe reemplazar su lock_version obsoleto con una lectura nueva",
+    );
+    assert.match(
+      budgetListPage,
+      /const \{ data, error \} = await supabase[\s\S]*?if \(error \|\| !data\) return false;[\s\S]*?setBudgets\(data as Budget\[\]\);[\s\S]*?return true;/,
+      "la lista no debe afirmar que se actualizó cuando la lectura falla",
     );
     assert.match(
       budgetDetailPage,
