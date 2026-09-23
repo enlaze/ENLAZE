@@ -295,6 +295,28 @@ function WizardContent() {
     <>
       <ExistingBudgetLoader />
       <DraftRecoveryManager />
+
+      {state.hasRevisionConflict && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-navy-950/70 p-4 backdrop-blur-sm"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="budget-revision-conflict-title"
+          aria-describedby="budget-revision-conflict-description"
+        >
+          <div className="w-full max-w-lg rounded-2xl border border-red-200 bg-white p-6 shadow-2xl dark:border-red-900 dark:bg-zinc-900">
+            <h2 id="budget-revision-conflict-title" className="text-xl font-bold text-navy-900 dark:text-white">
+              Este presupuesto cambió en otra sesión
+            </h2>
+            <p id="budget-revision-conflict-description" className="mt-3 text-sm leading-6 text-navy-600 dark:text-zinc-300">
+              {state.saveError || "Recarga la página para trabajar con la versión más reciente antes de continuar."}
+            </p>
+            <Button className="mt-6 w-full" onClick={() => window.location.reload()}>
+              Recargar presupuesto
+            </Button>
+          </div>
+        </div>
+      )}
       
       <div className="flex justify-between items-center mb-6">
         <GenerateStepper steps={steps} />
@@ -310,13 +332,13 @@ function WizardContent() {
               Error: {state.saveError}
             </span>
           )}
-          <Button variant="secondary" onClick={() => saveDraft(true)} disabled={state.isSavingDraft}>
+          <Button variant="secondary" onClick={() => saveDraft(true)} disabled={state.isSavingDraft || state.hasRevisionConflict}>
             {state.isSavingDraft ? "Guardando..." : "Guardar borrador"}
           </Button>
           <Button
             className="bg-brand-green hover:bg-brand-green/90 text-navy-900 font-bold border-0 shadow-md"
             onClick={handleFinalize}
-            disabled={state.isFinalizing || state.partidas.length === 0 || !state.title}
+            disabled={state.hasRevisionConflict || state.isFinalizing || state.partidas.length === 0 || !state.title}
             title={!state.title ? "Completa el titulo en el Paso 1" : state.partidas.length === 0 ? "Añade al menos una partida" : ""}
           >
             {state.isFinalizing ? "Finalizando..." : "Finalizar presupuesto"}

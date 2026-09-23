@@ -25,12 +25,25 @@ const virtualModules = {
     }
   `,
   "@/lib/budget-revision-writer": `
-    export function budgetRevisionErrorMessage(error) { return String(error?.message || error); }
+    export function isBudgetRevisionConflict(error) { return error?.code === "PT409"; }
+    export function budgetRevisionErrorMessage(error) {
+      return isBudgetRevisionConflict(error)
+        ? "Este presupuesto ha cambiado en otra pestaña o sesión. Recarga la página antes de volver a guardar."
+        : String(error?.message || error);
+    }
     export async function createBudgetWithItems(_client, payload, items) {
+      window.__attempts.push({ kind: "create" });
       window.__writes.push({ kind: "create", title: payload.title, items: items.length });
       return { budget_id: "${budgetId}", lock_version: 1 };
     }
     export async function saveBudgetRevision(_client, id, version, payload, items) {
+      window.__attempts.push({ kind: "save", version });
+      if (window.__conflictNextSave) {
+        window.__conflictNextSave = false;
+        const error = new Error("Budget revision conflict");
+        error.code = "PT409";
+        throw error;
+      }
       window.__writes.push({ kind: "save", id, version, title: payload.title, items: items.length });
       return { budget_id: id, lock_version: version + 1 };
     }
@@ -53,6 +66,8 @@ const entry = `
     return React.createElement("div", { id: "title" }, context.state.title);
   }
   window.__writes = [];
+  window.__attempts = [];
+  window.__conflictNextSave = false;
   createRoot(document.getElementById("root")).render(
     React.createElement(BudgetGenerateProvider, null, React.createElement(Probe))
   );
@@ -139,7 +154,10 @@ try {
   const existing = await localPage(`/existing?budgetId=${budgetId}`);
   await new Promise((resolve) => setTimeout(resolve, 1800));
   assert.equal(await existing.evaluate(() => window.__writes.length), 0, "blank state must not overwrite an existing budget");
-  await existing.evaluate((id) => window.harness.loadDraft({ draftId: id, lockVersion: 7, title: "Base" }), budgetId);
+  await existing.evaluate((id) => window.harness.loadDraft(
+    { draftId: id, lockVersion: 7, title: "Base" },
+    { itemsAuthoritative: true },
+  ), budgetId);
   await existing.waitForFunction(() => window.harness.state.title === "Base");
   await new Promise((resolve) => setTimeout(resolve, 1800));
   assert.equal(await existing.evaluate(() => window.__writes.length), 0, "hydration must establish a baseline without writing");
@@ -155,10 +173,43 @@ try {
   assert.deepEqual(await existing.evaluate(() => window.__writes[1]), {
     kind: "save", id: budgetId, version: 8, title: "Segunda edición", items: 0,
   }, "a second autosave must use the returned lock_version");
+
+  await existing.evaluate(() => {
+    window.__conflictNextSave = true;
+    window.harness.updateState({ title: "Edición desde pestaña obsoleta" });
+  });
+  await existing.waitForFunction(() => window.harness.state.hasRevisionConflict === true, { timeout: 3000 });
+  assert.match(
+    await existing.evaluate(() => window.harness.state.saveError),
+    /otra pestaña o sesión/,
+    "the conflict must be visible and actionable",
+  );
+  assert.equal(await existing.evaluate(() => window.__attempts.length), 3, "the conflict is attempted exactly once");
+  assert.equal(await existing.evaluate(() => window.__writes.length), 2, "the conflicting write is not accepted");
+  await existing.evaluate(() => window.harness.updateState({ title: "No debe reintentarse" }));
+  await new Promise((resolve) => setTimeout(resolve, 1900));
+  assert.equal(await existing.evaluate(() => window.__attempts.length), 3, "autosave must stay stopped after PT409");
+  assert.equal(await existing.evaluate(() => window.harness.saveDraft(true)), null, "manual save must require a reload after PT409");
+  assert.equal(await existing.evaluate(() => window.__attempts.length), 3, "manual save must not retry a stale revision");
   assert.deepEqual(existing.browserErrors, [], "existing-budget browser errors");
   await existing.close();
 
-  console.log("PASS: React provider debounces, avoids hydration writes and save loops, and chains lock_version");
+  const unchangedHydration = await localPage(`/same-signature?budgetId=${budgetId}`);
+  await unchangedHydration.evaluate((id) => window.harness.loadDraft(
+    { draftId: id, lockVersion: 11 },
+    { itemsAuthoritative: true },
+  ), budgetId);
+  await unchangedHydration.waitForFunction(() => window.harness.state.lockVersion === 11);
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  await unchangedHydration.evaluate(() => window.harness.updateState({ title: "Primera edición real" }));
+  await unchangedHydration.waitForFunction(() => window.__writes.length === 1, { timeout: 3000 });
+  assert.deepEqual(await unchangedHydration.evaluate(() => window.__writes[0]), {
+    kind: "save", id: budgetId, version: 11, title: "Primera edición real", items: 0,
+  }, "an unchanged hydration signature must not consume the first real edit");
+  assert.deepEqual(unchangedHydration.browserErrors, [], "same-signature hydration browser errors");
+  await unchangedHydration.close();
+
+  console.log("PASS: React provider debounces, baselines hydration, stops stale tabs and chains lock_version");
 } finally {
   await browser?.close();
   await new Promise((resolve) => server.close(resolve));

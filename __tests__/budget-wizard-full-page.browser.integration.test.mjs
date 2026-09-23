@@ -268,6 +268,8 @@ try {
     "stale revision conflict message", 15000);
   const conflictText = await visibleText(second.page);
   assert.match(conflictText, /Recarga la página/, "el conflicto debe decir qué hacer");
+  await waitFor(async () => (await visibleText(second.page)).includes("Recargar presupuesto"),
+    "el conflicto debe bloquear la pestaña obsoleta con una acción de recarga");
   assert.ok(requests.some((entry) => entry.path === "/rpc/save_budget" && entry.status === 409),
     "la pestaña obsoleta debe haber recibido un 409 real de PostgREST");
   assert.equal((await snapshot()).title, "Base E2E editado", "conflicting tab must not overwrite winner");

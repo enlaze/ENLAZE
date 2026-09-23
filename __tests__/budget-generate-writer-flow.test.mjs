@@ -40,8 +40,13 @@ describe("budget wizard uses the atomic E2 revision contract", () => {
 
   test("errors and conflicts cannot be mistaken for a successful save", () => {
     assert.ok((provider.match(/budgetRevisionErrorMessage\(err\)/g) || []).length >= 2);
+    assert.match(provider, /isBudgetRevisionConflict\(err\)/);
+    assert.match(provider, /revisionConflictRef\.current = true/);
+    assert.match(provider, /if \(revisionConflictRef\.current\)/);
     assert.match(provider, /if \(savedDraftId\) \{\s*lastSavedSignature\.current = signatureBeingSaved/);
     assert.match(provider, /if \(!budgetId\) throw new Error/);
+    assert.match(page, /role="alertdialog"/);
+    assert.match(page, /Recargar presupuesto/);
   });
 
   test("finalizing an existing draft performs one atomic revision, not save then finalize", () => {
@@ -62,7 +67,9 @@ describe("autosave waits for draft hydration", () => {
     const ready = provider.indexOf("autosaveReady.current = true", baseline);
     assert.ok(baseline >= 0 && ready > baseline);
     assert.match(provider, /pendingHydration\.current = true/);
-    assert.match(provider, /if \(!autosaveReady\.current \|\| isFinalizingRef\.current \|\| isFinalizedRef\.current\) return;/);
+    assert.match(provider, /setHydrationRevision\(revision => revision \+ 1\)/);
+    assert.match(provider, /\[autosaveSignature, hydrationRevision\]/);
+    assert.match(provider, /if \(!autosaveReady\.current \|\| revisionConflictRef\.current \|\| isFinalizingRef\.current \|\| isFinalizedRef\.current\) return;/);
     assert.match(provider, /has\("budgetId"\) &&\s*!autosaveReady\.current/);
   });
 

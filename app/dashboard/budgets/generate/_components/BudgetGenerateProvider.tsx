@@ -55,6 +55,7 @@ import {
   budgetRevisionErrorMessage,
   createBudgetWithItems,
   finalizeBudgetRevision,
+  isBudgetRevisionConflict,
   saveBudgetRevision,
 } from "@/lib/budget-revision-writer";
 import { canonicalProviderName, providerIdentitySlug } from "@/lib/provider-identity";
@@ -717,6 +718,7 @@ export interface BudgetState {
   /** Saving states */
   isSavingDraft: boolean;
   isFinalizing: boolean;
+  hasRevisionConflict: boolean;
   saveError: string | null;
   finalizeError: string | null;
 }
@@ -756,6 +758,7 @@ const AUTOSAVE_IGNORED_KEYS = new Set<string>([
   "lastSavedAt",
   "isSavingDraft",
   "isFinalizing",
+  "hasRevisionConflict",
   "saveError",
   "finalizeError",
   "validationError",
@@ -873,6 +876,7 @@ export function BudgetGenerateProvider({
     internalView: null,
     isSavingDraft: false,
     isFinalizing: false,
+    hasRevisionConflict: false,
     saveError: null,
     finalizeError: null,
   });
@@ -1321,6 +1325,8 @@ export function BudgetGenerateProvider({
   // until an existing budget has been hydrated, so a failed or partial load
   // cannot let an empty set through to the writer and wipe real lines.
   const itemsAuthoritative = useRef(false);
+  const revisionConflictRef = useRef(false);
+  const revisionConflictMessageRef = useRef<string | null>(null);
   const draftIdRef = useRef<string | null>(null);
   const isFinalizingRef = useRef(false);
   const isFinalizedRef = useRef(false);
@@ -1595,20 +1601,44 @@ export function BudgetGenerateProvider({
   // de sus consumidores actuales, y concentra aquí toda la gestión de errores.
   const saveDraft = async (manual = false): Promise<string | null> => {
     if (isFinalizingRef.current || isFinalizedRef.current) return null;
+    if (revisionConflictRef.current) {
+      const message = revisionConflictMessageRef.current ||
+        "Este presupuesto ha cambiado en otra pestaña o sesión. Recarga la página antes de volver a guardar.";
+      if (manual) toast.error(message);
+      return null;
+    }
     try {
       const outcome = await saveDraftOrThrow(manual);
       return outcome.skipped ? null : outcome.budgetId;
     } catch (err: any) {
       const errorMsg = budgetRevisionErrorMessage(err);
+      const conflict = isBudgetRevisionConflict(err);
+      if (conflict) {
+        revisionConflictRef.current = true;
+        revisionConflictMessageRef.current = errorMsg;
+        if (saveTimeout.current) clearTimeout(saveTimeout.current);
+      }
       console.error("Error saving draft:", err);
-      setState(prev => ({ ...prev, isSavingDraft: false, saveError: errorMsg }));
-      if (manual) toast.error("Error al guardar: " + errorMsg);
+      setState(prev => ({
+        ...prev,
+        isSavingDraft: false,
+        hasRevisionConflict: prev.hasRevisionConflict || conflict,
+        saveError: errorMsg,
+      }));
+      if (manual || conflict) toast.error("Error al guardar: " + errorMsg);
       return null;
     }
   };
 
   const finalizeBudget = async (): Promise<string | null> => {
     if (isFinalizingRef.current || isFinalizedRef.current) return null;
+    if (revisionConflictRef.current) {
+      const message = revisionConflictMessageRef.current ||
+        "Este presupuesto ha cambiado en otra pestaña o sesión. Recarga la página antes de finalizar.";
+      setState(prev => ({ ...prev, finalizeError: message }));
+      toast.error(message);
+      return null;
+    }
     // Block finalization if budget is undervalued
     if (state.isUndervalued) {
       toast.error("No se puede finalizar: el presupuesto esta por debajo del minimo realista de mercado. Ajusta las partidas o genera de nuevo con IA.");
@@ -1676,8 +1706,20 @@ export function BudgetGenerateProvider({
 
     } catch (err: any) {
       const errorMsg = budgetRevisionErrorMessage(err);
+      const conflict = isBudgetRevisionConflict(err);
+      if (conflict) {
+        revisionConflictRef.current = true;
+        revisionConflictMessageRef.current = errorMsg;
+        if (saveTimeout.current) clearTimeout(saveTimeout.current);
+      }
       console.error("Error finalizing budget:", err);
-      setState(prev => ({ ...prev, isFinalizing: false, finalizeError: errorMsg }));
+      setState(prev => ({
+        ...prev,
+        isFinalizing: false,
+        hasRevisionConflict: prev.hasRevisionConflict || conflict,
+        saveError: conflict ? errorMsg : prev.saveError,
+        finalizeError: errorMsg,
+      }));
       toast.error("Error al finalizar: " + errorMsg);
       return null;
     } finally {
@@ -1691,6 +1733,7 @@ export function BudgetGenerateProvider({
   const isAutosaving = useRef(false);
   const autosaveReady = useRef(false);
   const pendingHydration = useRef(false);
+  const [hydrationRevision, setHydrationRevision] = useState(0);
 
   useEffect(() => {
     if (!new URLSearchParams(window.location.search).has("budgetId")) {
@@ -1706,7 +1749,10 @@ export function BudgetGenerateProvider({
   ) => {
     autosaveReady.current = false;
     pendingHydration.current = true;
+    setHydrationRevision(revision => revision + 1);
     itemsAuthoritative.current = options.itemsAuthoritative === true;
+    revisionConflictRef.current = false;
+    revisionConflictMessageRef.current = null;
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
     // Un presupuesto ya guardado conserva el margen con el que se calculó.
     if (typeof savedState.marginPercent === "number") marginLockedRef.current = true;
@@ -1733,6 +1779,9 @@ export function BudgetGenerateProvider({
           ...(savedState.realismAudit || {}),
         },
         analysisDirty: Boolean(savedState.analysisDirty || requiresAtomicRecalculation),
+        hasRevisionConflict: false,
+        saveError: null,
+        finalizeError: null,
     }));
   }, []);
 
@@ -1764,7 +1813,7 @@ export function BudgetGenerateProvider({
 
     // Existing budgets are loaded after the first render. Do not persist the
     // blank/default provider state while that read is still in flight.
-    if (!autosaveReady.current || isFinalizingRef.current || isFinalizedRef.current) return;
+    if (!autosaveReady.current || revisionConflictRef.current || isFinalizingRef.current || isFinalizedRef.current) return;
 
     // Nothing the user cares about changed since the last successful save.
     if (autosaveSignature === lastSavedSignature.current) return;
@@ -1772,7 +1821,7 @@ export function BudgetGenerateProvider({
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
 
     const runAutosave = async () => {
-      if (isFinalizingRef.current || isFinalizedRef.current || !autosaveReady.current) return;
+      if (revisionConflictRef.current || isFinalizingRef.current || isFinalizedRef.current || !autosaveReady.current) return;
       // Re-entrancy guard: never overlap two autosaves. If one is already in
       // flight, retry shortly instead of dropping this edit on the floor.
       if (isAutosaving.current) {
@@ -1809,7 +1858,7 @@ export function BudgetGenerateProvider({
     // runaway save loop this code exists to prevent. Do not "fix" this warning
     // by adding it to the dependency array.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autosaveSignature]);
+  }, [autosaveSignature, hydrationRevision]);
 
   const validateStep = (stepIndex: number): boolean => {
     if (stepIndex === 0) {

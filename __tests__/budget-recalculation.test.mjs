@@ -62,10 +62,10 @@ test("commercial and BC3 candidate searches use their full-text indexes", () => 
 
 test("autosave cannot retrigger itself or write before draft hydration", () => {
   assert.match(provider, /const autosaveSignature = useMemo\(\(\) => buildAutosaveSignature\(state\), \[state\]\)/);
-  assert.match(provider, /\}, \[autosaveSignature\]\);/);
+  assert.match(provider, /\}, \[autosaveSignature, hydrationRevision\]\);/);
   assert.doesNotMatch(provider, /\}, \[state\]\);/);
   assert.match(provider, /if \(autosaveSignature === lastSavedSignature\.current\) return/);
-  assert.match(provider, /if \(!autosaveReady\.current \|\| isFinalizingRef\.current \|\| isFinalizedRef\.current\) return/);
+  assert.match(provider, /if \(!autosaveReady\.current \|\| revisionConflictRef\.current \|\| isFinalizingRef\.current \|\| isFinalizedRef\.current\) return/);
   assert.match(provider, /if \(pendingHydration\.current\) \{[\s\S]*lastSavedSignature\.current = autosaveSignature/);
   assert.match(provider, /await saveBudgetRevision\(/);
   assert.doesNotMatch(provider, /replaceBudgetItems\(/);
