@@ -65,6 +65,7 @@ import {
   isServiceMaterial,
   type ProcurementKind,
 } from "@/lib/material-procurement";
+import { buildAutosaveSignature } from "@/lib/budget-autosave-signature";
 
 // The v2 price resolver (/api/prices/resolve, resolver_used: "v2") can
 // return several low-confidence "estimate" source types — market_estimate,
@@ -745,47 +746,6 @@ interface BudgetContextProps {
 }
 
 const BudgetContext = createContext<BudgetContextProps | undefined>(undefined);
-
-/**
- * Transient fields that saveDraft() writes back into state on every run.
- * They must NOT be part of the autosave signature: including them makes the
- * autosave effect retrigger itself forever (save -> setState -> save -> ...),
- * which is what saturated the database's disk IO budget.
- */
-const AUTOSAVE_IGNORED_KEYS = new Set<string>([
-  "draftId",
-  "lockVersion",
-  "lastSavedAt",
-  "isSavingDraft",
-  "isFinalizing",
-  "hasRevisionConflict",
-  "saveError",
-  "finalizeError",
-  "validationError",
-  // These are computed from editable fields (or fetched reference settings).
-  // Their post-hydration effects must not count as a human edit to an existing
-  // budget and cause an otherwise empty revision write.
-  "totals",
-  "clientView",
-  "internalView",
-  "realisticTimeline",
-  "configuredMarginPercent",
-]);
-
-/** Stable fingerprint of the user-meaningful parts of the wizard state. */
-function buildAutosaveSignature(state: BudgetState): string {
-  const relevant: Record<string, unknown> = {};
-  for (const key of Object.keys(state).sort()) {
-    if (AUTOSAVE_IGNORED_KEYS.has(key)) continue;
-    relevant[key] = (state as unknown as Record<string, unknown>)[key];
-  }
-  try {
-    return JSON.stringify(relevant);
-  } catch {
-    // Never fall back to a always-changing value: that would restart the loop.
-    return "__unserializable__";
-  }
-}
 
 export function BudgetGenerateProvider({
   children,
