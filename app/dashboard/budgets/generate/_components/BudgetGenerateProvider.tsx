@@ -162,6 +162,36 @@ export interface Partida {
   estimated_hours?: number;
 }
 
+/**
+ * Rebuilds wizard partidas from the budget_items rows of a budget saved before
+ * the wizard stored them in wizard_state. The column pair is the inverse of the
+ * one revisionItems() writes: unit_price/subtotal hold the client price and
+ * unit_price_cost/subtotal_cost the cost.
+ */
+export function partidasFromBudgetItems(rows: readonly Record<string, unknown>[]): Partida[] {
+  const number = (value: unknown) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const text = (value: unknown, fallback = "") =>
+    typeof value === "string" && value.trim() ? value : fallback;
+  return rows.map((row, index) => ({
+    id: text(row.id, `budget-item-${index}`),
+    concept: text(row.concept),
+    description: text(row.description),
+    quantity: number(row.quantity),
+    unit: text(row.unit, "ud"),
+    category: text(row.category, "otros"),
+    chapter: text(row.chapter, text(row.category, "otros")),
+    unit_price: number(row.unit_price_cost),
+    subtotal_cost: number(row.subtotal_cost),
+    unit_price_client: number(row.unit_price),
+    subtotal_client: number(row.subtotal),
+    // budget_items only ever receives the non-optional lines.
+    status: "incluida" as const,
+  }));
+}
+
 export interface ProviderOption {
   id: string;
   name: string;
@@ -707,7 +737,7 @@ interface BudgetContextProps {
   /** Ajusta el margen de ESTE presupuesto y repropaga los precios de cliente. */
   setMarginPercent: (percent: number) => void;
   saveDraft: (manual?: boolean) => Promise<string | null>;
-  loadDraft: (statePayload: Partial<BudgetState>) => void;
+  loadDraft: (statePayload: Partial<BudgetState>, options?: { itemsAuthoritative?: boolean }) => void;
   finalizeBudget: () => Promise<string | null>;
   analyzeWithAI: (force?: boolean) => Promise<boolean>;
 }
@@ -1287,6 +1317,10 @@ export function BudgetGenerateProvider({
   // hacia atrás el margen con el que se cerró un presupuesto concreto.
   const marginLockedRef = useRef(false);
   const lockVersionRef = useRef<number | null>(null);
+  // Whether `state.partidas` is known to be this budget's whole item set. False
+  // until an existing budget has been hydrated, so a failed or partial load
+  // cannot let an empty set through to the writer and wipe real lines.
+  const itemsAuthoritative = useRef(false);
   const draftIdRef = useRef<string | null>(null);
   const isFinalizingRef = useRef(false);
   const isFinalizedRef = useRef(false);
@@ -1511,6 +1545,7 @@ export function BudgetGenerateProvider({
         lockVersion,
         revisionPayload(draftId, clientSnapshot),
         items,
+        { allowEmptyItems: itemsAuthoritative.current },
       );
       lockVersion = result.lock_version;
       lockVersionRef.current = result.lock_version;
@@ -1617,6 +1652,7 @@ export function BudgetGenerateProvider({
         expectedLockVersion,
         revisionPayload(budgetId),
         revisionItems(),
+        { allowEmptyItems: itemsAuthoritative.current },
       );
       lockVersionRef.current = result.lock_version;
       isFinalizedRef.current = true;
@@ -1659,12 +1695,18 @@ export function BudgetGenerateProvider({
   useEffect(() => {
     if (!new URLSearchParams(window.location.search).has("budgetId")) {
       autosaveReady.current = true;
+      // A brand-new wizard authors its own items; an empty set is the user's.
+      itemsAuthoritative.current = true;
     }
   }, []);
 
-  const loadDraft = useCallback((savedState: Partial<BudgetState>) => {
+  const loadDraft = useCallback((
+    savedState: Partial<BudgetState>,
+    options: { itemsAuthoritative?: boolean } = {},
+  ) => {
     autosaveReady.current = false;
     pendingHydration.current = true;
+    itemsAuthoritative.current = options.itemsAuthoritative === true;
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
     // Un presupuesto ya guardado conserva el margen con el que se calculó.
     if (typeof savedState.marginPercent === "number") marginLockedRef.current = true;

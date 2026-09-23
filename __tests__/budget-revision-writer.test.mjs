@@ -49,11 +49,11 @@ describe("budget revision writer", () => {
     const conflict = { code: "PT409", message: "Budget revision conflict" };
     const f = fake({ data: null, error: conflict });
     await assert.rejects(
-      () => saveBudgetRevision(f.client, result.budget_id, 1, { title: "B" }, []),
+      () => saveBudgetRevision(f.client, result.budget_id, 1, { title: "B" }, [{ concept: "x" }]),
       (error) => error instanceof BudgetRevisionError && error.code === "PT409",
     );
     try {
-      await saveBudgetRevision(f.client, result.budget_id, 1, { title: "B" }, []);
+      await saveBudgetRevision(f.client, result.budget_id, 1, { title: "B" }, [{ concept: "x" }]);
     } catch (error) {
       assert.equal(isBudgetRevisionConflict(error), true);
       assert.match(budgetRevisionErrorMessage(error), /Recarga la página/);
@@ -106,6 +106,36 @@ describe("budget revision writer", () => {
     }
   });
 
+  test("se niega a vaciar las partidas de un presupuesto sin permiso explícito", async () => {
+    // save_budget/finalize_budget reemplazan el conjunto entero: un array vacío
+    // borra todas las líneas. Sin la afirmación de que ese vacío es del usuario,
+    // no se envía siquiera la petición.
+    for (const [write, label] of [[saveBudgetRevision, "guardar"], [finalizeBudgetRevision, "finalizar"]]) {
+      const f = fake();
+      await assert.rejects(
+        () => write(f.client, result.budget_id, 1, { title: "X" }, []),
+        /no se han cargado las partidas|no se vacía/,
+        `${label} debería rechazar el conjunto vacío`,
+      );
+      assert.deepEqual(f.calls, [], `${label} no debe llegar a la base de datos`);
+    }
+  });
+
+  test("permite vaciarlas cuando la hidratación confirma que el vacío es del usuario", async () => {
+    for (const write of [saveBudgetRevision, finalizeBudgetRevision]) {
+      const f = fake({ data: { ...result, items_count: 0 }, error: null });
+      await write(f.client, result.budget_id, 1, { title: "X" }, [], { allowEmptyItems: true });
+      assert.equal(f.calls.length, 1);
+      assert.deepEqual(f.calls[0].params.p_items, []);
+    }
+  });
+
+  test("un conjunto con partidas no necesita permiso alguno", async () => {
+    const f = fake();
+    await saveBudgetRevision(f.client, result.budget_id, 1, { title: "X" }, [{ concept: "x" }]);
+    assert.equal(f.calls.length, 1);
+  });
+
   test("rechaza respuestas incompletas aunque PostgREST no devuelva error", async () => {
     const f = fake({ data: { budget_id: result.budget_id }, error: null });
     await assert.rejects(
@@ -117,7 +147,7 @@ describe("budget revision writer", () => {
   test("no comunica éxito si la RPC informa de un número de partidas distinto", async () => {
     const f = fake();
     await assert.rejects(
-      () => saveBudgetRevision(f.client, result.budget_id, 1, { title: "B" }, []),
+      () => saveBudgetRevision(f.client, result.budget_id, 1, { title: "B" }, [{ concept: "x" }, { concept: "y" }]),
       /número de partidas confirmadas no coincide/,
     );
   });

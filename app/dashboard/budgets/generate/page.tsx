@@ -6,7 +6,7 @@ import { PartyPopper } from "lucide-react";
 import { useSector } from "@/lib/sector-context";
 import { normalizeSector } from "@/lib/sector-config";
 import PageHeader from "@/components/ui/page-header";
-import { BudgetGenerateProvider, useBudgetGenerate } from "./_components/BudgetGenerateProvider";
+import { BudgetGenerateProvider, partidasFromBudgetItems, useBudgetGenerate, type Partida } from "./_components/BudgetGenerateProvider";
 import { GenerateLayout } from "./_components/GenerateLayout";
 import { GenerateStepper, StepDef } from "./_components/GenerateStepper";
 import { ScopeStep } from "./_components/steps/ScopeStep";
@@ -20,6 +20,31 @@ import { analytics } from "@/lib/analytics";
 function budgetIdFromLocation() {
   if (typeof window === "undefined") return null;
   return new URLSearchParams(window.location.search).get("budgetId");
+}
+
+/**
+ * An array — empty included — is the wizard's own record and is taken as given:
+ * an empty one means the user removed every line. Anything else means this
+ * budget predates the wizard storing them, so its real lines are read back from
+ * budget_items. When that read fails we report it instead of hydrating an empty
+ * set, and the writer then refuses to empty the budget.
+ */
+async function hydratePartidas(
+  supabase: ReturnType<typeof createClient>,
+  budgetId: string,
+  savedState: Record<string, unknown>,
+): Promise<{ partidas: Partida[] | null; itemsAuthoritative: boolean }> {
+  if (Array.isArray(savedState?.partidas)) {
+    return { partidas: savedState.partidas as Partida[], itemsAuthoritative: true };
+  }
+  const { data: rows, error } = await supabase
+    .from("budget_items")
+    .select("*")
+    .eq("budget_id", budgetId)
+    .order("sort_order", { ascending: true })
+    .order("id", { ascending: true });
+  if (error || !rows) return { partidas: null, itemsAuthoritative: false };
+  return { partidas: partidasFromBudgetItems(rows), itemsAuthoritative: true };
 }
 
 function ExistingBudgetLoader() {
@@ -43,10 +68,14 @@ function ExistingBudgetLoader() {
       const saved = budget.wizard_state && typeof budget.wizard_state === "object"
         ? budget.wizard_state
         : {};
+
+      const { partidas, itemsAuthoritative } = await hydratePartidas(supabase, budget.id, saved);
+      if (!active) return;
       const requestedStepValue = new URLSearchParams(window.location.search).get("step");
       const requestedStep = requestedStepValue === null ? null : Number(requestedStepValue);
       loadDraft({
         ...saved,
+        ...(partidas === null ? {} : { partidas }),
         draftId: budget.id,
         lockVersion: Number(budget.lock_version),
         currentStep: typeof requestedStep === "number" && Number.isInteger(requestedStep) && requestedStep >= 0 && requestedStep <= 2
@@ -73,7 +102,7 @@ function ExistingBudgetLoader() {
         conditionsText: saved.conditionsText || budget.conditions_text || "",
         internalNotes: saved.internalNotes || budget.notes || "",
         ivaPercent: saved.ivaPercent ?? budget.iva_percent ?? 21,
-      });
+      }, { itemsAuthoritative });
       setLoadedId(budgetId);
     }
 
@@ -127,13 +156,18 @@ function DraftRecoveryManager() {
           {drafts.map(d => (
             <button 
               key={d.id}
-              onClick={() => {
-                // Inyectamos el estado crudo tal cual se guardó
+              onClick={async () => {
+                // Un borrador recuperado aquí es igual de antiguo que uno abierto
+                // por URL: si su wizard_state no guarda partidas, se leen de
+                // budget_items antes de hidratar.
+                const saved = d.wizard_state || {};
+                const { partidas, itemsAuthoritative } = await hydratePartidas(supabase, d.id, saved);
                 loadDraft({
-                  ...(d.wizard_state || {}),
+                  ...saved,
+                  ...(partidas === null ? {} : { partidas }),
                   draftId: d.id,
                   lockVersion: Number(d.lock_version),
-                });
+                }, { itemsAuthoritative });
                 analytics.budgetDraftRecovered();
                 setShowModal(false);
               }}

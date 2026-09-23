@@ -62,6 +62,19 @@ function reply(response, status, body, headers = {}) {
   });
   response.end(JSON.stringify(body));
 }
+/** Las partidas se pintan dentro de inputs, así que innerText no basta. */
+const visibleText = (page) => page.evaluate(() => [
+  document.body?.innerText ?? "",
+  ...[...document.querySelectorAll("input,textarea")].map((node) => node.value ?? ""),
+].join("\n"));
+
+const WRITE_RPCS = new Set([
+  "/rpc/create_budget_with_items", "/rpc/save_budget", "/rpc/finalize_budget",
+  "/rpc/change_budget_status", "/rpc/duplicate_budget",
+]);
+/** Escrituras realmente cursadas por la pasarela, no una espera por tiempo. */
+const writeCalls = () => requests.filter((entry) => WRITE_RPCS.has(entry.path));
+
 async function waitFor(predicate, label, timeout = 90000) {
   const end = Date.now() + timeout;
   while (Date.now() < end) {
@@ -70,7 +83,7 @@ async function waitFor(predicate, label, timeout = 90000) {
   }
   throw Error(`Timed out waiting for ${label}. Next output:\n${nextLog.slice(-5000)}`);
 }
-async function openWizard(budgetId, expectedTitle = "Base E2E") {
+async function openWizard(budgetId, expectedTitle = "Base E2E", { step = null, ready = null } = {}) {
   const page = await browser.newPage();
   pages.push(page);
   // Production CSP deliberately allows hosted Supabase rather than this
@@ -98,10 +111,17 @@ async function openWizard(budgetId, expectedTitle = "Base E2E") {
     url: appOrigin,
     httpOnly: false,
   });
-  const response = await page.goto(`${appOrigin}/dashboard/budgets/generate?budgetId=${budgetId}`, {
+  const stepQuery = step === null ? "" : `&step=${step}`;
+  const response = await page.goto(`${appOrigin}/dashboard/budgets/generate?budgetId=${budgetId}${stepQuery}`, {
     waitUntil: "domcontentloaded", timeout: 90000,
   });
   assert.equal(response.status(), 200, `wizard response: ${await page.content()}`);
+  if (ready) {
+    await waitFor(async () => (await visibleText(page)).includes(ready),
+      `wizard step ${step} showing ${ready}`, 30000);
+    assert.deepEqual(pageErrors, [], "page must not throw during hydration");
+    return { page, pageErrors };
+  }
   try {
     await page.waitForSelector('input[placeholder="Ej: Reforma baño completo"]', { timeout: 30000 });
   } catch (error) {
@@ -144,6 +164,12 @@ try {
     }
     // All database traffic is forwarded to the already-guarded local PostgREST.
     const target = new URL(url.pathname.slice("/rest/v1".length) + url.search, restOrigin);
+    // Una ruta del tipo /rest/v1//otro-host/x resuelve a ese otro host: el
+    // destino se comprueba, no se deduce del origen base.
+    if (target.origin !== restOrigin) {
+      requests.push({ method: request.method, path: url.pathname, status: 403, error: `target escaped: ${target.origin}` });
+      reply(response, 403, { error: "gateway target escaped the disposable bench" }); return;
+    }
     const chunks = [];
     for await (const chunk of request) chunks.push(chunk);
     try {
@@ -206,9 +232,14 @@ try {
     "--no-sandbox", "--disable-setuid-sandbox", "--disable-background-networking",
     "--disable-extensions", "--disable-sync", "--no-first-run",
   ] });
+  const writesBeforeOpen = writeCalls().length;
   const first = await openWizard(budgetId);
   await new Promise((resolve) => setTimeout(resolve, 1800));
   assert.deepEqual(await snapshot(), baseline, "opening an existing budget must not autosave it");
+  // La espera por tiempo sólo acompaña: lo que lo demuestra es que la pasarela
+  // no cursó ninguna RPC de escritura.
+  assert.deepEqual(writeCalls().slice(writesBeforeOpen), [],
+    "abrir un presupuesto existente no debe cursar ninguna RPC de escritura");
   const second = await openWizard(budgetId);
   // Next dev can briefly replace an already-mounted tab with its loading
   // boundary while compiling the second request. Wait for the first tab to
@@ -225,11 +256,20 @@ try {
   }
   await waitFor(async () => (await first.page.$eval('input[placeholder="Ej: Reforma baño completo"]', (node) => node.value)) === "Base E2E", "first tab after dev reload", 15000);
   assert.deepEqual(await snapshot(), baseline, "second tab must not cause a revision write");
+  assert.deepEqual(writeCalls().slice(writesBeforeOpen), [],
+    "abrir una segunda pestaña tampoco escribe");
   await first.page.type('input[placeholder="Ej: Reforma baño completo"]', " editado");
   await waitFor(async () => (await snapshot()).lock_version === 2, "first real autosave", 15000);
   assert.equal((await snapshot()).title, "Base E2E editado");
   await second.page.type('input[placeholder="Ej: Reforma baño completo"]', " obsoleto");
-  await waitFor(async () => (await second.page.content()).includes("Error:"), "stale revision error", 15000);
+  // El mensaje concreto de PT409, no un "Error:" cualquiera que cualquier otro
+  // fallo satisfaría igual.
+  await waitFor(async () => (await visibleText(second.page)).includes("otra pestaña o sesión"),
+    "stale revision conflict message", 15000);
+  const conflictText = await visibleText(second.page);
+  assert.match(conflictText, /Recarga la página/, "el conflicto debe decir qué hacer");
+  assert.ok(requests.some((entry) => entry.path === "/rpc/save_budget" && entry.status === 409),
+    "la pestaña obsoleta debe haber recibido un 409 real de PostgREST");
   assert.equal((await snapshot()).title, "Base E2E editado", "conflicting tab must not overwrite winner");
   assert.equal((await snapshot()).lock_version, 2);
   assert.ok(requests.some((entry) => entry.path === "/rpc/save_budget"), "real UI must reach real RPC");
@@ -244,10 +284,62 @@ try {
   assert.equal(finalized.status, "pendiente");
   assert.equal(finalized.lock_version, 3);
   assert.ok(requests.some((entry) => entry.path === "/rpc/finalize_budget"), "real UI must call the finalization RPC");
+  // ---- F1: presupuesto anterior a que el asistente guardara las partidas ----
+  // Sus lineas viven solo en budget_items y su wizard_state no las tiene. Antes
+  // de la correccion, una edicion cualquiera las sustituia por un conjunto vacio.
+  const legacySeed = await fetch(`${restOrigin}/rpc/create_budget_with_items`, {
+    method: "POST",
+    headers: { "content-type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ p_budget_data: { title: "Antiguo E2E", budget_number: "WIZARD-E2E-LEGACY", total: 1350 }, p_items: [] }),
+  });
+  if (legacySeed.status !== 200) throw Error(`Legacy seed failed: ${legacySeed.status} ${await legacySeed.text()}`);
+  const { budget_id: legacyId } = await legacySeed.json();
+  await db.query(`insert into public.budget_items
+      (budget_id, sort_order, concept, description, quantity, unit, category, chapter,
+       unit_price, subtotal, unit_price_cost, subtotal_cost)
+    values ($1,0,'Alicatado de bano','Azulejo 20x20',12,'m2','mano_obra','banos',30,360,20,240),
+           ($1,1,'Pintura de salon','Plastica lavable',40,'m2','mano_obra','salon',12,480,8,320),
+           ($1,2,'Instalacion electrica','Puntos de luz',6,'ud','material','instalaciones',85,510,60,360)`, [legacyId]);
+  // wizard_state real de aquella epoca: con cabecera, sin partidas.
+  await db.query("update public.budgets set wizard_state=$2 where id=$1",
+    [legacyId, JSON.stringify({ title: "Antiguo E2E", currentStep: 0, ivaPercent: 21 })]);
+  const legacyState = async () => (await db.query(`select b.lock_version,
+      (select count(*) from public.budget_items i where i.budget_id=b.id)::int as items,
+      (select coalesce(jsonb_agg(jsonb_build_array(i.concept, i.unit_price, i.subtotal, i.unit_price_cost)
+        order by i.sort_order), '[]'::jsonb) from public.budget_items i where i.budget_id=b.id) as lines
+    from public.budgets b where b.id=$1`, [legacyId])).rows[0];
+  const legacyBaseline = await legacyState();
+  assert.equal(legacyBaseline.items, 3);
+  assert.equal(legacyBaseline.lock_version, 1);
+
+  const writesBeforeLegacy = writeCalls().length;
+  // Se abre en el paso de partidas: deben verse las tres, leidas de budget_items.
+  const legacyTab = await openWizard(legacyId, "Antiguo E2E", { step: 1, ready: "Alicatado de bano" });
+  const legacyShown = await visibleText(legacyTab.page);
+  for (const concept of ["Alicatado de bano", "Pintura de salon", "Instalacion electrica"]) {
+    assert.ok(legacyShown.includes(concept), `la partida ${concept} debe aparecer en el asistente`);
+  }
+  await new Promise((resolve) => setTimeout(resolve, 2500));
+  assert.deepEqual(writeCalls().slice(writesBeforeLegacy), [],
+    "abrir un presupuesto antiguo no debe escribir nada");
+  assert.deepEqual(await legacyState(), legacyBaseline, "abrirlo no altera sus partidas");
+
+  // Editar otro campo: el autoguardado debe conservar las tres partidas.
+  const legacyEdit = await openWizard(legacyId, "Antiguo E2E");
+  await legacyEdit.page.type('input[placeholder="Ej: Reforma baño completo"]', " revisado");
+  await waitFor(async () => (await legacyState()).lock_version === 2, "autoguardado del presupuesto antiguo", 20000);
+  const afterEdit = await legacyState();
+  assert.equal(afterEdit.items, 3, "ninguna partida puede desaparecer al autoguardar");
+  assert.deepEqual(afterEdit.lines, legacyBaseline.lines, "las partidas se reescriben identicas");
+  assert.equal((await db.query("select title from public.budgets where id=$1", [legacyId])).rows[0].title,
+    "Antiguo E2E revisado");
+  assert.deepEqual(legacyTab.pageErrors, []);
+  assert.deepEqual(legacyEdit.pageErrors, []);
+
   assert.deepEqual(first.pageErrors, []);
   assert.deepEqual(second.pageErrors, []);
   assert.deepEqual(final.pageErrors, []);
-  console.log("PASS: full Next wizard hydrates without writing, autosaves, rejects a stale browser tab and finalizes through PostgREST");
+  console.log("PASS: wizard hydrates without writing, autosaves, rejects a stale tab, finalizes through PostgREST and keeps a legacy budget items");
 } finally {
   for (const page of pages) await page.close().catch(() => {});
   await browser?.close();

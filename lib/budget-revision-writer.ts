@@ -130,13 +130,41 @@ export function createBudgetWithItems(
   }, "No se pudo crear el presupuesto", items.length);
 }
 
-export function saveBudgetRevision(
+/**
+ * save_budget and finalize_budget replace the whole item set, so sending an
+ * empty array deletes every line of an existing budget. A caller that has not
+ * loaded the budget's items cannot tell "the user removed them all" from "the
+ * wizard never had them", and a draft has no document version to restore from.
+ * So emptying is refused unless the caller states the empty set is the user's.
+ * The refusal is a rejection, not a synchronous throw, so every failure of these
+ * writers arrives through the same channel.
+ */
+export interface BudgetRevisionWriteOptions {
+  /** True only when the loaded state really is the whole item set. */
+  allowEmptyItems?: boolean;
+}
+
+function refuseAccidentalEmptying(
+  items: readonly BudgetRevisionItem[],
+  options: BudgetRevisionWriteOptions | undefined,
+  operation: string,
+) {
+  if (items.length > 0 || options?.allowEmptyItems) return;
+  throw new Error(
+    `${operation}: no se han cargado las partidas de este presupuesto, así que no se vacía. ` +
+    "Recarga la página antes de volver a editarlo.",
+  );
+}
+
+export async function saveBudgetRevision(
   client: BudgetRevisionRpcClient,
   budgetId: string,
   expectedLockVersion: number,
   budgetData: BudgetRevisionPayload,
   items: readonly BudgetRevisionItem[],
+  options?: BudgetRevisionWriteOptions,
 ) {
+  refuseAccidentalEmptying(items, options, "No se pudo guardar el presupuesto");
   return call(client, "save_budget", {
     p_budget_id: budgetId,
     p_expected_lock_version: expectedLockVersion,
@@ -145,13 +173,15 @@ export function saveBudgetRevision(
   }, "No se pudo guardar el presupuesto", items.length);
 }
 
-export function finalizeBudgetRevision(
+export async function finalizeBudgetRevision(
   client: BudgetRevisionRpcClient,
   budgetId: string,
   expectedLockVersion: number,
   budgetData: BudgetRevisionPayload,
   items: readonly BudgetRevisionItem[],
+  options?: BudgetRevisionWriteOptions,
 ) {
+  refuseAccidentalEmptying(items, options, "No se pudo finalizar el presupuesto");
   return call(client, "finalize_budget", {
     p_budget_id: budgetId,
     p_expected_lock_version: expectedLockVersion,

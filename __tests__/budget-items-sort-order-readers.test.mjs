@@ -112,23 +112,37 @@ const esLectura = (cadena) =>
   cadena.includes('.eq("budget_id"') &&
   !/\.(insert|update|upsert|delete)\(/.test(cadena);
 
-function lecturaUnica(ruta) {
-  const lecturas = cadenasBudgetItems(leer(ruta)).filter(esLectura);
-  assert.equal(
-    lecturas.length,
-    1,
-    `${ruta} debe contener exactamente una consulta lectora de budget_items, se han encontrado ${lecturas.length}`,
+// Un fichero puede tener mas de un lector legitimo: generate/page.tsx lee las
+// partidas para el PDF del asistente y tambien para rehidratar un presupuesto
+// antiguo cuyo wizard_state no las guarda. Lo que no admite excepcion es que
+// CADA lectura ordene por sort_order, asi que se comprueban todas.
+function lecturas(ruta) {
+  const encontradas = cadenasBudgetItems(leer(ruta)).filter(esLectura);
+  assert.ok(
+    encontradas.length >= 1,
+    `${ruta} debe contener al menos una consulta lectora de budget_items`,
   );
-  return lecturas[0];
+  return encontradas;
 }
 
 // ---------------------------------------------------------------------------
 // BLOQUE A — cada lector, por separado
 // ---------------------------------------------------------------------------
 
-function compruebaLector(ruta) {
-  const cadena = lecturaUnica(ruta);
+function compruebaLector(ruta, filtro = null) {
+  const todas = lecturas(ruta);
+  for (const candidata of todas) verificaOrden(ruta, candidata);
+  if (!filtro) {
+    assert.equal(todas.length, 1,
+      `${ruta}: hay ${todas.length} lecturas; indica cual se comprueba con un filtro`);
+    return todas[0];
+  }
+  const elegida = todas.find((candidata) => filtro.test(candidata));
+  assert.ok(elegida, `${ruta}: ninguna lectura de budget_items casa con ${filtro}`);
+  return elegida;
+}
 
+function verificaOrden(ruta, cadena) {
   const iSelect = cadena.indexOf('.select("*")');
   const iEq = cadena.indexOf('.eq("budget_id"');
   const iSort = cadena.indexOf('.order("sort_order", { ascending: true })');
@@ -164,6 +178,7 @@ function compruebaLector(ruta) {
   return cadena;
 }
 
+
 describe("FASE 2E-3 · lectores de budget_items · BLOQUE A — cada lector ordena por sort_order", () => {
   test("CASO R1 — budget-form.tsx hidrata la edicion por sort_order", () => {
     const cadena = compruebaLector(F_FORM);
@@ -171,7 +186,7 @@ describe("FASE 2E-3 · lectores de budget_items · BLOQUE A — cada lector orde
   });
 
   test("CASO R2 — generate/page.tsx exporta el PDF del asistente por sort_order", () => {
-    const cadena = compruebaLector(F_GENERATE);
+    const cadena = compruebaLector(F_GENERATE, /finalizedId/);
     assert.match(cadena, /\.eq\("budget_id", finalizedId\)/);
   });
 
