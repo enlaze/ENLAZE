@@ -20,6 +20,7 @@ import {
   budgetRevisionErrorMessage,
   changeBudgetStatus,
   duplicateBudgetRevision,
+  isBudgetRevisionConflict,
 } from "@/lib/budget-revision-writer";
 
 interface BudgetItem {
@@ -229,9 +230,16 @@ export default function BudgetDetailPage() {
       }
 
     } catch (error) {
-      toast.error("No se pudo cambiar el estado", {
-        description: budgetRevisionErrorMessage(error),
-      });
+      if (isBudgetRevisionConflict(error)) {
+        await loadBudget();
+        toast.error("El presupuesto cambió en otra sesión", {
+          description: "La ficha se ha actualizado. Revisa el estado actual antes de intentarlo de nuevo.",
+        });
+      } else {
+        toast.error("No se pudo cambiar el estado", {
+          description: budgetRevisionErrorMessage(error),
+        });
+      }
     }
     setUpdating(false);
   }
