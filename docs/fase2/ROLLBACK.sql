@@ -312,3 +312,39 @@ drop schema if exists budget_internal;
 notify pgrst, 'reload schema';
 commit;
 -- END ROLLBACK_2F2_E2
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BLOQUE E4-L1 · revierte 20260923120000_portal_token_lifecycle.sql
+-- Retira las tres RPC de gestión, sus auxiliares y el CHECK del vocabulario.
+-- NO borra ninguna fila de portal_tokens: los enlaces ya emitidos siguen existiendo y
+-- el portal los sigue aceptando, pero dejan de poder emitirse, rotarse o revocarse
+-- desde la aplicación hasta que el lote vuelva a aplicarse.
+-- NO toca projects.access_token ni ningún enlace heredado.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BEGIN ROLLBACK_2F2_E4_L1
+begin;
+do $guard$
+begin
+  if current_setting('enlaze.allow_portal_lifecycle_rollback', true) is distinct from 'before_issuing_links' then
+    raise exception 'Set explicit before_issuing_links acknowledgement; otherwise forward-fix only';
+  end if;
+  if exists (select 1 from public.portal_tokens where is_active and revoked_at is null) then
+    raise exception 'There are live modern portal links: revoke them deliberately before removing their lifecycle';
+  end if;
+end $guard$;
+drop function if exists public.portal_revoke_token(uuid);
+drop function if exists public.portal_rotate_token(uuid, timestamptz);
+drop function if exists public.portal_issue_token(uuid, jsonb, timestamptz, text);
+drop function if exists portal_token_internal.lock_own_token(uuid, uuid);
+drop function if exists portal_token_internal.status(public.portal_tokens);
+drop function if exists portal_token_internal.issued(public.portal_tokens);
+drop function if exists portal_token_internal.validate_expiry(timestamptz);
+drop function if exists portal_token_internal.validate_permissions(jsonb);
+drop function if exists portal_token_internal.owned_project(uuid, uuid);
+alter default privileges for role postgres in schema portal_token_internal grant execute on functions to public;
+drop schema if exists portal_token_internal;
+alter table public.portal_tokens drop constraint if exists portal_tokens_permissions_check;
+drop function if exists public.portal_token_permissions_valid(jsonb);
+notify pgrst, 'reload schema';
+commit;
+-- END ROLLBACK_2F2_E4_L1
