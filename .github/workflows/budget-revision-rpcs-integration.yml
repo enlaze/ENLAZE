@@ -11,6 +11,8 @@ on:
       - "__tests__/budget-revision-rpcs*.mjs"
       - "__tests__/budget-revision-writer.test.mjs"
       - "__tests__/budget-provider-autosave.browser.test.mjs"
+      - "__tests__/budget-form-conflict.browser.test.mjs"
+      - "app/dashboard/budgets/_components/budget-form.tsx"
       - "__tests__/budget-wizard-full-page.browser.integration.test.mjs"
       - "__tests__/budget-generate-writer-flow.test.mjs"
       - "__tests__/budget-duplicate-writer-safety.test.mjs"
@@ -87,6 +89,8 @@ jobs:
         run: ./node_modules/.bin/puppeteer browsers install chrome
       - name: React hydration and autosave debounce on loopback only
         run: npm run test:budget-provider-autosave-browser
+      - name: Manual budget form refuses to save from a stale tab
+        run: npm run test:budget-form-conflict-browser
       - name: Dedicated PostgreSQL 17 cluster, no production secrets
         run: |
           docker network create enlaze-e2-revision-network
