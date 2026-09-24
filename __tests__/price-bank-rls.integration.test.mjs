@@ -1,6 +1,6 @@
 /**
  * RLS del banco de precios contra la base REAL (migración
- * 20260924140000_close_price_bank_write_hole). Crea un usuario desechable y
+ * 20260924113527_close_price_bank_write_hole). Crea un usuario desechable y
  * lo borra al final; todo lo que inserta es suyo y se limpia.
  *
  *   npm run test:price-bank-rls
@@ -144,7 +144,7 @@ test("no puede colgar productos de un proveedor privado de OTRO usuario", async 
   }
 });
 
-test("sector_data y n8n_updates: sin sesión ni se leen ni se escriben (20260924160000)", async () => {
+test("sector_data y n8n_updates: sin sesión ni se leen ni se escriben (20260924144202)", async () => {
   for (const t of ["sector_data", "n8n_updates"]) {
     const r = await anon.from(t).select("*", { count: "exact", head: true });
     assert.ok(r.error || r.count === 0, `${t}: anon ve ${r.count} filas`);

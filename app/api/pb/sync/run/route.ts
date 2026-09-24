@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     if (blocked) return blocked;
 
     // La sincronización escribe el catálogo GLOBAL (pb_price_current,
-    // pb_sync_runs), que desde 20260924140000 solo puede escribir
+    // pb_sync_runs), que desde 20260924113527 solo puede escribir
     // service_role. Ya comprobados sesión y plan, corre como sistema,
     // igual que la rama del cron.
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {

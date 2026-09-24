@@ -1,5 +1,5 @@
 /**
- * Arreglos P1 de 20260924170000_fix_p1_signature_invoice_deletion_races,
+ * Arreglos P1 de 20260924150745_fix_p1_signature_invoice_deletion_races,
  * contra la base REAL. Crea dos usuarios desechables y lo borra todo al final.
  *
  *   npm run test:p1-races
