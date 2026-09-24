@@ -164,8 +164,11 @@ interfaz es el lote 2.
 
 - `authenticated`: `EXECUTE` en las tres RPC públicas. Nada más.
 - `anon`, `public`, `service_role`: **sin** `EXECUTE` en ninguna de las tres.
-- Esquema privado `portal_token_internal`: revocado para todos; sus seis auxiliares
-  son `SECURITY INVOKER` y solo se alcanzan desde dentro de las RPC.
+- Esquema privado `portal_token_internal`: revocado para todos; sus **siete**
+  auxiliares son `SECURITY INVOKER` y solo se alcanzan desde dentro de las RPC:
+  `owned_project`, `validate_permissions`, `resolve_expiry`,
+  `assert_live_link_cap`, `issued`, `status` y `lock_own_token`.
+  (Corregido el 2026-09-24: antes decía «seis», que era un recuento equivocado.)
 - `INSERT` / `UPDATE` / `DELETE` directos sobre `portal_tokens` siguen **revocados**
   para `anon` y `authenticated`. Este lote no los repone.
 
@@ -245,15 +248,23 @@ del repositorio, levanta `postgres:17` en un contenedor efímero.
 
 ## Despliegue futuro
 
-1. Ejecutar los bloques `CHECK_E4_L1_VALUES` de `docs/fase2/CHECKS.sql` **antes** de
-   aplicar: `incompatibles`, `sin_caducidad` y `fuera_de_ventana` deben ser 0. Si
-   alguno no lo es, parar y revisar a mano — la migración también se detendrá sola
-   con un mensaje legible, sin inventar fechas.
+1. Ejecutar **`CHECK_E4_L1_PRECHECK`** de `docs/fase2/CHECKS.sql`: `veredicto`
+   debe decir `OK`. Los bloques `CHECK_E4_L1_VALUES` y `CHECK_E4_L1_EXPIRY`
+   **no sirven antes del despliegue**, porque llaman a
+   `portal_token_permissions_valid()` y `portal_token_max_lifetime()`, que nacen
+   dentro de este mismo lote: ejecutarlos antes falla con
+   «function does not exist». El precheck no depende de ningún objeto de E4.
+   (Corregido el 2026-09-24; antes este paso remitía al bloque equivocado.)
+   Si el veredicto no es `OK`, parar y revisar a mano — la migración también se
+   detendrá sola con un mensaje legible, sin inventar fechas.
 2. Aplicar `20260923120000_portal_token_lifecycle.sql`.
-3. Ejecutar `CHECK_E4_L1_SCHEMA`, `CHECK_E4_L1_GRANTS` y `CHECK_E4_L1_EXPIRY`: las
-   tres RPC con `anon_execute = false` y `authenticated_execute = true`, los
-   auxiliares privados con ambos en `false`, las seis filas de DML directo en
-   `false`, `created_at` y `expires_at` con `is_nullable = NO`, los dos CHECK
+3. Ejecutar `CHECK_E4_L1_SCHEMA`, `CHECK_E4_L1_GRANTS` y `CHECK_E4_L1_EXPIRY`.
+   El inventario debe dar **13 funciones: 6 públicas y 7 internas** — las tres
+   RPC más `portal_token_permissions_valid`, `portal_token_default_lifetime` y
+   `portal_token_max_lifetime` en `public`, y los siete auxiliares en
+   `portal_token_internal`. Las tres RPC con `anon_execute = false` y
+   `authenticated_execute = true`, los auxiliares privados con ambos en `false`,
+   las seis filas de DML directo en `false`, `created_at` y `expires_at` con `is_nullable = NO`, los dos CHECK
    presentes y los plazos en 90 y 365 días.
 4. Reejecutar el segundo `SELECT` de `CHECK_E4_L1_VALUES`: cero proyectos por encima
    de cinco vigentes.

@@ -1937,6 +1937,140 @@ where (n.nspname = 'public' and p.proname in ('create_budget_with_items','save_b
 order by n.nspname, p.proname;
 -- END CHECK_E2_SCHEMA
 
+-- ═════════════════════════════════════════════════════════════════════════════════════
+-- PRECHECK E4-L1 · ANTES de aplicar 20260923120000_portal_token_lifecycle.sql
+--
+-- Los bloques CHECK_E4_L1_* de más abajo son POSTERIORES al despliegue: llaman a
+-- portal_token_permissions_valid() y portal_token_max_lifetime(), que nacen dentro
+-- del propio lote. Ejecutarlos antes falla con "function does not exist" y no dice
+-- nada útil. Este precheck no depende de ningún objeto de E4: solo tablas y
+-- expresiones que ya existen.
+--
+-- Solo lectura. No muestra ningún secreto: cuenta filas, nunca selecciona
+-- portal_tokens.token ni projects.access_token.
+--
+-- LÍNEA BASE declarada el 2026-09-23 y que hay que reconfirmar: 0 tokens modernos
+-- y 8 enlaces heredados vivos. Si los heredados ya no son 8, no es necesariamente
+-- un problema —se pueden haber creado o borrado proyectos—, pero hay que explicar
+-- la diferencia antes de seguir, porque el lote 2 planificará su retirada sobre
+-- ese número.
+-- ═════════════════════════════════════════════════════════════════════════════════════
+-- BEGIN CHECK_E4_L1_PRECHECK
+-- ESPERADO: veredicto = 'OK'. Cualquier otra cosa: parar y revisar a mano.
+select case
+         when tokens_modernos    > 0 then 'ABORTAR: hay tokens modernos inesperados'
+         when permisos_malos     > 0 then 'ABORTAR: permisos fuera del vocabulario canonico'
+         when sin_created_by     > 0 then 'ABORTAR: filas sin created_by'
+         when fechas_nulas       > 0 then 'ABORTAR: created_at o expires_at nulos'
+         when fuera_de_ventana   > 0 then 'ABORTAR: caducidad fuera de la ventana de 365 dias'
+         when proyectos_con_exceso > 0 then 'ABORTAR: algun proyecto ya supera 5 enlaces vigentes'
+         when objetos_e4         > 0 then 'ABORTAR: ya existen objetos de E4 (aplicacion parcial)'
+         when enlaces_legacy  <> 8    then 'REVISAR: los enlaces heredados no son los 8 de la linea base'
+         else 'OK'
+       end as veredicto, *
+from (
+  select
+    (select count(*) from public.portal_tokens) as tokens_modernos,
+    -- Mismo vocabulario que valida E4, escrito aquí a mano porque su función
+    -- todavía no existe: array, con read, solo textos, sin repetir y sin inventos.
+    (select count(*) from public.portal_tokens t
+       where not (
+         t.permissions is not null
+         and jsonb_typeof(t.permissions) = 'array'
+         and t.permissions @> '["read"]'::jsonb
+         and not exists (select 1 from jsonb_array_elements(t.permissions) e
+                           where jsonb_typeof(e) <> 'string')
+         and not exists (select 1 from jsonb_array_elements_text(t.permissions) e
+                           where e not in ('read','approve_changes','approve_budgets'))
+         and (select count(*) from jsonb_array_elements_text(t.permissions))
+           = (select count(distinct e) from jsonb_array_elements_text(t.permissions) e)
+       )) as permisos_malos,
+    (select count(*) from public.portal_tokens where created_by is null) as sin_created_by,
+    (select count(*) from public.portal_tokens
+       where created_at is null or expires_at is null) as fechas_nulas,
+    (select count(*) from public.portal_tokens
+       where expires_at is not null and created_at is not null
+         and (expires_at <= created_at
+              or expires_at > created_at + interval '365 days')) as fuera_de_ventana,
+    (select count(*) from (
+       select 1 from public.portal_tokens
+        where is_active and revoked_at is null and expires_at > now()
+        group by project_id having count(*) > 5) x) as proyectos_con_exceso,
+    -- Aplicación parcial: cualquier objeto del lote ya presente. ESPERADO 0;
+    -- tras aplicar E4-L1 completo serán 13 funciones (6 públicas + 7 internas)
+    -- más el esquema privado y los dos CHECK.
+    ((select count(*) from pg_namespace where nspname = 'portal_token_internal')
+     + (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where (n.nspname = 'public' and p.proname in (
+                  'portal_issue_token','portal_rotate_token','portal_revoke_token',
+                  'portal_token_permissions_valid','portal_token_default_lifetime',
+                  'portal_token_max_lifetime'))
+             or n.nspname = 'portal_token_internal')
+     + (select count(*) from pg_constraint
+          where conrelid = 'public.portal_tokens'::regclass
+            and conname in ('portal_tokens_permissions_check',
+                            'portal_tokens_expiry_window_check'))) as objetos_e4,
+    (select count(*) from public.projects
+       where access_token is not null and deleted_at is null) as enlaces_legacy
+) as evidencia;
+-- END CHECK_E4_L1_PRECHECK
+
+-- Misma comprobación para guiones, que sí tiene que parar la ejecución. Un bloque
+-- DO no escribe nada: solo lee y lanza. ROLLBACK.sql usa el mismo patrón.
+-- BEGIN CHECK_E4_L1_PRECHECK_GATE
+do $precheck$
+declare v integer;
+begin
+  select count(*) into v from public.portal_tokens;
+  if v > 0 then raise exception 'Precheck: % unexpected modern portal tokens', v; end if;
+
+  select count(*) into v from public.portal_tokens t
+    where not (t.permissions is not null
+      and jsonb_typeof(t.permissions) = 'array'
+      and t.permissions @> '["read"]'::jsonb
+      and not exists (select 1 from jsonb_array_elements(t.permissions) e
+                        where jsonb_typeof(e) <> 'string')
+      and not exists (select 1 from jsonb_array_elements_text(t.permissions) e
+                        where e not in ('read','approve_changes','approve_budgets'))
+      and (select count(*) from jsonb_array_elements_text(t.permissions))
+        = (select count(distinct e) from jsonb_array_elements_text(t.permissions) e));
+  if v > 0 then raise exception 'Precheck: % tokens with incompatible permissions', v; end if;
+
+  select count(*) into v from public.portal_tokens
+    where created_at is null or expires_at is null or created_by is null;
+  if v > 0 then raise exception 'Precheck: % tokens with null created_at, expires_at or created_by', v; end if;
+
+  select count(*) into v from public.portal_tokens
+    where expires_at <= created_at or expires_at > created_at + interval '365 days';
+  if v > 0 then raise exception 'Precheck: % tokens outside the 365-day expiry window', v; end if;
+
+  select count(*) into v from (
+    select 1 from public.portal_tokens
+     where is_active and revoked_at is null and expires_at > now()
+     group by project_id having count(*) > 5) x;
+  if v > 0 then raise exception 'Precheck: % projects already above 5 live links', v; end if;
+
+  select (select count(*) from pg_namespace where nspname = 'portal_token_internal')
+       + (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+            where (n.nspname = 'public' and p.proname in (
+                    'portal_issue_token','portal_rotate_token','portal_revoke_token',
+                    'portal_token_permissions_valid','portal_token_default_lifetime',
+                    'portal_token_max_lifetime'))
+               or n.nspname = 'portal_token_internal')
+       + (select count(*) from pg_constraint
+            where conrelid = 'public.portal_tokens'::regclass
+              and conname in ('portal_tokens_permissions_check',
+                              'portal_tokens_expiry_window_check')) into v;
+  if v > 0 then raise exception 'Precheck: % E4 objects already exist (partial apply)', v; end if;
+
+  select count(*) into v from public.projects
+    where access_token is not null and deleted_at is null;
+  if v <> 8 then
+    raise exception 'Precheck: % legacy links, baseline says 8. Explain the difference before deploying', v;
+  end if;
+end $precheck$;
+-- END CHECK_E4_L1_PRECHECK_GATE
+
 -- ─────────────────────────────────────────────────────────────────────────────────────
 -- BLOQUE E4-L1 · Tras 20260923120000_portal_token_lifecycle.sql (SELECT solamente)
 -- Inventario de las tres RPC de gestión, sus auxiliares privados y sus privilegios.
@@ -1946,6 +2080,12 @@ order by n.nspname, p.proname;
 -- Los tres ayudantes públicos (portal_token_permissions_valid y los dos de plazo)
 -- son puros, no leen ninguna tabla y SÍ quedan ejecutables: el CHECK y el DEFAULT
 -- de la tabla los necesitan para cualquier escritor legítimo.
+--
+-- RECUENTO ESPERADO tras E4-L1: 13 filas — 6 públicas (3 RPC + 3 ayudantes puros)
+-- y 7 internas (owned_project, validate_permissions, resolve_expiry,
+-- assert_live_link_cap, issued, status, lock_own_token).
+-- Tras el lote de endurecimiento son 15: +1 pública (portal_list_tokens) y
+-- +1 interna (visible_project), ambas incluidas ya en la consulta.
 -- ─────────────────────────────────────────────────────────────────────────────────────
 -- BEGIN CHECK_E4_L1_SCHEMA
 select n.nspname, p.proname, pg_get_function_identity_arguments(p.oid) as arguments,
@@ -1957,7 +2097,7 @@ from pg_proc p join pg_namespace n on n.oid = p.pronamespace
 where (n.nspname = 'public'
        and p.proname in ('portal_issue_token','portal_rotate_token','portal_revoke_token',
                          'portal_token_permissions_valid','portal_token_default_lifetime',
-                         'portal_token_max_lifetime'))
+                         'portal_token_max_lifetime','portal_list_tokens'))
    or n.nspname = 'portal_token_internal'
 order by n.nspname, p.proname;
 -- END CHECK_E4_L1_SCHEMA

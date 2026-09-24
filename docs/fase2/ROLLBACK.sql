@@ -365,3 +365,34 @@ drop function if exists public.portal_token_permissions_valid(jsonb);
 notify pgrst, 'reload schema';
 commit;
 -- END ROLLBACK_2F2_E4_L1
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BLOQUE E4-HARDENING · revierte 20260924120000_portal_token_listing.sql
+-- Retira la RPC de listado y su auxiliar privado. Nada más: no toca la tabla, ni
+-- las restricciones, ni los privilegios que dejó E4-L1, ni una sola fila.
+--
+-- No hay guarda de "enlaces vigentes" como en E4-L1: quitar un listado de solo
+-- lectura no puede dejar ningún enlace huérfano ni inaccesible. Lo que sí hace es
+-- devolver a la pantalla del proyecto a su única vía actual, el SELECT directo
+-- sobre portal_tokens, que en este punto todavía sigue concedido.
+--
+-- Si este rollback se ejecuta DESPUÉS de que el lote 2 haya retirado ese SELECT,
+-- la pantalla se queda sin forma de listar enlaces: en ese escenario hay que
+-- revertir también el lote 2, o no revertir esto.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BEGIN ROLLBACK_2F2_E4_HARDENING
+begin;
+do $guard$
+begin
+  if current_setting('enlaze.allow_portal_listing_rollback', true) is distinct from 'back_to_direct_select' then
+    raise exception 'Set explicit back_to_direct_select acknowledgement; otherwise forward-fix only';
+  end if;
+  if not has_table_privilege('authenticated', 'public.portal_tokens', 'SELECT') then
+    raise exception 'authenticated no longer has direct SELECT: removing the listing RPC would leave the screen blind. Revert lote 2 first';
+  end if;
+end $guard$;
+drop function if exists public.portal_list_tokens(uuid);
+drop function if exists portal_token_internal.visible_project(uuid, uuid);
+notify pgrst, 'reload schema';
+commit;
+-- END ROLLBACK_2F2_E4_HARDENING
