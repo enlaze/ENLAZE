@@ -42,6 +42,8 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install Chrome for the browser isolation test
+        run: npx puppeteer browsers install chrome
       - name: Start isolated PostgreSQL 17
         run: |
           docker run --detach --name enlaze-portal-listing-db \
