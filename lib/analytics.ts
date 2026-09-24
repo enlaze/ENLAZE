@@ -21,20 +21,34 @@ let posthog: any = null;
 
 let initialized = false;
 
+/* Promesa única de inicialización. Sin esto, dos llamadas concurrentes pasaban
+   las dos por `if (initialized) return` —que solo se pone a true DESPUÉS del
+   import dinámico de posthog-js— y hacían dos `posthog.init`. Los dos efectos
+   de AnalyticsProvider llaman a initAnalytics en el mismo tick, así que era el
+   caso normal, no el raro. */
+let initPromise: Promise<void> | null = null;
+
 /* ── Init ─────────────────────────────────────────────────────────── */
 
-export async function initAnalytics() {
-  if (initialized) return;
-  if (typeof window === "undefined") return;
+export function initAnalytics(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
 
   /* En /portal/<secreto> no se inicializa PostHog en absoluto.
      No basta con sanear los eventos: PostHog persiste $initial_current_url en
      localStorage y en cookie (persistence: "localStorage+cookie"), así que la
      URL portadora quedaría escrita en el navegador del cliente final aunque
      ningún evento llegara a salir. El portal es una página pública y anónima;
-     lo que se pierde de producto no compensa guardar ahí un secreto. */
-  if (isPortalPath(window.location.pathname)) return;
+     lo que se pierde de producto no compensa guardar ahí un secreto.
 
+     Este caso NO memoiza: si luego se navega desde el portal a una pantalla
+     normal, la inicialización tiene que poder ocurrir allí. */
+  if (isPortalPath(window.location.pathname)) return Promise.resolve();
+
+  if (!initPromise) initPromise = runInit();
+  return initPromise;
+}
+
+async function runInit(): Promise<void> {
   const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
   const host = process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://eu.i.posthog.com";
 
@@ -160,8 +174,15 @@ export const analytics = {
     trackEvent("client_created"),
 
   // Navigation
-  pageViewed: (path: string) =>
-    trackEvent("$pageview", { $current_url: redactPortalPath(path) }),
+  /* `url` debe ser la URL completa, no el pathname: la captura automática de
+     PostHog que esto sustituye mandaba window.location.href, con host, query y
+     parámetros UTM. Mandar solo el path habría roto la atribución de campañas
+     sin que nadie se enterase hasta mirar los informes. */
+  pageViewed: (url: string, pathname?: string) =>
+    trackEvent("$pageview", {
+      $current_url: redactPortalPath(url),
+      ...(pathname ? { $pathname: redactPortalPath(pathname) } : {}),
+    }),
 
   searchUsed: (query: string) =>
     trackEvent("search_used", { query_length: query.length }),
