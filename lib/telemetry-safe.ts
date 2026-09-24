@@ -14,10 +14,14 @@
 export function safeTelemetry<T>(run: () => T): T | undefined {
   try {
     return run();
-  } catch (error) {
-    // console.warn y no captureException: si la telemetría es justo lo que
-    // está roto, reportar el fallo por telemetría lo agravaría.
-    console.warn("[telemetry] llamada ignorada tras fallar:", error);
+  } catch {
+    /* Constante sin datos, a propósito. No se imprime el error: en /portal se
+       navega con el secreto en la URL, y el mensaje o el stack de lo que haya
+       fallado puede llevarlo. Con enableLogs esa línea volvería a Sentry.
+
+       console.warn y no captureException: si la telemetría es justo lo que
+       está roto, reportar el fallo por telemetría lo agravaría. */
+    console.warn("[telemetry] llamada ignorada tras fallar");
     return undefined;
   }
 }

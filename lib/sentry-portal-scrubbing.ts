@@ -11,16 +11,23 @@
  * evento a mandarlo sin redactar.
  */
 
-import { redactPortalDeep, isPortalPath } from "@/lib/portal-path-redaction";
+import { redactPortalDeep } from "@/lib/portal-path-redaction";
+
+/* Constante sin datos. El error que hizo fallar el saneado puede llevar el
+   secreto en su mensaje o en su stack —de hecho, es el caso más probable: algo
+   reventó leyendo la URL—, y con enableLogs esta línea volvería a Sentry. Así
+   que no se imprime ni el error, ni su mensaje, ni su tipo. Para depurar, el
+   evento descartado se nota por su ausencia. */
+const SCRUB_FAILED = "[telemetry] evento descartado: el saneado falló";
 
 /** Un hook de Sentry que redacta y, si el saneado falla, descarta. */
 function scrubbed<T>(input: T): T | null {
   try {
     return redactPortalDeep(input);
-  } catch (error) {
+  } catch {
     // Ni captureException ni Sentry.logger: si lo roto es la telemetría,
     // reportarlo por telemetría lo agrava. Y el evento no sale.
-    console.warn("[telemetry] evento descartado: el saneado falló", error);
+    console.warn(SCRUB_FAILED);
     return null;
   }
 }
@@ -32,20 +39,3 @@ export const portalScrubbingOptions = {
   beforeBreadcrumb: scrubbed,
   beforeSendLog: scrubbed,
 };
-
-/**
- * ¿Se está sirviendo ahora mismo una página del portal en el navegador?
- *
- * Session Replay graba la URL y el DOM, y su grabación no pasa por
- * `beforeSend`. En el portal no se graba, punto: no hay redacción que valga
- * sobre un vídeo de la barra de direcciones.
- */
-export function onPortalRouteNow(): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    return isPortalPath(window.location.pathname);
-  } catch {
-    // Si ni siquiera se puede leer la ruta, se asume lo más restrictivo.
-    return true;
-  }
-}
