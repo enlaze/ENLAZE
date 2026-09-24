@@ -77,7 +77,17 @@ async function runInit(): Promise<void> {
        cambio de ruta —con la ruta redactada—, así que no se pierde ninguno;
        de hecho se deja de enviar el duplicado que había. */
     capture_pageview: false,
-    capture_pageleave: true,         // track when user leaves
+    /* También desactivado, y por el mismo motivo que su hermano. Si alguien
+       navega en la misma pestaña del dashboard al portal, PostHog ya está
+       inicializado y emitiría un $pageleave desde /portal/<secreto>. Iría
+       redactado, pero la política es que desde el portal no sale NINGÚN evento:
+       el evento en sí ya delata que ese cliente abrió su enlace.
+
+       Se apaga globalmente en vez de reactivarlo al salir del portal. La
+       alternativa —opt_out/opt_in del capturado— puede pisar una preferencia de
+       privacidad que el usuario haya fijado, y eso es peor que perder la métrica
+       de permanencia. Vuelve en el lote 2, cuando el token salga de la URL. */
+    capture_pageleave: false,
     autocapture: false,              // we define events explicitly
     persistence: "localStorage+cookie",
     /* Red de seguridad para todo lo que no emitimos nosotros: $pageleave,

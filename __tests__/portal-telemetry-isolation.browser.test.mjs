@@ -43,11 +43,18 @@ const virtualModules = {
         const hook = window.__posthogOptions?.sanitize_properties;
         calls.push({ kind: "capture", event, properties: hook ? hook(properties, event) : properties });
       },
+      // Lo que el SDK real haría al cambiar de ruta si capture_pageleave
+      // estuviera activo. Aquí solo se dispara si la opción lo permite.
+      __maybePageleave() {
+        if (!window.__posthogOptions?.capture_pageleave) return;
+        api.capture("$pageleave", { $current_url: String(window.location.href) });
+      },
       identify(id, traits) { calls.push({ kind: "identify", id, traits }); },
       reset() { calls.push({ kind: "reset" }); },
       debug() {},
     };
     window.__posthogCalls = calls;
+    window.__posthogApi = api;
     export default api;
   `,
   "@sentry/nextjs": `
@@ -79,8 +86,20 @@ const entry = `
   import { createRoot } from "react-dom/client";
   import AnalyticsProvider from "@/components/AnalyticsProvider";
   import { captureException } from "@/lib/sentry";
-  window.__mount = () => createRoot(document.getElementById("root"))
-    .render(React.createElement(AnalyticsProvider, null, React.createElement("p", null, "hola")));
+  let root;
+  const paint = () => root.render(
+    React.createElement(AnalyticsProvider, null, React.createElement("p", null, "hola")));
+  window.__mount = () => { root = createRoot(document.getElementById("root")); paint(); };
+  /* Navegación SPA: el router cambia la URL con history.pushState y vuelve a
+     renderizar con el pathname nuevo. No hay recarga, así que ni el bundle ni
+     Sentry ni PostHog se reinicializan: ese es justo el caso a cubrir. */
+  window.__navigate = (next) => {
+    history.pushState({}, "", next);
+    window.__pathname = new URL(next, location.origin).pathname;
+    const ph = window.__posthogCalls && window.__posthogApi;
+    if (ph) window.__posthogApi.__maybePageleave();
+    paint();
+  };
   window.__captureException = captureException;
 `;
 
@@ -231,6 +250,55 @@ try {
   assert.equal(redacted.includes(SENTINEL), false,
     "sanitize_properties limpia cualquier propiedad que traiga la ruta del portal");
   await mixed.close();
+
+  // ── Navegación SPA: dashboard → portal en la MISMA pestaña ──────────────
+  /* El caso que faltaba. Al llegar al portal con una carga completa, PostHog no
+     se inicializa nunca. Pero si el usuario ya estaba en el dashboard, el SDK
+     está inicializado y el bundle no se vuelve a evaluar: la decisión sobre
+     Replay y sobre PostHog ya se tomó con la ruta anterior. */
+  const spa = await open("/dashboard/projects/abc-123");
+  await spa.waitForFunction(
+    () => window.__posthogCalls?.some((c) => c.kind === "capture" && c.event === "$pageview"),
+    { timeout: 10000 });
+  assert.equal(
+    (await spa.evaluate(() => window.__posthogCalls)).filter((c) => c.kind === "init").length, 1,
+    "el dashboard inicializa PostHog una sola vez");
+
+  const antes = (await spa.evaluate(() => window.__posthogCalls)).length;
+  await spa.evaluate((sentinel) => window.__navigate(`/portal/${sentinel}`), SENTINEL);
+  // Margen para que cualquier efecto tardío llegue a emitir algo.
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
+  const tras = await spa.evaluate(() => window.__posthogCalls);
+  assert.equal(tras.length, antes,
+    "desde el portal no sale ningún evento: ni pageview, ni pageleave, ni nada");
+  assert.equal(tras.filter((c) => c.kind === "init").length, 1,
+    "y no se reinicializa al navegar");
+  assert.equal(await spa.evaluate(() => window.__posthogOptions.capture_pageleave), false,
+    "pageleave desactivado: si no, el SDK emitiría desde /portal/<secreto>");
+
+  // El centinela está en la URL real de la pestaña, así que la prueba es real.
+  assert.match(await spa.evaluate(() => window.location.pathname), new RegExp(SENTINEL),
+    "la barra de direcciones lleva de verdad el secreto");
+
+  // Y un error en el portal tras la navegación tampoco lo filtra.
+  await spa.evaluate(() => window.__captureException(
+    new Error(`fallo tras navegar a ${window.location.href}`)));
+
+  const huella = [
+    JSON.stringify(tras),
+    JSON.stringify(await spa.evaluate(() => window.__sentryEvents)),
+    await storageDump(spa),
+    spa.__console.join("\n"),
+    spa.__pageErrors.join("\n"),
+    spa.__escapes.join("\n"),
+  ].join("\n");
+  assert.equal(huella.includes(SENTINEL), false,
+    "ni eventos, ni Sentry, ni almacenamiento, ni consola, ni errores, ni peticiones");
+  assert.deepEqual(spa.__escapes, [], "nada intenta salir del loopback");
+  assert.deepEqual(spa.__pageErrors, []);
+  assert.equal(await spa.evaluate(() => window.__posthogOptions.capture_pageview), false);
+  await spa.close();
 
   console.log("PASS: /portal/<secreto> no llega a PostHog, Sentry, Replay, consola ni almacenamiento");
 } finally {

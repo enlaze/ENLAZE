@@ -291,8 +291,14 @@ test("PostHog no captura la URL real por su cuenta", () => {
   assert.match(analytics, /capture_pageview:\s*false/,
     "el pageview automático captura window.location.href antes de que nada lo sanee");
   assert.equal(/capture_pageview:\s*true/.test(analytics), false);
+  assert.match(analytics, /capture_pageleave:\s*false/,
+    "con pageleave activo, navegar del dashboard al portal emitiría un evento " +
+    "desde /portal/<secreto>: redactado, pero la política es no emitir ninguno");
+  assert.equal(/capture_pageleave:\s*true/.test(analytics), false);
+  assert.equal(/opt_in_capturing|opt_out_capturing/.test(analytics), false,
+    "no se toca el opt-in/opt-out: pisaría una preferencia de privacidad del usuario");
   assert.match(analytics, /sanitize_properties:/,
-    "red de seguridad para $pageleave, $initial_current_url y lo que añada el SDK");
+    "red de seguridad para $initial_current_url y lo que añada el SDK");
   assert.match(analytics, /if \(isPortalPath\(window\.location\.pathname\)\) return Promise\.resolve\(\);/,
     "en el portal no se inicializa PostHog en absoluto: persiste la URL en localStorage y cookie");
   assert.match(analytics, /if \(!initPromise\) initPromise = runInit\(\);/,
