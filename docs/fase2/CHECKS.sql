@@ -1955,6 +1955,76 @@ order by n.nspname, p.proname;
 -- la diferencia antes de seguir, porque el lote 2 planificará su retirada sobre
 -- ese número.
 -- ═════════════════════════════════════════════════════════════════════════════════════
+-- ═════════════════════════════════════════════════════════════════════════════════════
+-- LIBRO DE MIGRACIONES · antes y después del despliegue de E4
+--
+-- `supabase db push` aplica TODAS las migraciones pendientes de una tacada. No hay
+-- pausa entre 20260923120000 y 20260924120000, así que no tiene sentido documentar
+-- una auditoría intermedia: se comprueba antes y se comprueba después, una vez.
+-- Manipular el directorio de migraciones para forzar esa pausa sería peor que el
+-- problema que resuelve.
+-- ═════════════════════════════════════════════════════════════════════════════════════
+-- BEGIN CHECK_E4_DEPLOY_PENDING
+-- ANTES del push. ESPERADO: veredicto = 'OK'.
+-- Que las dos pendientes sean exactamente estas se confirma además fuera de SQL,
+-- con `supabase migration list`: el libro solo sabe de las ya aplicadas.
+select case
+         when base_aplicada <> 1 then 'ABORTAR: falta 20260915160000, la base sobre la que va E4'
+         when l1_aplicada    > 0 then 'ABORTAR: 20260923120000 ya está registrada'
+         when listado_aplicada > 0 then 'ABORTAR: 20260924120000 ya está registrada'
+         else 'OK'
+       end as veredicto, *
+from (
+  select
+    (select count(*) from supabase_migrations.schema_migrations
+       where version = '20260915160000') as base_aplicada,
+    (select count(*) from supabase_migrations.schema_migrations
+       where version = '20260923120000') as l1_aplicada,
+    (select count(*) from supabase_migrations.schema_migrations
+       where version = '20260924120000') as listado_aplicada,
+    (select max(version) from supabase_migrations.schema_migrations) as ultima_registrada
+) as libro;
+-- END CHECK_E4_DEPLOY_PENDING
+
+-- BEGIN CHECK_E4_DEPLOY_AUDIT
+-- DESPUÉS del push, una sola auditoría conjunta. ESPERADO: veredicto = 'OK'.
+--
+-- Si sale 'RECUPERAR', la primera migración quedó registrada y la segunda no: es el
+-- único estado intermedio posible, y NO se arregla con rollback. Se corrige hacia
+-- delante — arreglar 20260924120000 y volver a lanzar `supabase db push`, que
+-- aplicará solo la que falta. Entre tanto el sistema es coherente: E4-L1 funciona
+-- entero y lo único ausente es el listado, que todavía no usa ninguna pantalla.
+select case
+         when l1 = 0 then 'ABORTAR: no se aplicó nada, revisar la salida del push'
+         when l1 = 1 and listado = 0 then 'RECUPERAR: E4-L1 registrada y el listado no; corregir y volver a hacer push'
+         when publicas <> 7 or internas <> 8 then 'ABORTAR: el inventario de funciones no cuadra'
+         when esquema <> 1 then 'ABORTAR: falta el esquema privado'
+         when checks <> 2 then 'ABORTAR: faltan restricciones de la tabla'
+         else 'OK'
+       end as veredicto, *
+from (
+  select
+    (select count(*) from supabase_migrations.schema_migrations
+       where version = '20260923120000') as l1,
+    (select count(*) from supabase_migrations.schema_migrations
+       where version = '20260924120000') as listado,
+    -- 7 públicas: 3 RPC del ciclo de vida + portal_list_tokens + 3 ayudantes puros.
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public' and p.proname in (
+         'portal_issue_token','portal_rotate_token','portal_revoke_token',
+         'portal_list_tokens','portal_token_permissions_valid',
+         'portal_token_default_lifetime','portal_token_max_lifetime')) as publicas,
+    -- 8 internas: las 7 de E4-L1 más visible_project.
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'portal_token_internal') as internas,
+    (select count(*) from pg_namespace where nspname = 'portal_token_internal') as esquema,
+    (select count(*) from pg_constraint
+       where conrelid = 'public.portal_tokens'::regclass
+         and conname in ('portal_tokens_permissions_check',
+                         'portal_tokens_expiry_window_check')) as checks
+) as inventario;
+-- END CHECK_E4_DEPLOY_AUDIT
+
 -- BEGIN CHECK_E4_L1_PRECHECK
 -- ESPERADO: veredicto = 'OK'. Cualquier otra cosa: parar y revisar a mano.
 select case

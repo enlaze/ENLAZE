@@ -1,6 +1,7 @@
 # 2F-2 / E4 — endurecimiento previo al despliegue de L1
 
-Fecha: 2026-09-24. Estado: **rama lista para revisión; nada aplicado**.
+Fecha: 2026-09-24 (revisión 2, tras el NO-GO de Codex sobre `f4820ab`).
+Estado: **rama lista para revisión; nada aplicado**.
 Rama: `codex/portal-token-hardening-e4`, desde `origin/main` `42c7c07`.
 Migración nueva: `20260924120000_portal_token_listing.sql`, **no aplicada**.
 `20260923120000_portal_token_lifecycle.sql` **no se toca**: ya está fusionada.
@@ -41,6 +42,25 @@ más reciente al más antiguo con **solo metadatos**:
 la parte `revoked` de rotar. Hay una sola definición de «metadato» en el lote, no
 dos que puedan separarse con el tiempo.
 
+**Pagina de verdad.** La primera versión agregaba el historial entero. El tope de
+cinco solo cuenta enlaces **vigentes**, así que rotar y revocar acumula filas sin
+límite: un proyecto de años puede tener cientos, y esa es justo la respuesta que
+la interfaz del lote 2 pedirá en cada carga. Mejor fijar el contrato ahora que
+romperlo después.
+
+```
+portal_list_tokens(p_project_id, p_limit default 20,
+                   p_cursor_created_at default null, p_cursor_id default null)
+  → { items: [...], next_cursor: {created_at, id} | null }
+```
+
+Cursor por `(created_at, id)` y no `OFFSET`: con `OFFSET`, emitir o revocar entre
+dos páginas desplaza las filas y el usuario ve repetidos o se salta alguno. El
+desempate por `id` hace falta porque `created_at` empata en cuanto se emiten dos
+enlaces en la misma transacción. `p_limit` se valida entre 1 y 100 (`22023`), y
+pasar media pareja de cursor también se rechaza: daría una página distinta de la
+que el llamante cree pedir. `next_cursor` solo se emite si la página salió llena.
+
 A diferencia de `owned_project`, el auxiliar `visible_project` **no bloquea** la
 fila del proyecto: abrir una ficha no debe serializar las emisiones de ese
 proyecto. Hay una prueba que lo comprueba con dos sesiones.
@@ -67,7 +87,8 @@ el día que el privilegio se retire, para que nadie olvide actualizar esto.
 | `capture_pageview: true` de PostHog captura `window.location.href` **dentro del propio `init`**, antes de que nada pueda sanearlo | `capture_pageview: false` |
 | `analytics.pageViewed(pathname)` mandaba la ruta cruda como `$current_url` | se redacta en el emisor |
 | PostHog **persiste** `$initial_current_url` en `localStorage` y cookie | en el portal no se inicializa PostHog en absoluto |
-| Sentry: `request.url`, breadcrumbs de navegación, nombre de transacción, logs, y Session Replay grabando la barra de direcciones | hooks de saneado en los tres `init` + Replay apagado |
+| Sentry: `request.url`, breadcrumbs de navegación, nombre de transacción, logs | hooks de saneado en los tres `init` |
+| Session Replay graba la barra de direcciones, y su grabación no pasa por `beforeSend` | apagado en toda la app mientras el token vaya en la URL |
 
 ### Piezas
 
@@ -77,28 +98,83 @@ el día que el privilegio se retire, para que nadie olvide actualizar esto.
   error. `redactPortalDeep` recorre estructuras enteras, **claves incluidas**, en
   vez de enumerar los campos donde hoy aparece la URL: esa lista se queda corta
   con cada versión del SDK.
+
+  **Fail-closed.** La primera versión devolvía el valor original en cuatro
+  situaciones, y en las cuatro el token sobrevivía entero: rama por debajo de la
+  profundidad 12, ciclo detectado, instancias de `Error` y de `URL`, y cualquier
+  otro objeto no plano. Ahora nada opaco sale intacto:
+
+  | Caso | Qué se emite |
+  |---|---|
+  | profundidad agotada | `[redacted: max depth]` |
+  | ciclo | `[redacted: cycle]` |
+  | `Error` | objeto plano con `name`, `message`, `stack`, `cause` y propiedades propias, todo redactado |
+  | `URL` | su `href` redactado |
+  | instancia de clase | aplanada a sus propiedades enumerables, redactadas |
+  | `Map` / `Set` | recorridos, no devueltos opacos |
+  | función | `[redacted: unsafe value]` — su código fuente puede llevar la URL |
+  | getter que lanza | `[redacted: unsafe value]`, sin mirar la excepción |
 - **`lib/sentry-portal-scrubbing.ts`** — `beforeSend`, `beforeSendTransaction`,
   `beforeBreadcrumb` y `beforeSendLog`, compartidos por
   `instrumentation-client.ts`, `sentry.server.config.ts` y
   `sentry.edge.config.ts`, para que endurecer uno no deje los otros dos
   abiertos. Si el saneado fallara, **el evento se descarta**; no sale sin
   redactar.
-- **Replay.** Su grabación no pasa por `beforeSend`: no hay hook que la redacte,
-  solo se puede no grabar. En el cliente la integración ni se carga si el bundle
-  arranca en el portal, y las dos tasas de muestreo van a 0. Para quien llegue
-  navegando dentro de la app —donde esa decisión ya se tomó con la ruta
-  anterior— `lib/replay-portal-guard.ts` la **para** al entrar. Se usa `stop()`,
-  no `flush()`: vaciar el búfer sería enviarlo.
+
+  El aviso por consola es una **constante sin datos**. Antes imprimía el error
+  que había hecho fallar el saneado, y ese error es justamente el que más
+  probabilidades tiene de llevar el secreto —algo reventó leyendo la URL—; con
+  `enableLogs` activo, esa línea de consola vuelve a Sentry. Mismo arreglo en
+  `lib/telemetry-safe.ts`, que tenía el mismo patrón.
+- **Replay: apagado en toda la app, no solo en el portal.**
+  La primera versión de este lote apagaba Replay en el portal y, para quien
+  llegara navegando dentro de la app, lo **paraba** al entrar con `stop()`. Eso
+  estaba mal, y de la peor manera. El `stop()` público de `@sentry/replay`
+  10.66.0 es, literalmente:
+
+  ```js
+  this._replay.stop({ forceFlush: this._replay.recordingMode === "session" })
+  ```
+
+  En una sesión muestreada —el 10% con la configuración anterior— `stop()`
+  **envía** el búfer. Es decir: pararlo al llegar al portal mandaba precisamente
+  la grabación del portal. El guard no solo no protegía, sino que disparaba la
+  fuga que pretendía evitar, y únicamente en el caso muestreado, que es el que
+  no se ve en una prueba con dobles.
+
+  Mientras el token viaje en la URL, Replay se queda fuera: sin
+  `replayIntegration()` y con las dos tasas a 0 en los tres entornos.
+  `lib/replay-portal-guard.ts` queda eliminado. Reactivarlo es parte del lote 2,
+  cuando el secreto deje de ir en la ruta; hay una prueba que falla si alguien
+  lo enciende antes.
 - **`onRouterTransitionStart`** redacta el href en el origen, así que el span de
   navegación nace ya como `/portal/[token]`.
+
+### Inicialización única
+
+`initialized` solo se ponía a `true` **después** del import dinámico de
+`posthog-js`, así que dos llamadas en el mismo tick pasaban las dos por el
+guardián y hacían dos `posthog.init`. Y los dos efectos de `AnalyticsProvider`
+llaman a `initAnalytics` en el mismo tick: era el caso normal, no el raro. Ahora
+hay una **promesa única** compartida; el early-return del portal no se memoiza,
+para que navegar del portal a una pantalla normal siga pudiendo inicializar.
+
+### El pageview conserva host, query y UTM
+
+Al sustituir la captura automática por una manual, el evento pasó a llevar solo
+el `pathname`: se perdían host, query y **parámetros UTM**, es decir la
+atribución de campañas, sin que nadie se enterase hasta mirar los informes.
+Ahora `$current_url` es la URL completa saneada —leída en el momento de emitir,
+cuando la barra de direcciones ya refleja la ruta nueva— y se añade `$pathname`
+aparte. En el portal no se emite nada, así que la URL completa nunca lleva un
+secreto.
 
 ### Regresión que destapó la prueba
 
 Al desactivar `capture_pageview` se perdía el **primer** pageview de cada carga:
-el efecto de `AnalyticsProvider` corría antes de que `initAnalytics` —asíncrona,
-importa `posthog-js` dinámicamente— hubiera terminado, y `trackEvent` volvía sin
-hacer nada. Antes lo tapaba la captura automática de PostHog. Ahora el efecto
-espera a `initAnalytics()`, que es idempotente.
+el efecto corría antes de que `initAnalytics` hubiera terminado y `trackEvent`
+volvía sin hacer nada. Antes lo tapaba la captura automática de PostHog. Ahora
+el efecto espera a la promesa de inicialización.
 
 ---
 
@@ -162,20 +238,45 @@ E4-L1 crea **7** auxiliares privados, no 6. Tras aplicarlo el inventario debe da
 |---|---|
 | `portal-token-access.integration` | **14/14**, sin tocar |
 | `portal-token-lifecycle.integration` | **18/18**, sin tocar |
-| `portal-token-listing.integration` | **10/10**, nueva |
-| `portal-telemetry-redaction` | **11/11**, nueva, estática |
-| `portal-telemetry-isolation.browser` | **PASS**, nueva, Chromium real |
+| `portal-token-listing.integration` | **12/12** (10 + paginación y validación de argumentos) |
+| `portal-telemetry-redaction` | **19/19** (11 + fail-closed, Replay y PostHog) |
+| `portal-telemetry-isolation.browser` | **PASS** |
 
 Las tres suites SQL comparten una sola base y cada una reconstruye el esquema,
 así que **no pueden correr en paralelo**: CI las lanza en pasos separados y en
-local hay que pasar `--test-concurrency=1` si se ejecutan juntas (así dan 42/42).
+local hay que pasar `--test-concurrency=1` si se ejecutan juntas (así dan 44/44).
 
 La prueba de navegador monta el `AnalyticsProvider` real con un secreto centinela
 en la ruta y comprueba que no aparece en eventos de PostHog, eventos de Sentry,
 consola, errores de página, `localStorage`, `sessionStorage` ni cookies, y que
-nada intenta salir del loopback. Lleva dos controles positivos —fuera del portal
-la telemetría sigue emitiendo, y `sanitize_properties` limpia una propiedad
-sucia— para que no pueda pasar por tenerlo todo apagado.
+nada intenta salir del loopback. Lleva tres controles positivos —fuera del portal
+la telemetría emite, el `$pageview` conserva host/query/UTM, y hay exactamente un
+`posthog.init`— para que no pueda pasar por tenerlo todo apagado.
+
+### Lo que la revisión anterior no detectaba
+
+Cinco de los siete hallazgos eran fallos que las pruebas de `f4820ab` dejaban
+pasar, y cada uno tiene ahora una prueba que lo caza:
+
+| Fallo | Prueba que ahora lo caza |
+|---|---|
+| `stop()` envía el búfer en sesión muestreada | Replay no puede activarse en producción |
+| token a profundidad >12 | corte por profundidad con marcador |
+| ciclo devolviendo el nodo crudo | ciclo con marcador |
+| `Error` con token en message/stack/cause | Error aplanado y redactado |
+| `URL` del portal | URL aplanada a href redactado |
+| objeto opaco intacto | instancia de clase aplanada |
+| getter que lanza con token en el mensaje | getter hostil sin mirar la excepción |
+| consola imprimiendo el error del saneado | constante sin datos, en los dos módulos |
+| dos `posthog.init` concurrentes | exactamente un init |
+| pageview sin host/query/UTM | pageview con UTM |
+| rollback en orden equivocado | comprobado a mano en el banco |
+| listado sin paginar | tope, cursor, orden estable y argumentos inválidos |
+
+Un detalle que solo apareció al probarlo: el bloque de rollback del hardening
+nombraba la firma antigua `portal_list_tokens(uuid)`. Con `drop ... if exists`
+eso **no borra nada** y solo lo dice en un `NOTICE`, así que la compensación
+parecía correcta y dejaba la función viva. Ahora lleva la firma completa.
 
 ### Mutantes
 
@@ -183,34 +284,78 @@ sucia— para que no pueda pasar por tenerlo todo apagado.
 |---|---|
 | `isPortalPath` deja de reconocer el portal | no se carga el SDK de PostHog |
 | se quitan los hooks de saneado de Sentry | el centinela no sale en Sentry |
-| no se para Session Replay al entrar | Replay se para al entrar |
 | `status` devolviera el secreto | control negativo del listado |
 
-Además se comprobaron a mano contra el banco desechable: el precheck da `OK`
-antes de desplegar con la línea base de 8 heredados, aborta tras aplicar E4
-(`objetos_e4 = 16`), y cada una de las ocho condiciones enciende su columna. El
-rollback nuevo falla sin reconocimiento, falla si el `SELECT` directo ya se
-retiró, y completa dejando los 13 objetos de E4-L1 y todas las filas intactas.
+El mutante «no se para Session Replay» ya no aplica: no hay nada que parar
+porque Replay no arranca. Lo sustituye una prueba estática que falla si
+`replayIntegration()` o una tasa positiva reaparecen en cualquiera de los tres
+`init`, o si vuelve el guard basado en `stop()`.
 
----
+Comprobado además a mano contra el banco desechable: el precheck da `OK` antes
+de desplegar, aborta tras aplicar E4; los cuatro estados del libro de migraciones
+dan el veredicto correcto, incluido `RECUPERAR`; y la compensación en orden
+inverso deja 0 objetos de E4, 0 filas borradas y las 3 funciones de migraciones
+anteriores intactas.
 
-## Orden de despliegue recomendado
+## Procedimiento de despliegue
 
-1. **`CHECK_E4_L1_PRECHECK`** contra producción. `veredicto` = `OK`, o parar.
-2. Aplicar **`20260923120000_portal_token_lifecycle.sql`** (E4-L1).
-3. `CHECK_E4_L1_SCHEMA`, `CHECK_E4_L1_GRANTS`, `CHECK_E4_L1_EXPIRY`,
-   `CHECK_E4_L1_VALUES`. Inventario: **13 funciones, 6 públicas y 7 internas**.
-4. Aplicar **`20260924120000_portal_token_listing.sql`**. Inventario: **15**.
-5. Desplegar **esta rama de aplicación** (telemetría + proyección explícita).
-   Los pasos 4 y 5 son independientes entre sí; ninguno rompe al otro si va
-   primero, porque nada de la interfaz actual llama todavía a la RPC nueva.
-6. **Lote 2, en un único despliegue atómico**: interfaz que usa
-   `portal_list_tokens` + `portal_issue_token`, y en la misma migración
-   `revoke select on public.portal_tokens from authenticated`. Solo a partir de
-   aquí puede decirse que el secreto se enseña una vez.
+La versión anterior de este documento decía «aplicar 23120000, auditar, aplicar
+24120000». **Eso no es lo que hace la herramienta**: `supabase db push` aplica
+todas las migraciones pendientes de una tacada. Documentar una pausa que nadie
+va a ejecutar es peor que no documentar nada, y forzarla manipulando el
+directorio de migraciones sería peor todavía. Una comprobación antes, un push,
+una auditoría después.
 
-El paso 5 puede ir antes del 2 sin problema: la redacción de telemetría y la
-proyección explícita no dependen de ningún objeto de base de datos nuevo.
+**1 · Antes del push**
+
+- `CHECK_E4_DEPLOY_PENDING` → `veredicto = OK`. Confirma que `20260915160000`
+  está registrada y que ninguna de las dos de E4 lo está.
+- `supabase migration list` → las **únicas** pendientes deben ser
+  `20260923120000` y `20260924120000`, en ese orden. Esto no se puede ver desde
+  SQL: el libro solo conoce las ya aplicadas.
+- `CHECK_E4_L1_PRECHECK` → `veredicto = OK` (estado de los datos).
+
+**2 · Un solo `supabase db push`**
+
+Aplica las dos seguidas. No hay auditoría intermedia porque no hay momento
+intermedio en el que ejecutarla.
+
+**3 · Auditoría conjunta**
+
+- `CHECK_E4_DEPLOY_AUDIT` → `veredicto = OK`: ambas versiones registradas,
+  **15 funciones (7 públicas + 8 internas)**, el esquema privado y los dos CHECK.
+- `CHECK_E4_L1_SCHEMA`, `_GRANTS`, `_EXPIRY`, `_VALUES` para el detalle de
+  privilegios, invariantes y datos.
+
+**4 · Recuperación si la segunda falla tras registrarse la primera**
+
+Es el único estado intermedio posible, y `CHECK_E4_DEPLOY_AUDIT` lo nombra:
+`RECUPERAR: E4-L1 registrada y el listado no`.
+
+**No se arregla con rollback.** Se corrige hacia delante: arreglar
+`20260924120000` y volver a lanzar `supabase db push`, que aplicará solo la que
+falta. Mientras tanto el sistema es coherente — E4-L1 funciona entero y lo único
+ausente es el listado, que todavía no usa ninguna pantalla.
+
+**5 · Despliegue de la aplicación**
+
+Esta rama (telemetría + proyección explícita) es independiente de la base de
+datos: puede ir antes o después del push, en cualquier orden.
+
+**6 · Lote 2, en un único despliegue atómico**
+
+Interfaz que usa `portal_list_tokens` + `portal_issue_token`, y en la misma
+migración `revoke select on public.portal_tokens from authenticated`. Solo a
+partir de aquí puede decirse que el secreto se enseña una vez. Es también el
+momento de volver a encender Session Replay, si se quiere.
+
+### Compensación
+
+`docs/fase2/ROLLBACK.sql` lleva los dos bloques **en orden inverso al
+despliegue**: `ROLLBACK_2F2_E4_HARDENING` primero y `ROLLBACK_2F2_E4_L1`
+después. Al revés falla, y se comprobó que falla: E4-L1 hace
+`drop schema portal_token_internal` sin `CASCADE` —a propósito, para no borrar
+de más— y el esquema no está vacío mientras siga dentro `visible_project`.
 
 ---
 
@@ -232,9 +377,19 @@ proyección explícita no dependen de ningún objeto de base de datos nuevo.
   propio evento delata que un cliente concreto abrió su enlace. Si alguna vez se
   quiere medir el uso del portal, hará falta un evento diseñado para eso, sin
   URL y sin identificador de enlace.
-- **Session Replay puede grabar unos instantes** si alguien llega al portal
-  navegando dentro de la app: `stopReplayOnPortal()` corre en un efecto, después
-  del primer render. La ventana es de milisegundos y no incluye envío, porque
-  `stop()` descarta el búfer, pero no es cero.
+- **Session Replay queda apagado en toda la aplicación**, no solo en el portal.
+  Es una pérdida real de observabilidad, y es el precio de que el token viaje en
+  la URL. Se recupera en el lote 2. No se intentó conservarlo fuera del portal
+  porque hacerlo con garantías exige impedir la grabación **antes** del cambio
+  de URL y probarlo contra el SDK real, no contra un doble; eso es un lote en sí
+  mismo.
+- **El saneado fail-closed puede recortar telemetría legítima**: una rama por
+  debajo de doce niveles, un ciclo o una instancia de clase salen ahora como
+  marcador. Es deliberado —mejor un evento menos informativo que un secreto
+  fuera— pero si aparecen muchos `[redacted: max depth]` en Sentry, habrá que
+  mirar qué estructura los provoca en vez de subir el límite sin pensar.
+- **La página por defecto son 20 enlaces.** Si la interfaz del lote 2 necesita
+  otra cosa, cambiar el valor por defecto es compatible hacia atrás; cambiar la
+  forma de `next_cursor` no lo sería.
 - **El rollback del listado deja ciega la pantalla** si se ejecuta después del
   lote 2. Su guarda lo detecta y se niega.
