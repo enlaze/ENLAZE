@@ -1940,9 +1940,12 @@ order by n.nspname, p.proname;
 -- ─────────────────────────────────────────────────────────────────────────────────────
 -- BLOQUE E4-L1 · Tras 20260923120000_portal_token_lifecycle.sql (SELECT solamente)
 -- Inventario de las tres RPC de gestión, sus auxiliares privados y sus privilegios.
--- Esperado: anon_execute = false en las tres públicas y en todo portal_token_internal;
+-- Esperado: anon_execute = false en las tres RPC y en todo portal_token_internal;
 -- authenticated_execute = true SOLO en portal_issue_token, portal_rotate_token y
--- portal_revoke_token, y false en los auxiliares.
+-- portal_revoke_token, y false en los auxiliares privados.
+-- Los tres ayudantes públicos (portal_token_permissions_valid y los dos de plazo)
+-- son puros, no leen ninguna tabla y SÍ quedan ejecutables: el CHECK y el DEFAULT
+-- de la tabla los necesitan para cualquier escritor legítimo.
 -- ─────────────────────────────────────────────────────────────────────────────────────
 -- BEGIN CHECK_E4_L1_SCHEMA
 select n.nspname, p.proname, pg_get_function_identity_arguments(p.oid) as arguments,
@@ -1952,7 +1955,9 @@ select n.nspname, p.proname, pg_get_function_identity_arguments(p.oid) as argume
        has_function_privilege('service_role', p.oid, 'execute') as service_role_execute
 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
 where (n.nspname = 'public'
-       and p.proname in ('portal_issue_token','portal_rotate_token','portal_revoke_token'))
+       and p.proname in ('portal_issue_token','portal_rotate_token','portal_revoke_token',
+                         'portal_token_permissions_valid','portal_token_default_lifetime',
+                         'portal_token_max_lifetime'))
    or n.nspname = 'portal_token_internal'
 order by n.nspname, p.proname;
 -- END CHECK_E4_L1_SCHEMA
@@ -1967,17 +1972,53 @@ from (values ('anon'),('authenticated')) as r(rolname),
 order by r.rolname, pr.privilege;
 -- END CHECK_E4_L1_GRANTS
 
+-- Invariantes de caducidad en la propia tabla, no solo en las RPC.
+-- ESPERADO: expires_at y created_at con is_nullable = NO; expires_at con DEFAULT
+-- now() + portal_token_default_lifetime(); y las dos restricciones presentes.
+-- BEGIN CHECK_E4_L1_EXPIRY
+select column_name, is_nullable, column_default
+from information_schema.columns
+where table_schema = 'public' and table_name = 'portal_tokens'
+  and column_name in ('created_at','expires_at')
+order by column_name;
+
+select conname, pg_get_constraintdef(oid) as definicion
+from pg_constraint
+where conrelid = 'public.portal_tokens'::regclass
+  and conname in ('portal_tokens_permissions_check','portal_tokens_expiry_window_check')
+order by conname;
+
+select public.portal_token_default_lifetime() as plazo_por_defecto,
+       public.portal_token_max_lifetime() as plazo_maximo;
+-- END CHECK_E4_L1_EXPIRY
+
 -- Estado de los enlaces. Antes de emitir el primero: modernos = 0 y legacy sin tocar.
--- incompatibles debe ser 0 SIEMPRE; si no lo es, el CHECK no llegó a aplicarse.
+-- incompatibles, sin_caducidad y fuera_de_ventana deben ser 0 SIEMPRE; si no lo son,
+-- las restricciones no llegaron a aplicarse.
 -- BEGIN CHECK_E4_L1_VALUES
 select (select count(*) from public.portal_tokens) as tokens_modernos,
-       (select count(*) from public.portal_tokens where is_active and revoked_at is null) as vigentes,
+       (select count(*) from public.portal_tokens
+          where is_active and revoked_at is null and expires_at > now()) as vigentes,
        (select count(*) from public.portal_tokens where created_by is null) as sin_created_by,
        (select count(*) from public.portal_tokens t
           where not public.portal_token_permissions_valid(t.permissions)) as incompatibles,
+       (select count(*) from public.portal_tokens
+          where expires_at is null or created_at is null) as sin_caducidad,
+       (select count(*) from public.portal_tokens
+          where expires_at <= created_at
+             or expires_at > created_at + public.portal_token_max_lifetime()) as fuera_de_ventana,
        (select count(*) from public.projects
           where access_token is not null and deleted_at is null) as enlaces_legacy,
        (select count(*) from pg_constraint
           where conrelid = 'public.portal_tokens'::regclass
-            and conname = 'portal_tokens_permissions_check') as check_presente;
+            and conname in ('portal_tokens_permissions_check',
+                            'portal_tokens_expiry_window_check')) as checks_presentes;
+
+-- Ningún proyecto puede pasar de 5 vigentes. ESPERADO: cero filas.
+select project_id, count(*) as vigentes
+from public.portal_tokens
+where is_active and revoked_at is null and expires_at > now()
+group by project_id
+having count(*) > 5
+order by vigentes desc;
 -- END CHECK_E4_L1_VALUES

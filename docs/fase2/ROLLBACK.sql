@@ -315,11 +315,16 @@ commit;
 
 -- ─────────────────────────────────────────────────────────────────────────────────────
 -- BLOQUE E4-L1 · revierte 20260923120000_portal_token_lifecycle.sql
--- Retira las tres RPC de gestión, sus auxiliares y el CHECK del vocabulario.
+-- Retira las tres RPC de gestión, sus auxiliares, los dos CHECK y las invariantes
+-- de caducidad (NOT NULL y DEFAULT de expires_at).
 -- NO borra ninguna fila de portal_tokens: los enlaces ya emitidos siguen existiendo y
 -- el portal los sigue aceptando, pero dejan de poder emitirse, rotarse o revocarse
 -- desde la aplicación hasta que el lote vuelva a aplicarse.
 -- NO toca projects.access_token ni ningún enlace heredado.
+--
+-- Asimetría deliberada: se retira el DEFAULT de expires_at, que este lote introdujo,
+-- pero NO el de created_at, porque no consta que la columna no lo tuviera ya y
+-- quitarlo rompería inserciones que hoy lo dan por hecho.
 -- ─────────────────────────────────────────────────────────────────────────────────────
 -- BEGIN ROLLBACK_2F2_E4_L1
 begin;
@@ -328,7 +333,9 @@ begin
   if current_setting('enlaze.allow_portal_lifecycle_rollback', true) is distinct from 'before_issuing_links' then
     raise exception 'Set explicit before_issuing_links acknowledgement; otherwise forward-fix only';
   end if;
-  if exists (select 1 from public.portal_tokens where is_active and revoked_at is null) then
+  -- Vigente con la misma definición que usan las RPC: activo, sin revocar y sin caducar.
+  if exists (select 1 from public.portal_tokens
+               where is_active and revoked_at is null and expires_at > now()) then
     raise exception 'There are live modern portal links: revoke them deliberately before removing their lifecycle';
   end if;
 end $guard$;
@@ -338,12 +345,22 @@ drop function if exists public.portal_issue_token(uuid, jsonb, timestamptz, text
 drop function if exists portal_token_internal.lock_own_token(uuid, uuid);
 drop function if exists portal_token_internal.status(public.portal_tokens);
 drop function if exists portal_token_internal.issued(public.portal_tokens);
-drop function if exists portal_token_internal.validate_expiry(timestamptz);
+drop function if exists portal_token_internal.assert_live_link_cap(uuid);
+drop function if exists portal_token_internal.resolve_expiry(timestamptz);
 drop function if exists portal_token_internal.validate_permissions(jsonb);
 drop function if exists portal_token_internal.owned_project(uuid, uuid);
 alter default privileges for role postgres in schema portal_token_internal grant execute on functions to public;
 drop schema if exists portal_token_internal;
-alter table public.portal_tokens drop constraint if exists portal_tokens_permissions_check;
+-- El DEFAULT se retira antes que la función a la que apunta; si no, el DROP falla
+-- por dependencia. Ninguna de estas sentencias toca una sola fila.
+alter table public.portal_tokens
+  drop constraint if exists portal_tokens_expiry_window_check,
+  drop constraint if exists portal_tokens_permissions_check,
+  alter column expires_at drop default,
+  alter column expires_at drop not null,
+  alter column created_at drop not null;
+drop function if exists public.portal_token_max_lifetime();
+drop function if exists public.portal_token_default_lifetime();
 drop function if exists public.portal_token_permissions_valid(jsonb);
 notify pgrst, 'reload schema';
 commit;
