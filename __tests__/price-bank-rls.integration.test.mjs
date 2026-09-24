@@ -143,3 +143,24 @@ test("no puede colgar productos de un proveedor privado de OTRO usuario", async 
     await admin.auth.admin.deleteUser(otherId);
   }
 });
+
+test("sector_data y n8n_updates: sin sesión ni se leen ni se escriben (20260924160000)", async () => {
+  for (const t of ["sector_data", "n8n_updates"]) {
+    const r = await anon.from(t).select("*", { count: "exact", head: true });
+    assert.ok(r.error || r.count === 0, `${t}: anon ve ${r.count} filas`);
+  }
+  const w1 = await anon.from("sector_data").insert({ sector: "__anon__", data_type: "news", title: "__anon__" });
+  assert.ok(w1.error, "anon no escribe sector_data");
+  const w2 = await anon.from("n8n_updates").insert({ sector: "__anon__", update_type: "x", data: {}, status: "processing" });
+  assert.ok(w2.error, "anon no escribe n8n_updates");
+});
+
+test("sector_data: con sesión se lee (los presupuestos la usan) pero no se escribe; n8n_updates no se ve", async () => {
+  const r = await user.from("sector_data").select("*", { count: "exact", head: true });
+  assert.equal(r.error, null);
+  assert.ok(r.count > 0, "los generadores de presupuestos necesitan leerla");
+  const w = await user.from("sector_data").insert({ sector: "__user__", data_type: "news", title: "__user__" });
+  assert.ok(w.error, "un usuario no escribe datos de mercado");
+  const n = await user.from("n8n_updates").select("*", { count: "exact", head: true });
+  assert.ok(n.error || n.count === 0, "n8n_updates es solo de sistema");
+});
