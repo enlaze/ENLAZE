@@ -1,8 +1,13 @@
--- Endurecimiento previo a E4-L1: listado seguro de enlaces del portal.
+-- Endurecimiento POSTERIOR a E4-L1: listado seguro de enlaces del portal.
 --
--- Posterior y aditiva respecto a 20260923120000_portal_token_lifecycle.sql, que
--- no se toca. Amplía su contrato con la única operación que faltaba: mirar qué
--- enlaces hay sin volver a ver el secreto.
+-- Se numeró 20260925090000 y no 20260924120000, su nombre original, porque
+-- 20260923120000 y cinco migraciones más del 24 ya están aplicadas: la última
+-- registrada es 20260924150745. Con el número viejo esta habría quedado por
+-- debajo de tres versiones ya recogidas, es decir fuera de orden.
+--
+-- Aditiva respecto a 20260923120000_portal_token_lifecycle.sql, que no se toca y
+-- que ya está desplegada. Amplía su contrato con la única operación que faltaba:
+-- mirar qué enlaces hay sin volver a ver el secreto.
 --
 -- El problema que resuelve: hoy la pantalla del proyecto hace
 -- `.from("portal_tokens").select("token")`, de modo que el secreto vuelve al

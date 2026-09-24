@@ -48,10 +48,15 @@ límite: un proyecto de años puede tener cientos, y esa es justo la respuesta q
 la interfaz del lote 2 pedirá en cada carga. Mejor fijar el contrato ahora que
 romperlo después.
 
-```
-portal_list_tokens(p_project_id, p_limit default 20,
-                   p_cursor_created_at default null, p_cursor_id default null)
-  → { items: [...], next_cursor: {created_at, id} | null }
+```sql
+portal_list_tokens(
+  p_project_id        uuid,
+  p_limit             integer     default 20,   -- validado entre 1 y 100
+  p_cursor_created_at timestamptz default null, -- las dos partes del cursor
+  p_cursor_id         uuid        default null  -- van juntas o ninguna
+) returns jsonb
+  -- { "items": [ …metadatos, nunca token… ],
+  --   "next_cursor": { "created_at": …, "id": … } | null }
 ```
 
 Cursor por `(created_at, id)` y no `OFFSET`: con `OFFSET`, emitir o revocar entre
@@ -59,7 +64,11 @@ dos páginas desplaza las filas y el usuario ve repetidos o se salta alguno. El
 desempate por `id` hace falta porque `created_at` empata en cuanto se emiten dos
 enlaces en la misma transacción. `p_limit` se valida entre 1 y 100 (`22023`), y
 pasar media pareja de cursor también se rechaza: daría una página distinta de la
-que el llamante cree pedir. `next_cursor` solo se emite si la página salió llena.
+que el llamante cree pedir. `next_cursor` **no** se emite por que la página venga llena: se consultan
+`p_limit + 1` filas, se devuelven `p_limit`, y el cursor aparece solo si existía
+esa fila sonda de más. Mirar únicamente si la página está llena fallaba con un
+total múltiplo exacto del límite —la última página se llena sin que quede nada
+detrás— y un bucle «mientras haya cursor» daba siempre una vuelta de más.
 
 A diferencia de `owned_project`, el auxiliar `visible_project` **no bloquea** la
 fila del proyecto: abrir una ficha no debe serializar las emisiones de ese
@@ -238,13 +247,13 @@ E4-L1 crea **7** auxiliares privados, no 6. Tras aplicarlo el inventario debe da
 |---|---|
 | `portal-token-access.integration` | **14/14**, sin tocar |
 | `portal-token-lifecycle.integration` | **18/18**, sin tocar |
-| `portal-token-listing.integration` | **12/12** (10 + paginación y validación de argumentos) |
+| `portal-token-listing.integration` | **14/14** (listado, paginación, cursor y gate de despliegue) |
 | `portal-telemetry-redaction` | **19/19** (11 + fail-closed, Replay y PostHog) |
 | `portal-telemetry-isolation.browser` | **PASS** |
 
 Las tres suites SQL comparten una sola base y cada una reconstruye el esquema,
 así que **no pueden correr en paralelo**: CI las lanza en pasos separados y en
-local hay que pasar `--test-concurrency=1` si se ejecutan juntas (así dan 44/44).
+local hay que pasar `--test-concurrency=1` si se ejecutan juntas (así dan 46/46).
 
 La prueba de navegador monta el `AnalyticsProvider` real con un secreto centinela
 en la ruta y comprueba que no aparece en eventos de PostHog, eventos de Sentry,
@@ -395,13 +404,13 @@ orden interno obligatorio.
 
 ## Riesgos
 
-- **«Copia única» sigue siendo falso** hasta el paso 6. Es el riesgo principal de
+- **«Copia única» sigue siendo falso** hasta el paso 8. Es el riesgo principal de
   este lote y el motivo de que la prueba
   `el SELECT directo sigue concedido` esté escrita para romperse cuando cambie.
-- **La línea base de 8 enlaces heredados no se pudo reconfirmar** en este lote:
-  las lecturas contra producción están bloqueadas por el clasificador de
-  permisos. Si el precheck devuelve otro número, no es necesariamente un fallo
-  —se crean y borran proyectos—, pero hay que explicarlo antes de seguir.
+- **La línea base de 8 enlaces heredados quedó reconfirmada** el 2026-09-24 por
+  lectura de producción, junto con 0 enlaces modernos. El precheck la sigue
+  comprobando y avisa si cambia, que es lo esperable si se crean o borran
+  proyectos.
 - **`capture_pageview: false` cambia el comportamiento de analytics en toda la
   app**, no solo en el portal. Se compensa con el pageview manual ya existente,
   ahora esperando a la inicialización, y hay control positivo en la prueba de
