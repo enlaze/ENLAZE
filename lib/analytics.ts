@@ -14,6 +14,8 @@
  * ────────────────────────────────────────────────────────────────────
  */
 
+import { isPortalPath, redactPortalDeep, redactPortalPath } from "@/lib/portal-path-redaction";
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let posthog: any = null;
 
@@ -24,6 +26,14 @@ let initialized = false;
 export async function initAnalytics() {
   if (initialized) return;
   if (typeof window === "undefined") return;
+
+  /* En /portal/<secreto> no se inicializa PostHog en absoluto.
+     No basta con sanear los eventos: PostHog persiste $initial_current_url en
+     localStorage y en cookie (persistence: "localStorage+cookie"), así que la
+     URL portadora quedaría escrita en el navegador del cliente final aunque
+     ningún evento llegara a salir. El portal es una página pública y anónima;
+     lo que se pierde de producto no compensa guardar ahí un secreto. */
+  if (isPortalPath(window.location.pathname)) return;
 
   const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
   const host = process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://eu.i.posthog.com";
@@ -47,10 +57,20 @@ export async function initAnalytics() {
   posthog.init(key, {
     api_host: host,
     person_profiles: "identified_only",
-    capture_pageview: true,          // auto-track page views
+    /* Desactivado a propósito: el pageview automático captura
+       window.location.href tal cual, y lo hace en el propio init, antes de que
+       nada pueda sanearlo. AnalyticsProvider ya emite un $pageview por cada
+       cambio de ruta —con la ruta redactada—, así que no se pierde ninguno;
+       de hecho se deja de enviar el duplicado que había. */
+    capture_pageview: false,
     capture_pageleave: true,         // track when user leaves
     autocapture: false,              // we define events explicitly
     persistence: "localStorage+cookie",
+    /* Red de seguridad para todo lo que no emitimos nosotros: $pageleave,
+       $initial_current_url, $referrer y cualquier propiedad que el SDK añada
+       en el futuro pasan por aquí antes de salir. */
+    sanitize_properties: (properties: Record<string, unknown>) =>
+      redactPortalDeep(properties),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     loaded: (instance: any) => {
       if (process.env.NODE_ENV === "development") {
@@ -66,7 +86,7 @@ export async function initAnalytics() {
 
 export function identifyUser(userId: string, traits?: Record<string, unknown>) {
   if (!initialized) return;
-  posthog.identify(userId, traits);
+  posthog.identify(userId, traits ? redactPortalDeep(traits) : traits);
 }
 
 export function resetAnalytics() {
@@ -78,7 +98,9 @@ export function resetAnalytics() {
 
 export function trackEvent(event: string, properties?: Record<string, unknown>) {
   if (!initialized) return;
-  posthog.capture(event, properties);
+  // Redactado también en el emisor, no solo en sanitize_properties: así una
+  // propiedad con la URL queda limpia aunque el hook del SDK cambie de nombre.
+  posthog.capture(event, properties ? redactPortalDeep(properties) : properties);
 }
 
 /* ── Predefined product events ────────────────────────────────────── */
@@ -139,7 +161,7 @@ export const analytics = {
 
   // Navigation
   pageViewed: (path: string) =>
-    trackEvent("$pageview", { $current_url: path }),
+    trackEvent("$pageview", { $current_url: redactPortalPath(path) }),
 
   searchUsed: (query: string) =>
     trackEvent("search_used", { query_length: query.length }),
