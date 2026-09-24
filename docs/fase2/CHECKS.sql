@@ -1956,22 +1956,31 @@ order by n.nspname, p.proname;
 -- ese número.
 -- ═════════════════════════════════════════════════════════════════════════════════════
 -- ═════════════════════════════════════════════════════════════════════════════════════
--- LIBRO DE MIGRACIONES · antes y después del despliegue de E4
+-- LIBRO DE MIGRACIONES · antes y después del despliegue del listado
 --
--- `supabase db push` aplica TODAS las migraciones pendientes de una tacada. No hay
--- pausa entre 20260923120000 y 20260924120000, así que no tiene sentido documentar
--- una auditoría intermedia: se comprueba antes y se comprueba después, una vez.
--- Manipular el directorio de migraciones para forzar esa pausa sería peor que el
--- problema que resuelve.
+-- ESTADO REAL comprobado por lectura el 2026-09-24: 20260923120000 (E4-L1) YA ESTÁ
+-- APLICADA en producción, junto con las migraciones de facturación y seguridad de
+-- ese mismo día. La última versión registrada es 20260924150745. La única pendiente
+-- de este trabajo es 20260925090000, el listado.
+--
+-- Por eso el listado se numeró 20260925090000 y no 20260924120000, que era su nombre
+-- original: ese número habría quedado POR DEBAJO de tres versiones ya registradas, y
+-- una migración fuera de orden es justo la clase de desajuste que el commit 8440857
+-- acaba de arreglar en este repositorio.
+--
+-- `supabase db push` aplica TODAS las pendientes de una tacada. No se documenta
+-- ninguna pausa intermedia porque la herramienta no la hace, y forzarla moviendo
+-- archivos del directorio de migraciones sería peor que el problema.
 -- ═════════════════════════════════════════════════════════════════════════════════════
 -- BEGIN CHECK_E4_DEPLOY_PENDING
 -- ANTES del push. ESPERADO: veredicto = 'OK'.
--- Que las dos pendientes sean exactamente estas se confirma además fuera de SQL,
--- con `supabase migration list`: el libro solo sabe de las ya aplicadas.
+-- Que la única pendiente sea 20260925090000 se confirma además fuera de SQL, con
+-- `supabase migration list`: el libro solo sabe de las ya aplicadas.
 select case
          when base_aplicada <> 1 then 'ABORTAR: falta 20260915160000, la base sobre la que va E4'
-         when l1_aplicada    > 0 then 'ABORTAR: 20260923120000 ya está registrada'
-         when listado_aplicada > 0 then 'ABORTAR: 20260924120000 ya está registrada'
+         when l1_aplicada <> 1 then 'ABORTAR: falta 20260923120000 (E4-L1); el listado depende de su esquema privado'
+         when listado_aplicada > 0 then 'ABORTAR: 20260925090000 ya está registrada, no hay nada que empujar'
+         when ultima_registrada > '20260925090000' then 'REVISAR: hay versiones por encima del listado; quedaría fuera de orden'
          else 'OK'
        end as veredicto, *
 from (
@@ -1981,7 +1990,7 @@ from (
     (select count(*) from supabase_migrations.schema_migrations
        where version = '20260923120000') as l1_aplicada,
     (select count(*) from supabase_migrations.schema_migrations
-       where version = '20260924120000') as listado_aplicada,
+       where version = '20260925090000') as listado_aplicada,
     (select max(version) from supabase_migrations.schema_migrations) as ultima_registrada
 ) as libro;
 -- END CHECK_E4_DEPLOY_PENDING
@@ -1989,17 +1998,21 @@ from (
 -- BEGIN CHECK_E4_DEPLOY_AUDIT
 -- DESPUÉS del push, una sola auditoría conjunta. ESPERADO: veredicto = 'OK'.
 --
--- Si sale 'RECUPERAR', la primera migración quedó registrada y la segunda no: es el
--- único estado intermedio posible, y NO se arregla con rollback. Se corrige hacia
--- delante — arreglar 20260924120000 y volver a lanzar `supabase db push`, que
--- aplicará solo la que falta. Entre tanto el sistema es coherente: E4-L1 funciona
--- entero y lo único ausente es el listado, que todavía no usa ninguna pantalla.
+-- Contar nombres no basta. Con solo contar, este gate daba OK con una firma
+-- cambiada, un overload de más, un SECURITY DEFINER donde no toca o un EXECUTE
+-- concedido de más. Aquí se compara el inventario REAL contra el esperado fila a
+-- fila —esquema, nombre, identidad de argumentos, prosecdef y los cuatro
+-- privilegios— con FULL JOIN, de modo que sobra y falta se detectan igual.
+--
+-- PUBLIC se mira por ACL y no con has_function_privilege('public', …), que no
+-- acepta el pseudo-rol. Un proacl NULL significa el valor por defecto, que para
+-- una función es EXECUTE a PUBLIC: por eso el acldefault().
 select case
-         when l1 = 0 then 'ABORTAR: no se aplicó nada, revisar la salida del push'
-         when l1 = 1 and listado = 0 then 'RECUPERAR: E4-L1 registrada y el listado no; corregir y volver a hacer push'
-         when publicas <> 7 or internas <> 8 then 'ABORTAR: el inventario de funciones no cuadra'
-         when esquema <> 1 then 'ABORTAR: falta el esquema privado'
-         when checks <> 2 then 'ABORTAR: faltan restricciones de la tabla'
+         when l1 = 0 then 'ABORTAR: 20260923120000 no está registrada'
+         when listado = 0 then 'RECUPERAR: falta 20260925090000; corregir y volver a hacer push'
+         when esquema <> 1 then 'ABORTAR: falta el esquema privado portal_token_internal'
+         when checks <> 2 then 'ABORTAR: faltan restricciones de portal_tokens'
+         when discrepancias > 0 then 'ABORTAR: el inventario de funciones no cuadra, ver CHECK_E4_DEPLOY_AUDIT_DETALLE'
          else 'OK'
        end as veredicto, *
 from (
@@ -2007,23 +2020,119 @@ from (
     (select count(*) from supabase_migrations.schema_migrations
        where version = '20260923120000') as l1,
     (select count(*) from supabase_migrations.schema_migrations
-       where version = '20260924120000') as listado,
-    -- 7 públicas: 3 RPC del ciclo de vida + portal_list_tokens + 3 ayudantes puros.
-    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-       where n.nspname = 'public' and p.proname in (
-         'portal_issue_token','portal_rotate_token','portal_revoke_token',
-         'portal_list_tokens','portal_token_permissions_valid',
-         'portal_token_default_lifetime','portal_token_max_lifetime')) as publicas,
-    -- 8 internas: las 7 de E4-L1 más visible_project.
-    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-       where n.nspname = 'portal_token_internal') as internas,
+       where version = '20260925090000') as listado,
     (select count(*) from pg_namespace where nspname = 'portal_token_internal') as esquema,
     (select count(*) from pg_constraint
        where conrelid = 'public.portal_tokens'::regclass
          and conname in ('portal_tokens_permissions_check',
-                         'portal_tokens_expiry_window_check')) as checks
+                         'portal_tokens_expiry_window_check')) as checks,
+    (select count(*) from (
+       select esperado.nspname, esperado.proname
+         from (values
+           -- Las cuatro RPC de gestión y listado: SECURITY DEFINER y EXECUTE
+           -- exclusivamente para authenticated.
+           ('public','portal_issue_token','p_project_id uuid, p_permissions jsonb, p_expires_at timestamp with time zone, p_label text',true,false,true,false,false),
+           ('public','portal_rotate_token','p_token_id uuid, p_expires_at timestamp with time zone',true,false,true,false,false),
+           ('public','portal_revoke_token','p_token_id uuid',true,false,true,false,false),
+           ('public','portal_list_tokens','p_project_id uuid, p_limit integer, p_cursor_created_at timestamp with time zone, p_cursor_id uuid',true,false,true,false,false),
+           -- Los tres ayudantes públicos son puros, no leen tablas y quedan
+           -- ejecutables por todos: el CHECK y el DEFAULT de la tabla los
+           -- necesitan para cualquier escritor legítimo. NO son definer.
+           ('public','portal_token_permissions_valid','p_permissions jsonb',false,true,true,true,true),
+           ('public','portal_token_default_lifetime','',false,true,true,true,true),
+           ('public','portal_token_max_lifetime','',false,true,true,true,true),
+           -- Los ocho auxiliares privados: invoker y sin EXECUTE para nadie.
+           ('portal_token_internal','owned_project','p_project_id uuid, p_owner uuid',false,false,false,false,false),
+           ('portal_token_internal','validate_permissions','p_permissions jsonb',false,false,false,false,false),
+           ('portal_token_internal','resolve_expiry','p_expires_at timestamp with time zone',false,false,false,false,false),
+           ('portal_token_internal','assert_live_link_cap','p_project_id uuid',false,false,false,false,false),
+           ('portal_token_internal','issued','t portal_tokens',false,false,false,false,false),
+           ('portal_token_internal','status','t portal_tokens',false,false,false,false,false),
+           ('portal_token_internal','lock_own_token','p_token_id uuid, p_owner uuid',false,false,false,false,false),
+           ('portal_token_internal','visible_project','p_project_id uuid, p_owner uuid',false,false,false,false,false)
+         ) as esperado(nspname, proname, args, secdef, anon_x, auth_x, service_x, public_x)
+       full join (
+         select n.nspname, p.proname,
+                pg_get_function_identity_arguments(p.oid) as args,
+                p.prosecdef as secdef,
+                has_function_privilege('anon', p.oid, 'execute') as anon_x,
+                has_function_privilege('authenticated', p.oid, 'execute') as auth_x,
+                has_function_privilege('service_role', p.oid, 'execute') as service_x,
+                exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                          where a.grantee = 0 and a.privilege_type = 'EXECUTE') as public_x
+           from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'portal_token_internal'
+             or (n.nspname = 'public' and p.proname in (
+                  'portal_issue_token','portal_rotate_token','portal_revoke_token',
+                  'portal_list_tokens','portal_token_permissions_valid',
+                  'portal_token_default_lifetime','portal_token_max_lifetime'))
+       ) as real_
+         on  real_.nspname = esperado.nspname
+         and real_.proname = esperado.proname
+         and real_.args    = esperado.args
+         and real_.secdef  = esperado.secdef
+         and real_.anon_x  = esperado.anon_x
+         and real_.auth_x  = esperado.auth_x
+         and real_.service_x = esperado.service_x
+         and real_.public_x  = esperado.public_x
+        where real_.proname is null or esperado.proname is null
+     ) as d) as discrepancias
 ) as inventario;
 -- END CHECK_E4_DEPLOY_AUDIT
+
+-- Qué sobra y qué falta exactamente, cuando el gate dice que no cuadra.
+-- ESPERADO: cero filas.
+-- BEGIN CHECK_E4_DEPLOY_AUDIT_DETALLE
+select coalesce(esperado.nspname, real_.nspname) as nspname,
+       coalesce(esperado.proname, real_.proname) as proname,
+       case when esperado.proname is null then 'SOBRA (overload o función inesperada)'
+            else 'FALTA o no coincide' end as problema,
+       esperado.args as args_esperados, real_.args as args_reales,
+       esperado.secdef as secdef_esperado, real_.secdef as secdef_real,
+       esperado.auth_x as auth_esperado, real_.auth_x as auth_real,
+       esperado.anon_x as anon_esperado, real_.anon_x as anon_real,
+       esperado.service_x as service_esperado, real_.service_x as service_real,
+       esperado.public_x as public_esperado, real_.public_x as public_real
+  from (values
+    ('public','portal_issue_token','p_project_id uuid, p_permissions jsonb, p_expires_at timestamp with time zone, p_label text',true,false,true,false,false),
+    ('public','portal_rotate_token','p_token_id uuid, p_expires_at timestamp with time zone',true,false,true,false,false),
+    ('public','portal_revoke_token','p_token_id uuid',true,false,true,false,false),
+    ('public','portal_list_tokens','p_project_id uuid, p_limit integer, p_cursor_created_at timestamp with time zone, p_cursor_id uuid',true,false,true,false,false),
+    ('public','portal_token_permissions_valid','p_permissions jsonb',false,true,true,true,true),
+    ('public','portal_token_default_lifetime','',false,true,true,true,true),
+    ('public','portal_token_max_lifetime','',false,true,true,true,true),
+    ('portal_token_internal','owned_project','p_project_id uuid, p_owner uuid',false,false,false,false,false),
+    ('portal_token_internal','validate_permissions','p_permissions jsonb',false,false,false,false,false),
+    ('portal_token_internal','resolve_expiry','p_expires_at timestamp with time zone',false,false,false,false,false),
+    ('portal_token_internal','assert_live_link_cap','p_project_id uuid',false,false,false,false,false),
+    ('portal_token_internal','issued','t portal_tokens',false,false,false,false,false),
+    ('portal_token_internal','status','t portal_tokens',false,false,false,false,false),
+    ('portal_token_internal','lock_own_token','p_token_id uuid, p_owner uuid',false,false,false,false,false),
+    ('portal_token_internal','visible_project','p_project_id uuid, p_owner uuid',false,false,false,false,false)
+  ) as esperado(nspname, proname, args, secdef, anon_x, auth_x, service_x, public_x)
+  full join (
+    select n.nspname, p.proname,
+           pg_get_function_identity_arguments(p.oid) as args,
+           p.prosecdef as secdef,
+           has_function_privilege('anon', p.oid, 'execute') as anon_x,
+           has_function_privilege('authenticated', p.oid, 'execute') as auth_x,
+           has_function_privilege('service_role', p.oid, 'execute') as service_x,
+           exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                     where a.grantee = 0 and a.privilege_type = 'EXECUTE') as public_x
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'portal_token_internal'
+        or (n.nspname = 'public' and p.proname in (
+             'portal_issue_token','portal_rotate_token','portal_revoke_token',
+             'portal_list_tokens','portal_token_permissions_valid',
+             'portal_token_default_lifetime','portal_token_max_lifetime'))
+  ) as real_
+    on  real_.nspname = esperado.nspname and real_.proname = esperado.proname
+    and real_.args = esperado.args and real_.secdef = esperado.secdef
+    and real_.anon_x = esperado.anon_x and real_.auth_x = esperado.auth_x
+    and real_.service_x = esperado.service_x and real_.public_x = esperado.public_x
+ where real_.proname is null or esperado.proname is null
+ order by 1, 2;
+-- END CHECK_E4_DEPLOY_AUDIT_DETALLE
 
 -- BEGIN CHECK_E4_L1_PRECHECK
 -- ESPERADO: veredicto = 'OK'. Cualquier otra cosa: parar y revisar a mano.
