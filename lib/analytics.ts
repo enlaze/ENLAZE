@@ -28,6 +28,19 @@ let initialized = false;
    caso normal, no el raro. */
 let initPromise: Promise<void> | null = null;
 
+/* La ruta EN ESTE INSTANTE, no la que había cuando se montó el componente.
+   Todo lo que pueda emitir o identificar la consulta justo antes de actuar:
+   entre que algo se pide y se ejecuta, la pestaña puede haber navegado al
+   portal. Fail-closed: si no se puede leer la ruta, se asume que sí. */
+function onPortalNow(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return isPortalPath(window.location.pathname);
+  } catch {
+    return true;
+  }
+}
+
 /* ── Init ─────────────────────────────────────────────────────────── */
 
 export function initAnalytics(): Promise<void> {
@@ -42,7 +55,7 @@ export function initAnalytics(): Promise<void> {
 
      Este caso NO memoiza: si luego se navega desde el portal a una pantalla
      normal, la inicialización tiene que poder ocurrir allí. */
-  if (isPortalPath(window.location.pathname)) return Promise.resolve();
+  if (onPortalNow()) return Promise.resolve();
 
   if (!initPromise) initPromise = runInit();
   return initPromise;
@@ -65,6 +78,19 @@ async function runInit(): Promise<void> {
     posthog = ph;
   } catch {
     console.info("[analytics] posthog-js not installed — run: npm install posthog-js");
+    return;
+  }
+
+  /* Segunda comprobación, inmediatamente antes de inicializar. La de arriba se
+     hizo antes del import dinámico de posthog-js, y ese import tarda: la
+     pestaña puede haber navegado al portal mientras estaba en vuelo, y entonces
+     este init escribiría $initial_current_url —con el secreto— en localStorage
+     y en la cookie del cliente final.
+
+     Al abortar se suelta initPromise en vez de dejarla memoizada resuelta: si
+     más tarde se sale del portal, la inicialización tiene que poder ocurrir. */
+  if (onPortalNow()) {
+    initPromise = null;
     return;
   }
 
@@ -110,6 +136,9 @@ async function runInit(): Promise<void> {
 
 export function identifyUser(userId: string, traits?: Record<string, unknown>) {
   if (!initialized) return;
+  /* Aunque PostHog se inicializara antes en el dashboard, desde el portal no se
+     identifica a nadie: ataría esa visita anónima a una persona concreta. */
+  if (onPortalNow()) return;
   posthog.identify(userId, traits ? redactPortalDeep(traits) : traits);
 }
 
@@ -122,6 +151,11 @@ export function resetAnalytics() {
 
 export function trackEvent(event: string, properties?: Record<string, unknown>) {
   if (!initialized) return;
+  /* Última barrera, y la que de verdad cierra la política: desde el portal no
+     sale NINGÚN evento de producto, esté quien esté llamando y se hubiera
+     inicializado PostHog donde se hubiera inicializado. El evento en sí ya
+     delata que ese cliente abrió su enlace, aunque vaya redactado. */
+  if (onPortalNow()) return;
   // Redactado también en el emisor, no solo en sanitize_properties: así una
   // propiedad con la URL queda limpia aunque el hook del SDK cambie de nombre.
   posthog.capture(event, properties ? redactPortalDeep(properties) : properties);
