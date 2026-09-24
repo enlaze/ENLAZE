@@ -40,6 +40,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# La plantilla SÍ se sube: no lleva secretos y documenta qué variables hacen falta.
+!.env.example
 
 # vercel
 .vercel
