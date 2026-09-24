@@ -78,14 +78,17 @@ test("portal_list_tokens returns metadata for the owner and never the secret",
   };
   const rpc = async (role, uid, call, params = []) =>
     (await as(db, role, uid, `select ${call} as data`, params)).rows[0].data;
-  const list = (project = PROJECT, uid = OWNER) =>
-    rpc("authenticated", uid, "public.portal_list_tokens($1)", [project]);
+  const page = (project = PROJECT, uid = OWNER, args = "") =>
+    rpc("authenticated", uid, `public.portal_list_tokens($1${args})`, [project]);
+  // La mayoría de las pruebas solo miran las filas; el sobre se comprueba aparte.
+  const list = async (project = PROJECT, uid = OWNER) => (await page(project, uid)).items;
   const issue = (project = PROJECT, extra = "") =>
     rpc("authenticated", OWNER, `public.portal_issue_token($1${extra})`, [project]);
 
   await t.test("un proyecto sin enlaces devuelve una lista vacía, no nulo", async () => {
-    const empty = await list(EMPTY_PROJECT);
-    assert.deepEqual(empty, [], "coalesce a [] para que la interfaz no tenga que distinguir");
+    const empty = await page(EMPTY_PROJECT);
+    assert.deepEqual(empty.items, [], "coalesce a [] para que la interfaz no tenga que distinguir");
+    assert.equal(empty.next_cursor, null, "sin nada detrás, no hay cursor");
   });
 
   await t.test("el listado trae los metadatos y jamás el secreto", async () => {
@@ -170,11 +173,11 @@ test("portal_list_tokens returns metadata for the owner and never the secret",
 
   await t.test("anon no puede listar y el privilegio está donde debe", async () => {
     assert.equal((await db.query(
-      "select has_function_privilege('authenticated','public.portal_list_tokens(uuid)','EXECUTE') as ok"
+      "select has_function_privilege('authenticated','public.portal_list_tokens(uuid,integer,timestamptz,uuid)','EXECUTE') as ok"
     )).rows[0].ok, true);
     for (const role of ["anon", "public", "service_role"]) {
       assert.equal((await db.query(
-        "select has_function_privilege($1,'public.portal_list_tokens(uuid)','EXECUTE') as ok",
+        "select has_function_privilege($1,'public.portal_list_tokens(uuid,integer,timestamptz,uuid)','EXECUTE') as ok",
         [role])).rows[0].ok, false, `${role} no debe listar`);
     }
     assert.equal((await db.query(
@@ -225,7 +228,7 @@ test("portal_list_tokens returns metadata for the owner and never the secret",
       // rechazaría por propiedad antes de llegar a filtrar nada.
       await db.query("select set_config('request.jwt.claim.sub',$1,true)", [OWNER]);
       await db.query("set local role authenticated");
-      leaked = (await db.query("select public.portal_list_tokens($1) as d", [PROJECT])).rows[0].d;
+      leaked = (await db.query("select public.portal_list_tokens($1) as d", [PROJECT])).rows[0].d.items;
       await db.query("reset role");
     } finally {
       await db.query("rollback").catch(() => {});
@@ -235,6 +238,81 @@ test("portal_list_tokens returns metadata for the owner and never the secret",
 
     const clean = await list();
     assert.equal(JSON.stringify(clean).includes(issued.token), false);
+  });
+
+  await t.test("la página tiene tope y el cursor recorre el historial sin saltos", async () => {
+    // Un historial que no cabe en una página: 12 enlaces en un proyecto propio.
+    // El tope de cinco solo cuenta vigentes, así que se revocan según se emiten.
+    const PAGINADO = "88888888-8888-4888-8888-888888888888";
+    await db.query(`insert into public.projects(id,user_id,name) values($1,$2,'Obra con historial')`,
+      [PAGINADO, OWNER]);
+    const emitidos = [];
+    for (let n = 0; n < 12; n += 1) {
+      const t = await issue(PAGINADO);
+      await rpc("authenticated", OWNER, "public.portal_revoke_token($1)", [t.id]);
+      emitidos.push(t);
+    }
+
+    // Recorrido completo a páginas de 5.
+    const vistos = [];
+    let cursor = null;
+    let vueltas = 0;
+    do {
+      const args = cursor
+        ? `,5,'${cursor.created_at}'::timestamptz,'${cursor.id}'::uuid`
+        : ",5";
+      const pagina = await page(PAGINADO, OWNER, args);
+      assert.ok(pagina.items.length <= 5, "ninguna página pasa del límite pedido");
+      vistos.push(...pagina.items.map((t) => t.id));
+      cursor = pagina.next_cursor;
+      vueltas += 1;
+      assert.ok(vueltas <= 10, "el recorrido tiene que terminar");
+    } while (cursor);
+
+    assert.equal(vistos.length, 12, "se ven todos, ni uno de más");
+    assert.equal(new Set(vistos).size, 12, "y ninguno repetido entre páginas");
+    assert.deepEqual([...vistos].sort(), emitidos.map((t) => t.id).sort());
+
+    // Orden estable pese a que created_at empata: desempate por id.
+    const primera = await page(PAGINADO, OWNER, ",5");
+    assert.deepEqual((await page(PAGINADO, OWNER, ",5")).items.map((t) => t.id),
+      primera.items.map((t) => t.id), "dos llamadas iguales dan la misma página");
+
+    // El cursor apunta a la última fila de la página, no a la primera.
+    assert.equal(primera.next_cursor.id, primera.items.at(-1).id);
+
+    // Página que no se llena: no hay cursor, porque no queda nada detrás.
+    const holgada = await page(PAGINADO, OWNER, ",100");
+    assert.equal(holgada.items.length, 12);
+    assert.equal(holgada.next_cursor, null, "página incompleta no emite cursor");
+
+    // Y el secreto sigue sin aparecer en ninguna página.
+    for (const t of emitidos) {
+      assert.equal(JSON.stringify(holgada).includes(t.token), false,
+        "el secreto tampoco sale al paginar");
+    }
+    await db.query("delete from public.portal_tokens where project_id=$1", [PAGINADO]);
+  });
+
+  await t.test("los argumentos de paginación se validan", async () => {
+    const rechazo = (args, expected, caso) => assert.rejects(
+      () => page(PROJECT, OWNER, args),
+      (error) => error.code === "22023" && expected.test(error.message), caso);
+    await rechazo(",0", /between 1 and 100/, "límite cero");
+    await rechazo(",-1", /between 1 and 100/, "límite negativo");
+    await rechazo(",101", /between 1 and 100/, "límite por encima del máximo");
+    await rechazo(",null::integer", /between 1 and 100/, "límite nulo explícito");
+    // Medio cursor no es un cursor.
+    await rechazo(",5,now()", /must be given together/, "solo la fecha");
+    await rechazo(",5,null::timestamptz,'00000000-0000-4000-8000-000000000000'::uuid",
+      /must be given together/, "solo el id");
+    // Los dos extremos admisibles sí entran.
+    for (const limite of [1, 100]) {
+      const ok = await page(PROJECT, OWNER, `,${limite}`);
+      assert.ok(Array.isArray(ok.items), `límite ${limite} es válido`);
+    }
+    // El valor por defecto son 20 y no hace falta pasarlo.
+    assert.ok(Array.isArray((await page()).items));
   });
 
   await t.test("el SELECT directo sigue concedido: transición pendiente del lote 2", async () => {
