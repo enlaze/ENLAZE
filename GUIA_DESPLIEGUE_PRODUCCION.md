@@ -28,6 +28,22 @@ Fecha: 2026-07-16
 | `WEBHOOK_SECRET` | Verificar webhooks de n8n | Generar con `openssl rand -hex 16` |
 | `SERP_API_KEY` | Búsqueda de precios de mercado vía SerpAPI | serpapi.com |
 | `N8N_PRICE_SEARCH_WEBHOOK_URL` | URL del webhook de n8n para búsqueda de precios | Se configura tras desplegar n8n |
+
+### Pagos (Stripe) — modo prueba
+
+`npm run build` ejecuta antes `npm run plans:check` (prebuild): necesita
+`NEXT_PUBLIC_SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` también **en el
+entorno de build** de Vercel, y falla si `plan_catalog` no coincide con
+`lib/plans.ts` o si un precio de Stripe no coincide con el de `lib/plans.ts`.
+Tras cambiar límites o funciones en `lib/plans.ts`: `npm run plans:sync`.
+
+| Variable | Para qué | Notas |
+|---|---|---|
+| `STRIPE_SECRET_KEY` | Checkout, portal, webhook | `rk_test_…` (restringida) o `sk_test_…`. Las `*_live_` se rechazan sin `STRIPE_LIVE_MODE=1` |
+| `STRIPE_WEBHOOK_SECRET` | Firma de `/api/billing/webhook` | `whsec_…`. Sin ella el webhook responde 500 y no procesa nada |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Para la interfaz de pago (fase 2) | `pk_test_…` |
+| `STRIPE_PRICE_{BASICO,PROFESIONAL,EMPRESA}_{MONTHLY,YEARLY}` | Price IDs de cada plan | 6 variables. Nunca en el código |
+| `STRIPE_LIVE_MODE` | Permitir claves reales | Solo cuando haya entidad legal. No definir por ahora |
 | `PRICE_INGEST_URL` | Endpoint del importador de tarifas oficiales | `https://enlaze.es/api/pb/ingest` |
 | `PRICE_WORKER_USER_AGENT` | Identificación pública del rastreador | `ENLAZE-Public-Price-Monitor/1.0` |
 | `VERCEL_AUTOMATION_BYPASS_SECRET` | Solo si el dominio tiene protección de automatizaciones | Configurarlo también en Vercel |

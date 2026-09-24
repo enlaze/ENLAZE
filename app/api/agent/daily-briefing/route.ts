@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAgentRequest, verifyAgentOrBrowserRequest, isErrorResponse } from "../_lib/auth";
+import { requireFeature } from "@/lib/subscription";
 
 export async function GET(req: NextRequest) {
   try {
@@ -7,6 +8,10 @@ export async function GET(req: NextRequest) {
     if (isErrorResponse(auth)) return auth;
     
     const { userId } = auth;
+
+    // Muro de pago: el briefing diario es de Profesional/Empresa (y de la prueba).
+    const blocked = await requireFeature(userId, "briefing_diario");
+    if (blocked) return blocked;
     const authHeader = req.headers.get("authorization");
 
     // Construct the base URL robustly using headers to guarantee exact Preview Deployment URL

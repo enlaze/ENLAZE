@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
+    "prebuild": "npm run plans:check",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -45,7 +46,12 @@
     "obramat:catalog-links": "node scripts/obramat-catalog-links.js",
     "obramat:catalog-import": "node scripts/import-obramat-catalog.js",
     "audit:atomic-coverage": "node --env-file-if-exists=.env.local --import tsx scripts/audit-atomic-material-coverage.ts",
-    "test:budget-form-conflict-browser": "node __tests__/budget-form-conflict.browser.test.mjs"
+    "test:budget-form-conflict-browser": "node __tests__/budget-form-conflict.browser.test.mjs",
+    "plans:sync": "node --env-file-if-exists=.env.local --import tsx scripts/plans-sync.ts --write",
+    "plans:check": "node --env-file-if-exists=.env.local --import tsx scripts/plans-sync.ts --check",
+    "test:billing": "node --import tsx --test __tests__/billing-plans.test.mjs __tests__/billing-webhook.test.mjs",
+    "test:billing-integration": "node --env-file-if-exists=.env.local --import tsx --test --test-concurrency=1 __tests__/billing.integration.test.mjs",
+    "test:price-bank-rls": "node --env-file-if-exists=.env.local --test --test-concurrency=1 __tests__/price-bank-rls.integration.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
@@ -65,6 +71,7 @@
     "resend": "^6.9.4",
     "server-only": "^0.0.1",
     "sharp": "^0.34.5",
+    "stripe": "^22.6.2",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

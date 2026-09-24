@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
+import { featureActive } from "@/lib/subscription";
 
 export const maxDuration = 300;
 
@@ -104,6 +105,9 @@ export async function POST() {
     // 5. Send email to each user with active alerts
     let sent = 0;
     for (const userId of userIds) {
+      // Muro de pago: el informe semanal es parte del seguimiento de precios.
+      if (!(await featureActive(userId, "seguimiento_precios"))) continue;
+
       let leaseId: string;
       try {
         // maxDuration above is 300s for the WHOLE route (looping over every

@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
+import { featureActive } from "@/lib/subscription";
 
 interface AlertNotification {
   user_id: string;
@@ -30,8 +31,17 @@ export async function POST(request: Request) {
       .select("*")
       .eq("is_active", true);
 
-    const { data: alerts, error: alertErr } = await alertQuery;
+    const { data: allAlerts, error: alertErr } = await alertQuery;
     if (alertErr) throw alertErr;
+
+    // Muro de pago: solo avisos de cuentas con el seguimiento de precios
+    // activo (plan que lo incluye y cuenta no en solo lectura).
+    const alertUserIds = Array.from(new Set((allAlerts || []).map((a) => a.user_id as string)));
+    const allowedUsers = new Set<string>();
+    for (const uid of alertUserIds) {
+      if (await featureActive(uid, "seguimiento_precios")) allowedUsers.add(uid);
+    }
+    const alerts = (allAlerts || []).filter((a) => allowedUsers.has(a.user_id));
     if (!alerts || alerts.length === 0) {
       return NextResponse.json({ processed: 0, triggered: 0 });
     }

@@ -13,6 +13,7 @@ import {
   retainedInvoiceStorageUrl,
 } from "@/lib/invoice-ocr-drafts";
 import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
+import { requireWriteAccess } from "@/lib/subscription";
 
 // Vision OCR + image processing + Storage round-trips can run long; the
 // lease TTL below (180s) must stay comfortably above this.
@@ -99,6 +100,10 @@ export async function POST(request: Request) {
     if (!user) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
+
+    // Muro de pago: la cuenta en solo lectura no crea ni modifica.
+    const blocked = await requireWriteAccess(user.id);
+    if (blocked) return blocked;
 
     const formData = await request.formData();
     const file = formData.get("file") as File;
@@ -418,6 +423,10 @@ export async function PATCH(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  // Muro de pago: la cuenta en solo lectura no crea ni modifica.
+  const blocked = await requireWriteAccess(user.id);
+  if (blocked) return blocked;
 
   let body: { draft_url?: unknown; invoice_id?: unknown };
   try {

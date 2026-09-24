@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { reserveUsage } from "@/lib/subscription";
 import { analyzeProject, buildScopeHash } from "@/lib/budget-analysis";
 import { generateBudgetItems, applyCostCoefficients } from "@/lib/budget-generator-v2";
 import { resolvePricesForBudget, type TechnicalPriceEntry, type ResolvedPrice } from "@/lib/price-resolver";
@@ -86,6 +87,11 @@ export async function POST(request: Request) {
         { status: 500 },
       );
     }
+
+    // Muro de pago: cada llamada cuenta como una generación con IA (mismo tope
+    // que los presupuestos del plan). Es nuestro mayor coste variable.
+    const blocked = await reserveUsage(user.id, "generaciones_ia", 1, { source: "api:budgets/generate-v2" });
+    if (blocked) return blocked;
 
     const prefs: BudgetPreferences = {
       quality: preferences?.quality || scope.quality || "media",

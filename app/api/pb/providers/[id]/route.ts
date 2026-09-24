@@ -6,6 +6,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { requireWriteAccess } from "@/lib/subscription";
 
 async function getSupabaseAndUser() {
   const cookieStore = await cookies();
@@ -61,6 +62,10 @@ export async function GET(_request: Request, context: RouteContext) {
 export async function PATCH(request: Request, context: RouteContext) {
   const { supabase, user, company_id } = await getSupabaseAndUser();
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
+  // Muro de pago: la cuenta en solo lectura no crea ni modifica.
+  const blocked = await requireWriteAccess(user.id);
+  if (blocked) return blocked;
   if (!company_id) return NextResponse.json({ error: "Usuario sin empresa asociada" }, { status: 403 });
 
   const { id } = await context.params;

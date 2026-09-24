@@ -14,6 +14,7 @@ import {
   isFiscallyDefinitiveIssuedInvoiceStatus,
   markAccountDeletionCleanupComplete,
 } from "@/lib/account-deletion-retention";
+import { getStripe } from "@/lib/stripe";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/account/delete — Borrado de cuenta (RGPD, art. 17 "derecho al
@@ -818,6 +819,33 @@ async function deleteN8nUpdatesForUser(
   }
 }
 
+/** Cancela la suscripción de Stripe del usuario. Devuelve un error o null. */
+async function cancelStripeSubscription(
+  admin: SupabaseClient,
+  userId: string
+): Promise<string | null> {
+  const { data, error } = await admin
+    .from("subscriptions")
+    .select("stripe_subscription_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) return `subscriptions: ${error.message}`;
+  const subscriptionId = (data as { stripe_subscription_id: string | null } | null)?.stripe_subscription_id;
+  if (!subscriptionId) return null;
+
+  const stripe = getStripe();
+  if (!stripe) return "Stripe no está configurado y la cuenta tiene una suscripción";
+  try {
+    const sub = await stripe.subscriptions.retrieve(subscriptionId);
+    if (sub.status !== "canceled" && sub.status !== "incomplete_expired") {
+      await stripe.subscriptions.cancel(subscriptionId);
+    }
+    return null;
+  } catch (e) {
+    return `Stripe: ${(e as Error).message}`;
+  }
+}
+
 export async function POST(request: Request) {
   const rl = rateLimitSensitive(request);
   if (!rl.allowed) {
@@ -895,6 +923,21 @@ export async function POST(request: Request) {
           "Tu cuenta ya ha quedado bloqueada para nuevos cambios; reinténtalo en unos segundos.",
       },
       { status: 409 }
+    );
+  }
+
+  // Suscripción de pago: se cancela en Stripe ANTES de borrar nada, o se le
+  // seguiría cobrando a una cuenta que ya no existe. Idempotente: en un
+  // reintento, una suscripción ya cancelada se deja como está.
+  const stripeCancel = await cancelStripeSubscription(admin, userId);
+  if (stripeCancel) {
+    console.error("[account/delete] no se pudo cancelar la suscripción:", stripeCancel);
+    return NextResponse.json(
+      {
+        error: "No se pudo cancelar tu suscripción de pago. No se ha eliminado nada; inténtalo de nuevo.",
+        details: [stripeCancel],
+      },
+      { status: 500 }
     );
   }
 

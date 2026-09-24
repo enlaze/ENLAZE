@@ -24,6 +24,7 @@ import {
   type PriceSourceAdapter,
 } from "@/lib/price-source-adapter";
 import { processImport } from "@/lib/price-import";
+import { requireWriteAccess } from "@/lib/subscription";
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB for source files
 const VALID_EXTENSIONS = [".csv", ".tsv", ".txt"];
@@ -53,6 +54,10 @@ export async function POST(request: Request) {
   if (authError || !user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  // Muro de pago: la cuenta en solo lectura no crea ni modifica.
+  const blocked = await requireWriteAccess(user.id);
+  if (blocked) return blocked;
 
   const { data: profile } = await supabase
     .from("profiles")

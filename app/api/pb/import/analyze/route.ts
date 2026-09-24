@@ -15,6 +15,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { analyzeCSV, analyzeXLSX, type ColumnMapping } from "@/lib/price-import";
 import { analyzePricePDF } from "@/lib/pdf-price-import";
+import { requireWriteAccess } from "@/lib/subscription";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const CSV_EXTENSIONS = [".csv", ".tsv", ".txt"];
@@ -40,6 +41,10 @@ export async function POST(request: Request) {
   if (authError || !user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  // Muro de pago: la cuenta en solo lectura no crea ni modifica.
+  const blocked = await requireWriteAccess(user.id);
+  if (blocked) return blocked;
 
   try {
     const formData = await request.formData();
