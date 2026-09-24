@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAgentRequest, isErrorResponse } from "../../_lib/auth";
 import Anthropic from "@anthropic-ai/sdk";
+import { reserveUsage } from "@/lib/subscription";
 import { getSectorConfig } from "@/lib/agent-prompts";
 import { normalizeSector } from "@/lib/sector-config";
 
@@ -48,6 +49,11 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+
+    // Muro de pago: cada llamada cuenta como una generación con IA (mismo tope
+    // que los presupuestos del plan). Es nuestro mayor coste variable.
+    const blocked = await reserveUsage(userId, "generaciones_ia", 1, { source: "api:agent/budgets/generate" });
+    if (blocked) return blocked;
 
     // Get user profile for sector context
     const { data: profile } = await supabase

@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { requireWriteAccess } from "@/lib/subscription";
 
 // POST /api/prices/import — Import prices from CSV
 // Expected CSV format: nombre,precio,unidad,tipo,categoria,subcategoria,proveedor,marca,descripcion
@@ -20,6 +21,10 @@ export async function POST(request: Request) {
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
+  // Muro de pago: la cuenta en solo lectura no crea ni modifica.
+  const blocked = await requireWriteAccess(user.id);
+  if (blocked) return blocked;
 
   try {
     const formData = await request.formData();

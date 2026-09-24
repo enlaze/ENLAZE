@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { getAccessTokenInfo } from "@/lib/services/google-api";
 import { sanitizeText } from "@/lib/sanitize";
+import { requireWriteAccess } from "@/lib/subscription";
 
 const CALENDAR_API =
   "https://www.googleapis.com/calendar/v3/calendars/primary/events";
@@ -160,6 +161,10 @@ export async function POST(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  // Muro de pago: la cuenta en solo lectura no crea ni modifica.
+  const blocked = await requireWriteAccess(user.id);
+  if (blocked) return blocked;
 
   const tokenInfo = await getAccessTokenInfo(
     supabase,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient as createSessionClient } from "@/lib/supabase-server";
 import { getServiceRoleClient } from "@/lib/supabase-service-role";
 import { rateLimitSensitive } from "@/lib/rate-limit";
+import { requireWriteAccess } from "@/lib/subscription";
 
 const REASON_MESSAGES: Record<string, { status: number; error: string }> = {
   signature_not_found: { status: 404, error: "Firma no encontrada" },
@@ -42,6 +43,10 @@ export async function POST(request: Request) {
     if (!user) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
+
+    // Muro de pago: la cuenta en solo lectura no crea ni modifica.
+    const blocked = await requireWriteAccess(user.id);
+    if (blocked) return blocked;
 
     const body = await request.json();
     const signatureId = body?.signature_id;

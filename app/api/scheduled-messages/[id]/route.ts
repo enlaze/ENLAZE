@@ -12,6 +12,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { isValidUuid } from "@/lib/sanitize";
+import { requireWriteAccess } from "@/lib/subscription";
 import { computeNextRun, type ScheduleSpec } from "@/lib/scheduled-messages";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -35,6 +36,13 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   const payload = await request.json().catch(() => null);
   const wanted = (payload as { status?: unknown } | null)?.status;
+  // Muro de pago: reanudar exige la función del plan; pausar solo que la cuenta
+  // no esté en solo lectura. Cancelar (DELETE) siempre se permite.
+  const blocked = await requireWriteAccess(
+    user.id,
+    wanted === "active" ? "programacion_envios" : undefined
+  );
+  if (blocked) return blocked;
   if (wanted !== "active" && wanted !== "paused") {
     return NextResponse.json(
       { error: "Solo se puede pausar o reanudar un envío programado." },

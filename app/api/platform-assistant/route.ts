@@ -8,6 +8,7 @@ import {
   getGuideForPath,
   suggestPathForQuestion,
 } from "@/lib/platform-assistant-guide";
+import { reserveUsage } from "@/lib/subscription";
 
 interface ConversationMessage {
   role: "user" | "assistant";
@@ -57,6 +58,11 @@ export async function POST(request: Request) {
   });
 
   if (!process.env.ANTHROPIC_API_KEY) return localResponse();
+
+  // Muro de pago: cada pregunta que llega al modelo gasta cupo de
+  // "mensajes_asistente" (la respuesta local de arriba no cuesta y no cuenta).
+  const blocked = await reserveUsage(user.id, "mensajes_asistente", 1, { source: "api:platform-assistant" });
+  if (blocked) return blocked;
 
   try {
     const currentGuide = getGuideForPath(pathname);

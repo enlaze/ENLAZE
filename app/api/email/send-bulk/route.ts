@@ -16,6 +16,7 @@ import { createClient } from "@/lib/supabase-server";
 import { sanitizeEmail, sanitizeText } from "@/lib/sanitize";
 import { rateLimitSensitive } from "@/lib/rate-limit";
 import { resolveGmailSender, sendGmailMessage } from "@/lib/gmail-send";
+import { releaseUsage, reserveUsage } from "@/lib/subscription";
 
 /** Tope por request; evita que un fallo de UI dispare un envío ilimitado. */
 const MAX_RECIPIENTS = 200;
@@ -60,8 +61,14 @@ export async function POST(request: Request) {
       );
     }
 
+    // Muro de pago: reserva el cupo de todo el lote antes de nada; lo que no
+    // salga se devuelve al final. Si el lote no cabe entero, no se envía nada.
+    const blocked = await reserveUsage(user.id, "emails", raw.length, { source: "api:email/send-bulk" });
+    if (blocked) return blocked;
+
     const resolved = await resolveGmailSender(supabase, user.id);
     if (!resolved.ok) {
+      await releaseUsage(user.id, "emails", raw.length, "release:email/send-bulk");
       return NextResponse.json(
         { error: resolved.error, code: resolved.code },
         { status: resolved.status }
@@ -109,6 +116,7 @@ export async function POST(request: Request) {
     }
 
     const delivered = results.filter((r) => r.sent).length;
+    await releaseUsage(user.id, "emails", results.length - delivered, "release:email/send-bulk");
     return NextResponse.json({
       success: delivered > 0,
       sent: delivered,

@@ -16,6 +16,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { requireWriteAccess } from "@/lib/subscription";
 import {
   resolvePricesForBudget,
   type TechnicalPriceEntry,
@@ -72,6 +73,11 @@ export async function POST(request: Request) {
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "Faltan las partidas (items)" }, { status: 400 });
     }
+
+    // Muro de pago: recalcular precios no llama a la IA (resolvers locales),
+    // así que no gasta cupo; solo exige que la cuenta no esté en solo lectura.
+    const blocked = await requireWriteAccess(user.id);
+    if (blocked) return blocked;
 
     // Get company_id
     const { data: profile } = await supabase

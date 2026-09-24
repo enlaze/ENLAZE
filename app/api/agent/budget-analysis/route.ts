@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { reserveUsage } from "@/lib/subscription";
 import Anthropic from "@anthropic-ai/sdk";
 import { getSectorConfig } from "@/lib/agent-prompts";
 import { normalizeSector } from "@/lib/sector-config";
@@ -53,6 +54,11 @@ export async function POST(request: Request) {
   if (authError || !user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  // Muro de pago: cada llamada cuenta como una generación con IA (mismo tope
+  // que los presupuestos del plan). Es nuestro mayor coste variable.
+  const blocked = await reserveUsage(user.id, "generaciones_ia", 1, { source: "api:agent/budget-analysis" });
+  if (blocked) return blocked;
 
   try {
     // The shared market tracker is written with the service role. Reading it

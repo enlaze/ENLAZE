@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { requireWriteAccess } from "@/lib/subscription";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -53,6 +54,10 @@ export async function POST(request: Request) {
   const supabase = await getSupabase();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
+  // Muro de pago: seguimiento de precios es de Profesional/Empresa (y de la prueba).
+  const blocked = await requireWriteAccess(user.id, "seguimiento_precios");
+  if (blocked) return blocked;
 
   try {
     const body = await request.json();
@@ -125,6 +130,10 @@ export async function PATCH(request: Request) {
   const supabase = await getSupabase();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
+  // Muro de pago: seguimiento de precios es de Profesional/Empresa (y de la prueba).
+  const blocked = await requireWriteAccess(user.id, "seguimiento_precios");
+  if (blocked) return blocked;
 
   try {
     const body = await request.json();

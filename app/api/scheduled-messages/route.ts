@@ -15,6 +15,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { sanitizeText } from "@/lib/sanitize";
 import { rateLimitStandard } from "@/lib/rate-limit";
+import { requireWriteAccess } from "@/lib/subscription";
 import {
   computeNextRun,
   validateAudience,
@@ -84,6 +85,10 @@ export async function POST(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  // Muro de pago: programar envíos es de Profesional/Empresa (y de la prueba).
+  const blocked = await requireWriteAccess(user.id, "programacion_envios");
+  if (blocked) return blocked;
 
   const payload = await request.json().catch(() => null);
   if (!payload || typeof payload !== "object") {

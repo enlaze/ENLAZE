@@ -10,6 +10,7 @@ import {
   listSnapshots,
   type CreateSnapshotInput,
 } from "@/lib/budget-snapshots";
+import { requireWriteAccess } from "@/lib/subscription";
 
 async function getSupabaseAndUser() {
   const cookieStore = await cookies();
@@ -57,6 +58,10 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const { supabase, user } = await getSupabaseAndUser();
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
+  // Muro de pago: la cuenta en solo lectura no crea ni modifica.
+  const blocked = await requireWriteAccess(user.id);
+  if (blocked) return blocked;
 
   try {
     const body = await request.json();

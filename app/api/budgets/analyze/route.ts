@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { reserveUsage } from "@/lib/subscription";
 import { analyzeProject, buildScopeHash } from "@/lib/budget-analysis";
 import type { BudgetScopeV2 } from "@/lib/types/budget-v2";
 
@@ -80,6 +81,12 @@ export async function POST(request: Request) {
         { status: 500 },
       );
     }
+
+    // (Los aciertos de caché de arriba no llaman a la IA y no cuentan.)
+    // Muro de pago: cada llamada cuenta como una generación con IA (mismo tope
+    // que los presupuestos del plan). Es nuestro mayor coste variable.
+    const blocked = await reserveUsage(user.id, "generaciones_ia", 1, { source: "api:budgets/analyze" });
+    if (blocked) return blocked;
 
     const result = await analyzeProject(scope, { apiKey });
 

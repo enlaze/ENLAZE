@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAgentOrBrowserRequest, isErrorResponse } from "../../../_lib/auth";
 import { getValidAccessToken } from "@/lib/services/google-api";
+import { requireWriteAccess } from "@/lib/subscription";
 
 export async function POST(req: NextRequest) {
   try {
     const auth = await verifyAgentOrBrowserRequest(req);
     if (isErrorResponse(auth)) return auth;
     const { supabase, userId } = auth;
+
+    // Muro de pago: la cuenta en solo lectura no crea ni modifica.
+    const blocked = await requireWriteAccess(userId);
+    if (blocked) return blocked;
 
     const body = await req.json();
     const { values, tab_name } = body;

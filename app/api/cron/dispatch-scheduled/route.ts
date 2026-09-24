@@ -71,6 +71,7 @@ import {
   type WhatsAppSender,
 } from "@/lib/whatsapp";
 import { resolveGmailSender, sendGmailMessage, type GmailSender } from "@/lib/gmail-send";
+import { billingMessage, consumeUsage, releaseUsage } from "@/lib/subscription";
 
 /* Enviar a mucha gente por HTTP tarda; el tope de Vercel para funciones. */
 export const maxDuration = 300;
@@ -148,6 +149,11 @@ type SendReport = {
   hardError?: string;
   /** Aviso que no impide seguir con la recurrencia (algún mensaje no salió). */
   softError?: string;
+  /** Muro de pago: cuenta en solo lectura, sin la función o sin cupo. Se pausa
+      sin enviar nada; el usuario lo reanuda cuando tenga plan o cupo. */
+  paused?: string;
+  /** No se pudo comprobar la suscripción: se deja como estaba y se reintenta. */
+  retry?: boolean;
 };
 
 async function sendRow(
@@ -337,7 +343,26 @@ async function dispatch(request: Request) {
               : "Ningún cliente encajaba con los destinatarios de este envío.",
         };
       } else {
-        report = await sendRow(supabase, row, recipients, senders);
+        /* Muro de pago: se reserva el cupo de toda la tanda antes de enviar.
+           Cuentas en solo lectura, sin la función de programación o sin cupo
+           se saltan (y se pausan); lo que no salga se devuelve después. */
+        const resource = row.channel === "whatsapp" ? "whatsapp" : "emails";
+        let decision: Awaited<ReturnType<typeof consumeUsage>> | null = null;
+        try {
+          decision = await consumeUsage(row.user_id, resource, recipients.length, {
+            feature: "programacion_envios",
+            source: "cron:dispatch-scheduled",
+          });
+        } catch (error: unknown) {
+          console.error("[dispatch-scheduled] no se pudo comprobar la suscripción de", row.user_id, error);
+          report = { sent: 0, failed: 0, retry: true };
+        }
+        if (decision && !decision.ok) {
+          report = { sent: 0, failed: 0, paused: billingMessage(decision) };
+        } else if (decision) {
+          report = await sendRow(supabase, row, recipients, senders);
+          await releaseUsage(row.user_id, resource, recipients.length - report.sent, "release:dispatch-scheduled");
+        }
       }
     } catch (error: unknown) {
       console.error("[dispatch-scheduled] fallo inesperado en", row.id, error);
@@ -354,7 +379,13 @@ async function dispatch(request: Request) {
     let status: ScheduleStatus;
     let nextRunAt: string | null = null;
 
-    if (report.hardError) {
+    if (report.retry) {
+      status = "active";
+      nextRunAt = row.next_run_at;
+    } else if (report.paused) {
+      status = "paused";
+      nextRunAt = row.next_run_at;
+    } else if (report.hardError) {
       status = "failed";
     } else if (row.schedule_type === "once") {
       status = "done";
@@ -370,7 +401,7 @@ async function dispatch(request: Request) {
         status,
         next_run_at: nextRunAt,
         last_run_at: finishedAt.toISOString(),
-        last_error: report.hardError || report.softError || null,
+        last_error: report.paused || report.hardError || report.softError || null,
         updated_at: finishedAt.toISOString(),
       })
       .eq("id", row.id);
@@ -384,7 +415,9 @@ async function dispatch(request: Request) {
       failed: report.failed,
       status,
       next_run_at: nextRunAt,
-      ...(report.hardError || report.softError ? { error: report.hardError || report.softError } : {}),
+      ...(report.paused || report.hardError || report.softError
+        ? { error: report.paused || report.hardError || report.softError }
+        : {}),
     });
   }
 

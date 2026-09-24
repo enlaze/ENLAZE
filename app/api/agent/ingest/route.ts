@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
+import { hasFeature } from "@/lib/subscription";
+import { requireBearer } from "@/lib/api-key-auth";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -15,12 +17,10 @@ export const maxDuration = 60;
  * Protected by a simple API key in the Authorization header.
  */
 export async function POST(req: NextRequest) {
-  // Auth check — expects "Bearer <AGENT_API_KEY>"
-  const authHeader = req.headers.get("authorization");
-  const expectedKey = process.env.AGENT_API_KEY;
-  if (expectedKey && authHeader !== `Bearer ${expectedKey}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  // Auth — "Bearer <AGENT_API_KEY>"
+  // Sin AGENT_API_KEY definida se deniega (500), nunca se deja pasar.
+  const denied = requireBearer(req, "AGENT_API_KEY");
+  if (denied) return denied;
 
   const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -81,7 +81,19 @@ async function ingestPayload(
     // UNIQUE (migración 20260912093000), así que un reintento del workflow
     // sobrescribe el briefing del día en lugar de añadir un duplicado — y no
     // se paga dos veces por el mismo día.
+    // Muro de pago: el briefing diario es de Profesional/Empresa (y de la
+    // prueba). Para el resto de planes no se guarda; el dashboard lo lee de
+    // agent_daily_summary, así que sin fila no hay briefing.
+    let briefingAllowed = false;
     if (payload.daily_summary) {
+      try {
+        briefingAllowed = await hasFeature(userId, "briefing_diario");
+      } catch (e) {
+        console.error("[agent/ingest] no se pudo comprobar el plan de", userId, e);
+      }
+      if (!briefingAllowed) results.daily_summary = { inserted: 0, errors: 0 };
+    }
+    if (payload.daily_summary && briefingAllowed) {
       const { error } = await supabase
         .from("agent_daily_summary")
         .upsert(

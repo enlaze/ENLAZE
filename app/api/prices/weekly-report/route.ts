@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { requireFeature } from "@/lib/subscription";
 
 export async function GET(request: Request) {
   const cookieStore = await cookies();
@@ -18,6 +19,10 @@ export async function GET(request: Request) {
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
+  // Muro de pago: el informe semanal ES la función de seguimiento (Profesional/Empresa).
+  const blocked = await requireFeature(user.id, "seguimiento_precios");
+  if (blocked) return blocked;
 
   const { searchParams } = new URL(request.url);
   const weeksBack = parseInt(searchParams.get("weeks") || "1");

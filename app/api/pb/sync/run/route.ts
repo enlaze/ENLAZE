@@ -18,6 +18,7 @@ import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { runPriceSync, type SyncConfig } from "@/lib/price-sync-v2";
+import { requireWriteAccess } from "@/lib/subscription";
 
 export async function POST(request: Request) {
   // Try Bearer auth first (cron/agent), then cookie auth (user)
@@ -57,6 +58,22 @@ export async function POST(request: Request) {
     if (authError || !user) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
+
+    // Muro de pago: lanzar una sincronización de precios es de Profesional/Empresa.
+    const blocked = await requireWriteAccess(user.id, "seguimiento_precios");
+    if (blocked) return blocked;
+
+    // La sincronización escribe el catálogo GLOBAL (pb_price_current,
+    // pb_sync_runs), que desde 20260924113527 solo puede escribir
+    // service_role. Ya comprobados sesión y plan, corre como sistema,
+    // igual que la rama del cron.
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json({ error: "Sincronización no configurada" }, { status: 503 });
+    }
+    supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+    );
   }
 
   try {

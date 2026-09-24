@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase-server";
 import { sanitizeEmail, sanitizeText } from "@/lib/sanitize";
 import { rateLimitSensitive } from "@/lib/rate-limit";
 import { resolveGmailSender, sendGmailMessage } from "@/lib/gmail-send";
+import { releaseUsage, reserveUsage } from "@/lib/subscription";
 
 export async function POST(request: Request) {
   try {
@@ -40,8 +41,13 @@ export async function POST(request: Request) {
       );
     }
 
+    // Muro de pago: reserva el cupo antes de nada; si no se envía, se devuelve.
+    const blocked = await reserveUsage(user.id, "emails", 1, { source: "api:send-email" });
+    if (blocked) return blocked;
+
     const resolved = await resolveGmailSender(supabase, user.id);
     if (!resolved.ok) {
+      await releaseUsage(user.id, "emails", 1, "release:send-email");
       return NextResponse.json(
         { error: resolved.error, code: resolved.code },
         { status: resolved.status }
@@ -50,6 +56,7 @@ export async function POST(request: Request) {
 
     const sent = await sendGmailMessage(resolved.sender, to, subject, message);
     if (!sent.ok) {
+      await releaseUsage(user.id, "emails", 1, "release:send-email");
       return NextResponse.json(
         { error: sent.error, code: sent.code },
         { status: sent.reconnect ? 409 : 502 }

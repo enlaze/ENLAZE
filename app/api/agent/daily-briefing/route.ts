@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAgentRequest, verifyAgentOrBrowserRequest, isErrorResponse } from "../_lib/auth";
+import { requireFeature } from "@/lib/subscription";
+import { bearerMatches } from "@/lib/api-key-auth";
 
 export async function GET(req: NextRequest) {
   try {
@@ -7,6 +9,10 @@ export async function GET(req: NextRequest) {
     if (isErrorResponse(auth)) return auth;
     
     const { userId } = auth;
+
+    // Muro de pago: el briefing diario es de Profesional/Empresa (y de la prueba).
+    const blocked = await requireFeature(userId, "briefing_diario");
+    if (blocked) return blocked;
     const authHeader = req.headers.get("authorization");
 
     // Construct the base URL robustly using headers to guarantee exact Preview Deployment URL
@@ -14,7 +20,7 @@ export async function GET(req: NextRequest) {
     const protocol = req.headers.get("x-forwarded-proto") || "https";
     const baseUrl = host ? `${protocol}://${host}` : req.nextUrl.origin;
 
-    const isAgentMode = !!(authHeader && authHeader.startsWith("Bearer ") && authHeader.includes(process.env.AGENT_API_KEY || ""));
+    const isAgentMode = bearerMatches(req, "AGENT_API_KEY");
     const cookieHeader = req.headers.get("cookie");
     console.log(`[Daily Briefing] Incoming request. AuthHeader present? ${!!authHeader} (Starts with Bearer? ${authHeader?.startsWith('Bearer ')}). Cookie present? ${!!cookieHeader}. (Mode: ${isAgentMode ? 'Agent API Key' : 'Browser Session'})`);
 

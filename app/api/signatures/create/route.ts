@@ -3,6 +3,7 @@ import { createClient as createSessionClient } from "@/lib/supabase-server";
 import { getServiceRoleClient } from "@/lib/supabase-service-role";
 import { sanitizeText, sanitizeEmail } from "@/lib/sanitize";
 import { rateLimitSensitive, getClientIp } from "@/lib/rate-limit";
+import { requireWriteAccess } from "@/lib/subscription";
 
 export async function POST(request: Request) {
   try {
@@ -33,6 +34,10 @@ export async function POST(request: Request) {
     if (!user) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
+
+    // Muro de pago: la cuenta en solo lectura no crea ni modifica.
+    const blocked = await requireWriteAccess(user.id);
+    if (blocked) return blocked;
 
     const body = await request.json();
     const { entity_type, entity_id, signer_name, signer_email, signer_phone, signer_nif, signer_role } = body;

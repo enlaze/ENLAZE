@@ -15,6 +15,7 @@ import { createClient } from "@/lib/supabase-server";
 import { sanitizeText } from "@/lib/sanitize";
 import { rateLimitSensitive } from "@/lib/rate-limit";
 import { normalizePhone, resolveWhatsAppSender, sendWhatsAppText } from "@/lib/whatsapp";
+import { releaseUsage, reserveUsage } from "@/lib/subscription";
 
 /** Tope por request; evita que un fallo de UI dispare un envío ilimitado. */
 const MAX_RECIPIENTS = 200;
@@ -57,8 +58,14 @@ export async function POST(request: Request) {
     );
   }
 
+  // Muro de pago: reserva el cupo de todo el lote antes de nada; lo que no
+  // salga se devuelve al final. Si el lote no cabe entero, no se envía nada.
+  const blocked = await reserveUsage(user.id, "whatsapp", raw.length, { source: "api:whatsapp/send-bulk" });
+  if (blocked) return blocked;
+
   const credentials = await resolveWhatsAppSender(supabase, user.id);
   if (!credentials.ok) {
+    await releaseUsage(user.id, "whatsapp", raw.length, "release:whatsapp/send-bulk");
     return NextResponse.json(
       { error: credentials.error, ...(credentials.code ? { code: credentials.code } : {}) },
       { status: credentials.status }
@@ -100,6 +107,7 @@ export async function POST(request: Request) {
   }
 
   const delivered = results.filter((r) => r.sent).length;
+  await releaseUsage(user.id, "whatsapp", results.length - delivered, "release:whatsapp/send-bulk");
   return NextResponse.json({
     success: delivered > 0,
     sent: delivered,

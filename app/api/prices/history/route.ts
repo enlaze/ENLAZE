@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { requireFeature } from "@/lib/subscription";
 
 export async function GET(request: Request) {
   const cookieStore = await cookies();
@@ -20,6 +21,10 @@ export async function GET(request: Request) {
   if (authError || !user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  // Muro de pago: el histórico de precios ES la función de seguimiento (Profesional/Empresa).
+  const blocked = await requireFeature(user.id, "seguimiento_precios");
+  if (blocked) return blocked;
 
   const { searchParams } = new URL(request.url);
   const productId = searchParams.get("product_id");

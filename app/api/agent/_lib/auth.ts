@@ -13,12 +13,9 @@ const supabaseKey =
 export function verifyAgentRequest(
   req: NextRequest,
 ): { supabase: SupabaseClient; userId: string } | NextResponse {
-  // Auth check
-  const authHeader = req.headers.get("authorization");
-  const expectedKey = process.env.AGENT_API_KEY;
-  if (expectedKey && authHeader !== `Bearer ${expectedKey}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  // Auth: sin AGENT_API_KEY definida se deniega (500), nunca se deja pasar.
+  const denied = requireBearer(req, "AGENT_API_KEY");
+  if (denied) return denied;
 
   // user_id is required
   const userId = req.nextUrl.searchParams.get("user_id");
@@ -44,6 +41,7 @@ export function isErrorResponse(
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { bearerMatches, requireBearer } from "@/lib/api-key-auth";
 
 /**
  * Async version that allows BOTH Agent API Key OR an authenticated browser session.
@@ -52,10 +50,10 @@ export async function verifyAgentOrBrowserRequest(
   req: NextRequest,
 ): Promise<{ supabase: SupabaseClient; userId: string } | NextResponse> {
   const authHeader = req.headers.get("authorization");
-  const expectedKey = process.env.AGENT_API_KEY;
 
   // 1. si Authorization coincide con AGENT_API_KEY → llamada de agente
-  if (expectedKey && authHeader === `Bearer ${expectedKey}`) {
+  //    (sin la variable definida nunca coincide: se exige sesión de navegador)
+  if (bearerMatches(req, "AGENT_API_KEY")) {
     console.log("[Auth] Mode: Agent API Key matched");
     let userId = req.nextUrl.searchParams.get("user_id");
     if (!userId) {

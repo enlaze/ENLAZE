@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
+import { reserveUsage } from "@/lib/subscription";
 import { getSectorConfig } from "@/lib/agent-prompts";
 import { normalizeSector } from "@/lib/sector-config";
 import { logAiRun, hashText } from "@/lib/ai-logger";
@@ -80,6 +81,11 @@ export async function POST(request: Request) {
     if (!description) {
       return NextResponse.json({ error: "Descripcion requerida" }, { status: 400 });
     }
+
+    // Muro de pago: cada llamada cuenta como una generación con IA (mismo tope
+    // que los presupuestos del plan). Es nuestro mayor coste variable.
+    const blocked = await reserveUsage(userId, "generaciones_ia", 1, { source: "api:generate-budget" });
+    if (blocked) return blocked;
 
     const { data: profile } = await supabase
       .from("profiles")

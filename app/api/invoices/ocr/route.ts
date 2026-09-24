@@ -13,6 +13,7 @@ import {
   retainedInvoiceStorageUrl,
 } from "@/lib/invoice-ocr-drafts";
 import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
+import { requireWriteAccess, reserveUsage } from "@/lib/subscription";
 
 // Vision OCR + image processing + Storage round-trips can run long; the
 // lease TTL below (180s) must stay comfortably above this.
@@ -100,6 +101,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
+    // Muro de pago: la cuenta en solo lectura no crea ni modifica.
+    const blocked = await requireWriteAccess(user.id);
+    if (blocked) return blocked;
+
     const formData = await request.formData();
     const file = formData.get("file") as File;
     const userId = user.id; // Use authenticated user, ignore client-sent userId
@@ -117,6 +122,11 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // Muro de pago: cada escaneo con IA gasta cupo de "escaneos_ocr" (facturas
+    // de proveedor), no de "facturas" (emitidas).
+    const quota = await reserveUsage(user.id, "escaneos_ocr", 1, { source: "api:invoices/ocr" });
+    if (quota) return quota;
 
     const preparedImage = await prepareImageForClaude(file);
     const startTime = Date.now();
@@ -418,6 +428,10 @@ export async function PATCH(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  // Muro de pago: la cuenta en solo lectura no crea ni modifica.
+  const blocked = await requireWriteAccess(user.id);
+  if (blocked) return blocked;
 
   let body: { draft_url?: unknown; invoice_id?: unknown };
   try {
