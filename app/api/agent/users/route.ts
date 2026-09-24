@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireBearer } from "@/lib/api-key-auth";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey =
@@ -55,12 +56,9 @@ function resolveInactiveDays(req: NextRequest): number {
  */
 export async function GET(req: NextRequest) {
   try {
-    // Auth check
-    const authHeader = req.headers.get("authorization");
-    const expectedKey = process.env.AGENT_API_KEY;
-    if (expectedKey && authHeader !== `Bearer ${expectedKey}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    // Sin AGENT_API_KEY definida se deniega (500), nunca se deja pasar.
+    const denied = requireBearer(req, "AGENT_API_KEY");
+    if (denied) return denied;
 
     const sector = req.nextUrl.searchParams.get("sector") || "comercio_local";
     const inactiveDays = resolveInactiveDays(req);

@@ -8,9 +8,11 @@ Tu workflow existente ya funciona. Lo unico que necesitas hacer:
 
 En n8n, ve a **Credentials** y busca "Header Auth account". Configura:
 - **Name**: `Authorization`
-- **Value**: `Bearer enlaze-n8n-2024`
+- **Value**: `Bearer <WEBHOOK_SECRET>`
 
-(El valor debe coincidir con tu variable `WEBHOOK_SECRET` en `.env.local` y Vercel)
+(Sustituye `<WEBHOOK_SECRET>` por el valor de la variable `WEBHOOK_SECRET` de
+`.env.local` y Vercel. **Nunca escribas el valor real en este fichero ni en el
+código**: este repositorio no es sitio para secretos.)
 
 ### 2. Tu workflow ya envia datos al Price Bank V2
 
@@ -41,7 +43,7 @@ Este workflow scrapea 7 proveedores adicionales:
    - Haz clic en el nodo **"Enviar a ENLAZE PB V2"**
    - En **Credentials**, crea una nueva "Header Auth":
      - Name: `Authorization`
-     - Value: `Bearer enlaze-n8n-2024`
+     - Value: `Bearer <WEBHOOK_SECRET>` (el valor real de la variable, no este texto)
 5. Si tu app esta en Vercel, la URL ya apunta a `https://enlaze.vercel.app/api/pb/webhook`
 6. Para probar en local, cambia la URL a `http://localhost:3000/api/pb/webhook`
 7. Haz clic en **Test Workflow** para probarlo

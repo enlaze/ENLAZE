@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServiceRoleClient } from "@/lib/supabase-service-role";
+import { requireBearer } from "@/lib/api-key-auth";
 
 /** Lanza si una escritura falla: antes se ignoraba y la ruta respondía "success" sin guardar nada. */
 function check(result: { error: { message: string } | null }, what: string) {
@@ -14,20 +15,12 @@ function check(result: { error: { message: string } | null }, what: string) {
 // responde 500 y no procesa nada: no hay secreto por defecto, a propósito.
 export async function POST(request: Request) {
   try {
-    const webhookSecret = process.env.WEBHOOK_SECRET;
-    if (!webhookSecret) {
-      console.error("[webhook] WEBHOOK_SECRET no está definida: webhook desactivado");
-      return NextResponse.json({ error: "Webhook no configurado" }, { status: 500 });
-    }
+    const denied = requireBearer(request, "WEBHOOK_SECRET");
+    if (denied) return denied;
     const supabase = getServiceRoleClient();
     if (!supabase) {
       console.error("[webhook] falta SUPABASE_SERVICE_ROLE_KEY: webhook desactivado");
       return NextResponse.json({ error: "Webhook no configurado" }, { status: 500 });
-    }
-
-    const authHeader = request.headers.get("authorization");
-    if (authHeader !== "Bearer " + webhookSecret) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
     const body = await request.json();

@@ -8,6 +8,7 @@ import {
 } from "@/lib/agent/sector-intel";
 import { normalizeBusinessSectorKey } from "@/lib/agent-prompts";
 import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
+import { requireBearer } from "@/lib/api-key-auth";
 
 export const maxDuration = 30;
 
@@ -53,11 +54,9 @@ interface HaikuRelevancePayload {
 export async function GET(req: NextRequest) {
   const startedAt = Date.now();
   try {
-    const authHeader = req.headers.get("authorization");
-    const expectedKey = process.env.AGENT_API_KEY;
-    if (expectedKey && authHeader !== `Bearer ${expectedKey}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    // Sin AGENT_API_KEY definida se deniega (500), nunca se deja pasar.
+    const denied = requireBearer(req, "AGENT_API_KEY");
+    if (denied) return denied;
 
     const userId = req.nextUrl.searchParams.get("user_id");
     if (!userId) {

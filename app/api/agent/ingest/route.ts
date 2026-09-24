@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
 import { hasFeature } from "@/lib/subscription";
+import { requireBearer } from "@/lib/api-key-auth";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -16,12 +17,10 @@ export const maxDuration = 60;
  * Protected by a simple API key in the Authorization header.
  */
 export async function POST(req: NextRequest) {
-  // Auth check — expects "Bearer <AGENT_API_KEY>"
-  const authHeader = req.headers.get("authorization");
-  const expectedKey = process.env.AGENT_API_KEY;
-  if (expectedKey && authHeader !== `Bearer ${expectedKey}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  // Auth — "Bearer <AGENT_API_KEY>"
+  // Sin AGENT_API_KEY definida se deniega (500), nunca se deja pasar.
+  const denied = requireBearer(req, "AGENT_API_KEY");
+  if (denied) return denied;
 
   const supabase = createClient(supabaseUrl, supabaseKey);
 

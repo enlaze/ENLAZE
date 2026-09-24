@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { syncUserPrices } from "@/lib/services/price-sync";
 import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
+import { requireBearer } from "@/lib/api-key-auth";
 
 // Usamos el Service Role Key para operaciones de webhook que necesitan saltarse RLS
 const supabase = createClient(
@@ -13,13 +14,10 @@ const supabase = createClient(
 // n8n puede enviar actualizaciones de precios, normativas, etc.
 export async function POST(request: Request) {
   try {
-    const authHeader = request.headers.get("authorization");
-    const webhookSecret = process.env.WEBHOOK_SECRET || "enlaze-n8n-2024";
-    const agentApiKey = process.env.AGENT_API_KEY || "enlace_agentcomerciallocal_2026_9f3c7a1d5b8e2f4a6c1d9e7b3a5f2c12";
-
-    if (authHeader !== "Bearer " + webhookSecret && authHeader !== "Bearer " + agentApiKey) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-    }
+    // Sin secretos por defecto: si ninguna de las dos variables está
+    // definida, 500 y no se procesa nada.
+    const denied = requireBearer(request, "WEBHOOK_SECRET", "AGENT_API_KEY");
+    if (denied) return denied;
 
     const body = await request.json();
 
