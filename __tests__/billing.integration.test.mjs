@@ -275,6 +275,38 @@ test("HTTP (función fuera del plan): básico → briefing diario 402", async (t
   await setSubscription({ plan: "prueba", status: "trialing" });
 });
 
+test("OCR y asistente tienen cupo propio: agotar el OCR no bloquea emitir facturas", async () => {
+  await wipeUserData();
+  await setSubscription({ plan: "prueba", status: "trialing", trial_ends_at: new Date(Date.now() + 86_400_000).toISOString() });
+  const ocr = await admin.rpc("billing_consume", { p_user_id: userId, p_resource: "escaneos_ocr", p_amount: 10 });
+  assert.equal(ocr.data.ok, true);
+  const ocr11 = await admin.rpc("billing_check", { p_user_id: userId, p_resource: "escaneos_ocr", p_amount: 1 });
+  assert.equal(ocr11.data.reason, "limit", "el escaneo 11 de la prueba se rechaza");
+  const facturas = await admin.rpc("billing_check", { p_user_id: userId, p_resource: "facturas", p_amount: 1 });
+  assert.equal(facturas.data.ok, true, "las facturas emitidas no se ven afectadas");
+});
+
+test("HTTP: asistente con el cupo agotado → 402 (sin llegar a llamar a la IA)", async (t) => {
+  if (!(await serverUp())) {
+    t.skip(`No hay servidor en ${BASE_URL}. NO se ha comprobado.`);
+    return;
+  }
+  await wipeUserData();
+  await setSubscription({ plan: "prueba", status: "trialing", trial_ends_at: new Date(Date.now() + 86_400_000).toISOString() });
+  const fill = await admin.rpc("billing_consume", { p_user_id: userId, p_resource: "mensajes_asistente", p_amount: 30 });
+  assert.equal(fill.data.ok, true);
+  const cookie = await sessionCookieHeader();
+  const res = await fetch(`${BASE_URL}/api/platform-assistant`, {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json", origin: BASE_URL },
+    body: JSON.stringify({ message: "¿Cómo creo un presupuesto?", pathname: "/dashboard" }),
+  });
+  assert.equal(res.status, 402);
+  const body = await res.json();
+  assert.equal(body.code, "plan_limit_reached");
+  assert.match(body.error, /30 mensajes al asistente/);
+});
+
 // ── n8n: el agente solo se ejecuta para cuentas con briefing ────────────
 
 test("n8n (agent_eligible_users): solo cuentas con el briefing en su plan y acceso completo", async () => {

@@ -51,6 +51,8 @@ export const LIMITED_RESOURCES = [
   "whatsapp",
   "emails",
   "generaciones_ia",
+  "escaneos_ocr",
+  "mensajes_asistente",
 ] as const;
 export type LimitedResource = (typeof LIMITED_RESOURCES)[number];
 
@@ -63,6 +65,8 @@ export const PAY_PER_USE_RESOURCES: readonly LimitedResource[] = [
   "whatsapp",
   "emails",
   "generaciones_ia",
+  "escaneos_ocr",
+  "mensajes_asistente",
 ];
 
 /** `null` = sin límite. */
@@ -72,11 +76,16 @@ type LimitTable = Record<Exclude<LimitedResource, "generaciones_ia">, number | n
 //  - prueba: TOTAL durante los 5 días de prueba.
 //  - planes de pago: POR MES NATURAL (hora de Madrid), salvo `clientes`, que
 //    es un stock (filas vivas en cada momento).
+//  - escaneos_ocr: facturas de PROVEEDOR escaneadas con IA (gastos). Contador
+//    propio a propósito: si contaran contra `facturas` (EMITIDAS), escanear
+//    tickets dejaría a un usuario sin poder facturar.
+//  - mensajes_asistente: preguntas al asistente de la plataforma (Haiku,
+//    barato por mensaje; por eso no cuenta contra `presupuestos`).
 export const LIMITS: Record<PlanId, LimitTable> = {
-  prueba:      { clientes: 10,   presupuestos: 5,   facturas: 5,    whatsapp: 20,   emails: 50 },
-  basico:      { clientes: 50,   presupuestos: 10,  facturas: 15,   whatsapp: 50,   emails: 150 },
-  profesional: { clientes: 500,  presupuestos: 50,  facturas: 100,  whatsapp: 400,  emails: 1000 },
-  empresa:     { clientes: null, presupuestos: 200, facturas: null, whatsapp: 1500, emails: 5000 },
+  prueba:      { clientes: 10,   presupuestos: 5,   facturas: 5,    whatsapp: 20,   emails: 50,   escaneos_ocr: 10,  mensajes_asistente: 30 },
+  basico:      { clientes: 50,   presupuestos: 10,  facturas: 15,   whatsapp: 50,   emails: 150,  escaneos_ocr: 30,  mensajes_asistente: 100 },
+  profesional: { clientes: 500,  presupuestos: 50,  facturas: 100,  whatsapp: 400,  emails: 1000, escaneos_ocr: 150, mensajes_asistente: 500 },
+  empresa:     { clientes: null, presupuestos: 200, facturas: null, whatsapp: 1500, emails: 5000, escaneos_ocr: 500, mensajes_asistente: 2000 },
 };
 
 /**
@@ -92,6 +101,8 @@ export const RESOURCE_KIND: Record<LimitedResource, "stock" | "window"> = {
   whatsapp: "window",
   emails: "window",
   generaciones_ia: "window",
+  escaneos_ocr: "window",
+  mensajes_asistente: "window",
 };
 
 export type LimitPeriod = "stock" | "month" | "trial";
@@ -158,6 +169,8 @@ export const RESOURCE_LABELS: Record<LimitedResource, string> = {
   whatsapp: "mensajes de WhatsApp",
   emails: "emails",
   generaciones_ia: "generaciones con IA",
+  escaneos_ocr: "facturas de proveedor escaneadas",
+  mensajes_asistente: "mensajes al asistente",
 };
 
 export const FEATURE_LABELS: Record<Feature, string> = {

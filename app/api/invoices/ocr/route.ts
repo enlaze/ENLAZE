@@ -13,7 +13,7 @@ import {
   retainedInvoiceStorageUrl,
 } from "@/lib/invoice-ocr-drafts";
 import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
-import { requireWriteAccess } from "@/lib/subscription";
+import { requireWriteAccess, reserveUsage } from "@/lib/subscription";
 
 // Vision OCR + image processing + Storage round-trips can run long; the
 // lease TTL below (180s) must stay comfortably above this.
@@ -122,6 +122,11 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // Muro de pago: cada escaneo con IA gasta cupo de "escaneos_ocr" (facturas
+    // de proveedor), no de "facturas" (emitidas).
+    const quota = await reserveUsage(user.id, "escaneos_ocr", 1, { source: "api:invoices/ocr" });
+    if (quota) return quota;
 
     const preparedImage = await prepareImageForClaude(file);
     const startTime = Date.now();

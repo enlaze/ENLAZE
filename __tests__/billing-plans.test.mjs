@@ -39,7 +39,9 @@ test("precios: 29/59/179 al mes y anual con un 20% de descuento sobre 12 meses",
 
 test("prueba: 5 días y todo el total de la prueba, no por mes", () => {
   assert.equal(TRIAL_DAYS, 5);
-  assert.deepEqual(LIMITS.prueba, { clientes: 10, presupuestos: 5, facturas: 5, whatsapp: 20, emails: 50 });
+  assert.deepEqual(LIMITS.prueba, {
+    clientes: 10, presupuestos: 5, facturas: 5, whatsapp: 20, emails: 50, escaneos_ocr: 10, mensajes_asistente: 30,
+  });
   assert.equal(limitPeriod("prueba", "presupuestos"), "trial");
   assert.equal(limitPeriod("prueba", "whatsapp"), "trial");
 });
@@ -52,6 +54,20 @@ test("planes de pago: por mes natural, salvo clientes que es un stock", () => {
     }
   }
   assert.equal(limitPeriod("prueba", "clientes"), "stock");
+});
+
+test("OCR y asistente: contadores propios con sus números (no cuentan contra facturas ni presupuestos)", () => {
+  const expect = {
+    prueba: [10, 30], basico: [30, 100], profesional: [150, 500], empresa: [500, 2000],
+  };
+  for (const [plan, [ocr, asis]] of Object.entries(expect)) {
+    assert.equal(planLimit(plan, "escaneos_ocr"), ocr, `${plan} escaneos_ocr`);
+    assert.equal(planLimit(plan, "mensajes_asistente"), asis, `${plan} mensajes_asistente`);
+  }
+  assert.ok(PAY_PER_USE_RESOURCES.includes("escaneos_ocr"));
+  assert.ok(PAY_PER_USE_RESOURCES.includes("mensajes_asistente"));
+  assert.equal(limitPeriod("basico", "escaneos_ocr"), "month");
+  assert.equal(limitPeriod("prueba", "mensajes_asistente"), "trial");
 });
 
 test("las generaciones con IA llevan el mismo tope que los presupuestos", () => {
