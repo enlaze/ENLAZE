@@ -4,7 +4,6 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { initAnalytics, identifyUser, analytics } from "@/lib/analytics";
 import { setSentryUser } from "@/lib/sentry";
-import { stopReplayOnPortal } from "@/lib/replay-portal-guard";
 import { isPortalPath, redactPortalPath } from "@/lib/portal-path-redaction";
 import { createClient } from "@/lib/supabase-browser";
 
@@ -44,14 +43,6 @@ export default function AnalyticsProvider({ children }: { children: React.ReactN
     });
   }, []);
 
-  /* Session Replay se configura una sola vez, al cargar el bundle. Si alguien
-     llega al portal navegando dentro de la app —no con una carga completa—,
-     esa decisión ya se tomó con la ruta anterior y la grabación sigue viva.
-     Aquí se para al entrar, que es lo único que llega a tiempo. */
-  useEffect(() => {
-    if (onPortal) stopReplayOnPortal();
-  }, [onPortal]);
-
   // Track page views on route change
   useEffect(() => {
     if (!pathname) return;
@@ -63,10 +54,16 @@ export default function AnalyticsProvider({ children }: { children: React.ReactN
        forma dinámica— o el primer $pageview se pierde: este efecto corría
        antes de que el SDK estuviera listo y trackEvent volvía sin hacer nada.
        Antes lo tapaba el capture_pageview automático de PostHog, que ahora
-       está desactivado justo porque capturaba la URL sin sanear. La llamada
-       es idempotente, así que repetirla en cada cambio de ruta no cuesta. */
+       está desactivado justo porque capturaba la URL sin sanear. Devuelve
+       siempre la misma promesa, así que llamarla en cada cambio de ruta no
+       provoca una segunda inicialización. */
     void initAnalytics().then(() => {
-      if (!cancelled) analytics.pageViewed(redactPortalPath(pathname));
+      if (cancelled) return;
+      /* URL completa, no solo el pathname: la captura automática de PostHog
+         que esto sustituye mandaba host, query y UTM. Se lee en el momento de
+         emitir, cuando la barra de direcciones ya refleja la ruta nueva. */
+      const href = typeof window === "undefined" ? pathname : window.location.href;
+      analytics.pageViewed(redactPortalPath(href), redactPortalPath(pathname));
     });
     return () => { cancelled = true; };
   }, [pathname, onPortal]);
