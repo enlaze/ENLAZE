@@ -246,29 +246,27 @@ habría pasado por el motivo equivocado.
 CI: `.github/workflows/portal-token-lifecycle-integration.yml`, sin ningún secreto
 del repositorio, levanta `postgres:17` en un contenedor efímero.
 
-## Despliegue futuro
+## Despliegue — YA APLICADO
 
-1. Ejecutar **`CHECK_E4_L1_PRECHECK`** de `docs/fase2/CHECKS.sql`: `veredicto`
-   debe decir `OK`. Los bloques `CHECK_E4_L1_VALUES` y `CHECK_E4_L1_EXPIRY`
-   **no sirven antes del despliegue**, porque llaman a
-   `portal_token_permissions_valid()` y `portal_token_max_lifetime()`, que nacen
-   dentro de este mismo lote: ejecutarlos antes falla con
-   «function does not exist». El precheck no depende de ningún objeto de E4.
-   (Corregido el 2026-09-24; antes este paso remitía al bloque equivocado.)
-   Si el veredicto no es `OK`, parar y revisar a mano — la migración también se
-   detendrá sola con un mensaje legible, sin inventar fechas.
-2. Aplicar `20260923120000_portal_token_lifecycle.sql`.
-3. Ejecutar `CHECK_E4_L1_SCHEMA`, `CHECK_E4_L1_GRANTS` y `CHECK_E4_L1_EXPIRY`.
-   El inventario debe dar **13 funciones: 6 públicas y 7 internas** — las tres
-   RPC más `portal_token_permissions_valid`, `portal_token_default_lifetime` y
-   `portal_token_max_lifetime` en `public`, y los siete auxiliares en
-   `portal_token_internal`. Las tres RPC con `anon_execute = false` y
-   `authenticated_execute = true`, los auxiliares privados con ambos en `false`,
-   las seis filas de DML directo en `false`, `created_at` y `expires_at` con `is_nullable = NO`, los dos CHECK
-   presentes y los plazos en 90 y 365 días.
-4. Reejecutar el segundo `SELECT` de `CHECK_E4_L1_VALUES`: cero proyectos por encima
-   de cinco vigentes.
-5. No hace falta desplegar aplicación: ninguna pantalla llama todavía a estas RPC.
+**`20260923120000` está aplicada en producción desde el 2026-09-24.** Comprobado
+por lectura del libro de migraciones y del catálogo: 6 funciones públicas, 7
+internas, los dos CHECK y el esquema privado, con 0 enlaces modernos y los 8
+heredados intactos. El recuento de 13 funciones que este documento describe es el
+que se observa.
+
+El procedimiento paso a paso que había aquí —aplicar solo `23120000`, auditar 13
+funciones y continuar— **queda retirado**. Era irrealizable: `supabase db push`
+aplica todas las migraciones pendientes de una tacada, así que nunca hubo un
+momento en el que auditar 13 funciones por separado.
+
+> **Hay una sola secuencia autorizada de despliegue para E4**, y vive en
+> [ESTADO-2F2-E4-HARDENING.md](ESTADO-2F2-E4-HARDENING.md), sección
+> «Procedimiento de despliegue»: precheck, dry-run con `supabase migration list`,
+> autorización independiente, un único `db push`, auditoría conjunta y
+> recuperación hacia delante. No se documenta ninguna otra en ningún otro sitio.
+
+Lo que queda pendiente de ese procedimiento es `20260925090000`, el listado
+seguro del lote de endurecimiento.
 
 Compensación: `ROLLBACK_2F2_E4_L1` en `docs/fase2/ROLLBACK.sql`, **sin ejecutar**.
 Exige el reconocimiento explícito

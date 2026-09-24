@@ -2,10 +2,19 @@
 -- FASE 2 · ROLLBACK COMPLETO
 -- Diseño congelado: docs/FASE-2-CONCEPTOS-CANONICOS.md (v5, 2026-08-24)
 --
--- ESTE ARCHIVO NO SE EJECUTA NUNCA ENTERO DE GOLPE SIN PENSAR.
--- Cada bloque revierte UNA migración y está delimitado. Se ejecuta de arriba abajo, que
--- es el ORDEN INVERSO al de aplicación. Ejecutar en otro orden falla por dependencias
--- de clave foránea, y eso es intencionado: la base de datos impide el desorden.
+-- ESTE ARCHIVO NO SE EJECUTA NUNCA ENTERO, NI DE GOLPE NI DE ARRIBA ABAJO.
+-- Cada bloque revierte UNA migración, está delimitado por marcas BEGIN/END y se
+-- SELECCIONA EXPRESAMENTE el que toque. Los bloques se fueron añadiendo por lotes
+-- (E1, E2, E4-L1, E4-HARDENING…) y el archivo NO está globalmente ordenado como
+-- inverso del despliegue: leerlo de arriba abajo no da una secuencia válida.
+--
+-- Donde sí hay un orden obligatorio es DENTRO de cada par que comparte objetos, y
+-- está documentado en su propia cabecera. El único par así hoy es el de E4:
+-- ROLLBACK_2F2_E4_HARDENING va antes que ROLLBACK_2F2_E4_L1, y en ese tramo los
+-- bloques sí aparecen en el orden correcto. Al revés falla, y falla a propósito.
+--
+-- En general, ejecutar compensaciones en un orden que rompa dependencias falla, y
+-- eso es intencionado: la base de datos impide el desorden en vez de dejar restos.
 --
 -- GARANTÍA DE NO DESTRUCCIÓN DE DATOS DE PRODUCCIÓN
 -- Ninguna sentencia de este archivo toca un importe, una línea de presupuesto ni un
@@ -323,7 +332,7 @@ commit;
 -- ═════════════════════════════════════════════════════════════════════════════════════
 
 -- ─────────────────────────────────────────────────────────────────────────────────────
--- BLOQUE E4-HARDENING · revierte 20260924120000_portal_token_listing.sql
+-- BLOQUE E4-HARDENING · revierte 20260925090000_portal_token_listing.sql
 -- Retira la RPC de listado y su auxiliar privado. Nada más: no toca la tabla, ni
 -- las restricciones, ni los privilegios que dejó E4-L1, ni una sola fila.
 --

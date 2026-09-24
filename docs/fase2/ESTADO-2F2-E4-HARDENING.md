@@ -3,7 +3,7 @@
 Fecha: 2026-09-24 (revisión 2, tras el NO-GO de Codex sobre `f4820ab`).
 Estado: **rama lista para revisión; nada aplicado**.
 Rama: `codex/portal-token-hardening-e4`, desde `origin/main` `42c7c07`.
-Migración nueva: `20260924120000_portal_token_listing.sql`, **no aplicada**.
+Migración nueva: `20260925090000_portal_token_listing.sql`, **no aplicada**.
 `20260923120000_portal_token_lifecycle.sql` **no se toca**: ya está fusionada.
 
 Cuatro hallazgos sobre el lote E4-L1 antes de desplegarlo. Tres se cierran aquí;
@@ -299,63 +299,97 @@ anteriores intactas.
 
 ## Procedimiento de despliegue
 
-La versión anterior de este documento decía «aplicar 23120000, auditar, aplicar
-24120000». **Eso no es lo que hace la herramienta**: `supabase db push` aplica
-todas las migraciones pendientes de una tacada. Documentar una pausa que nadie
-va a ejecutar es peor que no documentar nada, y forzarla manipulando el
-directorio de migraciones sería peor todavía. Una comprobación antes, un push,
-una auditoría después.
+**Ésta es la única secuencia autorizada para E4.** `ESTADO-2F2-E4-L1.md` ya no
+describe ninguna otra: apunta aquí.
 
-**1 · Antes del push**
+### El estado cambió mientras se revisaba este lote
 
-- `CHECK_E4_DEPLOY_PENDING` → `veredicto = OK`. Confirma que `20260915160000`
-  está registrada y que ninguna de las dos de E4 lo está.
-- `supabase migration list` → las **únicas** pendientes deben ser
-  `20260923120000` y `20260924120000`, en ese orden. Esto no se puede ver desde
-  SQL: el libro solo conoce las ya aplicadas.
+`origin/main` avanzó de `42c7c07` a `928e260` y, comprobado por lectura de
+producción el 2026-09-24:
+
+- **`20260923120000` (E4-L1) ya está aplicada.** 6 funciones públicas, 7 internas,
+  2 CHECK, 0 enlaces modernos, **8 heredados** — la línea base queda reconfirmada.
+- Se aplicaron además cinco migraciones de facturación y seguridad de ese día. La
+  última versión registrada es **`20260924150745`**.
+- **El listado se renumeró** de `20260924120000` a **`20260925090000`**. Con el
+  número original habría quedado por debajo de tres versiones ya registradas, es
+  decir fuera de orden — justo el desajuste que el commit `8440857` acababa de
+  arreglar en este repositorio.
+
+Así que **queda una sola migración pendiente**, no dos. La secuencia conserva la
+misma forma; lo que cambia es el recuento.
+
+**1 · Precheck**
+
+- `CHECK_E4_DEPLOY_PENDING` → `veredicto = OK`. Exige `20260915160000` y
+  `20260923120000` registradas, `20260925090000` ausente, y avisa si apareciera
+  alguna versión por encima que dejara el listado fuera de orden.
 - `CHECK_E4_L1_PRECHECK` → `veredicto = OK` (estado de los datos).
 
-**2 · Un solo `supabase db push`**
+**2 · Dry-run**
 
-Aplica las dos seguidas. No hay auditoría intermedia porque no hay momento
-intermedio en el que ejecutarla.
+`supabase migration list`. La **única** pendiente debe ser `20260925090000`. Esto
+no se ve desde SQL: el libro solo conoce lo ya aplicado. Si aparece cualquier
+otra, parar: alguien ha añadido trabajo que no se ha revisado aquí.
 
-**3 · Auditoría conjunta**
+**3 · Autorización independiente**
 
-- `CHECK_E4_DEPLOY_AUDIT` → `veredicto = OK`: ambas versiones registradas,
-  **15 funciones (7 públicas + 8 internas)**, el esquema privado y los dos CHECK.
-- `CHECK_E4_L1_SCHEMA`, `_GRANTS`, `_EXPIRY`, `_VALUES` para el detalle de
-  privilegios, invariantes y datos.
+El dry-run se enseña a quien autoriza y se obtiene un sí explícito **antes** de
+empujar. El push no se lanza a continuación del listado por inercia.
 
-**4 · Recuperación si la segunda falla tras registrarse la primera**
+**4 · Un único `supabase db push`**
 
-Es el único estado intermedio posible, y `CHECK_E4_DEPLOY_AUDIT` lo nombra:
-`RECUPERAR: E4-L1 registrada y el listado no`.
+Sin pausas intermedias: la herramienta no las hace y no se va a fingir que sí.
 
-**No se arregla con rollback.** Se corrige hacia delante: arreglar
-`20260924120000` y volver a lanzar `supabase db push`, que aplicará solo la que
-falta. Mientras tanto el sistema es coherente — E4-L1 funciona entero y lo único
-ausente es el listado, que todavía no usa ninguna pantalla.
+**5 · Auditoría conjunta**
 
-**5 · Despliegue de la aplicación**
+- `CHECK_E4_DEPLOY_AUDIT` → `veredicto = OK`. No cuenta nombres: compara el
+  inventario real contra el esperado fila a fila —esquema, nombre, **identidad de
+  argumentos**, `prosecdef` y los cuatro privilegios— con `FULL JOIN`, así que
+  detecta igual lo que falta y lo que sobra. Cubre firma cambiada, overload
+  inesperado, `SECURITY DEFINER` donde no toca, `EXECUTE` de más para `anon`,
+  `public` o `service_role`, auxiliar privado alcanzable y ayudante puro que deja
+  de ser ejecutable por `PUBLIC`.
+- Si no cuadra, `CHECK_E4_DEPLOY_AUDIT_DETALLE` dice exactamente qué fila falla y
+  en qué columna.
+- `CHECK_E4_L1_SCHEMA`, `_GRANTS`, `_EXPIRY`, `_VALUES` para el detalle de datos.
 
-Esta rama (telemetría + proyección explícita) es independiente de la base de
-datos: puede ir antes o después del push, en cualquier orden.
+Estado esperado al terminar: **15 funciones, 7 públicas y 8 internas**.
 
-**6 · Lote 2, en un único despliegue atómico**
+**6 · Recuperación hacia delante**
+
+`CHECK_E4_DEPLOY_AUDIT` nombra el estado intermedio:
+`RECUPERAR: falta 20260925090000`. **No se arregla con rollback.** Se corrige
+hacia delante: arreglar la migración y volver a hacer `db push`, que aplicará
+solo la que falta. Mientras tanto el sistema es coherente — E4-L1 funciona entero
+y lo único ausente es el listado, que ninguna pantalla usa todavía.
+
+**7 · Despliegue de la aplicación**
+
+Esta rama (telemetría + proyección explícita) no depende de la base de datos:
+puede ir antes o después del push, en cualquier orden.
+
+**8 · Lote 2, en un único despliegue atómico**
 
 Interfaz que usa `portal_list_tokens` + `portal_issue_token`, y en la misma
 migración `revoke select on public.portal_tokens from authenticated`. Solo a
 partir de aquí puede decirse que el secreto se enseña una vez. Es también el
-momento de volver a encender Session Replay, si se quiere.
+momento de volver a encender Session Replay y `capture_pageleave`.
 
 ### Compensación
 
-`docs/fase2/ROLLBACK.sql` lleva los dos bloques **en orden inverso al
+`docs/fase2/ROLLBACK.sql` lleva los dos bloques de E4 **en orden inverso al
 despliegue**: `ROLLBACK_2F2_E4_HARDENING` primero y `ROLLBACK_2F2_E4_L1`
 después. Al revés falla, y se comprobó que falla: E4-L1 hace
 `drop schema portal_token_internal` sin `CASCADE` —a propósito, para no borrar
 de más— y el esquema no está vacío mientras siga dentro `visible_project`.
+
+Ese orden vale **para el par de E4**, no para el archivo entero. La cabecera de
+`ROLLBACK.sql` decía que todo se ejecuta de arriba abajo como inverso del
+despliegue, y eso no es cierto: los bloques se fueron añadiendo por lotes y el
+archivo no está globalmente ordenado así. Ahora dice lo que hay que hacer —
+seleccionar expresamente el bloque que toque— y señala E4 como el único par con
+orden interno obligatorio.
 
 ---
 
