@@ -56,7 +56,7 @@ test("portal_list_tokens returns metadata for the owner and never the secret",
   await db.query(inlined("supabase/migrations/20260915140000_portal_tokens_owner_only.sql"));
   await db.query(inlined("supabase/migrations/20260915150000_portal_token_read_access.sql"));
   await db.query(inlined("supabase/migrations/20260923120000_portal_token_lifecycle.sql"));
-  await db.query(inlined("supabase/migrations/20260924120000_portal_token_listing.sql"));
+  await db.query(inlined("supabase/migrations/20260925090000_portal_token_listing.sql"));
 
   await db.query("insert into auth.users(id) values($1),($2)", [OWNER, OTHER]);
   await db.query(`insert into public.projects(id,user_id,access_token,name,deleted_at)
@@ -294,6 +294,57 @@ test("portal_list_tokens returns metadata for the owner and never the secret",
     await db.query("delete from public.portal_tokens where project_id=$1", [PAGINADO]);
   });
 
+  await t.test("un total múltiplo exacto del límite no inventa una página de más", async () => {
+    // Con p_limit filas justas la página sale llena, pero no queda nada detrás.
+    // Mirar solo "¿vino llena?" emitía cursor y el bucle daba una vuelta vacía.
+    const EXACTO = "99999999-9999-4999-8999-999999999999";
+    await db.query(`insert into public.projects(id,user_id,name) values($1,$2,'Obra exacta')`,
+      [EXACTO, OWNER]);
+    const creados = [];
+    const nuevo = async () => {
+      const t = await issue(EXACTO);
+      await rpc("authenticated", OWNER, "public.portal_revoke_token($1)", [t.id]);
+      creados.push(t);
+      return t;
+    };
+    for (let n = 0; n < 3; n += 1) await nuevo();
+
+    const justa = await page(EXACTO, OWNER, ",3");
+    assert.equal(justa.items.length, 3, "la página sale llena");
+    assert.equal(justa.next_cursor, null,
+      "pero no hay nada detrás: total == límite no puede emitir cursor");
+
+    // Una fila más y sí hay página siguiente.
+    await nuevo();
+    const primera = await page(EXACTO, OWNER, ",3");
+    assert.equal(primera.items.length, 3, "nunca se devuelve la fila sonda");
+    assert.ok(primera.next_cursor, "con límite + 1 sí hay cursor");
+
+    const segunda = await page(EXACTO, OWNER,
+      `,3,'${primera.next_cursor.created_at}'::timestamptz,'${primera.next_cursor.id}'::uuid`);
+    assert.equal(segunda.items.length, 1, "la segunda página trae el resto");
+    assert.equal(segunda.next_cursor, null, "y ahí se acaba");
+    const vistos = [...primera.items, ...segunda.items].map((t) => t.id);
+    assert.equal(new Set(vistos).size, 4, "las dos páginas no se solapan");
+    assert.deepEqual(vistos.sort(), creados.map((t) => t.id).sort(), "y cubren todo");
+
+    // El múltiplo exacto también con el límite por defecto de 20 y con 1.
+    const unaSola = await page(EXACTO, OWNER, ",4");
+    assert.equal(unaSola.items.length, 4);
+    assert.equal(unaSola.next_cursor, null, "límite 4 sobre 4 filas: sin cursor");
+    const deUnaEnUna = await page(EXACTO, OWNER, ",1");
+    assert.equal(deUnaEnUna.items.length, 1);
+    assert.ok(deUnaEnUna.next_cursor, "límite 1 sobre 4 filas: sí hay cursor");
+
+    for (const t of creados) {
+      for (const respuesta of [justa, primera, segunda, unaSola, deUnaEnUna]) {
+        assert.equal(JSON.stringify(respuesta).includes(t.token), false,
+          "el secreto no aparece en ninguna de las páginas");
+      }
+    }
+    await db.query("delete from public.portal_tokens where project_id=$1", [EXACTO]);
+  });
+
   await t.test("los argumentos de paginación se validan", async () => {
     const rechazo = (args, expected, caso) => assert.rejects(
       () => page(PROJECT, OWNER, args),
@@ -313,6 +364,115 @@ test("portal_list_tokens returns metadata for the owner and never the secret",
     }
     // El valor por defecto son 20 y no hace falta pasarlo.
     assert.ok(Array.isArray((await page()).items));
+  });
+
+  await t.test("el gate de auditoría del despliegue cuadra y deja de cuadrar si se altera algo", async () => {
+    // El SQL se lee de CHECKS.sql, así que la documentación y la prueba no
+    // pueden separarse: si alguien cambia el gate y se equivoca, esto falla.
+    const bloque = (nombre) =>
+      sql("docs/fase2/CHECKS.sql").split(`-- BEGIN ${nombre}\n`)[1].split(`-- END ${nombre}`)[0];
+    const gate = bloque("CHECK_E4_DEPLOY_AUDIT");
+    const detalle = bloque("CHECK_E4_DEPLOY_AUDIT_DETALLE");
+
+    // Libro de migraciones simulado: el banco no lo tiene.
+    await db.query("create schema if not exists supabase_migrations");
+    await db.query(`create table if not exists supabase_migrations.schema_migrations(version text primary key)`);
+    await db.query(`insert into supabase_migrations.schema_migrations values('20260923120000'),('20260925090000')
+                    on conflict do nothing`);
+
+    const veredicto = async () => (await db.query(gate)).rows[0].veredicto;
+    assert.equal(await veredicto(), "OK", "con todo en su sitio, el gate pasa");
+    assert.equal((await db.query(detalle)).rows.length, 0, "y el detalle no señala nada");
+
+    // ── Controles negativos ───────────────────────────────────────────────
+    // Cada uno en su transacción, que se deshace: el banco queda como estaba.
+    const rompiendo = async (sqlRoto, caso) => {
+      await db.query("begin");
+      try {
+        await db.query(sqlRoto);
+        const v = await veredicto();
+        assert.notEqual(v, "OK", `el gate debe rechazar: ${caso}`);
+        assert.match(v, /inventario de funciones no cuadra/, caso);
+        assert.ok((await db.query(detalle)).rows.length > 0, `y el detalle lo señala: ${caso}`);
+      } finally {
+        await db.query("rollback");
+      }
+    };
+
+    // 1 · Firma cambiada: mismo nombre, otros argumentos.
+    await rompiendo(
+      `drop function public.portal_revoke_token(uuid);
+       create function public.portal_revoke_token(p_token_id uuid, p_extra text default null)
+         returns jsonb language sql security definer set search_path = '' as $x$ select '{}'::jsonb $x$;`,
+      "firma alterada");
+
+    // 1b · Firma alterada pero con prosecdef y ACL IDÉNTICOS. Solo la
+    //      comparación de identidades de argumentos puede cazar esto: si se
+    //      quita esa condición del gate, este control deja de fallar.
+    await rompiendo(
+      `drop function public.portal_revoke_token(uuid);
+       create function public.portal_revoke_token(p_token_id uuid, p_reason text default null)
+         returns jsonb language sql security definer set search_path = '' as $x$ select '{}'::jsonb $x$;
+       revoke all on function public.portal_revoke_token(uuid, text)
+         from public, anon, authenticated, service_role;
+       grant execute on function public.portal_revoke_token(uuid, text) to authenticated;`,
+      "firma alterada con los mismos privilegios y el mismo prosecdef");
+
+    // 2 · Overload inesperado: la buena sigue, pero hay una de más.
+    await rompiendo(
+      `create function public.portal_list_tokens(p_project_id uuid, p_todo boolean)
+         returns jsonb language sql security definer set search_path = '' as $x$ select '{}'::jsonb $x$;`,
+      "overload de más");
+
+    // 3 · SECURITY DEFINER donde no toca.
+    await rompiendo(
+      `create or replace function public.portal_token_max_lifetime()
+         returns interval language sql immutable security definer set search_path = ''
+         as $x$ select interval '365 days' $x$;`,
+      "prosecdef incorrecto");
+
+    // 4 · Una RPC que deja de ser definer: se ejecutaría como el llamante.
+    await rompiendo(
+      `create or replace function public.portal_revoke_token(p_token_id uuid)
+         returns jsonb language sql security invoker set search_path = '' as $x$ select '{}'::jsonb $x$;`,
+      "definer retirado de una RPC");
+
+    // 5 · EXECUTE concedido de más a anon.
+    await rompiendo(
+      "grant execute on function public.portal_issue_token(uuid,jsonb,timestamptz,text) to anon",
+      "grant indebido a anon");
+
+    // 6 · EXECUTE concedido a un auxiliar privado.
+    await rompiendo(
+      "grant execute on function portal_token_internal.lock_own_token(uuid,uuid) to authenticated",
+      "auxiliar privado alcanzable");
+
+    // 7 · EXECUTE retirado de quien sí debe tenerlo.
+    await rompiendo(
+      "revoke execute on function public.portal_list_tokens(uuid,integer,timestamptz,uuid) from authenticated",
+      "authenticated sin permiso para listar");
+
+    // 8 · Un ayudante puro que deja de ser ejecutable por PUBLIC: rompería el
+    //     DEFAULT y el CHECK de la tabla para cualquier escritor legítimo.
+    await rompiendo(
+      "revoke execute on function public.portal_token_permissions_valid(jsonb) from public",
+      "ayudante puro sin EXECUTE para PUBLIC");
+
+    // 9 · Falta una función entera.
+    await rompiendo(
+      "drop function portal_token_internal.visible_project(uuid,uuid) cascade",
+      "auxiliar ausente");
+
+    // Y tras todos los rollbacks, el gate vuelve a decir OK.
+    assert.equal(await veredicto(), "OK", "ningún control negativo dejó residuo");
+
+    // El estado intermedio del push también se nombra.
+    await db.query("begin");
+    try {
+      await db.query("delete from supabase_migrations.schema_migrations where version='20260925090000'");
+      assert.match(await veredicto(), /^RECUPERAR: falta 20260925090000/,
+        "si la primera quedó registrada y la segunda no, se dice cómo salir");
+    } finally { await db.query("rollback"); }
   });
 
   await t.test("el SELECT directo sigue concedido: transición pendiente del lote 2", async () => {

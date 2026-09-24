@@ -69,6 +69,7 @@ declare
   v_owner uuid := auth.uid();
   v_items jsonb;
   v_count integer;
+  v_has_more boolean;
 begin
   perform portal_token_internal.visible_project(p_project_id, v_owner);
 
@@ -82,6 +83,14 @@ begin
       using errcode = '22023';
   end if;
 
+  /* Se piden p_limit + 1 filas y se devuelven p_limit. Esa fila de más no se
+     enseña: solo sirve para saber si hay página siguiente.
+
+     Mirar únicamente si la página salió llena no basta. Con un historial de
+     exactamente p_limit filas —o de cualquier múltiplo— la última página sale
+     llena sin que quede nada detrás, así que se emitía un cursor que llevaba a
+     una página vacía. Un bucle "mientras haya cursor" daba siempre una vuelta
+     de más. */
   select jsonb_agg(
            portal_token_internal.status(t)
              -- Vigente con la misma definición que usa el tope de cinco.
@@ -95,18 +104,22 @@ begin
          and (p_cursor_created_at is null
               or (pt.created_at, pt.id) < (p_cursor_created_at, p_cursor_id))
        order by pt.created_at desc, pt.id desc
-       limit p_limit) t;
+       limit p_limit + 1) t;
 
   v_items := coalesce(v_items, '[]'::jsonb);
   v_count := jsonb_array_length(v_items);
+  v_has_more := v_count > p_limit;
+  if v_has_more then
+    -- Fuera la fila sonda: el llamante nunca la ve.
+    v_items := v_items - (v_count - 1);
+    v_count := p_limit;
+  end if;
 
-  /* El cursor es la última fila de esta página, sacada del propio resultado en
-     vez de con una segunda consulta. Solo se emite si la página salió llena:
-     si vino corta, no queda nada detrás y devolver cursor haría que la
-     interfaz pidiera una página vacía de más. */
+  -- El cursor es la última fila devuelta, sacada del propio resultado en vez
+  -- de con una segunda consulta.
   return jsonb_build_object(
     'items', v_items,
-    'next_cursor', case when v_count < p_limit then null else jsonb_build_object(
+    'next_cursor', case when not v_has_more then null else jsonb_build_object(
       'created_at', v_items -> (v_count - 1) -> 'created_at',
       'id', v_items -> (v_count - 1) -> 'id') end);
 end $fn$;
