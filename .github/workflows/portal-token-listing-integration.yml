@@ -1,0 +1,85 @@
+name: Portal token listing and telemetry
+
+# Banco desechable: PostgreSQL 17 en un contenedor efímero con marcador propio.
+# No usa ningún secreto del repositorio y nunca se conecta a producción; el
+# propio test aborta si TEST_DATABASE_URL no es exactamente la del contenedor
+# o si el entorno trae variables PG* que pudieran redirigir la conexión.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "supabase/migrations/*portal_token_listing.sql"
+      - "supabase/migrations/*portal_token_lifecycle.sql"
+      - "lib/portal-path-redaction.ts"
+      - "lib/sentry-portal-scrubbing.ts"
+      - "lib/telemetry-safe.ts"
+      - "lib/analytics.ts"
+      - "components/AnalyticsProvider.tsx"
+      - "app/dashboard/projects/[id]/page.tsx"
+      - "instrumentation-client.ts"
+      - "sentry.*.config.ts"
+      - "__tests__/portal-telemetry-*"
+      - "__tests__/portal-token-listing.integration.test.mjs"
+      - "__tests__/support/portal-token-access-schema.sql"
+      - ".github/workflows/portal-token-listing-integration.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  listing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RUN_PORTAL_TOKEN_INTEGRATION: "1"
+      PORTAL_TEST_ACK: DISPOSABLE_CLUSTER
+      TEST_DATABASE_URL: postgres://postgres:e2_disposable_database_only@127.0.0.1:55435/enlaze_revision_rpcs_test
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install Chrome for the browser isolation test
+        run: npx puppeteer browsers install chrome
+      - name: Start isolated PostgreSQL 17
+        run: |
+          docker run --detach --name enlaze-portal-listing-db \
+            --publish 127.0.0.1:55435:5432 \
+            --env POSTGRES_PASSWORD=e2_disposable_database_only \
+            --env POSTGRES_DB=enlaze_revision_rpcs_test \
+            --health-cmd 'pg_isready -h 127.0.0.1 -U postgres -d enlaze_revision_rpcs_test' \
+            --health-interval 2s --health-timeout 3s --health-retries 5 \
+            postgres:17 -c enlaze.test_cluster_marker=budget_revision_rpcs_2f2
+      - name: Wait for database
+        run: |
+          for attempt in $(seq 1 60); do
+            state="$(docker inspect --format '{{.State.Status}} {{.State.Health.Status}}' enlaze-portal-listing-db)"
+            case "$state" in
+              'running healthy') exit 0 ;;
+              exited*|dead*) exit 1 ;;
+            esac
+            sleep 1
+          done
+          exit 1
+      - name: Telemetry never leaks the portal secret
+        run: |
+          node --import tsx --test __tests__/portal-telemetry-redaction.test.mjs
+          node __tests__/portal-telemetry-isolation.browser.test.mjs
+      # Un paso por suite a propósito: las tres comparten una sola base y cada
+      # una reconstruye el esquema, así que en paralelo se pisan. En local hay
+      # que pasarles --test-concurrency=1 si se lanzan juntas.
+      - name: Read access and legacy links stay intact
+        run: node --test __tests__/portal-token-access.integration.test.mjs
+      - name: Lifecycle stays green
+        run: node --test __tests__/portal-token-lifecycle.integration.test.mjs
+      - name: Listing never returns the secret
+        run: node --test __tests__/portal-token-listing.integration.test.mjs
+      - name: Migration conventions
+        run: node --test __tests__/migration-transaction-control.test.mjs
+      - name: Remove disposable database
+        if: always()
+        run: docker rm --force enlaze-portal-listing-db || true

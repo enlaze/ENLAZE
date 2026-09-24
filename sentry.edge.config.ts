@@ -4,6 +4,7 @@
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 
 import * as Sentry from "@sentry/nextjs";
+import { portalScrubbingOptions } from "@/lib/sentry-portal-scrubbing";
 
 Sentry.init({
   dsn: "https://34ca40d19351d9299e389cd6d7cade20@o4511746734948352.ingest.de.sentry.io/4511746843213904",
@@ -13,6 +14,11 @@ Sentry.init({
 
   // Enable logs to be sent to Sentry
   enableLogs: true,
+
+  // El servidor ve la URL completa de cada petición a /portal/<secreto>:
+  // en la traza, en el breadcrumb de la petición y en request.url del error.
+  // Se redacta con los mismos hooks que el cliente.
+  ...portalScrubbingOptions,
 
   dataCollection: {
     // To disable sending user data and HTTP bodies, uncomment the lines below. For more info visit:

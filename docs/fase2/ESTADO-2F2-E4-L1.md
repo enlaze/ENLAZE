@@ -164,8 +164,11 @@ interfaz es el lote 2.
 
 - `authenticated`: `EXECUTE` en las tres RPC públicas. Nada más.
 - `anon`, `public`, `service_role`: **sin** `EXECUTE` en ninguna de las tres.
-- Esquema privado `portal_token_internal`: revocado para todos; sus seis auxiliares
-  son `SECURITY INVOKER` y solo se alcanzan desde dentro de las RPC.
+- Esquema privado `portal_token_internal`: revocado para todos; sus **siete**
+  auxiliares son `SECURITY INVOKER` y solo se alcanzan desde dentro de las RPC:
+  `owned_project`, `validate_permissions`, `resolve_expiry`,
+  `assert_live_link_cap`, `issued`, `status` y `lock_own_token`.
+  (Corregido el 2026-09-24: antes decía «seis», que era un recuento equivocado.)
 - `INSERT` / `UPDATE` / `DELETE` directos sobre `portal_tokens` siguen **revocados**
   para `anon` y `authenticated`. Este lote no los repone.
 
@@ -243,21 +246,27 @@ habría pasado por el motivo equivocado.
 CI: `.github/workflows/portal-token-lifecycle-integration.yml`, sin ningún secreto
 del repositorio, levanta `postgres:17` en un contenedor efímero.
 
-## Despliegue futuro
+## Despliegue — YA APLICADO
 
-1. Ejecutar los bloques `CHECK_E4_L1_VALUES` de `docs/fase2/CHECKS.sql` **antes** de
-   aplicar: `incompatibles`, `sin_caducidad` y `fuera_de_ventana` deben ser 0. Si
-   alguno no lo es, parar y revisar a mano — la migración también se detendrá sola
-   con un mensaje legible, sin inventar fechas.
-2. Aplicar `20260923120000_portal_token_lifecycle.sql`.
-3. Ejecutar `CHECK_E4_L1_SCHEMA`, `CHECK_E4_L1_GRANTS` y `CHECK_E4_L1_EXPIRY`: las
-   tres RPC con `anon_execute = false` y `authenticated_execute = true`, los
-   auxiliares privados con ambos en `false`, las seis filas de DML directo en
-   `false`, `created_at` y `expires_at` con `is_nullable = NO`, los dos CHECK
-   presentes y los plazos en 90 y 365 días.
-4. Reejecutar el segundo `SELECT` de `CHECK_E4_L1_VALUES`: cero proyectos por encima
-   de cinco vigentes.
-5. No hace falta desplegar aplicación: ninguna pantalla llama todavía a estas RPC.
+**`20260923120000` está aplicada en producción desde el 2026-09-24.** Comprobado
+por lectura del libro de migraciones y del catálogo: 6 funciones públicas, 7
+internas, los dos CHECK y el esquema privado, con 0 enlaces modernos y los 8
+heredados intactos. El recuento de 13 funciones que este documento describe es el
+que se observa.
+
+El procedimiento paso a paso que había aquí —aplicar solo `23120000`, auditar 13
+funciones y continuar— **queda retirado**. Era irrealizable: `supabase db push`
+aplica todas las migraciones pendientes de una tacada, así que nunca hubo un
+momento en el que auditar 13 funciones por separado.
+
+> **Hay una sola secuencia autorizada de despliegue para E4**, y vive en
+> [ESTADO-2F2-E4-HARDENING.md](ESTADO-2F2-E4-HARDENING.md), sección
+> «Procedimiento de despliegue»: precheck, dry-run con `supabase migration list`,
+> autorización independiente, un único `db push`, auditoría conjunta y
+> recuperación hacia delante. No se documenta ninguna otra en ningún otro sitio.
+
+Lo que queda pendiente de ese procedimiento es `20260925090000`, el listado
+seguro del lote de endurecimiento.
 
 Compensación: `ROLLBACK_2F2_E4_L1` en `docs/fase2/ROLLBACK.sql`, **sin ejecutar**.
 Exige el reconocimiento explícito

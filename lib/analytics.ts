@@ -14,17 +14,54 @@
  * ────────────────────────────────────────────────────────────────────
  */
 
+import { isPortalPath, redactPortalDeep, redactPortalPath } from "@/lib/portal-path-redaction";
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let posthog: any = null;
 
 let initialized = false;
 
+/* Promesa única de inicialización. Sin esto, dos llamadas concurrentes pasaban
+   las dos por `if (initialized) return` —que solo se pone a true DESPUÉS del
+   import dinámico de posthog-js— y hacían dos `posthog.init`. Los dos efectos
+   de AnalyticsProvider llaman a initAnalytics en el mismo tick, así que era el
+   caso normal, no el raro. */
+let initPromise: Promise<void> | null = null;
+
+/* La ruta EN ESTE INSTANTE, no la que había cuando se montó el componente.
+   Todo lo que pueda emitir o identificar la consulta justo antes de actuar:
+   entre que algo se pide y se ejecuta, la pestaña puede haber navegado al
+   portal. Fail-closed: si no se puede leer la ruta, se asume que sí. */
+function onPortalNow(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return isPortalPath(window.location.pathname);
+  } catch {
+    return true;
+  }
+}
+
 /* ── Init ─────────────────────────────────────────────────────────── */
 
-export async function initAnalytics() {
-  if (initialized) return;
-  if (typeof window === "undefined") return;
+export function initAnalytics(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
 
+  /* En /portal/<secreto> no se inicializa PostHog en absoluto.
+     No basta con sanear los eventos: PostHog persiste $initial_current_url en
+     localStorage y en cookie (persistence: "localStorage+cookie"), así que la
+     URL portadora quedaría escrita en el navegador del cliente final aunque
+     ningún evento llegara a salir. El portal es una página pública y anónima;
+     lo que se pierde de producto no compensa guardar ahí un secreto.
+
+     Este caso NO memoiza: si luego se navega desde el portal a una pantalla
+     normal, la inicialización tiene que poder ocurrir allí. */
+  if (onPortalNow()) return Promise.resolve();
+
+  if (!initPromise) initPromise = runInit();
+  return initPromise;
+}
+
+async function runInit(): Promise<void> {
   const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
   const host = process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://eu.i.posthog.com";
 
@@ -44,13 +81,46 @@ export async function initAnalytics() {
     return;
   }
 
+  /* Segunda comprobación, inmediatamente antes de inicializar. La de arriba se
+     hizo antes del import dinámico de posthog-js, y ese import tarda: la
+     pestaña puede haber navegado al portal mientras estaba en vuelo, y entonces
+     este init escribiría $initial_current_url —con el secreto— en localStorage
+     y en la cookie del cliente final.
+
+     Al abortar se suelta initPromise en vez de dejarla memoizada resuelta: si
+     más tarde se sale del portal, la inicialización tiene que poder ocurrir. */
+  if (onPortalNow()) {
+    initPromise = null;
+    return;
+  }
+
   posthog.init(key, {
     api_host: host,
     person_profiles: "identified_only",
-    capture_pageview: true,          // auto-track page views
-    capture_pageleave: true,         // track when user leaves
+    /* Desactivado a propósito: el pageview automático captura
+       window.location.href tal cual, y lo hace en el propio init, antes de que
+       nada pueda sanearlo. AnalyticsProvider ya emite un $pageview por cada
+       cambio de ruta —con la ruta redactada—, así que no se pierde ninguno;
+       de hecho se deja de enviar el duplicado que había. */
+    capture_pageview: false,
+    /* También desactivado, y por el mismo motivo que su hermano. Si alguien
+       navega en la misma pestaña del dashboard al portal, PostHog ya está
+       inicializado y emitiría un $pageleave desde /portal/<secreto>. Iría
+       redactado, pero la política es que desde el portal no sale NINGÚN evento:
+       el evento en sí ya delata que ese cliente abrió su enlace.
+
+       Se apaga globalmente en vez de reactivarlo al salir del portal. La
+       alternativa —opt_out/opt_in del capturado— puede pisar una preferencia de
+       privacidad que el usuario haya fijado, y eso es peor que perder la métrica
+       de permanencia. Vuelve en el lote 2, cuando el token salga de la URL. */
+    capture_pageleave: false,
     autocapture: false,              // we define events explicitly
     persistence: "localStorage+cookie",
+    /* Red de seguridad para todo lo que no emitimos nosotros: $pageleave,
+       $initial_current_url, $referrer y cualquier propiedad que el SDK añada
+       en el futuro pasan por aquí antes de salir. */
+    sanitize_properties: (properties: Record<string, unknown>) =>
+      redactPortalDeep(properties),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     loaded: (instance: any) => {
       if (process.env.NODE_ENV === "development") {
@@ -66,7 +136,10 @@ export async function initAnalytics() {
 
 export function identifyUser(userId: string, traits?: Record<string, unknown>) {
   if (!initialized) return;
-  posthog.identify(userId, traits);
+  /* Aunque PostHog se inicializara antes en el dashboard, desde el portal no se
+     identifica a nadie: ataría esa visita anónima a una persona concreta. */
+  if (onPortalNow()) return;
+  posthog.identify(userId, traits ? redactPortalDeep(traits) : traits);
 }
 
 export function resetAnalytics() {
@@ -78,7 +151,14 @@ export function resetAnalytics() {
 
 export function trackEvent(event: string, properties?: Record<string, unknown>) {
   if (!initialized) return;
-  posthog.capture(event, properties);
+  /* Última barrera, y la que de verdad cierra la política: desde el portal no
+     sale NINGÚN evento de producto, esté quien esté llamando y se hubiera
+     inicializado PostHog donde se hubiera inicializado. El evento en sí ya
+     delata que ese cliente abrió su enlace, aunque vaya redactado. */
+  if (onPortalNow()) return;
+  // Redactado también en el emisor, no solo en sanitize_properties: así una
+  // propiedad con la URL queda limpia aunque el hook del SDK cambie de nombre.
+  posthog.capture(event, properties ? redactPortalDeep(properties) : properties);
 }
 
 /* ── Predefined product events ────────────────────────────────────── */
@@ -138,8 +218,15 @@ export const analytics = {
     trackEvent("client_created"),
 
   // Navigation
-  pageViewed: (path: string) =>
-    trackEvent("$pageview", { $current_url: path }),
+  /* `url` debe ser la URL completa, no el pathname: la captura automática de
+     PostHog que esto sustituye mandaba window.location.href, con host, query y
+     parámetros UTM. Mandar solo el path habría roto la atribución de campañas
+     sin que nadie se enterase hasta mirar los informes. */
+  pageViewed: (url: string, pathname?: string) =>
+    trackEvent("$pageview", {
+      $current_url: redactPortalPath(url),
+      ...(pathname ? { $pathname: redactPortalPath(pathname) } : {}),
+    }),
 
   searchUsed: (query: string) =>
     trackEvent("search_used", { query_length: query.length }),

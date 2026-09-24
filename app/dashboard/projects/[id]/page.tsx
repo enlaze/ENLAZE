@@ -36,7 +36,9 @@ interface Project {
   budget_amount: number;
   actual_cost: number;
   notes: string;
-  access_token: string;
+  /* access_token NO está aquí a propósito: es el secreto del enlace heredado y
+     no debe vivir en el estado de la pantalla. Se pide a demanda, solo al
+     copiar el enlace. Ver loadAll() y el botón "Compartir con cliente". */
   created_at: string;
   updated_at: string;
 }
@@ -326,8 +328,14 @@ export default function ProjectDetailPage() {
       if (!user) { router.push("/login"); return; }
       setUserId(user.id);
 
+      /* Proyección explícita en lugar de select("*"): con el comodín se
+         descargaba también projects.access_token, el secreto del enlace
+         heredado, que quedaba en el estado de React, en las props serializadas
+         y en cualquier volcado de error. Aquí no hace falta para nada. */
       const { data: proj, error: projErr } = await supabase
-        .from("projects").select("*").eq("id", params.id).single();
+        .from("projects")
+        .select("id, user_id, client_id, name, address, description, status, start_date, end_date, budget_amount, actual_cost, notes, created_at, updated_at")
+        .eq("id", params.id).single();
       if (projErr || !proj) { router.push("/dashboard/projects"); return; }
       setProject(proj);
 
@@ -830,16 +838,47 @@ export default function ProjectDetailPage() {
           )}
           <button
             onClick={async () => {
-              // Try to get portal_token, fall back to access_token
-              let portalUrl = `${window.location.origin}/portal/${project.access_token}`;
-              const { data: pt } = await supabase
+              /* El secreto se pide aquí, en el clic, y no al cargar la ficha:
+                 así vive lo justo para ir al portapapeles en vez de quedarse en
+                 el estado de la pantalla durante toda la sesión.
+
+                 Sigue leyéndose de portal_tokens con SELECT directo. Esa es la
+                 deuda que cierra el lote 2, cuando la interfaz pase a
+                 portal_list_tokens + portal_issue_token y pueda retirarse el
+                 SELECT de authenticated en el mismo despliegue. Hasta entonces
+                 el secreto se puede releer, así que no es "copia única". */
+              const { data: pt, error: portalTokenError } = await supabase
                 .from("portal_tokens")
                 .select("token")
                 .eq("project_id", project.id)
                 .eq("is_active", true)
+                .is("revoked_at", null)
+                .gt("expires_at", new Date().toISOString())
+                .order("created_at", { ascending: false })
                 .limit(1)
-                .single();
-              if (pt) portalUrl = `${window.location.origin}/portal/${pt.token}`;
+                .maybeSingle();
+              if (portalTokenError) {
+                toast.error("No se pudo obtener el enlace del portal.");
+                return;
+              }
+              let portalUrl = pt ? `${window.location.origin}/portal/${pt.token}` : "";
+              if (!portalUrl) {
+                // Enlace heredado: el secreto no está cargado, se pide ahora.
+                const { data: legacy, error: legacyError } = await supabase
+                  .from("projects")
+                  .select("access_token")
+                  .eq("id", project.id)
+                  .single();
+                if (legacyError) {
+                  toast.error("No se pudo obtener el enlace del portal.");
+                  return;
+                }
+                if (!legacy?.access_token) {
+                  toast.error("No hay ningún enlace vigente para compartir.");
+                  return;
+                }
+                portalUrl = `${window.location.origin}/portal/${legacy.access_token}`;
+              }
               navigator.clipboard.writeText(portalUrl);
               setLinkCopied(true);
               setTimeout(() => setLinkCopied(false), 3000);
