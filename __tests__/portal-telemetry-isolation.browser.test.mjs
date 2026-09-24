@@ -55,11 +55,7 @@ const virtualModules = {
     // guarda lo que de verdad se enviaría.
     import { portalScrubbingOptions } from ${JSON.stringify(path.join(root, "lib/sentry-portal-scrubbing.ts"))};
     window.__sentryEvents = [];
-    window.__replayStopped = false;
-    const replay = { name: "Replay", stop() { window.__replayStopped = true; } };
-    export function getClient() {
-      return { getIntegrationByName: (name) => (name === "Replay" && window.__replayRunning ? replay : undefined) };
-    }
+    export function getClient() { return { getIntegrationByName: () => undefined }; }
     export function setUser(user) { window.__sentryEvents.push({ kind: "user", user }); }
     export function withScope(run) { run({ setTag() {}, setExtras() {} }); }
     export function captureException(error) {
@@ -70,7 +66,6 @@ const virtualModules = {
       });
       if (event) window.__sentryEvents.push({ kind: "event", event });
     }
-    export function replayIntegration() { return replay; }
   `,
   "@/lib/supabase-browser": `
     export function createClient() {
@@ -128,7 +123,7 @@ await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
 let browser;
 
-async function open(pathname, { replayRunning = false } = {}) {
+async function open(pathname, { query = "" } = {}) {
   const page = await browser.newPage();
   const console_ = [];
   const pageErrors = [];
@@ -146,11 +141,8 @@ async function open(pathname, { replayRunning = false } = {}) {
   page.__console = console_;
   page.__pageErrors = pageErrors;
   // La URL real del navegador lleva el centinela, igual que en producción.
-  await page.goto(`${origin}${pathname}`, { waitUntil: "domcontentloaded" });
-  await page.evaluate((args) => {
-    window.__pathname = args.pathname;
-    window.__replayRunning = args.replayRunning;
-  }, { pathname, replayRunning });
+  await page.goto(`${origin}${pathname}${query}`, { waitUntil: "domcontentloaded" });
+  await page.evaluate((next) => { window.__pathname = next; }, pathname);
   await page.evaluate(() => window.__mount());
   await page.waitForFunction(() => document.querySelector("#root p") !== null, { timeout: 15000 });
   return page;
@@ -165,7 +157,7 @@ try {
   browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
 
   // ── El portal: nada de lo que se recoge puede llevar el centinela ────────
-  const portal = await open(`/portal/${SENTINEL}`, { replayRunning: true });
+  const portal = await open(`/portal/${SENTINEL}`);
   // Un error real en la página del portal, que es el caso peligroso: Sentry
   // adjunta request.url y breadcrumbs de navegación.
   await portal.evaluate(() => window.__captureException(
@@ -181,9 +173,6 @@ try {
   const sentryEvents = await portal.evaluate(() => JSON.stringify(window.__sentryEvents));
   assert.equal(sentryEvents.includes(SENTINEL), false, "el centinela no sale en ningún evento de Sentry");
   assert.match(sentryEvents, /\/portal\/\[token\]/, "y lo que sale es la ruta enmascarada");
-
-  assert.equal(await portal.evaluate(() => window.__replayStopped), true,
-    "Session Replay se para al entrar en el portal");
 
   const almacenamiento = await storageDump(portal);
   assert.equal(almacenamiento.includes(SENTINEL), false,
@@ -206,13 +195,32 @@ try {
   assert.equal(dashCalls.some((c) => c.kind === "init"), true, "fuera del portal sí se inicializa");
   const pageview = dashCalls.find((c) => c.kind === "capture" && c.event === "$pageview");
   assert.ok(pageview, "y sí se emite el pageview");
-  assert.equal(pageview.properties.$current_url, "/dashboard/projects/abc-123");
+  assert.match(pageview.properties.$current_url, /^http:\/\/127\.0\.0\.1:\d+\/dashboard\/projects\/abc-123$/,
+    "URL completa, como mandaba la captura automática que esto sustituye");
+  assert.equal(pageview.properties.$pathname, "/dashboard/projects/abc-123");
   assert.equal(await dashboard.evaluate(() => window.__posthogOptions.capture_pageview), false,
     "el pageview automático sigue desactivado: capturaría la URL cruda");
-  assert.equal(await dashboard.evaluate(() => window.__replayStopped), false,
-    "y fuera del portal no se para la grabación");
+  assert.equal(dashCalls.filter((c) => c.kind === "init").length, 1,
+    "exactamente un posthog.init: los dos efectos llaman a initAnalytics en el " +
+    "mismo tick y `initialized` solo se pone a true tras el import dinámico");
   assert.deepEqual(dashboard.__pageErrors, []);
   await dashboard.close();
+
+  // ── El pageview conserva host, query y UTM, como la captura automática ───
+  const utm = await open("/dashboard/projects/abc-123",
+    { query: "?utm_source=boletin&utm_campaign=marzo&ref=x" });
+  await utm.waitForFunction(
+    () => window.__posthogCalls?.some((c) => c.kind === "capture" && c.event === "$pageview"),
+    { timeout: 10000 });
+  const utmView = (await utm.evaluate(() => window.__posthogCalls))
+    .find((c) => c.kind === "capture" && c.event === "$pageview");
+  assert.match(utmView.properties.$current_url, /^http:\/\/127\.0\.0\.1:\d+\/dashboard\/projects\/abc-123\?/,
+    "$current_url es la URL completa con host, no el pathname suelto");
+  assert.match(utmView.properties.$current_url, /utm_source=boletin/, "la atribución de campaña sobrevive");
+  assert.match(utmView.properties.$current_url, /utm_campaign=marzo/);
+  assert.equal(utmView.properties.$pathname, "/dashboard/projects/abc-123");
+  assert.equal(await utm.evaluate(() => window.__posthogOptions.capture_pageview), false);
+  await utm.close();
 
   // ── Control: aunque un evento llevara la URL del portal, se redacta ──────
   const mixed = await open("/dashboard/projects/abc-123");

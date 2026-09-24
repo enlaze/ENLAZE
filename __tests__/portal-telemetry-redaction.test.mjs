@@ -1,14 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 import {
   PORTAL_PATH_PLACEHOLDER,
+  REDACTED_CYCLE,
+  REDACTED_DEPTH,
+  REDACTED_UNSAFE,
   isPortalPath,
   redactPortalDeep,
   redactPortalPath,
 } from "../lib/portal-path-redaction.ts";
 import { portalScrubbingOptions } from "../lib/sentry-portal-scrubbing.ts";
+import { safeTelemetry } from "../lib/telemetry-safe.ts";
 
 /* ─────────────────────────────────────────────────────────────────────
  *  /portal/<secreto> es una URL portadora: quien la tiene, entra.
@@ -104,11 +108,97 @@ test("el mismo objeto colgando de dos claves se redacta las dos veces", () => {
   assert.equal(limpio.b.url, PORTAL_PATH_PLACEHOLDER, "la segunda referencia no puede quedar sucia");
 });
 
-test("una estructura cíclica no cuelga ni revienta la telemetría", () => {
+test("una estructura cíclica se corta con marcador, no devolviendo el nodo", () => {
+  // Devolver el objeto original al detectar el ciclo era fail-open: ese objeto
+  // es justo el que lleva el token.
   const ciclo = { url: `/portal/${SENTINEL}` };
   ciclo.self = ciclo;
   const limpio = redactPortalDeep(ciclo);
   assert.equal(limpio.url, PORTAL_PATH_PLACEHOLDER);
+  assert.equal(limpio.self, REDACTED_CYCLE, "el nodo repetido no vuelve crudo");
+  assert.equal(JSON.stringify(limpio).includes(SENTINEL), false);
+});
+
+test("más allá de la profundidad máxima se corta con marcador, no con el valor", () => {
+  // Nido de 20 niveles con el token al fondo. Antes se devolvía la rama cruda
+  // a partir del nivel 12 y el token salía entero.
+  let nodo = { url: `/portal/${SENTINEL}` };
+  for (let n = 0; n < 20; n += 1) nodo = { hijo: nodo };
+  const limpio = redactPortalDeep(nodo);
+  const serializado = JSON.stringify(limpio);
+  assert.equal(serializado.includes(SENTINEL), false,
+    "el token a profundidad 20 no puede sobrevivir al corte");
+  assert.equal(serializado.includes(REDACTED_DEPTH), true, "se ve dónde se cortó");
+});
+
+test("un Error se aplana y se redacta entero: nombre, mensaje, stack y cause", () => {
+  const causa = new Error(`causa raíz en /portal/${SENTINEL}`);
+  const error = new Error(`fallo cargando /portal/${SENTINEL}`, { cause: causa });
+  error.name = `Error en /portal/${SENTINEL}`;
+  // Un stack fabricado, para no depender del formato del motor.
+  error.stack = `Error: fallo\n    at load (https://app.enlaze.es/portal/${SENTINEL}:1:1)`;
+  error.requestUrl = `https://app.enlaze.es/portal/${SENTINEL}`;
+
+  const limpio = redactPortalDeep(error);
+  const serializado = JSON.stringify(limpio);
+  assert.equal(serializado.includes(SENTINEL), false, "ni una de las cuatro partes filtra");
+  assert.equal(limpio.name, "Error en /portal/[token]");
+  assert.equal(limpio.message, "fallo cargando /portal/[token]");
+  assert.match(limpio.stack, /\/portal\/\[token\]/);
+  assert.equal(limpio.cause.message, "causa raíz en /portal/[token]");
+  assert.equal(limpio.requestUrl, "https://app.enlaze.es/portal/[token]",
+    "y las propiedades propias que cuelgue el código también");
+
+  // Y anidado dentro de un evento, no solo suelto.
+  const evento = { extra: { original: error }, lista: [error] };
+  assert.equal(JSON.stringify(redactPortalDeep(evento)).includes(SENTINEL), false);
+});
+
+test("una URL del portal se aplana a su href redactado", () => {
+  // Recorrer sus getters devolvería pathname, search y href con el secreto.
+  const url = new URL(`https://app.enlaze.es/portal/${SENTINEL}?utm_source=mail`);
+  const limpio = redactPortalDeep(url);
+  assert.equal(limpio, "https://app.enlaze.es/portal/[token]?utm_source=mail");
+  assert.equal(JSON.stringify(redactPortalDeep({ u: url })).includes(SENTINEL), false);
+});
+
+test("un objeto opaco no se devuelve intacto", () => {
+  class Contexto {
+    constructor() { this.destino = `/portal/${SENTINEL}`; }
+  }
+  const limpio = redactPortalDeep({ ctx: new Contexto() });
+  assert.equal(JSON.stringify(limpio).includes(SENTINEL), false,
+    "una instancia de clase cualquiera se aplana y se redacta");
+  assert.equal(limpio.ctx.destino, PORTAL_PATH_PLACEHOLDER);
+});
+
+test("un getter que lanza no filtra el token por el mensaje de su excepción", () => {
+  const veneno = { sano: "/dashboard" };
+  Object.defineProperty(veneno, "trampa", {
+    enumerable: true,
+    get() { throw new Error(`no se pudo leer /portal/${SENTINEL}`); },
+  });
+  const limpio = redactPortalDeep(veneno);
+  assert.equal(JSON.stringify(limpio).includes(SENTINEL), false,
+    "la excepción del getter ni se mira");
+  assert.equal(limpio.trampa, REDACTED_UNSAFE);
+  assert.equal(limpio.sano, "/dashboard", "el resto del objeto sí se conserva");
+});
+
+test("una función nunca se reenvía: su código fuente podría llevar la URL", () => {
+  const limpio = redactPortalDeep({ cb: () => `/portal/${SENTINEL}` });
+  assert.equal(limpio.cb, REDACTED_UNSAFE);
+  assert.equal(JSON.stringify(limpio).includes(SENTINEL), false);
+});
+
+test("Map y Set se recorren en vez de devolverse opacos", () => {
+  const limpio = redactPortalDeep({
+    m: new Map([["destino", `/portal/${SENTINEL}`]]),
+    s: new Set([`/portal/${SENTINEL}`]),
+  });
+  assert.equal(JSON.stringify(limpio).includes(SENTINEL), false);
+  assert.equal(limpio.m.destino, PORTAL_PATH_PLACEHOLDER);
+  assert.deepEqual(limpio.s, [PORTAL_PATH_PLACEHOLDER]);
 });
 
 test("los cuatro hooks de Sentry redactan el centinela", () => {
@@ -132,10 +222,12 @@ test("si el saneado fallara, el evento se descarta en vez de salir sucio", () =>
   const originalWarn = console.warn;
   console.warn = (...args) => warnings.push(args.join(" "));
   try {
-    // Un getter que lanza rompe el recorrido a mitad.
-    const veneno = { request: {} };
-    Object.defineProperty(veneno, "boom", {
-      enumerable: true, get() { throw new Error("no se puede leer"); },
+    /* Un getter que lanza ya NO rompe el recorrido: se maneja y la clave queda
+       con marcador, que es mejor que descartar el evento entero. Para forzar
+       un fallo real del saneado hace falta romper el recorrido en sí, que es
+       lo que hace un Proxy cuyo ownKeys lanza. */
+    const veneno = new Proxy({ request: {} }, {
+      ownKeys() { throw new Error("no se pueden enumerar las claves"); },
     });
     assert.equal(portalScrubbingOptions.beforeSend(veneno), null,
       "ante la duda no se envía nada");
@@ -143,7 +235,23 @@ test("si el saneado fallara, el evento se descarta en vez de salir sucio", () =>
     console.warn = originalWarn;
   }
   assert.equal(warnings.length, 1, "se avisa por consola, no por la propia telemetría");
-  assert.equal(warnings[0].includes("descartado"), true);
+  assert.equal(warnings[0], "[telemetry] evento descartado: el saneado falló",
+    "constante sin datos: el error que rompió el saneado puede llevar el secreto " +
+    "en su mensaje o su stack, y con enableLogs esa línea volvería a Sentry");
+});
+
+test("safeTelemetry tampoco imprime el error que se traga", () => {
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => warnings.push(args.join(" "));
+  try {
+    safeTelemetry(() => { throw new Error(`reventó en /portal/${SENTINEL}`); });
+  } finally {
+    console.warn = originalWarn;
+  }
+  assert.equal(warnings.length, 1);
+  assert.equal(warnings[0].includes(SENTINEL), false,
+    "el mensaje del error no puede acabar en consola ni, con enableLogs, en Sentry");
 });
 
 test("los tres Sentry.init enchufan el saneado", () => {
@@ -155,16 +263,27 @@ test("los tres Sentry.init enchufan el saneado", () => {
   }
 });
 
-test("Session Replay no graba en el portal", () => {
-  const cliente = source("instrumentation-client.ts");
-  assert.match(cliente, /onPortal\s*\?\s*\[\]\s*:\s*\[Sentry\.replayIntegration\(\)\]/,
-    "la integración de Replay no puede cargarse en el portal");
-  assert.match(cliente, /replaysSessionSampleRate:\s*onPortal\s*\?\s*0\s*:/);
-  assert.match(cliente, /replaysOnErrorSampleRate:\s*onPortal\s*\?\s*0\s*:/);
-  // Y la salvaguarda para quien llegue al portal navegando dentro de la app.
-  assert.match(source("components/AnalyticsProvider.tsx"), /stopReplayOnPortal\(\)/);
-  assert.match(source("lib/replay-portal-guard.ts"), /replay\?\.stop\?\.\(\)/,
-    "hay que parar la grabación, no vaciarla: flush() la enviaría");
+test("Session Replay no puede activarse en producción", () => {
+  /* stop() NO garantiza descartar el búfer: en @sentry/replay 10.66.0 el método
+     público hace stop({ forceFlush: recordingMode === "session" }), así que en
+     una sesión muestreada pararlo al entrar en el portal ENVIARÍA justo la
+     grabación del portal. Mientras el token viaje en la URL, Replay se queda
+     apagado en toda la app. */
+  for (const archivo of ["instrumentation-client.ts", "sentry.server.config.ts", "sentry.edge.config.ts"]) {
+    const texto = source(archivo);
+    assert.equal(/replayIntegration\s*\(/.test(texto), false,
+      `${archivo} no puede instanciar la integración de Replay`);
+    for (const opcion of ["replaysSessionSampleRate", "replaysOnErrorSampleRate"]) {
+      const encontrado = texto.match(new RegExp(`${opcion}\\s*:\\s*([^,\\n]+)`));
+      if (encontrado) {
+        assert.equal(encontrado[1].trim(), "0",
+          `${archivo}: ${opcion} debe ser 0 mientras el token vaya en la URL`);
+      }
+    }
+  }
+  // Y que no quede el guard antiguo, que se apoyaba en stop().
+  assert.equal(existsSync(new URL("../lib/replay-portal-guard.ts", import.meta.url)), false,
+    "el guard basado en stop() se retiró: daba una falsa sensación de seguridad");
 });
 
 test("PostHog no captura la URL real por su cuenta", () => {
@@ -174,6 +293,12 @@ test("PostHog no captura la URL real por su cuenta", () => {
   assert.equal(/capture_pageview:\s*true/.test(analytics), false);
   assert.match(analytics, /sanitize_properties:/,
     "red de seguridad para $pageleave, $initial_current_url y lo que añada el SDK");
-  assert.match(analytics, /if \(isPortalPath\(window\.location\.pathname\)\) return;/,
+  assert.match(analytics, /if \(isPortalPath\(window\.location\.pathname\)\) return Promise\.resolve\(\);/,
     "en el portal no se inicializa PostHog en absoluto: persiste la URL en localStorage y cookie");
+  assert.match(analytics, /if \(!initPromise\) initPromise = runInit\(\);/,
+    "una sola promesa de inicialización: `initialized` solo se pone a true tras " +
+    "el import dinámico, así que dos llamadas concurrentes hacían dos posthog.init");
+  assert.match(analytics, /pageViewed: \(url: string, pathname\?: string\)/,
+    "el pageview manual manda la URL completa, no solo el path: la captura " +
+    "automática que sustituye incluía host, query y UTM");
 });
