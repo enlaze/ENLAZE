@@ -51,7 +51,8 @@
     "plans:check": "node --env-file-if-exists=.env.local --import tsx scripts/plans-sync.ts --check",
     "test:billing": "node --import tsx --test __tests__/billing-plans.test.mjs __tests__/billing-webhook.test.mjs",
     "test:billing-integration": "node --env-file-if-exists=.env.local --import tsx --test --test-concurrency=1 __tests__/billing.integration.test.mjs",
-    "test:price-bank-rls": "node --env-file-if-exists=.env.local --test --test-concurrency=1 __tests__/price-bank-rls.integration.test.mjs"
+    "test:price-bank-rls": "node --env-file-if-exists=.env.local --test --test-concurrency=1 __tests__/price-bank-rls.integration.test.mjs",
+    "test:p1-races": "node --env-file-if-exists=.env.local --test --test-concurrency=1 __tests__/p1-races.integration.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
