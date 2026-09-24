@@ -22,7 +22,19 @@ const SENTINEL = "s3nt1nel-9f4c-4b2a-8e77-por7alt0k3n";
 
 const virtualModules = {
   "next/navigation": `
-    export function usePathname() { return window.__pathname; }
+    import { useSyncExternalStore } from "react";
+    // Suscripción a los cambios que provoca __navigate, como haría el router.
+    const listeners = new Set();
+    window.__routeChanged = () => listeners.forEach((l) => l());
+    const subscribe = (l) => { listeners.add(l); return () => listeners.delete(l); };
+    export function usePathname() {
+      return useSyncExternalStore(subscribe, () => window.__pathname, () => window.__pathname);
+    }
+    export function useSearchParams() {
+      const query = useSyncExternalStore(
+        subscribe, () => window.location.search, () => window.location.search);
+      return new URLSearchParams(query);
+    }
     export function useRouter() { return { push() {}, replace() {}, refresh() {}, back() {} }; }
   `,
   "posthog-js": `
@@ -76,7 +88,14 @@ const virtualModules = {
   `,
   "@/lib/supabase-browser": `
     export function createClient() {
-      return { auth: { getUser: async () => ({ data: { user: null }, error: null }) } };
+      return { auth: { getUser: () => new Promise((resolve) => {
+        const user = window.__user ?? null;
+        // Con __holdGetUser la respuesta queda pendiente hasta que la prueba la
+        // suelta: así se puede navegar al portal mientras está en vuelo.
+        if (window.__holdGetUser) window.__releaseGetUser = () =>
+          resolve({ data: { user }, error: null });
+        else resolve({ data: { user }, error: null });
+      }) } };
     }
   `,
 };
@@ -86,6 +105,7 @@ const entry = `
   import { createRoot } from "react-dom/client";
   import AnalyticsProvider from "@/components/AnalyticsProvider";
   import { captureException } from "@/lib/sentry";
+  import { analytics, identifyUser } from "@/lib/analytics";
   let root;
   const paint = () => root.render(
     React.createElement(AnalyticsProvider, null, React.createElement("p", null, "hola")));
@@ -98,14 +118,23 @@ const entry = `
     window.__pathname = new URL(next, location.origin).pathname;
     const ph = window.__posthogCalls && window.__posthogApi;
     if (ph) window.__posthogApi.__maybePageleave();
+    window.__routeChanged();
     paint();
   };
+  // Intento explícito de emitir un evento de producto, venga de donde venga.
+  window.__emitProductEvent = () => analytics.clientCreated();
+  window.__identify = () => identifyUser("user-forzado", { email: "x@y.z" });
   window.__captureException = captureException;
 `;
 
+/* ESM con splitting, no IIFE: así el `import("posthog-js")` de lib/analytics
+   sigue siendo un import dinámico de verdad, que el navegador pide por red. El
+   servidor de abajo puede retener ese chunk y dejar la inicialización en vuelo
+   mientras la pestaña navega al portal, que es el caso que hay que probar. */
 const bundle = await build({
   stdin: { contents: entry, resolveDir: root, sourcefile: "telemetry-harness.tsx", loader: "tsx" },
-  bundle: true, write: false, format: "iife", platform: "browser", target: "chrome120",
+  bundle: true, write: false, format: "esm", splitting: true, outdir: "/out",
+  platform: "browser", target: "chrome120",
   jsx: "automatic",
   define: { "process.env.NEXT_PUBLIC_POSTHOG_KEY": JSON.stringify("phc_test_key"),
             "process.env.NEXT_PUBLIC_POSTHOG_HOST": JSON.stringify("http://127.0.0.1:1/never"),
@@ -129,20 +158,35 @@ const bundle = await build({
   }],
 });
 
-const server = createServer((request, response) => {
-  if (request.url?.startsWith("/bundle.js")) {
+// Cada salida de esbuild por su nombre. La entrada es stdin.js.
+const chunks = new Map(bundle.outputFiles.map((f) => [path.posix.basename(f.path), f.contents]));
+const entryName = [...chunks.keys()].find((n) => n.startsWith("stdin"));
+// El chunk que contiene el SDK: el que menciona la marca del doble.
+const posthogChunk = [...chunks.entries()]
+  .find(([name, body]) => name !== entryName && Buffer.from(body).includes("__posthogApi"))?.[0];
+
+/* Cuando está puesto, el servidor no responde el chunk del SDK hasta que la
+   prueba lo suelte. Es el único modo de dejar el import dinámico realmente en
+   vuelo mientras se navega. */
+let holdPosthogChunk = null;
+
+const server = createServer(async (request, response) => {
+  const name = path.posix.basename((request.url ?? "/").split("?")[0]);
+  if (chunks.has(name)) {
+    if (name === posthogChunk && holdPosthogChunk) await holdPosthogChunk;
     response.writeHead(200, { "content-type": "text/javascript; charset=utf-8" });
-    response.end(bundle.outputFiles[0].contents);
+    response.end(Buffer.from(chunks.get(name)));
   } else {
     response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-    response.end('<!doctype html><html><body><div id="root"></div><script src="/bundle.js"></script></body></html>');
+    response.end(`<!doctype html><html><body><div id="root"></div>` +
+      `<script type="module" src="/${entryName}"></script></body></html>`);
   }
 });
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
 let browser;
 
-async function open(pathname, { query = "" } = {}) {
+async function open(pathname, { query = "", user = null, holdGetUser = false } = {}) {
   const page = await browser.newPage();
   const console_ = [];
   const pageErrors = [];
@@ -161,7 +205,11 @@ async function open(pathname, { query = "" } = {}) {
   page.__pageErrors = pageErrors;
   // La URL real del navegador lleva el centinela, igual que en producción.
   await page.goto(`${origin}${pathname}${query}`, { waitUntil: "domcontentloaded" });
-  await page.evaluate((next) => { window.__pathname = next; }, pathname);
+  await page.evaluate((args) => {
+    window.__pathname = args.pathname;
+    window.__user = args.user;
+    window.__holdGetUser = args.holdGetUser;
+  }, { pathname, user, holdGetUser });
   await page.evaluate(() => window.__mount());
   await page.waitForFunction(() => document.querySelector("#root p") !== null, { timeout: 15000 });
   return page;
@@ -277,6 +325,19 @@ try {
   assert.equal(await spa.evaluate(() => window.__posthogOptions.capture_pageleave), false,
     "pageleave desactivado: si no, el SDK emitiría desde /portal/<secreto>");
 
+  /* Intento explícito de emitir un evento de producto y de identificar, con
+     PostHog YA inicializado en el dashboard. Es el caso en que `initialized`
+     vale true y lo único que puede frenarlo es la comprobación de ruta dentro
+     de trackEvent e identifyUser. */
+  await spa.evaluate(() => window.__emitProductEvent());
+  await spa.evaluate(() => window.__identify());
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  const trasForzar = await spa.evaluate(() => window.__posthogCalls);
+  assert.equal(trasForzar.length, antes,
+    "con el SDK vivo, un evento de producto forzado desde el portal tampoco sale");
+  assert.deepEqual(trasForzar.filter((c) => c.kind === "identify"), [],
+    "ni se identifica a nadie desde el portal");
+
   // El centinela está en la URL real de la pestaña, así que la prueba es real.
   assert.match(await spa.evaluate(() => window.location.pathname), new RegExp(SENTINEL),
     "la barra de direcciones lleva de verdad el secreto");
@@ -299,6 +360,131 @@ try {
   assert.deepEqual(spa.__pageErrors, []);
   assert.equal(await spa.evaluate(() => window.__posthogOptions.capture_pageview), false);
   await spa.close();
+
+  // ── Navegación al portal MIENTRAS la inicialización está pendiente ──────
+  /* initAnalytics mira la ruta antes del import dinámico de posthog-js. Ese
+     import tarda, y la pestaña puede navegar al portal mientras está en vuelo:
+     el init llegaría estando ya en /portal/<secreto> y escribiría
+     $initial_current_url —con el secreto— en localStorage y en la cookie del
+     cliente final.
+
+     Aquí el import se retiene de verdad: el servidor no entrega el chunk del
+     SDK hasta que esta prueba lo suelte. */
+  assert.ok(posthogChunk, "hace falta identificar el chunk del SDK para retenerlo");
+  let soltarChunk;
+  holdPosthogChunk = new Promise((resolve) => { soltarChunk = resolve; });
+  const enVuelo = await open("/dashboard/projects/abc-123");
+  // El SDK no ha podido cargarse todavía.
+  assert.equal(await enVuelo.evaluate(() => window.__posthogCalls ?? null), null,
+    "el import sigue en vuelo: el SDK aún no se ha evaluado");
+
+  // Con la inicialización a medias, la pestaña se va al portal.
+  await enVuelo.evaluate((sentinel) => window.__navigate(`/portal/${sentinel}`), SENTINEL);
+  soltarChunk();
+  holdPosthogChunk = null;
+  await new Promise((resolve) => setTimeout(resolve, 600));
+
+  const trasVuelo = await enVuelo.evaluate(() => window.__posthogCalls ?? []);
+  assert.deepEqual(trasVuelo.filter((c) => c.kind === "init"), [],
+    "el init llegó tarde y se abortó: no se inicializa estando ya en el portal");
+  assert.equal([
+    JSON.stringify(trasVuelo), await storageDump(enVuelo), enVuelo.__console.join("\n"),
+  ].join("\n").includes(SENTINEL), false,
+    "y no queda el secreto ni en el almacenamiento ni en la consola");
+
+  // Forzar un evento o una identificación desde el portal tampoco sale.
+  await enVuelo.evaluate(() => window.__emitProductEvent());
+  await enVuelo.evaluate(() => window.__identify());
+  assert.equal((await enVuelo.evaluate(() => window.__posthogCalls ?? [])).length,
+    trasVuelo.length,
+    "un evento de producto forzado desde el portal no sale, ni identificar tampoco");
+
+  // Y al volver a una pantalla normal, la inicialización sí puede ocurrir:
+  // abortar no debe dejar initPromise memoizada para siempre.
+  await enVuelo.evaluate(() => window.__navigate("/dashboard/projects/abc-123"));
+  await enVuelo.waitForFunction(
+    () => window.__posthogCalls?.some((c) => c.kind === "init"), { timeout: 10000 });
+  assert.equal(
+    (await enVuelo.evaluate(() => window.__posthogCalls)).filter((c) => c.kind === "init").length, 1,
+    "al salir del portal se inicializa, y una sola vez");
+  await enVuelo.close();
+
+  // ── getUser() que resuelve TARDE, ya dentro del portal ──────────────────
+  const tardio = await open("/dashboard/projects/abc-123",
+    { user: { id: "user-1", email: "duenyo@enlaze.es" }, holdGetUser: true });
+  await tardio.waitForFunction(() => typeof window.__releaseGetUser === "function",
+    { timeout: 10000 });
+  await tardio.evaluate((sentinel) => window.__navigate(`/portal/${sentinel}`), SENTINEL);
+  // Ahora sí responde la sesión: ya estamos en el portal.
+  await tardio.evaluate(() => window.__releaseGetUser());
+  await new Promise((resolve) => setTimeout(resolve, 400));
+
+  const llamadas = await tardio.evaluate(() => window.__posthogCalls ?? []);
+  assert.deepEqual(llamadas.filter((c) => c.kind === "identify"), [],
+    "una respuesta tardía de getUser no identifica al usuario dentro del portal");
+  const sentryTardio = await tardio.evaluate(() => window.__sentryEvents);
+  assert.deepEqual(sentryTardio.filter((e) => e.kind === "user"), [],
+    "ni se fija el usuario en Sentry estando en el portal");
+  assert.equal(
+    [JSON.stringify(llamadas), JSON.stringify(sentryTardio), await storageDump(tardio),
+     tardio.__console.join("\n")].join("\n").includes(SENTINEL), false);
+  await tardio.close();
+
+  // ── Control positivo: fuera del portal sí se identifica y sí se emite ───
+  /* Sin esto, todo lo anterior pasaría igual si identificación y eventos
+     estuvieran rotos del todo. */
+  const normal = await open("/dashboard/projects/abc-123",
+    { user: { id: "user-1", email: "duenyo@enlaze.es" } });
+  await normal.waitForFunction(
+    () => window.__posthogCalls?.some((c) => c.kind === "identify"), { timeout: 10000 });
+  const idCall = (await normal.evaluate(() => window.__posthogCalls))
+    .find((c) => c.kind === "identify");
+  assert.equal(idCall.id, "user-1", "fuera del portal sí se identifica");
+  assert.equal(idCall.traits.email, "duenyo@enlaze.es");
+  assert.ok((await normal.evaluate(() => window.__sentryEvents))
+    .some((e) => e.kind === "user" && e.user?.id === "user-1"), "y Sentry también");
+
+  const antesEvento = (await normal.evaluate(() => window.__posthogCalls)).length;
+  await normal.evaluate(() => window.__emitProductEvent());
+  const trasEvento = await normal.evaluate(() => window.__posthogCalls);
+  assert.equal(trasEvento.length, antesEvento + 1, "y un evento de producto sí sale");
+  assert.equal(trasEvento.at(-1).event, "client_created");
+
+  // ── Navegación SPA que cambia SOLO la query ─────────────────────────────
+  /* usePathname no incluye la query, así que ir de ?page=1 a ?page=2 no
+     cambiaba nada y el pageview se perdía. Con el capture_pageview automático
+     apagado no hay nadie detrás que lo recupere. */
+  const pageviews = () => normal.evaluate(() =>
+    window.__posthogCalls.filter((c) => c.kind === "capture" && c.event === "$pageview"));
+  const antesQuery = (await pageviews()).length;
+  await normal.evaluate(() =>
+    window.__navigate("/dashboard/projects/abc-123?page=2&utm_source=boletin"));
+  await normal.waitForFunction(
+    (previos) => window.__posthogCalls.filter(
+      (c) => c.kind === "capture" && c.event === "$pageview").length > previos,
+    { timeout: 10000 }, antesQuery);
+  const soloQuery = (await pageviews()).at(-1);
+  assert.match(soloQuery.properties.$current_url, /\?page=2&utm_source=boletin$/,
+    "cambiar solo la query emite pageview, con la query y el UTM intactos");
+  assert.equal(soloQuery.properties.$pathname, "/dashboard/projects/abc-123");
+
+  // Y un segundo cambio de query también cuenta.
+  const antesSegundo = (await pageviews()).length;
+  await normal.evaluate(() => window.__navigate("/dashboard/projects/abc-123?page=3"));
+  await normal.waitForFunction(
+    (previos) => window.__posthogCalls.filter(
+      (c) => c.kind === "capture" && c.event === "$pageview").length > previos,
+    { timeout: 10000 }, antesSegundo);
+  assert.match((await pageviews()).at(-1).properties.$current_url, /\?page=3$/);
+
+  // Re-renderizar sin cambiar nada NO debe duplicar el pageview.
+  const antesRepintar = (await pageviews()).length;
+  await normal.evaluate(() => window.__navigate("/dashboard/projects/abc-123?page=3"));
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.equal((await pageviews()).length, antesRepintar,
+    "la misma URL no emite un pageview de más");
+  assert.deepEqual(normal.__pageErrors, []);
+  await normal.close();
 
   console.log("PASS: /portal/<secreto> no llega a PostHog, Sentry, Replay, consola ni almacenamiento");
 } finally {

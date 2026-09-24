@@ -299,12 +299,34 @@ test("PostHog no captura la URL real por su cuenta", () => {
     "no se toca el opt-in/opt-out: pisaría una preferencia de privacidad del usuario");
   assert.match(analytics, /sanitize_properties:/,
     "red de seguridad para $initial_current_url y lo que añada el SDK");
-  assert.match(analytics, /if \(isPortalPath\(window\.location\.pathname\)\) return Promise\.resolve\(\);/,
+  assert.match(analytics, /if \(onPortalNow\(\)\) return Promise\.resolve\(\);/,
     "en el portal no se inicializa PostHog en absoluto: persiste la URL en localStorage y cookie");
+  // La comprobación de antes del import no basta: el import tarda.
+  assert.match(analytics, /if \(onPortalNow\(\)\) \{\s*\n\s*initPromise = null;\s*\n\s*return;/,
+    "segunda comprobación justo antes de posthog.init, soltando initPromise para " +
+    "que al salir del portal se pueda inicializar");
+  assert.equal((analytics.match(/if \(onPortalNow\(\)\) return;/g) ?? []).length, 2,
+    "identifyUser y trackEvent fallan cerradas en el portal aunque PostHog ya " +
+    "estuviera inicializado en el dashboard");
   assert.match(analytics, /if \(!initPromise\) initPromise = runInit\(\);/,
     "una sola promesa de inicialización: `initialized` solo se pone a true tras " +
     "el import dinámico, así que dos llamadas concurrentes hacían dos posthog.init");
   assert.match(analytics, /pageViewed: \(url: string, pathname\?: string\)/,
     "el pageview manual manda la URL completa, no solo el path: la captura " +
     "automática que sustituye incluía host, query y UTM");
+
+  // Y el emisor tiene que reaccionar a cambios de query, no solo de pathname.
+  const provider = source("components/AnalyticsProvider.tsx");
+  assert.match(provider, /useSearchParams/,
+    "usePathname no incluye la query: sin esto, ir de ?page=1 a ?page=2 perdía el pageview");
+  assert.match(provider, /\}, \[pathname, query\]\);/,
+    "el efecto depende también de la query");
+  assert.match(provider, /<Suspense fallback=\{null\}>/,
+    "useSearchParams se aísla en un hermano bajo Suspense para no sacar del " +
+    "prerenderizado a todo el árbol (docs de Next 16, use-search-params)");
+  assert.match(provider, /Promise\.all\(\[initAnalytics\(\), supabase\.auth\.getUser\(\)\]\)/,
+    "identificar espera al init: si getUser resolvía antes, identifyUser se perdía");
+  assert.equal(
+    (provider.match(/if \(isPortalPath\(window\.location\.pathname\)\) return;/g) ?? []).length, 2,
+    "la ruta se recomprueba al montar y otra vez en la respuesta de getUser");
 });
