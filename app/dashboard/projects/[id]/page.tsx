@@ -847,22 +847,36 @@ export default function ProjectDetailPage() {
                  portal_list_tokens + portal_issue_token y pueda retirarse el
                  SELECT de authenticated en el mismo despliegue. Hasta entonces
                  el secreto se puede releer, así que no es "copia única". */
-              const { data: pt } = await supabase
+              const { data: pt, error: portalTokenError } = await supabase
                 .from("portal_tokens")
                 .select("token")
                 .eq("project_id", project.id)
                 .eq("is_active", true)
+                .is("revoked_at", null)
+                .gt("expires_at", new Date().toISOString())
+                .order("created_at", { ascending: false })
                 .limit(1)
-                .single();
+                .maybeSingle();
+              if (portalTokenError) {
+                toast.error("No se pudo obtener el enlace del portal.");
+                return;
+              }
               let portalUrl = pt ? `${window.location.origin}/portal/${pt.token}` : "";
               if (!portalUrl) {
                 // Enlace heredado: el secreto no está cargado, se pide ahora.
-                const { data: legacy } = await supabase
+                const { data: legacy, error: legacyError } = await supabase
                   .from("projects")
                   .select("access_token")
                   .eq("id", project.id)
                   .single();
-                if (!legacy?.access_token) return;
+                if (legacyError) {
+                  toast.error("No se pudo obtener el enlace del portal.");
+                  return;
+                }
+                if (!legacy?.access_token) {
+                  toast.error("No hay ningún enlace vigente para compartir.");
+                  return;
+                }
                 portalUrl = `${window.location.origin}/portal/${legacy.access_token}`;
               }
               navigator.clipboard.writeText(portalUrl);

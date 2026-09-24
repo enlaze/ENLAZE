@@ -84,6 +84,35 @@ test("portal_list_tokens returns metadata for the owner and never the secret",
   const list = async (project = PROJECT, uid = OWNER) => (await page(project, uid)).items;
   const issue = (project = PROJECT, extra = "") =>
     rpc("authenticated", OWNER, `public.portal_issue_token($1${extra})`, [project]);
+  const bloque = (nombre) =>
+    sql("docs/fase2/CHECKS.sql").split(`-- BEGIN ${nombre}\n`)[1].split(`-- END ${nombre}`)[0];
+
+  await t.test("el precheck actual acepta E4-L1 ya aplicada y valida los datos", async () => {
+    // Producción tiene ocho enlaces heredados. El fixture base representa uno;
+    // los otros siete viven solo dentro de esta transacción y se deshacen.
+    await db.query("begin");
+    try {
+      await db.query(`insert into public.projects(id,user_id,access_token,name)
+        select ('90000000-0000-4000-8000-' || lpad(g::text,12,'0'))::uuid,
+               $1,
+               ('a0000000-0000-4000-8000-' || lpad(g::text,12,'0'))::uuid,
+               'Legacy ' || g
+          from generate_series(1,7) g`, [OWNER]);
+
+      const historico = (await db.query(bloque("CHECK_E4_L1_PRECHECK"))).rows[0];
+      assert.match(historico.veredicto, /ya existen objetos de E4/,
+        "el gate histórico sigue detectando correctamente que E4-L1 ya existe");
+
+      const actual = (await db.query(bloque("CHECK_E4_HARDENING_DATA_PRECHECK"))).rows[0];
+      assert.equal(actual.veredicto, "OK",
+        "el gate del listado no confunde E4-L1 completa con una aplicación parcial");
+      assert.equal(Number(actual.tokens_modernos), 0);
+      assert.equal(Number(actual.enlaces_legacy), 8);
+      await db.query(bloque("CHECK_E4_HARDENING_DATA_PRECHECK_GATE"));
+    } finally {
+      await db.query("rollback");
+    }
+  });
 
   await t.test("un proyecto sin enlaces devuelve una lista vacía, no nulo", async () => {
     const empty = await page(EMPTY_PROJECT);
@@ -369,8 +398,6 @@ test("portal_list_tokens returns metadata for the owner and never the secret",
   await t.test("el gate de auditoría del despliegue cuadra y deja de cuadrar si se altera algo", async () => {
     // El SQL se lee de CHECKS.sql, así que la documentación y la prueba no
     // pueden separarse: si alguien cambia el gate y se equivoca, esto falla.
-    const bloque = (nombre) =>
-      sql("docs/fase2/CHECKS.sql").split(`-- BEGIN ${nombre}\n`)[1].split(`-- END ${nombre}`)[0];
     const gate = bloque("CHECK_E4_DEPLOY_AUDIT");
     const detalle = bloque("CHECK_E4_DEPLOY_AUDIT_DETALLE");
 

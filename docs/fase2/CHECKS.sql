@@ -2251,6 +2251,83 @@ end $precheck$;
 -- END CHECK_E4_L1_PRECHECK_GATE
 
 -- ─────────────────────────────────────────────────────────────────────────────────────
+-- PRECHECK DE DATOS DEL ENDURECIMIENTO · E4-L1 YA APLICADA, listado aún pendiente
+--
+-- CHECK_E4_L1_PRECHECK es histórico: exige que no exista ningún objeto de E4 y
+-- solo sirve ANTES de 20260923120000. Producción ya está después de ese punto.
+-- Este bloque valida el estado de los datos sin interpretar las 13 funciones y
+-- los dos CHECK legítimos de E4-L1 como una aplicación parcial.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BEGIN CHECK_E4_HARDENING_DATA_PRECHECK
+-- ESPERADO antes de 20260925090000: veredicto = 'OK'.
+select case
+         when tokens_modernos      > 0 then 'ABORTAR: hay tokens modernos no incluidos en la linea base revisada'
+         when permisos_malos       > 0 then 'ABORTAR: permisos fuera del vocabulario canonico'
+         when sin_created_by       > 0 then 'ABORTAR: filas sin created_by'
+         when fechas_nulas         > 0 then 'ABORTAR: created_at o expires_at nulos'
+         when fuera_de_ventana     > 0 then 'ABORTAR: caducidad fuera de la ventana de 365 dias'
+         when proyectos_con_exceso > 0 then 'ABORTAR: algun proyecto ya supera 5 enlaces vigentes'
+         when enlaces_legacy      <> 8 then 'REVISAR: los enlaces heredados no son los 8 de la linea base'
+         else 'OK'
+       end as veredicto, *
+from (
+  select
+    (select count(*) from public.portal_tokens) as tokens_modernos,
+    (select count(*) from public.portal_tokens t
+       where not public.portal_token_permissions_valid(t.permissions)) as permisos_malos,
+    (select count(*) from public.portal_tokens where created_by is null) as sin_created_by,
+    (select count(*) from public.portal_tokens
+       where created_at is null or expires_at is null) as fechas_nulas,
+    (select count(*) from public.portal_tokens
+       where expires_at is not null and created_at is not null
+         and (expires_at <= created_at
+              or expires_at > created_at + public.portal_token_max_lifetime())) as fuera_de_ventana,
+    (select count(*) from (
+       select 1 from public.portal_tokens
+        where is_active and revoked_at is null and expires_at > now()
+        group by project_id having count(*) > 5) x) as proyectos_con_exceso,
+    (select count(*) from public.projects
+       where access_token is not null and deleted_at is null) as enlaces_legacy
+) as evidencia;
+-- END CHECK_E4_HARDENING_DATA_PRECHECK
+
+-- Versión para scripts: solo lee y aborta si la evidencia ya no coincide con
+-- el estado que se revisó. No comprueba objetos de E4 porque E4-L1 debe existir.
+-- BEGIN CHECK_E4_HARDENING_DATA_PRECHECK_GATE
+do $precheck$
+declare v integer;
+begin
+  select count(*) into v from public.portal_tokens;
+  if v > 0 then raise exception 'Precheck: % modern portal tokens outside the reviewed baseline', v; end if;
+
+  select count(*) into v from public.portal_tokens t
+    where not public.portal_token_permissions_valid(t.permissions);
+  if v > 0 then raise exception 'Precheck: % tokens with incompatible permissions', v; end if;
+
+  select count(*) into v from public.portal_tokens
+    where created_at is null or expires_at is null or created_by is null;
+  if v > 0 then raise exception 'Precheck: % tokens with null created_at, expires_at or created_by', v; end if;
+
+  select count(*) into v from public.portal_tokens
+    where expires_at <= created_at
+       or expires_at > created_at + public.portal_token_max_lifetime();
+  if v > 0 then raise exception 'Precheck: % tokens outside the maximum expiry window', v; end if;
+
+  select count(*) into v from (
+    select 1 from public.portal_tokens
+     where is_active and revoked_at is null and expires_at > now()
+     group by project_id having count(*) > 5) x;
+  if v > 0 then raise exception 'Precheck: % projects already above 5 live links', v; end if;
+
+  select count(*) into v from public.projects
+    where access_token is not null and deleted_at is null;
+  if v <> 8 then
+    raise exception 'Precheck: % legacy links, reviewed baseline says 8. Explain the difference before deploying', v;
+  end if;
+end $precheck$;
+-- END CHECK_E4_HARDENING_DATA_PRECHECK_GATE
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
 -- BLOQUE E4-L1 · Tras 20260923120000_portal_token_lifecycle.sql (SELECT solamente)
 -- Inventario de las tres RPC de gestión, sus auxiliares privados y sus privilegios.
 -- Esperado: anon_execute = false en las tres RPC y en todo portal_token_internal;

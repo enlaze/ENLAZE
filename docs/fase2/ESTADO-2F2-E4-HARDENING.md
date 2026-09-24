@@ -214,9 +214,11 @@ dentro de E4-L1**. Ejecutarlos antes falla con «function does not exist»: just
 cuando más falta hacían, no decían nada.
 
 **`CHECK_E4_L1_PRECHECK`** es autónomo: solo tablas y expresiones que ya existen.
-Es solo lectura y no selecciona `portal_tokens.token` ni `projects.access_token`
-en ningún momento; cuenta filas. Devuelve un `veredicto` y las siete columnas de
-evidencia que lo justifican, y aborta ante:
+Es el gate histórico anterior a E4-L1 y, por diseño, aborta si encuentra objetos
+de E4. Ya no se usa para desplegar el listado porque `20260923120000` está
+aplicada en producción. Es solo lectura y no selecciona `portal_tokens.token` ni
+`projects.access_token` en ningún momento; cuenta filas. Devuelve un `veredicto`
+y las siete columnas de evidencia que lo justifican, y aborta ante:
 
 | Condición | Columna |
 |---|---|
@@ -230,7 +232,13 @@ evidencia que lo justifican, y aborta ante:
 | enlaces heredados distintos de la línea base de 8 | `enlaces_legacy` |
 
 `CHECK_E4_L1_PRECHECK_GATE` es la misma comprobación en un bloque `DO` que lanza,
-para guiones que tengan que parar. Un `DO` no escribe nada: lee y lanza.
+para guiones que desplieguen E4-L1 desde cero. Un `DO` no escribe nada: lee y
+lanza.
+
+Para el estado actual existe **`CHECK_E4_HARDENING_DATA_PRECHECK`**, acompañado
+por `_GATE`: exige E4-L1 ya disponible, conserva todos los controles de datos y
+de línea base, pero no cuenta sus objetos legítimos como una aplicación parcial.
+Es el único precheck de datos que usa el procedimiento del listado.
 
 ### Recuento corregido
 
@@ -247,13 +255,13 @@ E4-L1 crea **7** auxiliares privados, no 6. Tras aplicarlo el inventario debe da
 |---|---|
 | `portal-token-access.integration` | **14/14**, sin tocar |
 | `portal-token-lifecycle.integration` | **18/18**, sin tocar |
-| `portal-token-listing.integration` | **14/14** (listado, paginación, cursor y gate de despliegue) |
-| `portal-telemetry-redaction` | **19/19** (11 + fail-closed, Replay y PostHog) |
+| `portal-token-listing.integration` | **15/15** (listado, paginación, cursor y gates de despliegue) |
+| `portal-telemetry-redaction` | **20/20** (11 + fail-closed, Replay, PostHog y selección del enlace) |
 | `portal-telemetry-isolation.browser` | **PASS** |
 
 Las tres suites SQL comparten una sola base y cada una reconstruye el esquema,
 así que **no pueden correr en paralelo**: CI las lanza en pasos separados y en
-local hay que pasar `--test-concurrency=1` si se ejecutan juntas (así dan 46/46).
+local hay que pasar `--test-concurrency=1` si se ejecutan juntas (así dan 47/47).
 
 La prueba de navegador monta el `AnalyticsProvider` real con un secreto centinela
 en la ruta y comprueba que no aparece en eventos de PostHog, eventos de Sentry,
@@ -333,7 +341,10 @@ misma forma; lo que cambia es el recuento.
 - `CHECK_E4_DEPLOY_PENDING` → `veredicto = OK`. Exige `20260915160000` y
   `20260923120000` registradas, `20260925090000` ausente, y avisa si apareciera
   alguna versión por encima que dejara el listado fuera de orden.
-- `CHECK_E4_L1_PRECHECK` → `veredicto = OK` (estado de los datos).
+- `CHECK_E4_HARDENING_DATA_PRECHECK` → `veredicto = OK`; después se ejecuta
+  `CHECK_E4_HARDENING_DATA_PRECHECK_GATE`. Este es el gate del estado actual:
+  E4-L1 ya aplicada, 0 enlaces modernos y 8 heredados. No usar aquí el histórico
+  `CHECK_E4_L1_PRECHECK`, que correctamente aborta cuando ya existen objetos E4.
 
 **2 · Dry-run**
 

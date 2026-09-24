@@ -330,3 +330,16 @@ test("PostHog no captura la URL real por su cuenta", () => {
     (provider.match(/if \(isPortalPath\(window\.location\.pathname\)\) return;/g) ?? []).length, 2,
     "la ruta se recomprueba al montar y otra vez en la respuesta de getUser");
 });
+
+test("Compartir selecciona el enlace moderno vigente más reciente y avisa si no existe", () => {
+  const pagina = source("app/dashboard/projects/[id]/page.tsx");
+  assert.match(pagina,
+    /\.eq\("is_active", true\)\s*\.is\("revoked_at", null\)\s*\.gt\("expires_at", new Date\(\)\.toISOString\(\)\)\s*\.order\("created_at", \{ ascending: false \}\)/s,
+    "un enlace activo pero revocado o caducado no puede copiarse, y entre varios se elige el más reciente");
+  assert.match(pagina, /\.maybeSingle\(\)/,
+    "cero enlaces modernos es un resultado normal: entonces se comprueba el heredado");
+  assert.match(pagina, /toast\.error\("No hay ningún enlace vigente para compartir\."\)/,
+    "si tampoco existe enlace heredado, el usuario recibe una explicación");
+  assert.equal(/if \(!legacy\?\.access_token\) return;/.test(pagina), false,
+    "el camino sin enlace no puede volver a ser un clic silencioso");
+});
