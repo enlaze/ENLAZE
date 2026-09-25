@@ -38,8 +38,8 @@ interface Project {
   actual_cost: number;
   notes: string;
   /* access_token NO está aquí a propósito: es el secreto del enlace heredado y
-     no debe vivir en el estado de la pantalla. Se pide a demanda, solo al
-     copiar el enlace. Ver loadAll() y el botón "Compartir con cliente". */
+     no debe vivir en el estado de la pantalla. La gestión moderna se delega en
+     PortalLinksDialog, que usa RPC y nunca recupera secretos ya emitidos. */
   created_at: string;
   updated_at: string;
 }
