@@ -323,13 +323,42 @@ commit;
 -- END ROLLBACK_2F2_E2
 
 -- ═════════════════════════════════════════════════════════════════════════════════════
--- ORDEN DE LOS DOS BLOQUES DE E4 · se compensa en orden inverso al despliegue
+-- ORDEN DE LOS TRES BLOQUES DE E4 · se compensa en orden inverso al despliegue
 --
--- E4-HARDENING va PRIMERO y E4-L1 después. Al revés falla: E4-L1 hace
+-- E4-L2-CUTOVER va primero, E4-HARDENING después y E4-L1 al final. Alterar ese
+-- orden falla: E4-L1 hace
 -- `drop schema portal_token_internal` (sin CASCADE, a propósito, para no borrar de
 -- más sin darse cuenta) y el esquema no está vacío mientras sigan dentro
 -- visible_project y su RPC pública portal_list_tokens, que crea el hardening.
 -- ═════════════════════════════════════════════════════════════════════════════════════
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BLOQUE E4-L2-CUTOVER · revierte 20260925100000_portal_token_ui_cutover.sql
+--
+-- Reabre deliberadamente la lectura directa de portal_tokens para la interfaz
+-- antigua. Esto vuelve a permitir que el dueño relea secretos ya emitidos y,
+-- por tanto, elimina la garantía de copia única. Solo debe usarse DESPUÉS de
+-- retirar la interfaz nueva y con una incidencia que justifique la regresión;
+-- para un fallo de la interfaz nueva se prefiere corregir hacia delante.
+-- Debe ir antes que ROLLBACK_2F2_E4_HARDENING, porque ese bloque exige que la
+-- interfaz antigua conserve alguna vía de lectura.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BEGIN ROLLBACK_2F2_E4_L2_CUTOVER
+begin;
+do $guard$
+begin
+  if current_setting('enlaze.allow_portal_ui_cutover_rollback', true)
+       is distinct from 'temporarily_restore_direct_secret_read' then
+    raise exception 'Set explicit temporarily_restore_direct_secret_read acknowledgement; otherwise forward-fix only';
+  end if;
+  if to_regprocedure('public.portal_list_tokens(uuid,integer,timestamp with time zone,uuid)') is null then
+    raise exception 'portal_list_tokens is absent: restore the reviewed dependency before changing privileges';
+  end if;
+end $guard$;
+grant select on table public.portal_tokens to authenticated;
+notify pgrst, 'reload schema';
+commit;
+-- END ROLLBACK_2F2_E4_L2_CUTOVER
 
 -- ─────────────────────────────────────────────────────────────────────────────────────
 -- BLOQUE E4-HARDENING · revierte 20260925090000_portal_token_listing.sql

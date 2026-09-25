@@ -13,6 +13,7 @@ import ChaptersPanel from "@/app/dashboard/projects/_components/ChaptersPanel";
 import ProgressPanel from "@/app/dashboard/projects/_components/ProgressPanel";
 import DocumentsPanel from "@/app/dashboard/projects/_components/DocumentsPanel";
 import SignaturePanel from "@/app/dashboard/projects/_components/SignaturePanel";
+import PortalLinksDialog from "@/app/dashboard/projects/_components/PortalLinksDialog";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import Breadcrumbs from "@/components/ui/breadcrumbs";
@@ -310,7 +311,7 @@ export default function ProjectDetailPage() {
   const [supplierAssignForm, setSupplierAssignForm] = useState({ supplier_id: "", role: "", notes: "" });
   const [savingSupplierAssign, setSavingSupplierAssign] = useState(false);
 
-  const [linkCopied, setLinkCopied] = useState(false);
+  const [showPortalLinks, setShowPortalLinks] = useState(false);
 
   // Dynamic service labels from sector config
   const sTypes = serviceTypes();
@@ -837,57 +838,20 @@ export default function ProjectDetailPage() {
             </span>
           )}
           <button
-            onClick={async () => {
-              /* El secreto se pide aquí, en el clic, y no al cargar la ficha:
-                 así vive lo justo para ir al portapapeles en vez de quedarse en
-                 el estado de la pantalla durante toda la sesión.
-
-                 Sigue leyéndose de portal_tokens con SELECT directo. Esa es la
-                 deuda que cierra el lote 2, cuando la interfaz pase a
-                 portal_list_tokens + portal_issue_token y pueda retirarse el
-                 SELECT de authenticated en el mismo despliegue. Hasta entonces
-                 el secreto se puede releer, así que no es "copia única". */
-              const { data: pt, error: portalTokenError } = await supabase
-                .from("portal_tokens")
-                .select("token")
-                .eq("project_id", project.id)
-                .eq("is_active", true)
-                .is("revoked_at", null)
-                .gt("expires_at", new Date().toISOString())
-                .order("created_at", { ascending: false })
-                .limit(1)
-                .maybeSingle();
-              if (portalTokenError) {
-                toast.error("No se pudo obtener el enlace del portal.");
-                return;
-              }
-              let portalUrl = pt ? `${window.location.origin}/portal/${pt.token}` : "";
-              if (!portalUrl) {
-                // Enlace heredado: el secreto no está cargado, se pide ahora.
-                const { data: legacy, error: legacyError } = await supabase
-                  .from("projects")
-                  .select("access_token")
-                  .eq("id", project.id)
-                  .single();
-                if (legacyError) {
-                  toast.error("No se pudo obtener el enlace del portal.");
-                  return;
-                }
-                if (!legacy?.access_token) {
-                  toast.error("No hay ningún enlace vigente para compartir.");
-                  return;
-                }
-                portalUrl = `${window.location.origin}/portal/${legacy.access_token}`;
-              }
-              navigator.clipboard.writeText(portalUrl);
-              setLinkCopied(true);
-              setTimeout(() => setLinkCopied(false), 3000);
-            }}
+            onClick={() => setShowPortalLinks(true)}
             className="px-4 py-1.5 rounded-lg text-sm font-medium border border-navy-200 bg-white text-navy-700 hover:bg-navy-50 hover:border-navy-300 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:hover:border-zinc-700 transition flex items-center gap-1.5">
-            {linkCopied ? "✓ Enlace copiado" : <><LinkIcon className="h-4 w-4" /> Compartir con cliente</>}
+            <LinkIcon className="h-4 w-4" /> Gestionar enlaces del portal
           </button>
         </div>
       </div>
+
+      {showPortalLinks && (
+        <PortalLinksDialog
+          projectId={project.id}
+          projectName={project.name}
+          onClose={() => setShowPortalLinks(false)}
+        />
+      )}
 
       {/* ── Info cards ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
