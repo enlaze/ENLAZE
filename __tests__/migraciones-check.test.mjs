@@ -54,7 +54,6 @@ async function withApi(status, versions, fn) {
 function run(apiUrl, args = [], token = "sbp_test") {
   return new Promise((resolve) => {
     const env = { ...process.env, SUPABASE_API_URL: apiUrl, SUPABASE_PROJECT_REF: "testref" };
-    delete env.SUPABASE_DB_URL;
     if (token) env.SUPABASE_ACCESS_TOKEN = token;
     else delete env.SUPABASE_ACCESS_TOKEN;
     const child = spawn(process.execPath, ["--import", "tsx", "scripts/migraciones-check.mts", ...args], { env });
@@ -90,6 +89,7 @@ test("check: sale con 2 si la API rechaza el token", async () => {
     const { code, out } = await run(url);
     assert.equal(code, 2, out);
     assert.match(out, /401/);
+    assert.match(out, /Migrations → Read/);
   });
 });
 

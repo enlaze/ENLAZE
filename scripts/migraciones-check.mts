@@ -5,10 +5,11 @@
  *   npm run migraciones:check   → sale con 1 si no coinciden, 2 si no pudo comprobarlo
  *   npm run dev                 → lo lanza antes (predev) con --warn: avisa, nunca bloquea
  *
- * Credenciales, en .env.local (basta una):
- *   SUPABASE_ACCESS_TOKEN  token personal de supabase.com/dashboard/account/tokens;
- *                          lee el historial por la Management API.
- *   SUPABASE_DB_URL        cadena de conexión Postgres; lee la tabla directamente.
+ * Lee el historial por la Management API con SUPABASE_ACCESS_TOKEN (.env.local
+ * o secreto de Actions): un token de supabase.com/dashboard/account/tokens
+ * limitado a este proyecto y con un único permiso, Database → Migrations → Read.
+ * No hay vía por conexión directa a propósito: SUPABASE_DB_URL daría lectura y
+ * escritura sobre toda la base para leer una lista de versiones.
  * El proyecto sale de SUPABASE_PROJECT_REF, de NEXT_PUBLIC_SUPABASE_URL o de
  * supabase/.temp/project-ref, en ese orden.
  */
@@ -72,42 +73,21 @@ async function versionsFromApi(token: string, ref: string): Promise<string[]> {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
+  if (res.status === 401 || res.status === 403) {
+    throw new Error(
+      `la Management API respondió ${res.status} para el proyecto ${ref}: el token ` +
+        "necesita este proyecto y el permiso Database → Migrations → Read",
+    );
+  }
   if (!res.ok) throw new Error(`la Management API respondió ${res.status} para el proyecto ${ref}`);
   const rows = (await res.json()) as { version: string }[];
   return rows.map((r) => r.version);
 }
 
-async function versionsFromDb(connectionString: string): Promise<string[]> {
-  // pg no trae tipos y solo se carga si se usa esta vía.
-  const pgModule: string = "pg";
-  const { default: pg } = (await import(pgModule)) as {
-    default: {
-      Client: new (config: object) => {
-        connect(): Promise<void>;
-        query(sql: string): Promise<{ rows: { version: string }[] }>;
-        end(): Promise<void>;
-      };
-    };
-  };
-  const client = new pg.Client({
-    connectionString,
-    connectionTimeoutMillis: TIMEOUT_MS,
-    query_timeout: TIMEOUT_MS,
-  });
-  await client.connect();
-  try {
-    const { rows } = await client.query("select version from supabase_migrations.schema_migrations");
-    return rows.map((r) => r.version);
-  } finally {
-    await client.end();
-  }
-}
-
 async function appliedVersions(): Promise<string[]> {
-  if (process.env.SUPABASE_DB_URL) return versionsFromDb(process.env.SUPABASE_DB_URL);
   const token = process.env.SUPABASE_ACCESS_TOKEN;
   if (!token) {
-    throw new Error("falta SUPABASE_ACCESS_TOKEN o SUPABASE_DB_URL en .env.local");
+    throw new Error("falta SUPABASE_ACCESS_TOKEN en .env.local");
   }
   const ref = projectRef();
   if (!ref) throw new Error("no se sabe qué proyecto mirar: define SUPABASE_PROJECT_REF");
