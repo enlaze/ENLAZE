@@ -332,6 +332,12 @@ commit;
 -- visible_project y su RPC pública portal_list_tokens, que crea el hardening.
 -- ═════════════════════════════════════════════════════════════════════════════════════
 
+-- 20260925110000_portal_tokens_least_privilege.sql no tiene rollback operativo.
+-- Reabrir REFERENCES/TRIGGER/TRUNCATE o SELECT a anon/authenticated no recupera
+-- ninguna función y sí restaura una superficie insegura. Ante una incidencia se
+-- corrigen hacia delante las RPC; el rollback excepcional del corte que figura
+-- debajo solo reabre SELECT a authenticated con reconocimiento explícito.
+
 -- ─────────────────────────────────────────────────────────────────────────────────────
 -- BLOQUE E4-L2-CUTOVER · revierte 20260925100000_portal_token_ui_cutover.sql
 --

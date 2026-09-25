@@ -2447,10 +2447,10 @@ select case
           where access_token is not null and deleted_at is null) as enlaces_legacy;
 -- END CHECK_E4_L2_CUTOVER_PRECHECK
 
--- Auditoría posterior al corte. La tabla ya no puede entregar secretos al
--- navegador autenticado; las cuatro RPC siguen ejecutables y el DML continúa
--- cerrado. ESPERADO: los cuatro privilegios de tabla = false; las cuatro RPC =
--- true para authenticated y false para anon.
+-- Auditoría posterior al corte 100000. La tabla ya no puede entregar secretos
+-- al navegador autenticado; las cuatro RPC siguen ejecutables y su DML sigue
+-- cerrado. Las filas de anon sirven además para detectar grants históricos:
+-- solo después de 110000 deben ser también todas false.
 -- BEGIN CHECK_E4_L2_CUTOVER_AUDIT
 select r.rolname, p.privilege,
        has_table_privilege(r.rolname, 'public.portal_tokens', p.privilege) as permitido
@@ -2478,3 +2478,38 @@ select (select count(*) from public.portal_tokens t
        (select count(*) from public.projects
           where access_token is not null and deleted_at is null) as enlaces_legacy;
 -- END CHECK_E4_L2_CUTOVER_AUDIT
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- E4 LOTE 2 · CIERRE ABSOLUTO DE ACL DIRECTA
+-- Ejecutar después de 20260925110000_portal_tokens_least_privilege.sql.
+-- ESPERADO: 14 filas con permitido=false; ACL por columna = 0; las cuatro RPC
+-- siguen ejecutables por authenticated y service_role conserva sus 7 grants.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BEGIN CHECK_E4_L2_ACL_CLOSURE_AUDIT
+select r.rolname, p.privilege,
+       has_table_privilege(r.rolname, 'public.portal_tokens', p.privilege) as permitido
+from (values ('anon'),('authenticated')) as r(rolname),
+     (values ('SELECT'),('INSERT'),('UPDATE'),('DELETE'),
+             ('TRUNCATE'),('REFERENCES'),('TRIGGER')) as p(privilege)
+order by r.rolname, p.privilege;
+
+select count(*) as acl_directa_por_columna
+from pg_attribute
+where attrelid = 'public.portal_tokens'::regclass
+  and attnum > 0 and not attisdropped and attacl is not null;
+
+select p.proname,
+       has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated_execute,
+       has_function_privilege('anon', p.oid, 'EXECUTE') as anon_execute
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public'
+  and p.proname in ('portal_list_tokens','portal_issue_token',
+                    'portal_rotate_token','portal_revoke_token')
+order by p.proname;
+
+select p.privilege,
+       has_table_privilege('service_role', 'public.portal_tokens', p.privilege) as permitido
+from (values ('SELECT'),('INSERT'),('UPDATE'),('DELETE'),
+             ('TRUNCATE'),('REFERENCES'),('TRIGGER')) as p(privilege)
+order by p.privilege;
+-- END CHECK_E4_L2_ACL_CLOSURE_AUDIT

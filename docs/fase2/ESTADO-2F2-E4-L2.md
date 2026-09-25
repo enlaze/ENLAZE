@@ -1,8 +1,7 @@
 # 2F-2 / E4 lote 2 — gestión de enlaces del portal
 
-Fecha: 2026-09-24. Estado: **implementación local, no fusionada y migración no aplicada**.
-Rama: `codex/portal-token-management-e4-l2`, basada en el merge del PR #20
-`43887790a914191437fa397da4e56f1eaa3daf16`.
+Fecha: 2026-09-25. Estado: **interfaz fusionada y desplegada; corte 100000 aplicado**.
+Merge de PR #21: `f9cc187262ceee3d645680c705ca3825b34407fe`.
 
 ## Objetivo
 
@@ -40,6 +39,16 @@ El orden controlado es:
 Así la interfaz nueva nunca depende de una RPC ausente y la antigua nunca se
 queda sin su lectura antes de ser sustituida. La garantía de copia única empieza
 en el paso 4, no antes.
+
+La auditoría posterior detectó una deuda histórica adicional: `anon` aún tenía
+`SELECT`, `REFERENCES`, `TRIGGER` y `TRUNCATE`, y `authenticated` conservaba los
+tres últimos. RLS impedía a `anon` ver filas y no existían tokens modernos, por
+lo que no hubo exposición observada, pero la ACL no cumplía mínimo privilegio.
+`20260925110000_portal_tokens_least_privilege.sql` cierra absolutamente el
+acceso directo para `PUBLIC`, `anon` y `authenticated`, sin alterar filas,
+políticas, `service_role` ni los ocho enlaces heredados.
+Esta corrección está preparada y probada en la rama
+`codex/portal-token-acl-closure-20260925`; aún no está aplicada en producción.
 
 ## Pruebas
 

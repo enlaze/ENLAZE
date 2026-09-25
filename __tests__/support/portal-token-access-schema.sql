@@ -71,6 +71,9 @@ create policy "Public update change approval" on public.project_changes
 create policy "Public update budget status" on public.budgets
   for update using(true) with check(true);
 grant select on public.portal_tokens,public.projects to anon,authenticated;
+-- Producción conserva acceso administrativo completo para service_role. El
+-- cierre del navegador no debe degradar ese contrato de backend.
+grant all privileges on public.portal_tokens to service_role;
 -- Production's real grants on portal_tokens. Without the write privileges the
 -- tenant-isolation assertions would pass because the privilege is missing, not
 -- because the policy refuses — which is how the defect survived until now.
