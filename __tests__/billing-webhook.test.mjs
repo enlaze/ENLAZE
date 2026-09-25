@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import Stripe from "stripe";
-import { handleStripeWebhook, mapStripeStatus } from "../lib/billing-webhook.ts";
+import { handleStripeWebhook, mapStripeStatus, patchFromSubscription } from "../lib/billing-webhook.ts";
 
 const SECRET = "whsec_test_unit_only";
 // Clave falsa: constructEvent no llama a la red.
@@ -132,4 +132,31 @@ test("estados de Stripe → estados de Enlaze", () => {
   assert.equal(mapStripeStatus("canceled"), "canceled");
   assert.equal(mapStripeStatus("incomplete_expired"), "canceled");
   assert.equal(mapStripeStatus("incomplete"), null);
+});
+
+function activeSubscription(overrides = {}) {
+  return {
+    id: "sub_test_cancel",
+    customer: "cus_test_cancel",
+    status: "active",
+    cancel_at_period_end: false,
+    cancel_at: null,
+    items: { data: [{ price: { id: "price_test_basico_monthly" }, current_period_end: 1792929541 }] },
+    ...overrides,
+  };
+}
+
+test("cancelar al final del periodo se guarda también cuando Stripe lo expresa con cancel_at", () => {
+  process.env.STRIPE_PRICE_BASICO_MONTHLY = "price_test_basico_monthly";
+  // El portal de clientes, con la API actual, programa la baja con cancel_at
+  // en el final del periodo y deja cancel_at_period_end en false.
+  const viaCancelAt = patchFromSubscription(activeSubscription({ cancel_at: 1792929541 }));
+  assert.equal(viaCancelAt.cancel_at_period_end, true);
+  assert.equal(viaCancelAt.status, "active");
+
+  const viaFlag = patchFromSubscription(activeSubscription({ cancel_at_period_end: true }));
+  assert.equal(viaFlag.cancel_at_period_end, true);
+
+  // Reactivar desde el portal borra cancel_at: vuelve a false.
+  assert.equal(patchFromSubscription(activeSubscription()).cancel_at_period_end, false);
 });

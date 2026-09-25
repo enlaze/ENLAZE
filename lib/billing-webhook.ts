@@ -83,7 +83,9 @@ export function patchFromSubscription(sub: Stripe.Subscription): SubscriptionPat
   const patch: SubscriptionPatch = {
     stripe_subscription_id: sub.id,
     stripe_customer_id: idOf(sub.customer) ?? undefined,
-    cancel_at_period_end: sub.cancel_at_period_end,
+    // El portal programa la baja con cancel_at (en el final del periodo) y deja
+    // cancel_at_period_end en false: cualquiera de los dos significa que no renueva.
+    cancel_at_period_end: sub.cancel_at_period_end || sub.cancel_at != null,
   };
 
   const status = mapStripeStatus(sub.status);
