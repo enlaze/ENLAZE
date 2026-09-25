@@ -1,0 +1,109 @@
+// E4 lote 2 — el navegador pierde SELECT sobre portal_tokens, pero las cuatro
+// RPC autenticadas siguen operativas. Solo se ejecuta contra el PostgreSQL 17
+// desechable y marcado del workflow.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const enabled = process.env.RUN_PORTAL_TOKEN_INTEGRATION === "1";
+const root = new URL("../", import.meta.url);
+const sql = (path) => readFileSync(new URL(path, root), "utf8");
+const inlined = (path) => sql(path).replace(/\nbegin;\n/i, "\n").replace(/\ncommit;\s*$/i, "\n");
+const OWNER = "11111111-1111-4111-8111-111111111111";
+const PROJECT = "33333333-3333-4333-8333-333333333333";
+
+test("portal token UI cutover removes direct secret reads and preserves RPCs",
+  { skip: !enabled, timeout: 120000 }, async (t) => {
+  assert.equal(process.env.PORTAL_TEST_ACK, "DISPOSABLE_CLUSTER");
+  assert.deepEqual(Object.keys(process.env).filter((key) => key.startsWith("PG")), []);
+  const socket = process.env.PORTAL_TEST_SOCKET;
+  if (socket) assert.match(socket, /^\/private\/tmp\/enlaze-e2-bench\.[A-Za-z0-9]+$/);
+  else assert.equal(process.env.TEST_DATABASE_URL,
+    "postgres://postgres:e2_disposable_database_only@127.0.0.1:55435/enlaze_revision_rpcs_test");
+
+  const { Client } = await import("pg");
+  const db = new Client(socket
+    ? { host: socket, port: 55435, user: "postgres", database: "enlaze_revision_rpcs_test" }
+    : { connectionString: process.env.TEST_DATABASE_URL });
+  await db.connect();
+  t.after(async () => db.end().catch(() => {}));
+
+  const identity = (await db.query(`select current_database() as db,
+    current_setting('enlaze.test_cluster_marker',true) as marker,
+    current_setting('server_version_num')::integer as version,
+    (select count(*) from pg_database where not datistemplate
+      and datname not in ('postgres',current_database()))::integer as other_dbs`)).rows[0];
+  assert.equal(identity.db, "enlaze_revision_rpcs_test");
+  assert.equal(identity.marker, "budget_revision_rpcs_2f2");
+  assert.equal(Math.floor(identity.version / 10000), 17);
+  assert.equal(identity.other_dbs, 0);
+
+  await db.query("drop schema if exists portal_token_internal cascade");
+  await db.query(sql("__tests__/support/bootstrap-budget-schema.sql"));
+  await db.query(sql("__tests__/support/portal-token-access-schema.sql"));
+  for (const migration of [
+    "20260915140000_portal_tokens_owner_only.sql",
+    "20260915150000_portal_token_read_access.sql",
+    "20260923120000_portal_token_lifecycle.sql",
+    "20260925090000_portal_token_listing.sql",
+    "20260925100000_portal_token_ui_cutover.sql",
+  ]) {
+    await db.query(inlined(`supabase/migrations/${migration}`));
+  }
+  await db.query("insert into auth.users(id) values($1)", [OWNER]);
+  await db.query("insert into public.projects(id,user_id,name) values($1,$2,'Obra')", [PROJECT, OWNER]);
+
+  const asOwner = async (expression, params = []) => {
+    await db.query("begin");
+    try {
+      await db.query("select set_config('request.jwt.claim.sub',$1,true)", [OWNER]);
+      await db.query("set local role authenticated");
+      const result = await db.query(`select ${expression} as data`, params);
+      await db.query("commit");
+      return result.rows[0].data;
+    } catch (error) {
+      await db.query("rollback").catch(() => {});
+      throw error;
+    }
+  };
+
+  for (const privilege of ["SELECT", "INSERT", "UPDATE", "DELETE"]) {
+    assert.equal((await db.query(
+      "select has_table_privilege('authenticated','public.portal_tokens',$1) as ok",
+      [privilege])).rows[0].ok, false, `${privilege} directo debe estar retirado`);
+  }
+
+  const issued = await asOwner(
+    "public.portal_issue_token($1,'[\"read\",\"approve_changes\"]'::jsonb,null,'Cliente')",
+    [PROJECT]);
+  assert.match(issued.token, /^[0-9a-f-]{36}$/i, "emitir entrega el secreto una vez");
+
+  const listed = await asOwner("public.portal_list_tokens($1)", [PROJECT]);
+  assert.equal(listed.items.length, 1);
+  assert.equal(listed.items[0].id, issued.id);
+  assert.equal(JSON.stringify(listed).includes(issued.token), false,
+    "el listado no puede recuperar el secreto");
+
+  const rotated = await asOwner("public.portal_rotate_token($1)", [issued.id]);
+  assert.notEqual(rotated.issued.token, issued.token);
+  assert.equal(Object.hasOwn(rotated.revoked, "token"), false);
+  const revoked = await asOwner("public.portal_revoke_token($1)", [rotated.issued.id]);
+  assert.equal(revoked.is_active, false);
+  assert.equal(Object.hasOwn(revoked, "token"), false);
+
+  await assert.rejects(
+    () => asOwner("(select token from public.portal_tokens where id=$1)", [rotated.issued.id]),
+    /permission denied for table portal_tokens/,
+    "ni siquiera el dueño puede releer el secreto con SELECT directo");
+
+  for (const signature of [
+    "portal_list_tokens(uuid,integer,timestamp with time zone,uuid)",
+    "portal_issue_token(uuid,jsonb,timestamp with time zone,text)",
+    "portal_rotate_token(uuid,timestamp with time zone)",
+    "portal_revoke_token(uuid)",
+  ]) {
+    assert.equal((await db.query(
+      "select has_function_privilege('authenticated',$1,'EXECUTE') as ok",
+      [`public.${signature}`])).rows[0].ok, true, `${signature} sigue ejecutable`);
+  }
+});

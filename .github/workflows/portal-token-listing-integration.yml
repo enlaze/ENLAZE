@@ -11,16 +11,21 @@ on:
     paths:
       - "supabase/migrations/*portal_token_listing.sql"
       - "supabase/migrations/*portal_token_lifecycle.sql"
+      - "supabase/migrations/*portal_token_ui_cutover.sql"
       - "lib/portal-path-redaction.ts"
       - "lib/sentry-portal-scrubbing.ts"
       - "lib/telemetry-safe.ts"
       - "lib/analytics.ts"
       - "components/AnalyticsProvider.tsx"
       - "app/dashboard/projects/[id]/page.tsx"
+      - "app/dashboard/projects/_components/PortalLinksDialog.tsx"
       - "instrumentation-client.ts"
       - "sentry.*.config.ts"
       - "__tests__/portal-telemetry-*"
       - "__tests__/portal-token-listing.integration.test.mjs"
+      - "__tests__/portal-token-management.test.mjs"
+      - "__tests__/portal-token-management.browser.test.mjs"
+      - "__tests__/portal-token-ui-cutover.integration.test.mjs"
       - "__tests__/support/portal-token-access-schema.sql"
       - ".github/workflows/portal-token-listing-integration.yml"
   workflow_dispatch:
@@ -78,6 +83,12 @@ jobs:
         run: node --test __tests__/portal-token-lifecycle.integration.test.mjs
       - name: Listing never returns the secret
         run: node --test __tests__/portal-token-listing.integration.test.mjs
+      - name: Management UI reveals secrets only on issue or rotation
+        run: |
+          node --test __tests__/portal-token-management.test.mjs
+          node __tests__/portal-token-management.browser.test.mjs
+      - name: UI cutover removes direct secret reads
+        run: node --test __tests__/portal-token-ui-cutover.integration.test.mjs
       - name: Migration conventions
         run: node --test __tests__/migration-transaction-control.test.mjs
       - name: Remove disposable database

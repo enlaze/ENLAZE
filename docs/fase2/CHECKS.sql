@@ -2418,3 +2418,63 @@ group by project_id
 having count(*) > 5
 order by vigentes desc;
 -- END CHECK_E4_L1_VALUES
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- E4 LOTE 2 · PRECHECK DEL CORTE DE LECTURA DIRECTA
+-- Ejecutar después de 20260925090000 y antes de
+-- 20260925100000_portal_token_ui_cutover.sql. Solo lectura.
+-- ESPERADO: veredicto = OK. Si authenticated_select ya es false, no volver a
+-- aplicar ni conceder nada: comprobar el historial y auditar hacia delante.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BEGIN CHECK_E4_L2_CUTOVER_PRECHECK
+select case
+         when to_regprocedure('public.portal_list_tokens(uuid,integer,timestamp with time zone,uuid)') is null
+           then 'ABORTAR: falta portal_list_tokens'
+         when to_regprocedure('public.portal_issue_token(uuid,jsonb,timestamp with time zone,text)') is null
+           or to_regprocedure('public.portal_rotate_token(uuid,timestamp with time zone)') is null
+           or to_regprocedure('public.portal_revoke_token(uuid)') is null
+           then 'ABORTAR: ciclo de vida incompleto'
+         when not has_function_privilege('authenticated',
+              'public.portal_list_tokens(uuid,integer,timestamp with time zone,uuid)','EXECUTE')
+           then 'ABORTAR: authenticated no puede listar por RPC'
+         when not has_table_privilege('authenticated','public.portal_tokens','SELECT')
+           then 'REVISAR: el SELECT directo ya está retirado'
+         else 'OK'
+       end as veredicto,
+       has_table_privilege('authenticated','public.portal_tokens','SELECT') as authenticated_select,
+       (select count(*) from public.portal_tokens) as tokens_modernos,
+       (select count(*) from public.projects
+          where access_token is not null and deleted_at is null) as enlaces_legacy;
+-- END CHECK_E4_L2_CUTOVER_PRECHECK
+
+-- Auditoría posterior al corte. La tabla ya no puede entregar secretos al
+-- navegador autenticado; las cuatro RPC siguen ejecutables y el DML continúa
+-- cerrado. ESPERADO: los cuatro privilegios de tabla = false; las cuatro RPC =
+-- true para authenticated y false para anon.
+-- BEGIN CHECK_E4_L2_CUTOVER_AUDIT
+select r.rolname, p.privilege,
+       has_table_privilege(r.rolname, 'public.portal_tokens', p.privilege) as permitido
+from (values ('anon'),('authenticated')) as r(rolname),
+     (values ('SELECT'),('INSERT'),('UPDATE'),('DELETE')) as p(privilege)
+order by r.rolname, p.privilege;
+
+select p.proname,
+       has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated_execute,
+       has_function_privilege('anon', p.oid, 'EXECUTE') as anon_execute
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public'
+  and p.proname in ('portal_list_tokens','portal_issue_token',
+                    'portal_rotate_token','portal_revoke_token')
+order by p.proname;
+
+select (select count(*) from public.portal_tokens t
+          where not public.portal_token_permissions_valid(t.permissions)) as permisos_invalidos,
+       (select count(*) from public.portal_tokens
+          where created_by is null or created_at is null or expires_at is null) as identidad_o_fechas_nulas,
+       (select count(*) from (
+          select 1 from public.portal_tokens
+           where is_active and revoked_at is null and expires_at > now()
+           group by project_id having count(*) > 5) exceso) as proyectos_sobre_el_tope,
+       (select count(*) from public.projects
+          where access_token is not null and deleted_at is null) as enlaces_legacy;
+-- END CHECK_E4_L2_CUTOVER_AUDIT
