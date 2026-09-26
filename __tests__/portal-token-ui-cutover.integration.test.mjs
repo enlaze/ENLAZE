@@ -1,6 +1,6 @@
-// E4 lote 2 — el navegador pierde SELECT sobre portal_tokens, pero las cuatro
-// RPC autenticadas siguen operativas. Solo se ejecuta contra el PostgreSQL 17
-// desechable y marcado del workflow.
+// E4 lote 2 — el navegador pierde todo privilegio directo sobre portal_tokens,
+// pero las cuatro RPC autenticadas siguen operativas. Solo se ejecuta contra
+// el PostgreSQL 17 desechable y marcado del workflow.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -11,6 +11,8 @@ const sql = (path) => readFileSync(new URL(path, root), "utf8");
 const inlined = (path) => sql(path).replace(/\nbegin;\n/i, "\n").replace(/\ncommit;\s*$/i, "\n");
 const OWNER = "11111111-1111-4111-8111-111111111111";
 const PROJECT = "33333333-3333-4333-8333-333333333333";
+const MODERN_CHANGE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const LEGACY_CHANGE = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
 test("portal token UI cutover removes direct secret reads and preserves RPCs",
   { skip: !enabled, timeout: 120000 }, async (t) => {
@@ -47,11 +49,18 @@ test("portal token UI cutover removes direct secret reads and preserves RPCs",
     "20260923120000_portal_token_lifecycle.sql",
     "20260925090000_portal_token_listing.sql",
     "20260925100000_portal_token_ui_cutover.sql",
+    "20260925110000_portal_tokens_least_privilege.sql",
   ]) {
     await db.query(inlined(`supabase/migrations/${migration}`));
   }
   await db.query("insert into auth.users(id) values($1)", [OWNER]);
   await db.query("insert into public.projects(id,user_id,name) values($1,$2,'Obra')", [PROJECT, OWNER]);
+  const legacyToken = (await db.query(
+    "select access_token::text as token from public.projects where id=$1", [PROJECT])).rows[0].token;
+  await db.query(`insert into public.project_changes(id,user_id,project_id,title,status)
+    values($1,$2,$3,'Cambio moderno','proposed'),
+      ($4,$2,$3,'Cambio heredado','proposed')`,
+  [MODERN_CHANGE, OWNER, PROJECT, LEGACY_CHANGE]);
 
   const asOwner = async (expression, params = []) => {
     await db.query("begin");
@@ -67,16 +76,61 @@ test("portal token UI cutover removes direct secret reads and preserves RPCs",
     }
   };
 
-  for (const privilege of ["SELECT", "INSERT", "UPDATE", "DELETE"]) {
-    assert.equal((await db.query(
-      "select has_table_privilege('authenticated','public.portal_tokens',$1) as ok",
-      [privilege])).rows[0].ok, false, `${privilege} directo debe estar retirado`);
+  const asAnon = async (expression, params = []) => {
+    await db.query("begin");
+    try {
+      await db.query("set local role anon");
+      const result = await db.query(`select ${expression} as data`, params);
+      await db.query("commit");
+      return result.rows[0].data;
+    } catch (error) {
+      await db.query("rollback").catch(() => {});
+      throw error;
+    }
+  };
+
+  const directPrivileges = [
+    "SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER",
+  ];
+  for (const role of ["anon", "authenticated"]) {
+    for (const privilege of directPrivileges) {
+      assert.equal((await db.query(
+        "select has_table_privilege($1,'public.portal_tokens',$2) as ok",
+        [role, privilege])).rows[0].ok, false,
+      `${role} no debe conservar ${privilege} directo`);
+    }
   }
+  for (const privilege of directPrivileges) {
+    assert.equal((await db.query(
+      "select has_table_privilege('service_role','public.portal_tokens',$1) as ok",
+      [privilege])).rows[0].ok, true,
+    `service_role debe conservar ${privilege}`);
+  }
+
+  assert.equal((await db.query(`select count(*)::integer as n
+    from pg_attribute where attrelid='public.portal_tokens'::regclass
+      and attnum > 0 and not attisdropped and attacl is not null`)).rows[0].n, 0,
+  "no deben quedar ACL directas por columna");
 
   const issued = await asOwner(
     "public.portal_issue_token($1,'[\"read\",\"approve_changes\"]'::jsonb,null,'Cliente')",
     [PROJECT]);
   assert.match(issued.token, /^[0-9a-f-]{36}$/i, "emitir entrega el secreto una vez");
+
+  for (const [kind, token] of [["moderno", issued.token], ["heredado", legacyToken]]) {
+    const snapshot = await asAnon("public.portal_read_snapshot($1)", [token]);
+    assert.equal(snapshot.project.id, PROJECT,
+      `el portal ${kind} sigue leyendo mediante la RPC tras el revoke`);
+    assert.equal(snapshot.capabilities.respond_changes, true);
+  }
+  for (const [kind, token, change] of [
+    ["moderno", issued.token, MODERN_CHANGE],
+    ["heredado", legacyToken, LEGACY_CHANGE],
+  ]) {
+    const response = await asAnon("public.portal_respond_to_change($1,$2,true)", [token, change]);
+    assert.equal(response.status, "approved",
+      `el portal ${kind} sigue respondiendo mediante la RPC tras el revoke`);
+  }
 
   const listed = await asOwner("public.portal_list_tokens($1)", [PROJECT]);
   assert.equal(listed.items.length, 1);
@@ -95,6 +149,17 @@ test("portal token UI cutover removes direct secret reads and preserves RPCs",
     () => asOwner("(select token from public.portal_tokens where id=$1)", [rotated.issued.id]),
     /permission denied for table portal_tokens/,
     "ni siquiera el dueño puede releer el secreto con SELECT directo");
+
+  await db.query("begin");
+  try {
+    await db.query("set local role anon");
+    await assert.rejects(
+      () => db.query("select count(*) from public.portal_tokens"),
+      /permission denied for table portal_tokens/,
+      "anon no debe depender de que RLS o una tabla vacía oculten el grant residual");
+  } finally {
+    await db.query("rollback");
+  }
 
   for (const signature of [
     "portal_list_tokens(uuid,integer,timestamp with time zone,uuid)",

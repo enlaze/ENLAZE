@@ -71,10 +71,22 @@ create policy "Public update change approval" on public.project_changes
 create policy "Public update budget status" on public.budgets
   for update using(true) with check(true);
 grant select on public.portal_tokens,public.projects to anon,authenticated;
+-- PUBLIC has no grant in production today, but the least-privilege migration
+-- revokes it defensively. Reproduce that possible inheritance path so omitting
+-- PUBLIC from the revoke cannot survive the integration suite.
+grant select on public.portal_tokens to public;
+-- Producción conserva acceso administrativo completo para service_role. El
+-- cierre del navegador no debe degradar ese contrato de backend.
+grant all privileges on public.portal_tokens to service_role;
 -- Production's real grants on portal_tokens. Without the write privileges the
 -- tenant-isolation assertions would pass because the privilege is missing, not
 -- because the policy refuses — which is how the defect survived until now.
 grant insert,update,delete on public.portal_tokens to anon,authenticated;
+-- Deuda histórica que 20260925110000 existe para cerrar: la ACL de producción
+-- conservaba REFERENCES/TRIGGER/TRUNCATE para anon y authenticated. Sin
+-- reproducirla aquí, las aserciones de "ya no los tiene" pasarían porque el
+-- privilegio nunca se concedió, no porque la migración lo retire.
+grant references,trigger,truncate on public.portal_tokens to anon,authenticated;
 grant select,update on public.project_changes to anon,authenticated;
 -- Production grants anon these table privileges, so RLS is the only thing that
 -- stops a portal write. Without the grant the direct-write assertions would
