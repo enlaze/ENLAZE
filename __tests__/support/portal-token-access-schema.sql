@@ -5,7 +5,11 @@ create table public.clients (
   name text, email text, phone text, company text);
 create table public.projects (
   id uuid primary key, user_id uuid not null references auth.users(id),
-  client_id uuid references public.clients(id), access_token uuid unique default gen_random_uuid(),
+  client_id uuid references public.clients(id),
+  -- Igual que producción: NOT NULL con default, que es justo lo que S3.1
+  -- retira. Sin el NOT NULL, el guard de la migración no se ejercitaría y
+  -- la prueba del proyecto nuevo pasaría por el motivo equivocado.
+  access_token uuid unique not null default gen_random_uuid(),
   deleted_at timestamptz, name text, address text, description text, status text,
   start_date date, end_date date, budget_amount numeric, notes text,
   created_at timestamptz default now());

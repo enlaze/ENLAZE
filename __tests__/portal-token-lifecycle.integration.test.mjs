@@ -66,9 +66,14 @@ test("portal token lifecycle issues, rotates and revokes only for the owner",
   await db.query(inlined("supabase/migrations/20260923120000_portal_token_lifecycle.sql"));
 
   await db.query("insert into auth.users(id) values($1),($2)", [OWNER, OTHER]);
+  // access_token es NOT NULL con default, igual que producción: las obras que
+  // no necesitan un enlace concreto reciben el suyo del default en vez de un
+  // null que la tabla real nunca aceptaría.
   await db.query(`insert into public.projects(id,user_id,access_token,name,deleted_at)
-    values($1,$2,$3,'Obra propia',null),($4,$5,null,'Obra ajena',null),($6,$7,null,'Obra borrada',now())`,
-    [PROJECT, OWNER, LEGACY, FOREIGN_PROJECT, OTHER, DELETED_PROJECT, OWNER]);
+    values($1,$2,$3,'Obra propia',null)`, [PROJECT, OWNER, LEGACY]);
+  await db.query(`insert into public.projects(id,user_id,name,deleted_at)
+    values($1,$2,'Obra ajena',null),($3,$4,'Obra borrada',now())`,
+    [FOREIGN_PROJECT, OTHER, DELETED_PROJECT, OWNER]);
   await db.query(`insert into public.project_changes(id,user_id,project_id,title,status)
     values($1,$2,$3,'Cambio','proposed')`, [CHANGE, OWNER, PROJECT]);
 
