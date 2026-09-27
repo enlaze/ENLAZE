@@ -2513,3 +2513,63 @@ from (values ('SELECT'),('INSERT'),('UPDATE'),('DELETE'),
              ('TRUNCATE'),('REFERENCES'),('TRIGGER')) as p(privilege)
 order by p.privilege;
 -- END CHECK_E4_L2_ACL_CLOSURE_AUDIT
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- E4 LOTE 3 · S3.1 · emisión heredada detenida
+-- Antes de 20260927100000: default = gen_random_uuid(), is_nullable = NO.
+-- Después: sin default, is_nullable = YES, y las ocho filas con enlace intactas.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BEGIN CHECK_E4_L3_S31_PRECHECK
+-- ANTES del push. ESPERADO: veredicto = 'OK'.
+select case
+         when columna_existe = 0 then 'ABORTAR: no existe projects.access_token'
+         when por_defecto is distinct from 'gen_random_uuid()'
+           then 'ABORTAR: el default no es el esperado; revisar antes de aplicar'
+         when not es_not_null then 'ABORTAR: la columna ya admite NULL; S3.1 ya se aplico?'
+         when con_enlace <> 8 then 'REVISAR: los enlaces heredados no son los 8 de la linea base'
+         when sin_enlace > 0 then 'REVISAR: ya hay proyectos sin enlace heredado'
+         else 'OK'
+       end as veredicto, *
+from (
+  select
+    (select count(*) from pg_attribute
+       where attrelid='public.projects'::regclass and attname='access_token'
+         and attnum > 0 and not attisdropped) as columna_existe,
+    (select pg_get_expr(d.adbin, d.adrelid) from pg_attribute a
+       left join pg_attrdef d on d.adrelid=a.attrelid and d.adnum=a.attnum
+      where a.attrelid='public.projects'::regclass and a.attname='access_token') as por_defecto,
+    (select a.attnotnull from pg_attribute a
+      where a.attrelid='public.projects'::regclass and a.attname='access_token') as es_not_null,
+    (select count(*) from public.projects
+       where access_token is not null and deleted_at is null) as con_enlace,
+    (select count(*) from public.projects
+       where access_token is null and deleted_at is null) as sin_enlace
+) as evidencia;
+-- END CHECK_E4_L3_S31_PRECHECK
+
+-- BEGIN CHECK_E4_L3_S31_AUDIT
+-- DESPUÉS del push. ESPERADO: veredicto = 'OK' y los 8 enlaces intactos.
+select case
+         when registrada = 0 then 'ABORTAR: 20260927100000 no esta registrada'
+         when por_defecto is not null then 'ABORTAR: el default sigue emitiendo enlaces'
+         when es_not_null then 'ABORTAR: la columna sigue siendo NOT NULL'
+         when con_enlace <> 8 then 'ABORTAR: el numero de enlaces heredados cambio'
+         when unico = 0 then 'ABORTAR: se perdio la unicidad de access_token'
+         else 'OK'
+       end as veredicto, *
+from (
+  select
+    (select count(*) from supabase_migrations.schema_migrations
+       where version='20260927100000') as registrada,
+    (select pg_get_expr(d.adbin, d.adrelid) from pg_attribute a
+       left join pg_attrdef d on d.adrelid=a.attrelid and d.adnum=a.attnum
+      where a.attrelid='public.projects'::regclass and a.attname='access_token') as por_defecto,
+    (select a.attnotnull from pg_attribute a
+      where a.attrelid='public.projects'::regclass and a.attname='access_token') as es_not_null,
+    (select count(*) from public.projects
+       where access_token is not null and deleted_at is null) as con_enlace,
+    (select count(*) from pg_constraint
+       where conrelid='public.projects'::regclass and contype='u'
+         and pg_get_constraintdef(oid) ilike '%access_token%') as unico
+) as evidencia;
+-- END CHECK_E4_L3_S31_AUDIT

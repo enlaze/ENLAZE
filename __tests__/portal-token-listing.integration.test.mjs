@@ -59,11 +59,13 @@ test("portal_list_tokens returns metadata for the owner and never the secret",
   await db.query(inlined("supabase/migrations/20260925090000_portal_token_listing.sql"));
 
   await db.query("insert into auth.users(id) values($1),($2)", [OWNER, OTHER]);
+  // access_token es NOT NULL con default, igual que producción.
   await db.query(`insert into public.projects(id,user_id,access_token,name,deleted_at)
-    values($1,$2,$3,'Obra propia',null),($4,$5,null,'Obra ajena',null),
-          ($6,$7,null,'Obra borrada',now()),($8,$9,null,'Obra sin enlaces',null)`,
-    [PROJECT, OWNER, LEGACY, FOREIGN_PROJECT, OTHER,
-     DELETED_PROJECT, OWNER, EMPTY_PROJECT, OWNER]);
+    values($1,$2,$3,'Obra propia',null)`, [PROJECT, OWNER, LEGACY]);
+  await db.query(`insert into public.projects(id,user_id,name,deleted_at)
+    values($1,$2,'Obra ajena',null),($3,$4,'Obra borrada',now()),
+          ($5,$6,'Obra sin enlaces',null)`,
+    [FOREIGN_PROJECT, OTHER, DELETED_PROJECT, OWNER, EMPTY_PROJECT, OWNER]);
 
   const as = async (client, role, uid, query, params = []) => {
     await client.query("begin");
@@ -88,8 +90,13 @@ test("portal_list_tokens returns metadata for the owner and never the secret",
     sql("docs/fase2/CHECKS.sql").split(`-- BEGIN ${nombre}\n`)[1].split(`-- END ${nombre}`)[0];
 
   await t.test("el precheck actual acepta E4-L1 ya aplicada y valida los datos", async () => {
-    // Producción tiene ocho enlaces heredados. El fixture base representa uno;
-    // los otros siete viven solo dentro de esta transacción y se deshacen.
+    // Producción tiene ocho enlaces heredados activos. El fixture base ya aporta
+    // tres —access_token es NOT NULL con default, como en producción, así que
+    // toda obra no borrada tiene el suyo—; las cinco restantes viven solo
+    // dentro de esta transacción y se deshacen.
+    const base = Number((await db.query(
+      `select count(*) from public.projects
+        where access_token is not null and deleted_at is null`)).rows[0].count);
     await db.query("begin");
     try {
       await db.query(`insert into public.projects(id,user_id,access_token,name)
@@ -97,7 +104,7 @@ test("portal_list_tokens returns metadata for the owner and never the secret",
                $1,
                ('a0000000-0000-4000-8000-' || lpad(g::text,12,'0'))::uuid,
                'Legacy ' || g
-          from generate_series(1,7) g`, [OWNER]);
+          from generate_series(1, 8 - $2::int) g`, [OWNER, base]);
 
       const historico = (await db.query(bloque("CHECK_E4_L1_PRECHECK"))).rows[0];
       assert.match(historico.veredicto, /ya existen objetos de E4/,

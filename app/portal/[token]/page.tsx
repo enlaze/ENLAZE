@@ -197,13 +197,14 @@ export default function ClientPortalPage() {
 
   async function loadPortal() {
     try {
+      /* portal_read_snapshot es la única lectura del portal. La rama de
+         compatibilidad con PGRST202 existía para la ventana entre desplegar
+         esta página y aplicar 20260915150000; esa ventana se cerró el
+         2026-09-15 y el fallback leía projects con select("*"), que se traía
+         access_token —el secreto del enlace heredado— al navegador anónimo.
+         Los ocho enlaces heredados siguen abriendo: la compatibilidad vive
+         dentro de la RPC, no aquí. */
       const { data, error } = await supabase.rpc("portal_read_snapshot", { p_token: token });
-      if (error?.code === "PGRST202") {
-        // A deployed page can precede the database migration. Preserve the
-        // previous reader only until PostgREST knows the new function.
-        await loadLegacyPortal();
-        return;
-      }
       if (error || !data || typeof data !== "object" || !data.project) {
         setNotFound(true);
         return;
@@ -222,60 +223,6 @@ export default function ClientPortalPage() {
     } finally {
       setLoading(false);
     }
-  }
-
-  // Read-only compatibility for the window where this page is deployed but the
-  // migration has not run. Both writers live in the database, so neither action
-  // is offered here.
-  async function loadLegacyPortal() {
-    setCapabilities({ respond_changes: false });
-    let proj: Project | null = null;
-    const { data: portalToken } = await supabase.from("portal_tokens")
-      .select("project_id").eq("token", token).eq("is_active", true).single();
-    if (portalToken) {
-      const { data: p } = await supabase.from("projects")
-        .select("*").eq("id", portalToken.project_id).single();
-      proj = p as Project | null;
-    }
-    if (!proj) {
-      const { data: p } = await supabase.from("projects")
-        .select("*").eq("access_token", token).single();
-      proj = p as Project | null;
-    }
-    if (!proj) { setNotFound(true); return; }
-    setProject(proj);
-    const pid = proj.id;
-    const cid = proj.client_id;
-    const linked = cid
-      ? `project_id.eq.${pid},and(client_id.eq.${cid},project_id.is.null)`
-      : `project_id.eq.${pid}`;
-    const [clientRes, budgetsRes, invoicesRes, paymentsRes, changesRes, milestonesRes] =
-      await Promise.all([
-        cid ? supabase.from("clients")
-          .select("id,name,email,phone,company").eq("id", cid).single()
-          : Promise.resolve({ data: null }),
-        supabase.from("budgets")
-          .select("id,budget_number,title,service_type,status,subtotal,iva_amount,total,created_at")
-          .or(linked).order("created_at", { ascending: false }),
-        supabase.from("invoices")
-          .select("id,invoice_number,invoice_date,base_amount,iva_amount,total_amount,category,payment_status")
-          .or(linked).order("invoice_date", { ascending: false }),
-        supabase.from("payments")
-          .select("id,amount,payment_date,payment_method,concept")
-          .eq("project_id", pid).order("payment_date", { ascending: false }),
-        supabase.from("project_changes")
-          .select("id,title,description,economic_impact,time_impact_days,status,client_approved,notes,created_at")
-          .eq("project_id", pid).order("created_at", { ascending: false }),
-        supabase.from("project_milestones")
-          .select("id,title,planned_date,actual_date,status,sort_order,notes")
-          .eq("project_id", pid).order("sort_order", { ascending: true }),
-      ]);
-    setClient((clientRes.data as Client | null) ?? null);
-    setBudgets((budgetsRes.data as Budget[]) ?? []);
-    setInvoices((invoicesRes.data as Invoice[]) ?? []);
-    setPayments((paymentsRes.data as Payment[]) ?? []);
-    setChanges((changesRes.data as ProjectChange[]) ?? []);
-    setMilestones((milestonesRes.data as Milestone[]) ?? []);
   }
 
   /* ── Actions: Approve/Reject budget ── */
