@@ -1,7 +1,11 @@
 # G1 — Precios deterministas en la ruta viva
 
-Fecha: 2026-09-27. Estado: **diseño y matriz de pruebas. Sin código de producción.**
-Rama: `codex/g1-deterministic-pricing-design`, desde `origin/main` `99d11e9`.
+Fecha: 2026-09-27 (revisión 2). Estado: **diseño y matriz de pruebas. Sin código de producción.**
+Rama: `codex/g1-deterministic-pricing-design`, con `origin/main` `ec4958e` integrado.
+
+La revisión 1 inventó dos contratos en lugar de leerlos. Ambos están corregidos
+contra el código y la base reales, y el error de partida resultó ser un defecto
+vivo, no una imprecisión de documentación.
 
 ## El hallazgo que define el bloque
 
@@ -41,35 +45,98 @@ precios, y la separación entre las dos cosas es justamente lo que hace el
 resolutor. Absorber respeta esa división sin apostar la ruta viva a un camino
 sin rodaje.
 
-## Contrato propuesto
+## El defecto que apareció al verificar: `maquinaria`
+
+`app/api/agent/budget-analysis/route.ts:326` le dice al modelo:
+
+```
+- category: "mano_obra", "material", "maquinaria", "otros"
+```
+
+El CHECK de la base dice otra cosa:
+
+```sql
+budget_items_category_check
+  CHECK (category = ANY (ARRAY['material', 'mano_obra', 'otros']))
+```
+
+**El generador vivo ofrece una categoría que la base rechaza.** Una partida que
+el modelo clasifique como `maquinaria` llega intacta al escritor —
+`BudgetGenerateProvider.tsx:186` hace `text(row.category, "otros")`, y ese
+`"otros"` es solo el valor por defecto para cadenas vacías, no una
+normalización — y revienta con `23514`.
+
+Comprobado en producción: de 911 partidas, **0 son `maquinaria`** (583 material,
+310 mano_obra, 18 otros). Coherente con el rechazo.
+
+`maquinaria` sí es legítima en otro sitio: es un `business_subsector` del banco
+de precios (`pb_products`), con su propio vocabulario. El defecto es que el
+prompt de partidas tomó prestado el vocabulario del banco de precios.
+
+**Decisión de producto pendiente**, y conviene tomarla al abrir G1:
+
+- **(a) Añadir `maquinaria` al CHECK.** Migración, y arrastra el agrupado del
+  PDF (`lib/pdf-generator.ts:110` ya la contempla), los filtros y los informes.
+  Es lo correcto si la maquinaria debe verse separada en el presupuesto.
+- **(b) Quitarla del prompt** y mapear maquinaria a `otros`. Sin migración, pero
+  entierra en «otros» un coste que en obra se mira aparte.
+
+Recomiendo **(a)**: el PDF ya la trata como categoría propia, así que el resto
+del sistema ya asume que existe. Pero es una decisión de producto, no mía.
+
+## Contrato real de `price_source`
+
+La revisión 1 proponía cuatro valores inventados —`catalog`, `tracker`,
+`technical_bank`, `unresolved`—. El resolutor real (`lib/price-resolver-v2.ts`)
+no funciona así: devuelve **diez `source_type` con un `confidence_score`
+graduado**.
+
+| `source_type` | `confidence_score` | Qué es |
+|---|---|---|
+| `manual_locked` | **1.00** | precio fijado a mano y bloqueado |
+| `private_tariff` | ≤ 0.95 | tarifa privada del usuario |
+| `negotiated` | ≤ 0.93 | precio negociado con proveedor |
+| `historical_approved` | 0.88 / 0.78 / 0.65 | aprobado antes; decae con los días |
+| `preferred_supplier` | ≤ 0.85 | proveedor preferente |
+| `provider_updated` | ≈ 0.82 | actualización del proveedor |
+| `technical_bank` | 0.78 | banco técnico (CYPE/BC3) |
+| `enlaze_base` | 0.45 | base propia |
+| `market_estimate` | 0.35 | estimación de mercado |
+| `estimated` | **0.05** | el resolutor no encontró nada |
+
+**No existe `unresolved`.** Su equivalente es `estimated` con confianza 0.05:
+el resolutor ya dice «esto me lo he inventado», solo que lo dice con un número
+en lugar de negarse.
+
+Eso reescribe la regla de G1. «Impedir precios inventados» no es distinguir
+resuelto de no resuelto, es **fijar un umbral de confianza por debajo del cual
+un precio no puede presentarse como firme**. Los candidatos naturales son
+`market_estimate` (0.35) y `estimated` (0.05).
+
+**Segunda decisión de producto**: dónde va el umbral y qué pasa debajo. Propongo
+**0.45** —deja pasar `enlaze_base` y superiores, marca `market_estimate` y
+`estimated`— pero el número lo decide quien firma los presupuestos, y conviene
+medirlo antes con presupuestos reales.
+
+## Contrato propuesto para el modelo
 
 El modelo deja de emitir `unit_cost`. Emite, por partida:
 
 ```
-{ concept, description, quantity, unit, category, price_hint? }
+{ concept, description, quantity, unit, category, chapter, price_hint? }
 ```
 
-`price_hint` es opcional y **no se usa para calcular**: solo se registra, para
-poder medir después cuánto se desviaba el modelo del precio real.
+`price_hint` es opcional y **no se usa para calcular**: se registra para poder
+medir después cuánto se desviaba el modelo del precio real.
 
-El resolutor decide el precio y devuelve, por partida, el origen:
+El resolutor decide el precio y cada partida viaja con su `source_type` y su
+`confidence_score` hasta la interfaz. Por debajo del umbral, la partida se marca
+y **no se presenta como precio comprobado**; qué se hace exactamente con ella es
+la puerta de G2.
 
-| `price_source` | Significado |
-|---|---|
-| `catalog` | tarifa del usuario o proveedor autorizado |
-| `tracker` | producto con precio comprobado en el rastreador |
-| `technical_bank` | banco técnico (CYPE/BC3) |
-| `unresolved` | **no hay precio**: la partida sale a cero y marcada |
-
-**Ninguna partida sale con precio si el resolutor no lo encontró.** Hoy el
-modelo rellena el hueco con una invención; el diseño lo sustituye por un
-`unresolved` visible que obliga a decidir a una persona. Eso es la parte de
-«impedir precios inventados».
-
-Y «impedir partidas improcedentes»: toda partida debe declarar `category`
-dentro del vocabulario canónico (`material`, `mano_obra`, `otros`) y superar el
-filtro de sector. Una partida que no encaja en el oficio del proyecto se
-descarta antes de llegar al presupuesto, no después.
+`category` debe pertenecer al vocabulario que el CHECK acepte **en ese momento**
+—hoy tres valores, cuatro si se toma la decisión (a)—, y la validación debe leer
+el vocabulario de un solo sitio, no repetirlo en el prompt y en el escritor.
 
 ## Criterios de entrada y de terminado
 
@@ -78,38 +145,44 @@ descarta antes de llegar al presupuesto, no después.
 **Terminado**:
 1. Un presupuesto generado por la interfaz no contiene ni un `unit_price` que no
    provenga del resolutor.
-2. Cada partida lleva su `price_source`, y las `unresolved` son visibles en la
-   interfaz y no suman al total como si fueran precio firme.
-3. Cero partidas fuera del vocabulario de categorías.
-4. La línea base estática no empeora.
-5. `generate-v2` sigue existiendo pero queda marcado como pendiente de retirada
-   con fecha y responsable.
+2. Cada partida lleva `source_type` y `confidence_score` hasta la interfaz, y
+   las que quedan por debajo del umbral están marcadas y **no** se presentan
+   como precio comprobado.
+3. Cero partidas con una `category` que el CHECK rechace. El vocabulario se lee
+   de un único sitio.
+4. La tasa de partidas por debajo del umbral está **medida** sobre presupuestos
+   reales antes de cambiar la ruta viva.
+5. La línea base estática no empeora (hoy 19 fallos preexistentes).
+6. `generate-v2` sigue existiendo pero con fecha y responsable de retirada.
 
 ## Matriz de pruebas
 
 | Área | Casos |
 |---|---|
 | **Determinismo** | dos generaciones con la misma entrada y el mismo catálogo dan los mismos precios; cambiar el catálogo cambia el precio; cambiar solo la redacción del proyecto no lo cambia |
-| **Origen del precio** | cada partida lleva `price_source`; `catalog` gana a `tracker` y `tracker` a `technical_bank`; sin coincidencia sale `unresolved` |
-| **Precios no inventados** | un catálogo vacío produce todas las partidas `unresolved` y **ninguna** con precio; un `price_hint` del modelo nunca acaba en `unit_price` |
-| **Partidas improcedentes** | categoría fuera del vocabulario → rechazada; partida de otro oficio → descartada; cantidad ausente o no numérica → rechazada |
-| **Cálculo** | el total es la suma de las partidas resueltas; las `unresolved` no inflan el total ni lo bloquean en silencio |
-| **Regresión de la ruta viva** | el contexto por sector, rastreador y ubicación sigue llegando al prompt; el flujo completo del asistente sigue terminando en un presupuesto guardado |
-| **Mutantes obligatorios** | devolver el `price_hint` como `unit_price` → debe fallar; saltarse el filtro de categoría → debe fallar; tratar `unresolved` como 0 € firme → debe fallar |
-| **E2E** | generar desde la interfaz, revisar las `unresolved`, corregirlas a mano, guardar y exportar |
+| **Origen y confianza** | cada partida lleva `source_type` y `confidence_score`; la cadena respeta su orden de prioridad (`manual_locked` > `private_tariff` > `negotiated` > `historical_approved` > `preferred_supplier` > `provider_updated` > `technical_bank` > `enlaze_base` > `market_estimate` > `estimated`); `historical_approved` decae con los días (0.88 / 0.78 / 0.65) |
+| **Precios no inventados** | con el catálogo vacío todo cae a `estimated` 0.05 y **ninguna** partida se presenta como firme; un `price_hint` del modelo nunca acaba en `unit_price`; el umbral se aplica en el servidor, no solo al pintar |
+| **Categorías** | una `category` fuera del vocabulario del CHECK se rechaza **antes** de llegar al escritor, con mensaje accionable; `maquinaria` según la decisión (a) o (b), y la prueba debe fallar si prompt y CHECK divergen otra vez |
+| **Cálculo** | el total suma solo las partidas por encima del umbral; las de debajo no lo inflan ni lo bloquean en silencio |
+| **Regresión de la ruta viva** | el contexto por sector, rastreador y ubicación sigue llegando al prompt; el asistente sigue terminando en un presupuesto guardado |
+| **Mutantes obligatorios** | devolver el `price_hint` como `unit_price` → debe fallar; saltarse la validación de categoría → debe fallar; tratar una partida bajo umbral como precio firme → debe fallar; bajar el umbral a 0 → debe fallar |
+| **E2E** | generar desde la interfaz, revisar las partidas marcadas, corregirlas a mano, guardar y exportar |
 
-Las tres pruebas de mutante no son opcionales: sin ellas, una suite que solo
+Las cuatro pruebas de mutante no son opcionales: sin ellas, una suite que solo
 comprueba «hay precio» pasaría con el modelo inventándolo.
 
 ## Riesgos
 
-- **Cobertura del catálogo.** Si el resolutor no cubre lo que el modelo propone,
-  el presupuesto sale lleno de `unresolved` y la herramienta parece peor que
-  antes, aunque sea más honesta. Hay que medir la tasa de resolución sobre
-  presupuestos reales **antes** de cambiar la ruta viva; es el dato que decide si
-  G1 se despliega o se pospone.
-- **Decisión de producto**: qué hacer con una partida `unresolved` — bloquear el
-  PDF, dejarla a cero y avisar, o pedir precio al usuario. Es la puerta de G2 y
-  conviene decidirla al empezar G1, no al acabarlo.
+- **Cobertura del catálogo, y es el riesgo que decide el bloque.** Si el
+  resolutor no cubre lo que el modelo propone, el presupuesto sale lleno de
+  partidas marcadas y la herramienta parece peor que antes, aunque sea más
+  honesta. Hay que medir la distribución de `confidence_score` sobre
+  presupuestos reales **antes** de tocar la ruta viva: si la mayoría cae en
+  `market_estimate` o `estimated`, G1 no se despliega, se pospone y primero se
+  amplía el catálogo.
+- **Tres decisiones de producto**, todas al abrir G1 y no al cerrarlo: qué pasa
+  con `maquinaria` (a o b), dónde va el umbral de confianza, y qué se hace con
+  una partida por debajo — bloquear el PDF, dejarla marcada a cero, o pedir el
+  precio al usuario. La tercera es la puerta de G2.
 - **`generate-v2` acumula deuda mientras siga ahí.** Si G1 se alarga, quedan dos
   generadores divergiendo. Poner fecha de retirada desde el primer día.
