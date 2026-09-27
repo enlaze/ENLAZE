@@ -368,7 +368,8 @@ alter table public.budget_items
 -- pasado.
 -- Ampliado el 2026-09-27 por 20260927120000_budget_items_allow_maquinaria.sql:
 -- `maquinaria` es válida desde entonces. El generador ya la ofrecía al modelo y
--- el PDF ya la agrupaba aparte; lo que faltaba era que la tabla la admitiera.
+-- el PDF reconoce su etiqueta, aunque todavía suma su importe bajo «Otros»; lo
+-- que faltaba era que la tabla la admitiera.
 -- Cualquier valor fuera de estos cuatro se sigue rechazando.
 alter table public.budget_items add constraint budget_items_category_check check (
   category in ('material','mano_obra','maquinaria','otros')

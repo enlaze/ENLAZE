@@ -34,9 +34,15 @@ nació de que el prompt de partidas tomó prestada esa lista.
 
 ## La decisión
 
-Se amplía el vocabulario en vez de quitarla del prompt. El generador de PDF ya
-la trata como etiqueta propia (`lib/pdf-generator.ts:110`), así que el resto del
-sistema ya asumía que existe; lo que faltaba era que la tabla la admitiera.
+Se amplía el vocabulario en vez de quitarla del prompt. El generador de PDF
+**reconoce la etiqueta «Maquinaria»** (`lib/pdf-generator.ts:110`), así que el
+resto del sistema ya asumía que la categoría existe; lo que faltaba era que la
+tabla la admitiera.
+
+Conviene ser preciso sobre qué hace el PDF y qué no: reconoce la etiqueta en
+cada línea, pero **incluye su importe en el subtotal «Otros»**, porque el
+desglose agrupa en material, mano de obra y todo lo demás (`:916-922`, rotulado
+en `:995`). Maquinaria no tiene subtotal propio, y esta migración no se lo da.
 
 ## Qué cambia, y qué no
 
@@ -119,11 +125,15 @@ restricción**. Dentro de su transacción eso no puede pasar.
 
 ## Riesgos
 
-- **La agrupación del PDF no distingue maquinaria.** `lib/pdf-generator.ts:918`
-  agrupa en material / mano de obra / **todo lo demás**, así que una partida de
-  maquinaria suma en «otros» aunque tenga etiqueta propia. No rompe nada y la
-  migración no lo empeora, pero si el objetivo era ver la maquinaria separada en
-  el presupuesto, falta ese paso. Decisión de producto, fuera de este lote.
+- **Falta un subtotal propio de maquinaria en el PDF, y sigue faltando tras
+  este lote.** `lib/pdf-generator.ts:916-922` agrupa en material / mano de obra
+  / **todo lo demás**, y ese tercer grupo se rotula «Otros» (`:995`). Una
+  partida de maquinaria se ve con su etiqueta en la línea, pero su importe suma
+  bajo «Otros». No rompe nada y la migración no lo empeora —antes esa partida
+  ni siquiera se podía guardar—, pero si el objetivo era ver la maquinaria
+  separada en el presupuesto, falta ese paso. **No se implementa aquí**: añadir
+  un cuarto grupo cambia la cara del PDF que ve el cliente y necesita decisión
+  propia.
 - **Estrechar deja de ser posible con la primera partida.** Inherente; el
   rollback lo detecta y se niega.
 - **El CHECK sigue sin nacer de una migración**: esta lo sustituye, así que a

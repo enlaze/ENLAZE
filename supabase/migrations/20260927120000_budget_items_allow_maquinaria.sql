@@ -12,8 +12,11 @@
 -- maquinaria (583 material, 310 mano_obra, 18 otros).
 --
 -- Decisión de producto: se amplía el vocabulario en vez de quitarla del prompt.
--- El generador de PDF ya la trata como agrupación propia
--- (lib/pdf-generator.ts), así que el resto del sistema ya asume que existe.
+-- El generador de PDF reconoce la etiqueta «Maquinaria»
+-- (lib/pdf-generator.ts:110), aunque hoy incluye su importe en el subtotal
+-- «Otros»: el desglose agrupa en material, mano de obra y todo lo demás. Es
+-- decir, la categoría ya existe para el sistema, pero todavía no tiene subtotal
+-- propio; eso es otra decisión y no entra aquí.
 --
 -- Esto SOLO amplía. No toca ninguna de las 911 filas, no relaja la restricción
 -- —cualquier categoría fuera de las cuatro se sigue rechazando— y no cambia
@@ -68,7 +71,8 @@ alter table public.budget_items
 
 comment on constraint budget_items_category_check on public.budget_items is
   'Vocabulario canónico de categorías de partida. maquinaria se añadió el '
-  '2026-09-27 porque el generador ya la ofrecía y el PDF ya la agrupaba aparte. '
-  'Cualquier valor fuera de la lista se sigue rechazando.';
+  '2026-09-27 porque el generador ya la ofrecía. El PDF reconoce su etiqueta '
+  'pero de momento la suma bajo «Otros». Cualquier valor fuera de la lista se '
+  'sigue rechazando.';
 
 notify pgrst, 'reload schema';
