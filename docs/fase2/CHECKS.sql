@@ -2573,3 +2573,54 @@ from (
          and pg_get_constraintdef(oid) ilike '%access_token%') as unico
 ) as evidencia;
 -- END CHECK_E4_L3_S31_AUDIT
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- CATEGORÍAS DE PARTIDA · 20260927120000_budget_items_allow_maquinaria.sql
+-- Amplía budget_items_category_check de tres valores a cuatro. Solo SELECT.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BEGIN CHECK_MAQUINARIA_PRECHECK
+-- ANTES del push. ESPERADO: veredicto = 'OK'.
+select case
+         when definicion is null then 'ABORTAR: no existe budget_items_category_check'
+         when definicion is distinct from 'CHECK ((category = ANY (ARRAY[''material''::text, ''mano_obra''::text, ''otros''::text])))'
+           then 'ABORTAR: el vocabulario de partida no es el esperado'
+         when fuera_del_nuevo > 0 then 'ABORTAR: hay partidas fuera del vocabulario nuevo'
+         when ya_maquinaria > 0 then 'REVISAR: ya hay partidas maquinaria; el CHECK no estaba donde se creia'
+         else 'OK'
+       end as veredicto, *
+from (
+  select
+    (select pg_get_constraintdef(oid) from pg_constraint
+      where conrelid='public.budget_items'::regclass
+        and conname='budget_items_category_check') as definicion,
+    (select count(*) from public.budget_items) as partidas,
+    (select count(*) from public.budget_items where category='maquinaria') as ya_maquinaria,
+    (select count(*) from public.budget_items
+      where category is not null
+        and category not in ('material','mano_obra','maquinaria','otros')) as fuera_del_nuevo
+) as evidencia;
+-- END CHECK_MAQUINARIA_PRECHECK
+
+-- BEGIN CHECK_MAQUINARIA_AUDIT
+-- DESPUÉS del push. ESPERADO: veredicto = 'OK' y el mismo número de partidas.
+select case
+         when registrada = 0 then 'ABORTAR: 20260927120000 no esta registrada'
+         -- is distinct from y no <>: con la restriccion ausente, definicion es
+         -- NULL, y NULL <> texto no es cierto, asi que el gate habria dicho OK
+         -- justo cuando no hay ningun CHECK.
+         when definicion is distinct from 'CHECK ((category = ANY (ARRAY[''material''::text, ''mano_obra''::text, ''maquinaria''::text, ''otros''::text])))'
+           then 'ABORTAR: el CHECK no quedo como se esperaba (ausente o distinto)'
+         else 'OK'
+       end as veredicto, *
+from (
+  select
+    (select count(*) from supabase_migrations.schema_migrations
+      where version='20260927120000') as registrada,
+    (select pg_get_constraintdef(oid) from pg_constraint
+      where conrelid='public.budget_items'::regclass
+        and conname='budget_items_category_check') as definicion,
+    (select count(*) from public.budget_items) as partidas,
+    (select string_agg(category||'='||n, ', ' order by category) from (
+       select category, count(*) as n from public.budget_items group by category) c) as reparto
+) as evidencia;
+-- END CHECK_MAQUINARIA_AUDIT
