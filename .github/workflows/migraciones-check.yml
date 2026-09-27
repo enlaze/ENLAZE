@@ -1,0 +1,54 @@
+name: Migraciones repo vs base
+
+# Compara supabase/migrations con las migraciones registradas en producción y
+# falla si no coinciden, nombrando cuáles faltan en cada lado.
+#
+# El disparo programado es el que importa: una migración aplicada a mano desde
+# el panel o con `db push` desde otra máquina no cambia el repo, así que ningún
+# push la detectaría. El push a main detecta el caso contrario: una migración
+# fusionada que nadie ha aplicado todavía (fallo esperado hasta aplicarla).
+#
+# Solo lee: usa la Management API con el secreto SUPABASE_ACCESS_TOKEN y no
+# ejecuta nada contra la base. Sin el secreto, el job falla diciendo que falta.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 */2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migraciones-check
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_PROJECT_REF: dsgnymebkxxkslyeotee
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Comparar migraciones
+        run: |
+          set -o pipefail
+          npm run --silent migraciones:check 2>&1 | tee resultado.txt
+      - name: Resumen
+        if: always()
+        run: |
+          {
+            echo '### Migraciones repo vs base'
+            echo '```'
+            cat resultado.txt 2>/dev/null || echo 'Sin salida: el paso anterior no llegó a ejecutarse.'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

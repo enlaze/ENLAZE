@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node --env-file-if-exists=.env.local --import tsx scripts/migraciones-check.mts --warn",
     "dev": "next dev --webpack",
     "prebuild": "npm run plans:check",
     "build": "next build",
@@ -50,6 +51,8 @@
     "test:budget-form-conflict-browser": "node __tests__/budget-form-conflict.browser.test.mjs",
     "plans:sync": "node --env-file-if-exists=.env.local --import tsx scripts/plans-sync.ts --write",
     "plans:check": "node --env-file-if-exists=.env.local --import tsx scripts/plans-sync.ts --check",
+    "migraciones:check": "node --env-file-if-exists=.env.local --import tsx scripts/migraciones-check.mts",
+    "test:migraciones-check": "node --import tsx --test __tests__/migraciones-check.test.mjs",
     "test:billing": "node --import tsx --test __tests__/billing-plans.test.mjs __tests__/billing-webhook.test.mjs",
     "test:billing-integration": "node --env-file-if-exists=.env.local --import tsx --test --test-concurrency=1 __tests__/billing.integration.test.mjs",
     "test:price-bank-rls": "node --env-file-if-exists=.env.local --test --test-concurrency=1 __tests__/price-bank-rls.integration.test.mjs",
