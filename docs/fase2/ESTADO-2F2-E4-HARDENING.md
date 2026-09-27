@@ -422,6 +422,19 @@ orden interno obligatorio.
   lectura de producción, junto con 0 enlaces modernos. El precheck la sigue
   comprobando y avisa si cambia, que es lo esperable si se crean o borran
   proyectos.
+
+- **Corrección del 2026-09-27: los enlaces heredados no son un resto que se
+  agote, se reponen solos.** `projects.access_token` es
+  `uuid NOT NULL DEFAULT gen_random_uuid()`, así que **cada proyecto nuevo nace
+  con una URL portadora**. Son ocho porque hay ocho proyectos, no porque queden
+  ocho de una tanda antigua, y ese número sube con cada alta.
+
+  Dos consecuencias que este documento daba por supuestas al revés. Retirar un
+  enlace concreto poniéndolo a `NULL` **es imposible hoy**: la columna no lo
+  admite. Y cualquier plan de «sustituir los ocho y cerrar» no converge mientras
+  la fuente siga emitiendo. Por eso S3.1 corta primero el `DEFAULT` y hace la
+  columna nullable, antes de tocar una sola fila. Ver
+  [ESTADO-2F2-E4-L3.md](ESTADO-2F2-E4-L3.md).
 - **`capture_pageview: false` cambia el comportamiento de analytics en toda la
   app**, no solo en el portal. Se compensa con el pageview manual ya existente,
   ahora esperando a la inicialización, y hay control positivo en la prueba de
