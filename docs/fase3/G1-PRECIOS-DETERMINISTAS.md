@@ -1,6 +1,6 @@
 # G1 — Precios deterministas en la ruta viva
 
-Fecha: 2026-09-27 (revisión 4). Estado: **diseño y matriz de pruebas. Sin código de producción.**
+Fecha: 2026-09-27 (revisión 5). Estado: **diseño y matriz de pruebas. Sin código de producción.**
 Rama: `codex/g1-deterministic-pricing-design`, con `origin/main` `ec4958e` integrado.
 
 La revisión 1 inventó dos contratos en lugar de leerlos. La revisión 2 los
@@ -74,19 +74,24 @@ Comprobado en producción: de 911 partidas, **0 son `maquinaria`** (583 material
 de precios (`pb_products`), con su propio vocabulario. El defecto es que el
 prompt de partidas tomó prestado el vocabulario del banco de precios.
 
-**Decisión de producto pendiente**, y conviene tomarla al abrir G1:
+**Decisión tomada: opción (a), ampliar el vocabulario.** Se aprobó y está
+implementada en la rama `codex/budget-items-maquinaria-category`
+(`20260927120000_budget_items_allow_maquinaria.sql`), **pendiente de merge y de
+despliegue**. Las dos opciones que se barajaron:
 
-- **(a) Añadir `maquinaria` al CHECK.** Migración, y después habría que decidir
-  qué hacer con el PDF: hoy **reconoce la etiqueta «Maquinaria»**
-  (`lib/pdf-generator.ts:110`) pero **suma su importe bajo «Otros»**, porque el
-  desglose agrupa en material, mano de obra y todo lo demás (`:916-922`, con el
-  rótulo en `:995`). Es decir, la categoría se vería en cada línea pero no
-  tendría subtotal propio.
+- **(a) Añadir `maquinaria` al CHECK** — la elegida. Migración que amplía de
+  tres valores a cuatro sin tocar ninguna fila y sin relajar la restricción.
 - **(b) Quitarla del prompt** y mapear maquinaria a `otros`. Sin migración, pero
   entierra en «otros» un coste que en obra se mira aparte.
 
-Recomiendo **(a)**: el PDF ya la trata como categoría propia, así que el resto
-del sistema ya asume que existe. Pero es una decisión de producto, no mía.
+Pesó que el resto del sistema ya conocía la categoría: el PDF **reconoce su
+etiqueta «Maquinaria»** (`lib/pdf-generator.ts:110`), aunque todavía **suma su
+importe bajo «Otros»**, porque el desglose agrupa en material, mano de obra y
+todo lo demás (`:916-922`, rotulado en `:995`).
+
+Queda vivo, por tanto, lo que (a) **no** resuelve: maquinaria se ve en cada
+línea pero no tiene subtotal propio. Añadir un cuarto grupo cambia la cara del
+PDF que ve el cliente y es una decisión aparte, todavía sin tomar.
 
 ## Contrato real de `price_source`
 
@@ -192,7 +197,7 @@ el vocabulario de un solo sitio, no repetirlo en el prompt y en el escritor.
 | **Origen y confianza** | cada partida lleva `source_type` y `confidence_score`; la cadena respeta sus **once** niveles en orden (`manual_locked` > `private_tariff` > `negotiated` > `historical_approved` > `preferred_supplier` > `provider_updated` > **`private_bc3`** > `technical_bank` > `enlaze_base` > `market_estimate` > `ai_estimate`); `private_bc3` gana a `technical_bank` cuando ambos casan; `historical_approved` decae con los días (0.88 / 0.78 / 0.65) |
 | **Precios no inventados** | con el catálogo vacío todo cae al fallback: `source_type` = `estimated`, confianza 0.05, `unit_price` 0 y su aviso, y **ninguna** partida se presenta como firme; un `price_hint` del modelo nunca acaba en `unit_price`; el umbral se aplica en el servidor, no solo al pintar; un cero con confianza 0.05 no se muestra como «gratis» |
 | **Nombre interno frente a externo** | la salida nunca contiene `source_type: "ai_estimate"`; una validación escrita contra `ai_estimate` debe fallar la prueba, porque no casaría nunca en producción |
-| **Categorías** | una `category` fuera del vocabulario del CHECK se rechaza **antes** de llegar al escritor, con mensaje accionable; `maquinaria` según la decisión (a) o (b), y la prueba debe fallar si prompt y CHECK divergen otra vez |
+| **Categorías** | una `category` fuera del vocabulario del CHECK se rechaza **antes** de llegar al escritor, con mensaje accionable; `maquinaria` es válida —decisión (a), ya implementada— y la prueba debe fallar si prompt y CHECK vuelven a divergir |
 | **Cálculo** | el total es reproducible y coincide con la suma de las partidas tal como se hayan contabilizado; ninguna partida bajo umbral entra en el total **en silencio**: o suma y está marcada, o no suma y se dice. **Qué de las dos cosas es la decisión de G2 y esta fila se cierra cuando llegue**; hasta entonces la prueba fija el invariante, no la política |
 | **Regresión de la ruta viva** | el contexto por sector, rastreador y ubicación sigue llegando al prompt; el asistente sigue terminando en un presupuesto guardado |
 | **Mutantes obligatorios** | devolver el `price_hint` como `unit_price` → debe fallar; saltarse la validación de categoría → debe fallar; tratar una partida bajo umbral como precio firme → debe fallar; bajar el umbral a 0 → debe fallar; quitar `private_bc3` de la cadena → debe fallar; comprobar el umbral contra `ai_estimate` en vez de `estimated` → debe fallar |
@@ -210,9 +215,12 @@ comprueba «hay precio» pasaría con el modelo inventándolo.
   presupuestos reales **antes** de tocar la ruta viva: si la mayoría cae en
   `market_estimate` o `estimated`, G1 no se despliega, se pospone y primero se
   amplía el catálogo.
-- **Tres decisiones de producto**, todas al abrir G1 y no al cerrarlo: qué pasa
-  con `maquinaria` (a o b), dónde va el umbral de confianza, y qué se hace con
-  una partida por debajo — bloquear el PDF, dejarla marcada a cero, o pedir el
-  precio al usuario. La tercera es la puerta de G2.
+- **Dos decisiones de producto abiertas**, ambas al abrir G1 y no al cerrarlo:
+  dónde va el umbral de confianza, y qué se hace con una partida por debajo —
+  bloquear el PDF, dejarla marcada a cero, o pedir el precio al usuario. La
+  segunda es la puerta de G2. La de `maquinaria` ya se tomó: opción (a).
+- **Sigue sin subtotal propio de maquinaria en el PDF.** La opción (a) hace que
+  la categoría se pueda guardar y se vea en cada línea, no que tenga su propia
+  línea de totales. Decisión aparte, sin tomar.
 - **`generate-v2` acumula deuda mientras siga ahí.** Si G1 se alarga, quedan dos
   generadores divergiendo. Poner fecha de retirada desde el primer día.
