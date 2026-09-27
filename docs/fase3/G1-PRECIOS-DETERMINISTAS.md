@@ -1,6 +1,6 @@
 # G1 — Precios deterministas en la ruta viva
 
-Fecha: 2026-09-27 (revisión 3). Estado: **diseño y matriz de pruebas. Sin código de producción.**
+Fecha: 2026-09-27 (revisión 4). Estado: **diseño y matriz de pruebas. Sin código de producción.**
 Rama: `codex/g1-deterministic-pricing-design`, con `origin/main` `ec4958e` integrado.
 
 La revisión 1 inventó dos contratos en lugar de leerlos. La revisión 2 los
@@ -76,9 +76,12 @@ prompt de partidas tomó prestado el vocabulario del banco de precios.
 
 **Decisión de producto pendiente**, y conviene tomarla al abrir G1:
 
-- **(a) Añadir `maquinaria` al CHECK.** Migración, y arrastra el agrupado del
-  PDF (`lib/pdf-generator.ts:110` ya la contempla), los filtros y los informes.
-  Es lo correcto si la maquinaria debe verse separada en el presupuesto.
+- **(a) Añadir `maquinaria` al CHECK.** Migración, y después habría que decidir
+  qué hacer con el PDF: hoy **reconoce la etiqueta «Maquinaria»**
+  (`lib/pdf-generator.ts:110`) pero **suma su importe bajo «Otros»**, porque el
+  desglose agrupa en material, mano de obra y todo lo demás (`:916-922`, con el
+  rótulo en `:995`). Es decir, la categoría se vería en cada línea pero no
+  tendría subtotal propio.
 - **(b) Quitarla del prompt** y mapear maquinaria a `otros`. Sin migración, pero
   entierra en «otros» un coste que en obra se mira aparte.
 
@@ -89,8 +92,10 @@ del sistema ya asume que existe. Pero es una decisión de producto, no mía.
 
 La revisión 1 proponía cuatro valores inventados —`catalog`, `tracker`,
 `technical_bank`, `unresolved`—. El resolutor real (`lib/price-resolver-v2.ts`)
-no funciona así: devuelve **diez `source_type` con un `confidence_score`
-graduado**.
+no funciona así: hay **once `source_type` posibles**, cada uno con su
+`confidence_score`. Son los diez nombres que coinciden con su nivel de
+prioridad, más `estimated`, que es lo que sale al exterior en lugar de la
+prioridad interna `ai_estimate`.
 
 La cadena tiene **once niveles de prioridad**, y el resolutor los documenta en su
 propia cabecera (`lib/price-resolver-v2.ts:7-18`) y los recorre en ese orden
@@ -188,7 +193,7 @@ el vocabulario de un solo sitio, no repetirlo en el prompt y en el escritor.
 | **Precios no inventados** | con el catálogo vacío todo cae al fallback: `source_type` = `estimated`, confianza 0.05, `unit_price` 0 y su aviso, y **ninguna** partida se presenta como firme; un `price_hint` del modelo nunca acaba en `unit_price`; el umbral se aplica en el servidor, no solo al pintar; un cero con confianza 0.05 no se muestra como «gratis» |
 | **Nombre interno frente a externo** | la salida nunca contiene `source_type: "ai_estimate"`; una validación escrita contra `ai_estimate` debe fallar la prueba, porque no casaría nunca en producción |
 | **Categorías** | una `category` fuera del vocabulario del CHECK se rechaza **antes** de llegar al escritor, con mensaje accionable; `maquinaria` según la decisión (a) o (b), y la prueba debe fallar si prompt y CHECK divergen otra vez |
-| **Cálculo** | el total suma solo las partidas por encima del umbral; las de debajo no lo inflan ni lo bloquean en silencio |
+| **Cálculo** | el total es reproducible y coincide con la suma de las partidas tal como se hayan contabilizado; ninguna partida bajo umbral entra en el total **en silencio**: o suma y está marcada, o no suma y se dice. **Qué de las dos cosas es la decisión de G2 y esta fila se cierra cuando llegue**; hasta entonces la prueba fija el invariante, no la política |
 | **Regresión de la ruta viva** | el contexto por sector, rastreador y ubicación sigue llegando al prompt; el asistente sigue terminando en un presupuesto guardado |
 | **Mutantes obligatorios** | devolver el `price_hint` como `unit_price` → debe fallar; saltarse la validación de categoría → debe fallar; tratar una partida bajo umbral como precio firme → debe fallar; bajar el umbral a 0 → debe fallar; quitar `private_bc3` de la cadena → debe fallar; comprobar el umbral contra `ai_estimate` en vez de `estimated` → debe fallar |
 | **E2E** | generar desde la interfaz, revisar las partidas marcadas, corregirlas a mano, guardar y exportar |
