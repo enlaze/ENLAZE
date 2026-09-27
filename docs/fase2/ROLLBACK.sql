@@ -451,3 +451,47 @@ drop function if exists public.portal_token_permissions_valid(jsonb);
 notify pgrst, 'reload schema';
 commit;
 -- END ROLLBACK_2F2_E4_L1
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BLOQUE E4-L3 · compensa 20260927100000_projects_access_token_no_default.sql
+--
+-- ATENCIÓN: esta compensación NO es incondicional, y la migración que revierte
+-- tampoco debe describirse como reversible sin más.
+--
+-- S3.1 quita el DEFAULT de projects.access_token y permite NULL. Mientras no
+-- exista ningún proyecto con access_token NULL, deshacerlo es trivial. En cuanto
+-- exista uno —y existirá: todo proyecto creado después de S3.1 nace así—,
+-- restaurar el NOT NULL es imposible sin inventar un valor para esas filas, y
+-- inventarlo significaría EMITIR enlaces portadores nuevos para proyectos que
+-- nunca los pidieron. Eso no lo hace este bloque: prefiere abortar.
+--
+-- Si hay nulos y aun así se quiere volver atrás, es una decisión de producto que
+-- exige elegir explícitamente qué recibe cada proyecto afectado, proyecto a
+-- proyecto y con conocimiento del dueño. No cabe en un rollback.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BEGIN ROLLBACK_2F2_E4_L3
+begin;
+do $guard$
+declare v_nulos integer;
+begin
+  if current_setting('enlaze.allow_legacy_token_default_rollback', true)
+     is distinct from 'restore_automatic_legacy_links' then
+    raise exception 'Set explicit restore_automatic_legacy_links acknowledgement; otherwise forward-fix only';
+  end if;
+
+  select count(*) into v_nulos from public.projects where access_token is null;
+  if v_nulos > 0 then
+    raise exception
+      'There are % projects with a NULL access_token. Restoring NOT NULL would require minting bearer links for projects that never asked for one. Decide project by project instead; this rollback refuses.', v_nulos;
+  end if;
+end $guard$;
+
+-- Solo se llega aquí sin un solo nulo: restaurar es seguro y no emite nada.
+alter table public.projects
+  alter column access_token set default gen_random_uuid(),
+  alter column access_token set not null;
+
+comment on column public.projects.access_token is null;
+notify pgrst, 'reload schema';
+commit;
+-- END ROLLBACK_2F2_E4_L3
