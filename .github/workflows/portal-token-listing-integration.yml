@@ -30,6 +30,12 @@ on:
       - "__tests__/portal-token-management.browser.test.mjs"
       - "__tests__/portal-token-ui-cutover.integration.test.mjs"
       - "__tests__/support/portal-token-access-schema.sql"
+      - "__tests__/s33-prechecks.test.mjs"
+      # Los bloques CHECK_* viven aquí y dos suites los leen del fichero: las
+      # comprobaciones de S3.3 y el gate de despliegue del listado. Cambiarlos
+      # sin ejecutar nada dejaría la documentación y las pruebas divergiendo,
+      # que es justo lo que esas pruebas existen para impedir.
+      - "docs/fase2/CHECKS.sql"
       - ".github/workflows/portal-token-listing-integration.yml"
   workflow_dispatch:
 
@@ -96,6 +102,11 @@ jobs:
         run: node --test __tests__/legacy-token-retirement.integration.test.mjs
       - name: The public portal reads only through the RPC
         run: node --import tsx --test __tests__/portal-public-page-contract.test.mjs
+      # Sin base de datos: lee los bloques de docs/fase2/CHECKS.sql y comprueba
+      # que las puertas de S3.3 siguen siendo de solo lectura, sin secretos en
+      # la salida y sin dar luz verde por omisión.
+      - name: S3.3 gates stay read-only and fail closed
+        run: node --test __tests__/s33-prechecks.test.mjs
       - name: Migration conventions
         run: node --test __tests__/migration-transaction-control.test.mjs
       - name: Remove disposable database

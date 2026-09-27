@@ -2573,3 +2573,80 @@ from (
          and pg_get_constraintdef(oid) ilike '%access_token%') as unico
 ) as evidencia;
 -- END CHECK_E4_L3_S31_AUDIT
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- E4 LOTE 3 · S3.3 · retirada de los enlaces heredados
+--
+-- S3.3 tiene tres pasos y cada uno exige que el anterior esté hecho y verificado:
+--   a) vaciar los enlaces que se decida retirar (access_token = NULL, ya posible
+--      desde S3.1);
+--   b) retirar la compatibilidad heredada de portal_read_snapshot y
+--      portal_respond_to_change, solo cuando queden CERO enlaces;
+--   c) eliminar la columna, solo cuando (b) esté desplegada y estable.
+--
+-- Estos bloques son de solo lectura y sirven para decidir si se puede pasar de
+-- un paso al siguiente. Ninguno vacía nada ni retira nada.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BEGIN CHECK_E4_L3_S33_INVENTARIO
+-- Inventario sin secretos: ni una consulta selecciona access_token, solo su
+-- presencia. Sirve para llevar la conversación con los propietarios.
+select p.id as proyecto_id,
+       left(p.name, 40) as nombre,
+       p.status,
+       p.user_id as propietario,
+       p.access_token is not null as tiene_enlace_heredado,
+       (select count(*) from public.portal_tokens t
+          where t.project_id = p.id and t.is_active and t.revoked_at is null
+            and t.expires_at > now()) as enlaces_modernos_vigentes,
+       p.created_at::date as alta,
+       p.updated_at::date as ultima_modificacion,
+       (select count(*) from public.project_changes c
+          where c.project_id = p.id and c.status = 'proposed') as cambios_pendientes,
+       (select count(*) from public.budgets b
+          where b.project_id = p.id and b.status in ('enviado','sent')) as presupuestos_enviados
+from public.projects p
+where p.access_token is not null and p.deleted_at is null
+order by p.updated_at desc nulls last;
+-- END CHECK_E4_L3_S33_INVENTARIO
+
+-- BEGIN CHECK_E4_L3_S33_PASO_B_PRECHECK
+-- ¿Se puede retirar ya la compatibilidad heredada de las RPC?
+-- ESPERADO para seguir: veredicto = 'OK', que exige CERO enlaces heredados.
+select case
+         when s31 = 0 then 'ABORTAR: falta 20260927100000; la columna aun emite en cada alta'
+         when heredados > 0 then 'ESPERAR: quedan ' || heredados || ' enlaces heredados activos'
+         when heredados_borrados > 0 then 'REVISAR: hay enlaces en proyectos borrados; decidir antes'
+         else 'OK'
+       end as veredicto, *
+from (
+  select
+    (select count(*) from supabase_migrations.schema_migrations
+       where version='20260927100000') as s31,
+    (select count(*) from public.projects
+       where access_token is not null and deleted_at is null) as heredados,
+    (select count(*) from public.projects
+       where access_token is not null and deleted_at is not null) as heredados_borrados,
+    (select count(*) from public.projects where deleted_at is null) as proyectos,
+    (select count(*) from public.portal_tokens
+       where is_active and revoked_at is null and expires_at > now()) as modernos_vigentes
+) as evidencia;
+-- END CHECK_E4_L3_S33_PASO_B_PRECHECK
+
+-- BEGIN CHECK_E4_L3_S33_PASO_C_PRECHECK
+-- ¿Se puede eliminar ya la columna? Exige que el paso (b) esté desplegado: las
+-- RPC ya no deben mencionar access_token en su cuerpo.
+-- ESPERADO para seguir: veredicto = 'OK'.
+select case
+         when heredados > 0 then 'ABORTAR: todavia hay enlaces heredados'
+         when rpc_con_legacy > 0 then 'ESPERAR: ' || rpc_con_legacy || ' RPC siguen aceptando access_token'
+         else 'OK'
+       end as veredicto, *
+from (
+  select
+    (select count(*) from public.projects where access_token is not null) as heredados,
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname='public'
+         and p.proname in ('portal_read_snapshot','portal_respond_to_change')
+         and pg_get_functiondef(p.oid) ilike '%access_token%') as rpc_con_legacy
+) as evidencia;
+-- END CHECK_E4_L3_S33_PASO_C_PRECHECK
