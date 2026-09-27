@@ -1,11 +1,12 @@
 # G1 — Precios deterministas en la ruta viva
 
-Fecha: 2026-09-27 (revisión 2). Estado: **diseño y matriz de pruebas. Sin código de producción.**
+Fecha: 2026-09-27 (revisión 3). Estado: **diseño y matriz de pruebas. Sin código de producción.**
 Rama: `codex/g1-deterministic-pricing-design`, con `origin/main` `ec4958e` integrado.
 
-La revisión 1 inventó dos contratos en lugar de leerlos. Ambos están corregidos
-contra el código y la base reales, y el error de partida resultó ser un defecto
-vivo, no una imprecisión de documentación.
+La revisión 1 inventó dos contratos en lugar de leerlos. La revisión 2 los
+corrigió contra el código, pero se dejó un nivel de la cadena y confundió el
+último. La revisión 3 los lista completos, verificados uno a uno contra
+`lib/price-resolver-v2.ts`.
 
 ## El hallazgo que define el bloque
 
@@ -91,31 +92,54 @@ La revisión 1 proponía cuatro valores inventados —`catalog`, `tracker`,
 no funciona así: devuelve **diez `source_type` con un `confidence_score`
 graduado**.
 
-| `source_type` | `confidence_score` | Qué es |
-|---|---|---|
-| `manual_locked` | **1.00** | precio fijado a mano y bloqueado |
-| `private_tariff` | ≤ 0.95 | tarifa privada del usuario |
-| `negotiated` | ≤ 0.93 | precio negociado con proveedor |
-| `historical_approved` | 0.88 / 0.78 / 0.65 | aprobado antes; decae con los días |
-| `preferred_supplier` | ≤ 0.85 | proveedor preferente |
-| `provider_updated` | ≈ 0.82 | actualización del proveedor |
-| `technical_bank` | 0.78 | banco técnico (CYPE/BC3) |
-| `enlaze_base` | 0.45 | base propia |
-| `market_estimate` | 0.35 | estimación de mercado |
-| `estimated` | **0.05** | el resolutor no encontró nada |
+La cadena tiene **once niveles de prioridad**, y el resolutor los documenta en su
+propia cabecera (`lib/price-resolver-v2.ts:7-18`) y los recorre en ese orden
+(`:147-152`).
 
-**No existe `unresolved`.** Su equivalente es `estimated` con confianza 0.05:
-el resolutor ya dice «esto me lo he inventado», solo que lo dice con un número
-en lugar de negarse.
+| # | Prioridad interna | `source_type` devuelto | `confidence_score` | Qué es |
+|---|---|---|---|---|
+| 1 | `manual_locked` | `manual_locked` | **1.00** | precio fijado a mano y bloqueado |
+| 2 | `private_tariff` | `private_tariff` | ≤ 0.95 | tarifa privada del usuario |
+| 3 | `negotiated` | `negotiated` | ≤ 0.93 | precio negociado con proveedor |
+| 4 | `historical_approved` | `historical_approved` | 0.88 / 0.78 / 0.65 | aprobado antes; decae a los 30 y 60 días |
+| 5 | `preferred_supplier` | `preferred_supplier` | ≤ 0.85 | proveedor preferente |
+| 6 | `provider_updated` | `provider_updated` | ≈ 0.82 | actualización del proveedor |
+| 7 | `private_bc3` | `private_bc3` | **≈ 0.80** | BC3 privado del usuario |
+| 8 | `technical_bank` | `technical_bank` | 0.78 | banco técnico global (CYPE/BC3) |
+| 9 | `enlaze_base` | `enlaze_base` | 0.45 | banco general de Enlaze |
+| 10 | `market_estimate` | `market_estimate` | 0.35 | estimación de mercado |
+| 11 | `ai_estimate` | **`estimated`** | **0.05** | último recurso: no hay fuente |
+
+### El nivel 11 se llama distinto por dentro que por fuera
+
+`ai_estimate` es el nombre de la **prioridad interna**, y nunca sale como
+`source_type`: su resolutor es literalmente `case "ai_estimate": return null`
+(`:200`). Cuando la cadena se agota sin resultado, la función cae al bloque
+`// Absolute fallback` (`:165-175`) y devuelve `source_type: "estimated"` con
+`confidence_score: 0.05`.
+
+Quien consuma la salida verá **`estimated`**, nunca `ai_estimate`. Cualquier
+validación, filtro o umbral debe escribirse contra `estimated`; una escrita
+contra `ai_estimate` no casaría nunca y dejaría pasar justo el caso que quiere
+frenar.
+
+Y un matiz que mejora el diseño: ese fallback devuelve `unit_price: 0` y
+`effective_price: 0` con el aviso «No se encontró precio en ninguna fuente».
+**El resolutor no inventa una cifra**, la deja a cero y lo dice. El riesgo real
+no es un número inventado colándose como firme, sino un cero pasando por precio.
+
+**No existe `unresolved`.** Su equivalente es `estimated` con confianza 0.05 y
+precio 0.
 
 Eso reescribe la regla de G1. «Impedir precios inventados» no es distinguir
 resuelto de no resuelto, es **fijar un umbral de confianza por debajo del cual
 un precio no puede presentarse como firme**. Los candidatos naturales son
-`market_estimate` (0.35) y `estimated` (0.05).
+`market_estimate` (0.35) y `estimated` (0.05), que es además el único que llega
+con precio 0.
 
 **Segunda decisión de producto**: dónde va el umbral y qué pasa debajo. Propongo
-**0.45** —deja pasar `enlaze_base` y superiores, marca `market_estimate` y
-`estimated`— pero el número lo decide quien firma los presupuestos, y conviene
+**0.45** —deja pasar `enlaze_base` y los ocho niveles por encima, y marca
+`market_estimate` y `estimated`— pero el número lo decide quien firma los presupuestos, y conviene
 medirlo antes con presupuestos reales.
 
 ## Contrato propuesto para el modelo
@@ -160,15 +184,16 @@ el vocabulario de un solo sitio, no repetirlo en el prompt y en el escritor.
 | Área | Casos |
 |---|---|
 | **Determinismo** | dos generaciones con la misma entrada y el mismo catálogo dan los mismos precios; cambiar el catálogo cambia el precio; cambiar solo la redacción del proyecto no lo cambia |
-| **Origen y confianza** | cada partida lleva `source_type` y `confidence_score`; la cadena respeta su orden de prioridad (`manual_locked` > `private_tariff` > `negotiated` > `historical_approved` > `preferred_supplier` > `provider_updated` > `technical_bank` > `enlaze_base` > `market_estimate` > `estimated`); `historical_approved` decae con los días (0.88 / 0.78 / 0.65) |
-| **Precios no inventados** | con el catálogo vacío todo cae a `estimated` 0.05 y **ninguna** partida se presenta como firme; un `price_hint` del modelo nunca acaba en `unit_price`; el umbral se aplica en el servidor, no solo al pintar |
+| **Origen y confianza** | cada partida lleva `source_type` y `confidence_score`; la cadena respeta sus **once** niveles en orden (`manual_locked` > `private_tariff` > `negotiated` > `historical_approved` > `preferred_supplier` > `provider_updated` > **`private_bc3`** > `technical_bank` > `enlaze_base` > `market_estimate` > `ai_estimate`); `private_bc3` gana a `technical_bank` cuando ambos casan; `historical_approved` decae con los días (0.88 / 0.78 / 0.65) |
+| **Precios no inventados** | con el catálogo vacío todo cae al fallback: `source_type` = `estimated`, confianza 0.05, `unit_price` 0 y su aviso, y **ninguna** partida se presenta como firme; un `price_hint` del modelo nunca acaba en `unit_price`; el umbral se aplica en el servidor, no solo al pintar; un cero con confianza 0.05 no se muestra como «gratis» |
+| **Nombre interno frente a externo** | la salida nunca contiene `source_type: "ai_estimate"`; una validación escrita contra `ai_estimate` debe fallar la prueba, porque no casaría nunca en producción |
 | **Categorías** | una `category` fuera del vocabulario del CHECK se rechaza **antes** de llegar al escritor, con mensaje accionable; `maquinaria` según la decisión (a) o (b), y la prueba debe fallar si prompt y CHECK divergen otra vez |
 | **Cálculo** | el total suma solo las partidas por encima del umbral; las de debajo no lo inflan ni lo bloquean en silencio |
 | **Regresión de la ruta viva** | el contexto por sector, rastreador y ubicación sigue llegando al prompt; el asistente sigue terminando en un presupuesto guardado |
-| **Mutantes obligatorios** | devolver el `price_hint` como `unit_price` → debe fallar; saltarse la validación de categoría → debe fallar; tratar una partida bajo umbral como precio firme → debe fallar; bajar el umbral a 0 → debe fallar |
+| **Mutantes obligatorios** | devolver el `price_hint` como `unit_price` → debe fallar; saltarse la validación de categoría → debe fallar; tratar una partida bajo umbral como precio firme → debe fallar; bajar el umbral a 0 → debe fallar; quitar `private_bc3` de la cadena → debe fallar; comprobar el umbral contra `ai_estimate` en vez de `estimated` → debe fallar |
 | **E2E** | generar desde la interfaz, revisar las partidas marcadas, corregirlas a mano, guardar y exportar |
 
-Las cuatro pruebas de mutante no son opcionales: sin ellas, una suite que solo
+Las seis pruebas de mutante no son opcionales: sin ellas, una suite que solo
 comprueba «hay precio» pasaría con el modelo inventándolo.
 
 ## Riesgos
