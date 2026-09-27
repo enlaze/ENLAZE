@@ -13,17 +13,25 @@ const root = new URL("../", import.meta.url);
 const sql = (path) => readFileSync(new URL(path, root), "utf8");
 const inlined = (path) => sql(path).replace(/\nbegin;\n/i, "\n").replace(/\ncommit;\s*$/i, "\n");
 const MIGRACION = "supabase/migrations/20260927120000_budget_items_allow_maquinaria.sql";
+const dbName = "enlaze_revision_rpcs_test";
 
 test("budget_items acepta maquinaria y sigue rechazando lo desconocido",
   { skip: !enabled, timeout: 120000 }, async (t) => {
   assert.equal(process.env.PORTAL_TEST_ACK, "DISPOSABLE_CLUSTER");
   assert.deepEqual(Object.keys(process.env).filter((key) => key.startsWith("PG")), []);
+  /* Dos formas de llegar al banco desechable y ninguna más: el socket que usa
+     el banco local, o exactamente la URL del contenedor del workflow. Exigir
+     socket dejaba fuera a CI, que levanta PostgreSQL por TCP. Una URL
+     arbitraria no se acepta: se compara literalmente. */
   const socket = process.env.PORTAL_TEST_SOCKET;
-  assert.ok(socket, "este banco se direcciona por socket");
-  assert.match(socket, /^\/private\/tmp\/enlaze-e2-bench\.[A-Za-z0-9]+$/);
+  if (socket) assert.match(socket, /^\/private\/tmp\/enlaze-e2-bench\.[A-Za-z0-9]+$/);
+  else assert.equal(process.env.TEST_DATABASE_URL,
+    "postgres://postgres:e2_disposable_database_only@127.0.0.1:55435/enlaze_revision_rpcs_test");
 
   const { Client } = await import("pg");
-  const db = new Client({ host: socket, port: 55435, user: "postgres", database: "enlaze_revision_rpcs_test" });
+  const db = new Client(socket
+    ? { host: socket, port: 55435, user: "postgres", database: dbName }
+    : { connectionString: process.env.TEST_DATABASE_URL });
   await db.connect();
   t.after(async () => db.end().catch(() => {}));
 
@@ -32,7 +40,7 @@ test("budget_items acepta maquinaria y sigue rechazando lo desconocido",
     current_setting('server_version_num')::integer as version,
     (select count(*) from pg_database where not datistemplate
       and datname not in ('postgres',current_database()))::integer as other_dbs`)).rows[0];
-  assert.equal(identity.db, "enlaze_revision_rpcs_test");
+  assert.equal(identity.db, dbName);
   assert.equal(identity.marker, "budget_revision_rpcs_2f2");
   assert.equal(Math.floor(identity.version / 10000), 17);
   assert.equal(identity.other_dbs, 0);
