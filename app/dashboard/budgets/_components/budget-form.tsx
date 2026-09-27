@@ -29,9 +29,14 @@ const fallbackServiceTypes = [
 ];
 
 const unitOptions = ["ud", "m2", "ml", "h", "kg", "global"];
+/* Mismo vocabulario que budget_items_category_check. Si divergen, el formulario
+   ofrece algo que la base rechaza con 23514 —que es justo el defecto que
+   20260927120000 vino a cerrar por el otro lado, el del generador—. La prueba
+   budget-item-categories.test.mjs compara las dos listas. */
 const categoryOptions = [
   { value: "material", label: "Material" },
   { value: "mano_obra", label: "Mano de obra" },
+  { value: "maquinaria", label: "Maquinaria" },
   { value: "otros", label: "Otros" },
 ];
 const ivaOptions = [0, 4, 10, 21];
