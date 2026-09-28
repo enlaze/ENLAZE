@@ -1,10 +1,8 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { getServiceRoleClient } from "@/lib/supabase-service-role";
+import { blockMessage } from "@/lib/billing-messages";
 import {
-  FEATURE_LABELS,
-  PLAN_LABELS,
-  RESOURCE_LABELS,
   planHasFeature,
   type Feature,
   type LimitedResource,
@@ -126,21 +124,9 @@ export async function releaseUsage(userId: string, resource: LimitedResource, am
 
 // ── Traducción a HTTP ────────────────────────────────────────────────────
 
-/** Mensaje claro para el usuario: qué límite o función ha tocado. */
+/** Mensaje claro para el usuario: el mismo que ve cuando salta el trigger (lib/billing-messages.ts). */
 export function billingMessage(d: BillingDecision): string {
-  const plan = d.plan ? PLAN_LABELS[d.plan] : "tu plan";
-  if (d.reason === "read_only") {
-    return "Tu cuenta está en modo solo lectura: la prueba ha terminado o la suscripción no está activa. "
-      + "Puedes consultar y exportar todos tus datos, pero no crear ni enviar nada nuevo.";
-  }
-  if (d.reason === "feature" && d.feature) {
-    return `«${FEATURE_LABELS[d.feature]}» no está incluido en el plan ${plan}.`;
-  }
-  if (d.reason === "limit" && d.resource) {
-    const when = d.period === "month" ? " este mes" : d.period === "trial" ? " durante la prueba" : "";
-    return `Has llegado al límite de ${d.limit} ${RESOURCE_LABELS[d.resource]}${when} del plan ${plan} (llevas ${d.used}).`;
-  }
-  return d.message || "Operación no permitida por tu plan.";
+  return blockMessage(d);
 }
 
 export function paymentRequired(d: BillingDecision): NextResponse {

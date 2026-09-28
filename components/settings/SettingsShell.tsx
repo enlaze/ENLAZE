@@ -18,9 +18,10 @@ import NotificacionesPanel from "@/components/settings/NotificacionesPanel";
 import IntegracionesPanel from "@/components/settings/IntegracionesPanel";
 import CuentaPanel from "@/components/settings/CuentaPanel";
 import PersonalizacionPanel from "@/components/settings/PersonalizacionPanel";
-import { IcoAccount, IcoBell, IcoCompany, IcoLayout, IcoPlug, IcoSparkle } from "@/components/settings/ui";
+import PlanPanel from "@/components/settings/PlanPanel";
+import { IcoAccount, IcoBell, IcoCard, IcoCompany, IcoLayout, IcoPlug, IcoSparkle } from "@/components/settings/ui";
 
-export type SettingsTab = "empresa" | "notificaciones" | "integraciones" | "personalizacion" | "cuenta";
+export type SettingsTab = "empresa" | "notificaciones" | "integraciones" | "personalizacion" | "plan" | "cuenta";
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode; path: string }[] = [
   { id: "empresa", label: "Empresa y datos fiscales", icon: <IcoCompany />, path: "/dashboard/settings" },
@@ -42,6 +43,7 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode; path: strin
     icon: <IcoLayout />,
     path: "/dashboard/settings/personalizacion",
   },
+  { id: "plan", label: "Plan y facturación", icon: <IcoCard />, path: "/dashboard/settings/plan" },
   { id: "cuenta", label: "Cuenta y tema", icon: <IcoAccount />, path: "/dashboard/settings/cuenta" },
 ];
 
@@ -54,6 +56,15 @@ export default function SettingsShell({ initialTab = "empresa" }: { initialTab?:
     const target = TABS.find((t) => t.id === next);
     if (target) window.history.replaceState(null, "", target.path);
   }, []);
+
+  // Sesiones de pago abiertas antes de mover la vuelta a /settings/plan:
+  // /dashboard/settings?billing=... se lleva a su pestaña conservando el parámetro.
+  useEffect(() => {
+    if (initialTab !== "empresa" || !new URLSearchParams(window.location.search).has("billing")) return;
+    window.history.replaceState(null, "", `/dashboard/settings/plan${window.location.search}`);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTab("plan");
+  }, [initialTab]);
 
   // Si el usuario navega con atrás/adelante, la pestaña sigue a la URL.
   useEffect(() => {
@@ -191,6 +202,7 @@ export default function SettingsShell({ initialTab = "empresa" }: { initialTab?:
         {tab === "notificaciones" && <NotificacionesPanel />}
         {tab === "integraciones" && <IntegracionesPanel />}
         {tab === "personalizacion" && <PersonalizacionPanel />}
+        {tab === "plan" && <PlanPanel />}
         {tab === "cuenta" && <CuentaPanel />}
       </main>
     </div>

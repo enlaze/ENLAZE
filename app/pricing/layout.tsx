@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
+import { TRIAL_DAYS } from "@/lib/plans";
+
+const description = `Planes para autónomos y empresas de la construcción. Prueba ${TRIAL_DAYS} días gratis, sin tarjeta. Sin permanencia.`;
 
 export const metadata: Metadata = {
   title: "Precios",
-  description:
-    "Planes flexibles para empresas de servicios de cualquier tamaño. Empieza gratis y escala cuando lo necesites.",
+  description,
   openGraph: {
     title: "Precios | Enlaze",
-    description:
-      "Planes flexibles para empresas de servicios. Empieza gratis y escala cuando lo necesites.",
+    description,
   },
 };
 

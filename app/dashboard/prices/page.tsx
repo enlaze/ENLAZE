@@ -20,6 +20,10 @@ import PriceAlertsPanel from "./_components/PriceAlertsPanel";
 import ProviderComparePanel from "./_components/ProviderComparePanel";
 import { ClipboardList, BrickWall, HardHat, Construction, Truck, Handshake, Wrench, Recycle } from "lucide-react";
 import WeeklyReportPanel from "./_components/WeeklyReportPanel";
+import { FeatureGate } from "@/components/billing/PlanNotices";
+
+const PRICE_TRACKING_PITCH =
+  "Vigila lo que te cobran tus proveedores: te avisa cuando un material sube de precio y cada semana te manda un resumen de los cambios.";
 import AddProviderPricePanel from "./_components/AddProviderPricePanel";
 import ImportPricesPanel from "./_components/ImportPricesPanel";
 
@@ -1285,11 +1289,13 @@ export default function PricesPage() {
       {/* ─── Tab: Alertas ──────────────────────────────────────────── */}
       {activeTab === "alertas" && (
         <div className="rounded-2xl border border-navy-100 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-6 mb-6">
-          <PriceAlertsPanel
-            onCreateAlert={(pid, pname, provider) => {
-              // Could pre-fill from a product
-            }}
-          />
+          <FeatureGate feature="seguimiento_precios" description={PRICE_TRACKING_PITCH} compact>
+            <PriceAlertsPanel
+              onCreateAlert={(pid, pname, provider) => {
+                // Could pre-fill from a product
+              }}
+            />
+          </FeatureGate>
         </div>
       )}
 
@@ -1305,7 +1311,9 @@ export default function PricesPage() {
       {/* ─── Tab: Informe semanal ──────────────────────────────────── */}
       {activeTab === "informe" && (
         <div className="mb-6">
-          <WeeklyReportPanel />
+          <FeatureGate feature="seguimiento_precios" description={PRICE_TRACKING_PITCH}>
+            <WeeklyReportPanel />
+          </FeatureGate>
         </div>
       )}
 

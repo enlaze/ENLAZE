@@ -21,6 +21,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Loading from "@/components/ui/loading";
 import { inputBase } from "@/components/ui/form-fields";
+import { billingBlockOf } from "@/lib/billing-status";
 
 /* ═══════════════════════════ Types ═══════════════════════════ */
 
@@ -695,7 +696,8 @@ export default function ProjectDetailPage() {
       verifactu_registered: fiscal.verifactu_enabled,
     }).select("id").single();
 
-    if (error) { toast.error("Error", { description: error.message }); return; }
+    // Bloqueo del plan: el aviso con «Ver planes» ya sale solo (BillingProvider).
+    if (error) { if (!billingBlockOf(error)) toast.error("No se pudo crear la factura", { description: error.message }); return; }
 
     // Increment number
     await supabase.from("fiscal_settings").update({

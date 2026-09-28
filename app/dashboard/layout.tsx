@@ -14,6 +14,8 @@ import PlatformAssistant from "@/components/PlatformAssistant";
 import { useToast } from "@/components/ui/toast";
 import { analytics, resetAnalytics } from "@/lib/analytics";
 import { setSentryUser } from "@/lib/sentry";
+import { BillingProvider } from "@/components/billing/BillingProvider";
+import { PlanBanner } from "@/components/billing/PlanNotices";
 /* La lista canónica de secciones (NAV_ITEMS, iconos y reglas de filtrado) vive
    en lib/dashboard-nav.tsx: un layout.tsx no puede exportar nada propio y
    Ajustes → Personalización necesita la misma lista. */
@@ -27,7 +29,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <SectorProvider>
       <SearchCommandProvider>
-        <DashboardInner>{children}</DashboardInner>
+        <BillingProvider>
+          <DashboardInner>{children}</DashboardInner>
+        </BillingProvider>
       </SearchCommandProvider>
     </SectorProvider>
   );
@@ -314,6 +318,9 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         )}
+
+        {/* Prueba o solo lectura: aviso fino, sin tapar nada. */}
+        <PlanBanner />
 
         <div className="px-6 py-10 md:px-12 md:py-14">{children}</div>
       </main>

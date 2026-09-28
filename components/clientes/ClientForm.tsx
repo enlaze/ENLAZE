@@ -21,6 +21,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { useToast } from "@/components/ui/toast";
+import { claimBillingBlock } from "@/components/billing/BillingProvider";
+import { PlanBlockNotice } from "@/components/billing/PlanNotices";
+import { billingBlockOf } from "@/lib/billing-status";
+import type { BillingBlockInfo } from "@/lib/billing-messages";
 import {
   CliCard,
   CliLabel,
@@ -158,6 +162,8 @@ export default function ClientForm({
 
   const [phone, setPhone] = useState(splitPhone(client?.phone ?? null));
   const [saving, setSaving] = useState(false);
+  // Bloqueo del plan (solo lectura o límite): se explica aquí mismo.
+  const [block, setBlock] = useState<BillingBlockInfo | null>(null);
 
   const domainRef = useRef<HTMLDivElement>(null);
 
@@ -216,10 +222,19 @@ export default function ClientForm({
     setNewTag("");
   }
 
+  function showBlock(error: unknown): boolean {
+    const b = billingBlockOf(error);
+    if (!b) return false;
+    claimBillingBlock();
+    setBlock(b);
+    return true;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
     setSaving(true);
+    setBlock(null);
 
     const digits = phone.replace(/\D/g, "");
     const payload = {
@@ -236,6 +251,7 @@ export default function ClientForm({
       const { error } = await supabase.from("clients").update(payload).eq("id", client.id);
       setSaving(false);
       if (error) {
+        if (showBlock(error)) return;
         toast.error("No se pudo guardar el cliente");
         return;
       }
@@ -247,6 +263,7 @@ export default function ClientForm({
       const { error } = await supabase.from("clients").insert({ ...payload, user_id: user?.id });
       setSaving(false);
       if (error) {
+        if (showBlock(error)) return;
         toast.error("No se pudo crear el cliente");
         return;
       }
@@ -501,6 +518,8 @@ export default function ClientForm({
             />
           </label>
         </div>
+
+        {block && <PlanBlockNotice block={block} className="mx-6 mb-5" />}
 
         {/* ── Pie ── */}
         <div className="flex flex-wrap items-center justify-end gap-3 border-t border-navy-100 bg-navy-50/60 px-6 py-4 dark:border-zinc-800 dark:bg-zinc-800/30">
