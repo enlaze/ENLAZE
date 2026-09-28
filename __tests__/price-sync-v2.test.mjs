@@ -2,9 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  PRICE_SYNC_SOURCE_TYPES,
   confidenceForEvidence,
   getSyncStatus,
   observedUnitPrice,
+  priceSyncSourceType,
   runPriceSync,
 } from "../lib/price-sync-v2.ts";
 
@@ -297,13 +299,20 @@ test("package prices convert only with a usable package quantity", async (t) => 
 
     const result = await runPriceSync(database);
 
-    assert.equal(result.status, "partial");
+    assert.equal(result.status, "completed");
     assert.equal(result.records_checked, 1);
     assert.equal(result.records_skipped, 1);
-    assert.equal(result.records_errors, 1);
+    assert.equal(result.records_errors, 0);
+    assert.deepEqual(result.errors, []);
     assert.equal(database.currentUpserts.length, 0);
     assert.equal(database.runUpdates.at(-1).summary.records_skipped, 1);
-    assert.match(result.errors[0], /price_basis 'Caja'/);
+    assert.deepEqual(database.runUpdates.at(-1).summary.skipped, {
+      reasons: { package_without_usable_units_per_package: 1 },
+      examples: [{
+        product_id: "product-1",
+        reason: "package price_basis 'Caja' has no usable units_per_package",
+      }],
+    });
   });
 
   await t.test("sale_unit protects an old Caja row when metadata lacks price_basis", async () => {
@@ -317,8 +326,9 @@ test("package prices convert only with a usable package quantity", async (t) => 
 
     const result = await runPriceSync(database);
 
-    assert.equal(result.status, "partial");
+    assert.equal(result.status, "completed");
     assert.equal(result.records_skipped, 1);
+    assert.deepEqual(result.errors, []);
     assert.equal(database.currentUpserts.length, 0);
   });
 
@@ -337,6 +347,75 @@ test("package prices convert only with a usable package quantity", async (t) => 
     assert.equal(result.records_skipped, 0);
     assert.equal(database.currentUpserts[0].price_excl_vat, 10);
   });
+});
+
+test("3,000 safe discards stay completed and keep a bounded summary", async () => {
+  const products = Array.from({ length: 3_000 }, (_, index) => product({
+    id: `product-${index + 1}`,
+    sale_unit: "Caja",
+    units_per_package: 1,
+    unit_price: 120,
+  }));
+  const database = new FakeSupabase({ products, observations: [] });
+
+  const result = await runPriceSync(database);
+  const persisted = database.runUpdates.at(-1);
+  const reason = "package price_basis 'Caja' has no usable units_per_package";
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.records_checked, 3_000);
+  assert.equal(result.records_skipped, 3_000);
+  assert.equal(result.records_errors, 0);
+  assert.deepEqual(result.errors, []);
+  assert.equal(database.currentUpserts.length, 0);
+  assert.equal(persisted.status, "completed");
+  assert.deepEqual(persisted.error_log, []);
+  assert.deepEqual(persisted.summary.skipped.reasons, {
+    package_without_usable_units_per_package: 3_000,
+  });
+  assert.equal(persisted.summary.skipped.examples.length, 20);
+  assert.ok(persisted.summary.skipped.examples.every((example) => example.reason === reason));
+});
+
+test("a product base price cannot tie an observation without evidence metadata", async () => {
+  const database = new FakeSupabase({
+    products: [
+      product({ id: "observed-product" }),
+      product({ id: "base-product" }),
+    ],
+    observations: [observation({
+      id: "observation-without-evidence",
+      product_id: "observed-product",
+      source: "n8n",
+      metadata: { price_basis: "ud" },
+    })],
+  });
+
+  const result = await runPriceSync(database);
+  const observed = database.currentUpserts.find((row) => row.product_id === "observed-product");
+  const base = database.currentUpserts.find((row) => row.product_id === "base-product");
+
+  assert.equal(result.status, "completed");
+  assert.equal(observed.confidence_score, 0.55);
+  assert.equal(observed.source_type, "n8n");
+  assert.equal(base.confidence_score, 0.30);
+  assert.equal(base.source_type, "product_base");
+  assert.ok(base.confidence_score < observed.confidence_score);
+});
+
+test("source_type has one closed vocabulary", () => {
+  const allowed = [
+    "provider_catalog",
+    "n8n",
+    "manual",
+    "api",
+    "scraper",
+    "product_base",
+  ];
+  assert.deepEqual([...PRICE_SYNC_SOURCE_TYPES], allowed);
+  for (const source of allowed) assert.equal(priceSyncSourceType(source), source);
+  assert.equal(priceSyncSourceType("unexpected_source"), "n8n");
+  assert.equal(priceSyncSourceType(" API "), "api");
 });
 
 test("every database operation in the sync fails closed", async (t) => {

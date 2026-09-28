@@ -80,6 +80,20 @@ const OBSERVATION_CONFIDENCE: Readonly<Record<string, number>> = Object.freeze({
   official_product_listing: 0.70,
 });
 
+export const PRICE_SYNC_SOURCE_TYPES = Object.freeze([
+  "provider_catalog",
+  "n8n",
+  "manual",
+  "api",
+  "scraper",
+  "product_base",
+] as const);
+
+type PriceSyncSourceType = typeof PRICE_SYNC_SOURCE_TYPES[number];
+
+const PRICE_SYNC_SOURCE_TYPE_SET = new Set<string>(PRICE_SYNC_SOURCE_TYPES);
+const MAX_SKIPPED_EXAMPLES = 20;
+
 const PACKAGE_BASES = new Set([
   "caja",
   "saco",
@@ -135,8 +149,26 @@ function observationMetadata(observation: Record<string, unknown>): Record<strin
     : {};
 }
 
+function skippedReasonKey(reason: string): string {
+  if (reason.startsWith("package price_basis")) {
+    return "package_without_usable_units_per_package";
+  }
+  if (reason.startsWith("non-unit price_basis")) {
+    return "non_unit_without_usable_units_per_package";
+  }
+  if (reason.startsWith("observed_price")) return "invalid_observed_price";
+  return "unsafe_price_normalization";
+}
+
 export function confidenceForEvidence(evidenceType: unknown): number {
   return OBSERVATION_CONFIDENCE[String(evidenceType ?? "")] ?? 0.55;
+}
+
+export function priceSyncSourceType(source: unknown): PriceSyncSourceType {
+  const normalized = String(source ?? "").trim().toLowerCase();
+  return PRICE_SYNC_SOURCE_TYPE_SET.has(normalized)
+    ? normalized as PriceSyncSourceType
+    : "n8n";
 }
 
 export function observedUnitPrice(
@@ -310,6 +342,10 @@ export async function runPriceSync(
       summary: {
         stale_marked: staleResult.count,
         records_skipped: matResult.skipped,
+        skipped: {
+          reasons: matResult.skipped_by_reason,
+          examples: matResult.skipped_examples,
+        },
         price_changes_above_threshold: priceChanges.length,
         config: cfg,
       },
@@ -347,6 +383,8 @@ interface MaterializeResult {
   unchanged: number;
   error_count: number;
   skipped: number;
+  skipped_by_reason: Record<string, number>;
+  skipped_examples: Array<{ product_id: string; reason: string }>;
   fatal: boolean;
   changes: PriceChange[];
   errors: string[];
@@ -367,6 +405,8 @@ async function materializeCurrentPrices(
     unchanged: 0,
     error_count: 0,
     skipped: 0,
+    skipped_by_reason: {},
+    skipped_examples: [],
     fatal: false,
     changes: [],
     errors: [],
@@ -470,9 +510,13 @@ async function materializeCurrentPrices(
       );
 
       if (normalized.price === null) {
-        result.error_count++;
+        const reason = normalized.reason ?? "unsafe price normalization";
+        const reasonKey = skippedReasonKey(reason);
         result.skipped++;
-        result.errors.push(`Skipped product ${product.id}: ${normalized.reason}`);
+        result.skipped_by_reason[reasonKey] = (result.skipped_by_reason[reasonKey] ?? 0) + 1;
+        if (result.skipped_examples.length < MAX_SKIPPED_EXAMPLES) {
+          result.skipped_examples.push({ product_id: product.id, reason });
+        }
         continue;
       }
 
@@ -480,11 +524,11 @@ async function materializeCurrentPrices(
       const price = normalized.price;
       const isAvailable = Boolean(product.is_available);
       const evidenceType = metadata.evidence_type;
-      const confidence = confidenceForEvidence(evidenceType);
+      const confidence = obs ? confidenceForEvidence(evidenceType) : 0.30;
       const checkedAt = obs ? String(obs.observed_at) : new Date().toISOString();
       const sourceType = obs
-        ? String(obs.source || evidenceType || "n8n")
-        : "provider_catalog";
+        ? priceSyncSourceType(obs.source)
+        : "product_base";
 
       // Compare with existing
       const existing = existingMap.get(product.id);
