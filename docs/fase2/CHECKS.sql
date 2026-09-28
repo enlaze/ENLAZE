@@ -2573,3 +2573,53 @@ from (
          and pg_get_constraintdef(oid) ilike '%access_token%') as unico
 ) as evidencia;
 -- END CHECK_E4_L3_S31_AUDIT
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- E4 LOTE 3 · S3.3 paso (a) · 20260928120000_retire_legacy_portal_links.sql
+-- La única migración de la serie que ESCRIBE DATOS. Estos bloques son solo lectura.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BEGIN CHECK_E4_L3_S33A_PRECHECK
+-- ANTES del push. ESPERADO: veredicto = 'OK'.
+select case
+         when s31 = 0 then 'ABORTAR: falta 20260927100000; la columna repondria enlaces'
+         when es_not_null then 'ABORTAR: access_token sigue siendo NOT NULL'
+         when por_defecto is not null then 'ABORTAR: access_token sigue teniendo default'
+         when activos <> 8 then 'ABORTAR: no son los 8 enlaces revisados con los propietarios'
+         when borrados > 0 then 'ABORTAR: hay enlaces en proyectos borrados, fuera de lo revisado'
+         else 'OK'
+       end as veredicto, *
+from (
+  select
+    (select count(*) from supabase_migrations.schema_migrations
+       where version='20260927100000') as s31,
+    (select a.attnotnull from pg_attribute a
+      where a.attrelid='public.projects'::regclass and a.attname='access_token') as es_not_null,
+    (select pg_get_expr(d.adbin,d.adrelid) from pg_attribute a
+       left join pg_attrdef d on d.adrelid=a.attrelid and d.adnum=a.attnum
+      where a.attrelid='public.projects'::regclass and a.attname='access_token') as por_defecto,
+    (select count(*) from public.projects
+       where access_token is not null and deleted_at is null) as activos,
+    (select count(*) from public.projects
+       where access_token is not null and deleted_at is not null) as borrados,
+    (select count(*) from public.projects) as proyectos
+) as evidencia;
+-- END CHECK_E4_L3_S33A_PRECHECK
+
+-- BEGIN CHECK_E4_L3_S33A_AUDIT
+-- DESPUÉS del push. ESPERADO: veredicto = 'OK', con los proyectos intactos.
+select case
+         when registrada = 0 then 'ABORTAR: 20260928120000 no esta registrada'
+         when con_enlace > 0 then 'ABORTAR: quedan ' || con_enlace || ' enlaces heredados'
+         when proyectos <> 8 then 'ABORTAR: el numero de proyectos cambio; se esperaba vaciar, no borrar'
+         else 'OK'
+       end as veredicto, *
+from (
+  select
+    (select count(*) from supabase_migrations.schema_migrations
+       where version='20260928120000') as registrada,
+    (select count(*) from public.projects where access_token is not null) as con_enlace,
+    (select count(*) from public.projects) as proyectos,
+    (select count(*) from public.projects where deleted_at is null) as proyectos_vivos,
+    (select count(*) from public.portal_tokens) as tokens_modernos
+) as evidencia;
+-- END CHECK_E4_L3_S33A_AUDIT

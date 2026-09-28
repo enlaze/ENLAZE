@@ -14,6 +14,8 @@ on:
       - "supabase/migrations/*portal_token_ui_cutover.sql"
       - "supabase/migrations/*portal_tokens_least_privilege.sql"
       - "supabase/migrations/*projects_access_token_no_default.sql"
+      - "supabase/migrations/*retire_legacy_portal_links.sql"
+      - "__tests__/legacy-links-retired.integration.test.mjs"
       - "lib/portal-path-redaction.ts"
       - "lib/sentry-portal-scrubbing.ts"
       - "lib/telemetry-safe.ts"
@@ -96,6 +98,8 @@ jobs:
         run: node --test __tests__/legacy-token-retirement.integration.test.mjs
       - name: The public portal reads only through the RPC
         run: node --import tsx --test __tests__/portal-public-page-contract.test.mjs
+      - name: Legacy links are retired without touching anything else
+        run: node --test __tests__/legacy-links-retired.integration.test.mjs
       - name: Migration conventions
         run: node --test __tests__/migration-transaction-control.test.mjs
       - name: Remove disposable database

@@ -495,3 +495,22 @@ comment on column public.projects.access_token is null;
 notify pgrst, 'reload schema';
 commit;
 -- END ROLLBACK_2F2_E4_L3
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BLOQUE E4-L3-S33A · 20260928120000_retire_legacy_portal_links.sql
+--
+-- NO HAY COMPENSACIÓN, y no es un olvido.
+--
+-- La migración pone projects.access_token a NULL. El valor anterior no se guarda
+-- en ninguna parte, a propósito: conservarlo sería preservar exactamente el
+-- secreto que se está retirando. Restaurar «el» enlace es imposible; lo único
+-- que se podría hacer es emitir uno nuevo, que no es lo mismo y que además es
+-- justo lo que 20260927100000 dejó de hacer automáticamente.
+--
+-- Si alguna vez hiciera falta dar acceso por el portal a uno de esos proyectos,
+-- el camino es portal_issue_token: enlace moderno, con caducidad, revocable y
+-- atribuido a su dueño. Ese es el objetivo de todo el lote E4.
+--
+-- Se deja este bloque escrito, y vacío a propósito, para que nadie busque una
+-- compensación que no existe y termine improvisándola.
+-- ─────────────────────────────────────────────────────────────────────────────────────
