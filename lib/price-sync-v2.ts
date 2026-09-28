@@ -59,10 +59,124 @@ export interface SyncResult {
   records_modified: number;
   records_unchanged: number;
   records_errors: number;
+  records_skipped: number;
   price_changes: PriceChange[];
   stale_marked: number;
   duration_ms: number;
   errors: string[];
+}
+
+type QueryError = { message?: string } | null;
+
+type StalePriceResult = {
+  count: number;
+  error: string | null;
+};
+
+const OBSERVATION_CONFIDENCE: Readonly<Record<string, number>> = Object.freeze({
+  official_bc3_catalog: 0.85,
+  official_pdf_catalog: 0.80,
+  official_product_page: 0.70,
+  official_product_listing: 0.70,
+});
+
+const PACKAGE_BASES = new Set([
+  "caja",
+  "saco",
+  "rollo",
+  "paquete",
+  "pack",
+  "palet",
+  "pallet",
+  "bobina",
+  "bidon",
+]);
+
+function queryError(prefix: string, error: QueryError): string {
+  return `${prefix}: ${error?.message || "unknown database error"}`;
+}
+
+function normalizeUnit(value: unknown): string {
+  const normalized = String(value ?? "")
+    .trim()
+    .toLocaleLowerCase("es")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/²/g, "2")
+    .replace(/³/g, "3")
+    .replace(/[._\s/-]+/g, "");
+
+  const aliases: Record<string, string> = {
+    u: "ud",
+    unidad: "ud",
+    unidades: "ud",
+    metro: "m",
+    metros: "m",
+    metrocuadrado: "m2",
+    metroscuadrados: "m2",
+    metrocubico: "m3",
+    metroscubicos: "m3",
+    litro: "l",
+    litros: "l",
+    ltr: "l",
+    kilogramo: "kg",
+    kilogramos: "kg",
+    hora: "h",
+    horas: "h",
+  };
+
+  return aliases[normalized] ?? normalized;
+}
+
+function observationMetadata(observation: Record<string, unknown>): Record<string, unknown> {
+  const metadata = observation.metadata;
+  return metadata && typeof metadata === "object" && !Array.isArray(metadata)
+    ? metadata as Record<string, unknown>
+    : {};
+}
+
+export function confidenceForEvidence(evidenceType: unknown): number {
+  return OBSERVATION_CONFIDENCE[String(evidenceType ?? "")] ?? 0.55;
+}
+
+export function observedUnitPrice(
+  observedPrice: unknown,
+  priceBasis: unknown,
+  saleUnit: unknown,
+  unitsPerPackage: unknown
+): { price: number | null; reason: string | null } {
+  const price = Number(observedPrice);
+  if (!Number.isFinite(price) || price <= 0) {
+    return { price: null, reason: "observed_price is not a positive finite number" };
+  }
+
+  const basis = normalizeUnit(priceBasis);
+  if (!basis) return { price, reason: null };
+
+  const unit = normalizeUnit(saleUnit);
+  const quantity = Number(unitsPerPackage);
+
+  // Package labels describe the price of the whole package even when an old
+  // product row copied that same label into sale_unit. Never let that equality
+  // turn a box/sack/roll price into a unit price.
+  if (PACKAGE_BASES.has(basis) && Number.isFinite(quantity) && quantity > 1) {
+    return { price: price / quantity, reason: null };
+  }
+
+  if (!PACKAGE_BASES.has(basis) && (basis === unit || (basis === "ud" && (!unit || unit === "ud")))) {
+    return { price, reason: null };
+  }
+
+  if (!PACKAGE_BASES.has(basis) && Number.isFinite(quantity) && quantity > 1) {
+    return { price: price / quantity, reason: null };
+  }
+
+  const displayBasis = String(priceBasis).trim();
+  const kind = PACKAGE_BASES.has(basis) ? "package" : "non-unit";
+  return {
+    price: null,
+    reason: `${kind} price_basis '${displayBasis}' has no usable units_per_package`,
+  };
 }
 
 // ─── Main sync function ──────────────────────────────────────────────────────
@@ -85,12 +199,29 @@ export async function runPriceSync(
 
   // 1. Check idempotency
   if (cfg.idempotency_key) {
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from("pb_sync_runs")
       .select("id, status")
       .eq("idempotency_key", cfg.idempotency_key)
       .in("status", ["completed", "processing"])
       .limit(1);
+
+    if (existingError) {
+      return {
+        run_id: "",
+        status: "error",
+        records_checked: 0,
+        records_new: 0,
+        records_modified: 0,
+        records_unchanged: 0,
+        records_errors: 1,
+        records_skipped: 0,
+        price_changes: [],
+        stale_marked: 0,
+        duration_ms: Date.now() - startTime,
+        errors: [queryError("Failed to check sync idempotency", existingError)],
+      };
+    }
 
     if (existing && existing.length > 0) {
       return {
@@ -101,6 +232,7 @@ export async function runPriceSync(
         records_modified: 0,
         records_unchanged: 0,
         records_errors: 0,
+        records_skipped: 0,
         price_changes: [],
         stale_marked: 0,
         duration_ms: 0,
@@ -129,7 +261,8 @@ export async function runPriceSync(
       records_new: 0,
       records_modified: 0,
       records_unchanged: 0,
-      records_errors: 0,
+      records_errors: 1,
+      records_skipped: 0,
       price_changes: [],
       stale_marked: 0,
       duration_ms: Date.now() - startTime,
@@ -148,15 +281,23 @@ export async function runPriceSync(
     (c) => Math.abs(c.change_pct) >= cfg.change_threshold_pct
   );
 
-  // 5. Clean stale prices
-  const staleCount = await markStalePrices(supabase, cfg.staleness_days);
+  // 5. Clean stale prices only when materialization did not hit a fatal query
+  // error. Continuing after a failed read is how the old implementation hid a
+  // broken observation schema behind a successful run.
+  const staleResult: StalePriceResult = matResult.fatal
+    ? { count: 0, error: null }
+    : await markStalePrices(supabase, cfg.staleness_days);
+  if (staleResult.error) errors.push(staleResult.error);
+  const recordsErrors = matResult.error_count + (staleResult.error ? 1 : 0);
 
   // 6. Update sync run
-  const status = errors.length > 0 && matResult.checked === 0 ? "error" as const
-    : errors.length > 0 ? "partial" as const
-    : "completed" as const;
+  let status: SyncResult["status"] = matResult.fatal || staleResult.error
+    ? "error"
+    : errors.length > 0
+      ? "partial"
+      : "completed";
 
-  await supabase
+  const { error: updateRunError } = await supabase
     .from("pb_sync_runs")
     .update({
       status,
@@ -165,15 +306,21 @@ export async function runPriceSync(
       records_new: matResult.new_count,
       records_modified: matResult.modified,
       records_unchanged: matResult.unchanged,
-      records_errors: matResult.error_count,
+      records_errors: recordsErrors,
       summary: {
-        stale_marked: staleCount,
+        stale_marked: staleResult.count,
+        records_skipped: matResult.skipped,
         price_changes_above_threshold: priceChanges.length,
         config: cfg,
       },
       error_log: errors.map((e) => ({ message: e, at: new Date().toISOString() })),
     })
     .eq("id", runId);
+
+  if (updateRunError) {
+    status = "error";
+    errors.push(queryError("Failed to persist sync result", updateRunError));
+  }
 
   return {
     run_id: runId,
@@ -182,9 +329,10 @@ export async function runPriceSync(
     records_new: matResult.new_count,
     records_modified: matResult.modified,
     records_unchanged: matResult.unchanged,
-    records_errors: matResult.error_count,
+    records_errors: recordsErrors + (updateRunError ? 1 : 0),
+    records_skipped: matResult.skipped,
     price_changes: priceChanges,
-    stale_marked: staleCount,
+    stale_marked: staleResult.count,
     duration_ms: Date.now() - startTime,
     errors,
   };
@@ -198,6 +346,8 @@ interface MaterializeResult {
   modified: number;
   unchanged: number;
   error_count: number;
+  skipped: number;
+  fatal: boolean;
   changes: PriceChange[];
   errors: string[];
 }
@@ -216,6 +366,8 @@ async function materializeCurrentPrices(
     modified: 0,
     unchanged: 0,
     error_count: 0,
+    skipped: 0,
+    fatal: false,
     changes: [],
     errors: [],
   };
@@ -238,6 +390,8 @@ async function materializeCurrentPrices(
 
   if (prodErr) {
     result.errors.push(`Failed to fetch products: ${prodErr.message}`);
+    result.error_count++;
+    result.fatal = true;
     return result;
   }
 
@@ -246,9 +400,16 @@ async function materializeCurrentPrices(
   }
 
   // Fetch existing current prices for comparison
-  const { data: existingPrices } = await supabase
+  const { data: existingPrices, error: existingPricesError } = await supabase
     .from("pb_price_current")
     .select("product_id, price_excl_vat, is_available");
+
+  if (existingPricesError) {
+    result.errors.push(queryError("Failed to fetch current prices", existingPricesError));
+    result.error_count++;
+    result.fatal = true;
+    return result;
+  }
 
   const existingMap = new Map<string, { price: number; available: boolean }>();
   for (const ep of existingPrices || []) {
@@ -266,11 +427,18 @@ async function materializeCurrentPrices(
     const productIds = batch.map((p) => p.id);
 
     // Get latest observation for each product in this batch
-    const { data: observations } = await supabase
+    const { data: observations, error: observationsError } = await supabase
       .from("pb_price_observations")
-      .select("*")
+      .select("id, product_id, provider_id, observed_price, observed_at, source, source_url, currency, metadata, created_at")
       .in("product_id", productIds)
-      .order("checked_at", { ascending: false });
+      .order("observed_at", { ascending: false });
+
+    if (observationsError) {
+      result.errors.push(queryError("Failed to fetch price observations", observationsError));
+      result.error_count++;
+      result.fatal = true;
+      return result;
+    }
 
     // Group by product_id, take latest per product
     const latestByProduct = new Map<string, Record<string, unknown>>();
@@ -289,14 +457,34 @@ async function materializeCurrentPrices(
       const prov = Array.isArray(provRaw) ? provRaw[0] as Record<string, unknown> | undefined : provRaw as Record<string, unknown> | null;
       const providerName = String(prov?.name ?? "");
 
-      // Use observation price if available, else product base price
-      const price = obs
-        ? Number(obs.price_excl_vat) || 0
-        : Number(product.unit_price) || 0;
+      const metadata = obs ? observationMetadata(obs) : {};
+      // Old product rows also copied package labels into sale_unit, and some
+      // observations have no price_basis metadata. Falling back to sale_unit
+      // keeps those rows from publishing a package price as a unit price.
+      const priceBasis = metadata.price_basis ?? product.sale_unit;
+      const normalized = observedUnitPrice(
+        obs ? obs.observed_price : product.unit_price,
+        priceBasis,
+        product.sale_unit,
+        product.units_per_package
+      );
 
-      const isAvailable = obs ? Boolean(obs.is_available) : Boolean(product.is_available);
-      const confidence = obs ? Number(obs.confidence_score) || 0.5 : 0.4;
-      const checkedAt = obs ? String(obs.checked_at) : new Date().toISOString();
+      if (normalized.price === null) {
+        result.error_count++;
+        result.skipped++;
+        result.errors.push(`Skipped product ${product.id}: ${normalized.reason}`);
+        continue;
+      }
+
+      // Use observation price if available, else product base price
+      const price = normalized.price;
+      const isAvailable = Boolean(product.is_available);
+      const evidenceType = metadata.evidence_type;
+      const confidence = confidenceForEvidence(evidenceType);
+      const checkedAt = obs ? String(obs.observed_at) : new Date().toISOString();
+      const sourceType = obs
+        ? String(obs.source || evidenceType || "n8n")
+        : "provider_catalog";
 
       // Compare with existing
       const existing = existingMap.get(product.id);
@@ -331,9 +519,9 @@ async function materializeCurrentPrices(
             concept_id: product.concept_id,
             price_excl_vat: price,
             confidence_score: confidence,
-            region: obs?.region ?? "ES",
+            region: "ES",
             is_available: isAvailable,
-            source_type: obs?.source_type ?? "provider_catalog",
+            source_type: sourceType,
             checked_at: checkedAt,
             price_changed_at: priceChanged ? new Date().toISOString() : undefined,
           },
@@ -342,6 +530,7 @@ async function materializeCurrentPrices(
 
       if (upsertErr) {
         result.error_count++;
+        result.fatal = true;
         result.errors.push(`Upsert product ${product.id}: ${upsertErr.message}`);
       } else if (isNew) {
         result.new_count++;
@@ -365,7 +554,7 @@ async function materializeCurrentPrices(
 async function markStalePrices(
   supabase: SupabaseClient,
   staleness_days: number
-): Promise<number> {
+): Promise<StalePriceResult> {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - staleness_days);
 
@@ -377,11 +566,13 @@ async function markStalePrices(
     .select("id");
 
   if (error) {
-    console.error("[PriceSync] Stale cleanup error:", error.message);
-    return 0;
+    return {
+      count: 0,
+      error: queryError("Failed to mark stale prices", error),
+    };
   }
 
-  return data?.length ?? 0;
+  return { count: data?.length ?? 0, error: null };
 }
 
 // ─── Get last sync info ──────────────────────────────────────────────────────
@@ -396,9 +587,9 @@ export interface SyncStatus {
 
 export async function getSyncStatus(supabase: SupabaseClient): Promise<SyncStatus> {
   const [
-    { data: lastRun },
-    { count: totalProducts },
-    { count: totalAvailable },
+    { data: lastRun, error: lastRunError },
+    { count: totalProducts, error: totalProductsError },
+    { count: totalAvailable, error: totalAvailableError },
   ] = await Promise.all([
     supabase
       .from("pb_sync_runs")
@@ -414,6 +605,14 @@ export async function getSyncStatus(supabase: SupabaseClient): Promise<SyncStatu
       .select("*", { count: "exact", head: true })
       .eq("is_available", true),
   ]);
+
+  const statusErrors = [
+    lastRunError && queryError("Failed to fetch last sync run", lastRunError),
+    totalProductsError && queryError("Failed to count current prices", totalProductsError),
+    totalAvailableError && queryError("Failed to count available prices", totalAvailableError),
+  ].filter((value): value is string => Boolean(value));
+
+  if (statusErrors.length > 0) throw new Error(statusErrors.join("; "));
 
   const total = totalProducts ?? 0;
   const available = totalAvailable ?? 0;
