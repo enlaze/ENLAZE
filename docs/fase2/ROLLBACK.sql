@@ -497,6 +497,40 @@ commit;
 -- END ROLLBACK_2F2_E4_L3
 
 -- ─────────────────────────────────────────────────────────────────────────────────────
+-- BLOQUE MAQUINARIA · compensa 20260927120000_budget_items_allow_maquinaria.sql
+--
+-- Estrechar un vocabulario no es simétrico a ampliarlo. En cuanto exista una
+-- sola partida clasificada como `maquinaria`, volver al CHECK de tres valores
+-- falla al crearse, y la única forma de que no fallara sería reclasificar esas
+-- partidas —decidir por el usuario dónde va su maquinaria—. Eso no lo hace un
+-- rollback: prefiere abortar y decir cuántas hay.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BEGIN ROLLBACK_MAQUINARIA
+begin;
+do $guard$
+declare v_maquinaria integer;
+begin
+  if current_setting('enlaze.allow_maquinaria_rollback', true)
+     is distinct from 'narrow_back_to_three_categories' then
+    raise exception 'Set explicit narrow_back_to_three_categories acknowledgement; otherwise forward-fix only';
+  end if;
+
+  select count(*) into v_maquinaria from public.budget_items where category = 'maquinaria';
+  if v_maquinaria > 0 then
+    raise exception
+      'There are % budget items classified as maquinaria. Narrowing the vocabulary would mean reclassifying someone else''s work; decide where they go first. This rollback refuses.', v_maquinaria;
+  end if;
+end $guard$;
+
+alter table public.budget_items drop constraint budget_items_category_check;
+alter table public.budget_items
+  add constraint budget_items_category_check
+  check (category = any (array['material'::text, 'mano_obra'::text, 'otros'::text]));
+notify pgrst, 'reload schema';
+commit;
+-- END ROLLBACK_MAQUINARIA
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
 -- BLOQUE E4-L3-S33A · 20260928120000_retire_legacy_portal_links.sql
 --
 -- NO HAY COMPENSACIÓN, y no es un olvido.

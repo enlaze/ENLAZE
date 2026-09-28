@@ -366,8 +366,13 @@ alter table public.budget_items
 -- defaults son valores ADMITIDOS por estos vocabularios. Sin las restricciones
 -- puestas, ese detalle no se estaría verificando: cualquier default habría
 -- pasado.
+-- Ampliado el 2026-09-27 por 20260927120000_budget_items_allow_maquinaria.sql:
+-- `maquinaria` es válida desde entonces. El generador ya la ofrecía al modelo y
+-- el PDF reconoce su etiqueta, aunque todavía suma su importe bajo «Otros»; lo
+-- que faltaba era que la tabla la admitiera.
+-- Cualquier valor fuera de estos cuatro se sigue rechazando.
 alter table public.budget_items add constraint budget_items_category_check check (
-  category in ('material','mano_obra','otros')
+  category in ('material','mano_obra','maquinaria','otros')
 );
 
 -- `unit` se compara normalizada —`lower(trim(...))`— y admite las variantes con
