@@ -278,7 +278,7 @@ test("the obsolete checked_at failure ends the run in error instead of completed
   assert.equal(database.runUpdates.at(-1).status, "error");
 });
 
-test("package prices convert only with a usable package quantity", async (t) => {
+test("price_basis is a sale format, while explicit package quantities still convert", async (t) => {
   assert.deepEqual(observedUnitPrice(120, "Caja", "Caja", 12), {
     price: 10,
     reason: null,
@@ -288,12 +288,16 @@ test("package prices convert only with a usable package quantity", async (t) => 
     reason: null,
   });
 
-  await t.test("an ambiguous Caja price is skipped and counted", async () => {
+  await t.test("a Bote with units_per_package 1 keeps its observed price", async () => {
     const database = new FakeSupabase({
-      products: [product({ sale_unit: "Caja", units_per_package: 1 })],
+      products: [product({
+        commercial_name: "Pintura plástica Bote 4 L",
+        sale_unit: "Bote",
+        units_per_package: 1,
+      })],
       observations: [observation({
-        observed_price: 120,
-        metadata: { evidence_type: "official_product_page", price_basis: "Caja" },
+        observed_price: 23.23,
+        metadata: { evidence_type: "official_product_page", price_basis: "Bote" },
       })],
     });
 
@@ -301,66 +305,67 @@ test("package prices convert only with a usable package quantity", async (t) => 
 
     assert.equal(result.status, "completed");
     assert.equal(result.records_checked, 1);
-    assert.equal(result.records_skipped, 1);
+    assert.equal(result.records_skipped, 0);
     assert.equal(result.records_errors, 0);
     assert.deepEqual(result.errors, []);
-    assert.equal(database.currentUpserts.length, 0);
-    assert.equal(database.runUpdates.at(-1).summary.records_skipped, 1);
-    assert.deepEqual(database.runUpdates.at(-1).summary.skipped, {
-      reasons: { package_without_usable_units_per_package: 1 },
-      examples: [{
-        product_id: "product-1",
-        reason: "package price_basis 'Caja' has no usable units_per_package",
-      }],
-    });
+    assert.equal(database.currentUpserts[0].price_excl_vat, 23.23);
   });
 
-  await t.test("sale_unit protects an old Caja row when metadata lacks price_basis", async () => {
+  await t.test("x12 ud with units_per_package 1 is skipped with its own reason", async () => {
     const database = new FakeSupabase({
-      products: [product({ sale_unit: "Caja", units_per_package: 1 })],
-      observations: [observation({
-        observed_price: 120,
-        metadata: { evidence_type: "official_product_page" },
+      products: [product({
+        commercial_name: "Tacos de nylon x12 ud",
+        sale_unit: "Caja",
+        units_per_package: 1,
       })],
-    });
-
-    const result = await runPriceSync(database);
-
-    assert.equal(result.status, "completed");
-    assert.equal(result.records_skipped, 1);
-    assert.deepEqual(result.errors, []);
-    assert.equal(database.currentUpserts.length, 0);
-  });
-
-  await t.test("a Caja with units_per_package becomes a real unit price", async () => {
-    const database = new FakeSupabase({
-      products: [product({ sale_unit: "Caja", units_per_package: 12 })],
       observations: [observation({
-        observed_price: 120,
+        observed_price: 12,
         metadata: { evidence_type: "official_product_page", price_basis: "Caja" },
       })],
     });
 
     const result = await runPriceSync(database);
+    const summary = database.runUpdates.at(-1).summary;
 
     assert.equal(result.status, "completed");
-    assert.equal(result.records_skipped, 0);
-    assert.equal(database.currentUpserts[0].price_excl_vat, 10);
+    assert.equal(result.records_skipped, 1);
+    assert.deepEqual(result.errors, []);
+    assert.equal(database.currentUpserts.length, 0);
+    assert.deepEqual(summary.skipped.reasons, {
+      declared_pack_quantity_without_units_per_package: 1,
+    });
+    assert.match(summary.skipped.examples[0].reason, /declared pack quantity 12/);
+  });
+
+  await t.test("zero and negative prices stay discarded", async () => {
+    const database = new FakeSupabase({
+      products: [product({ id: "zero" }), product({ id: "negative" })],
+      observations: [
+        observation({ id: "zero-observation", product_id: "zero", observed_price: 0 }),
+        observation({ id: "negative-observation", product_id: "negative", observed_price: -5 }),
+      ],
+    });
+
+    const result = await runPriceSync(database);
+    const summary = database.runUpdates.at(-1).summary;
+
+    assert.equal(result.status, "completed");
+    assert.equal(result.records_skipped, 2);
+    assert.equal(database.currentUpserts.length, 0);
+    assert.deepEqual(summary.skipped.reasons, { invalid_observed_price: 2 });
   });
 });
 
 test("3,000 safe discards stay completed and keep a bounded summary", async () => {
   const products = Array.from({ length: 3_000 }, (_, index) => product({
     id: `product-${index + 1}`,
-    sale_unit: "Caja",
-    units_per_package: 1,
-    unit_price: 120,
+    unit_price: 0,
   }));
   const database = new FakeSupabase({ products, observations: [] });
 
   const result = await runPriceSync(database);
   const persisted = database.runUpdates.at(-1);
-  const reason = "package price_basis 'Caja' has no usable units_per_package";
+  const reason = "observed_price is not a positive finite number";
 
   assert.equal(result.status, "completed");
   assert.equal(result.records_checked, 3_000);
@@ -370,9 +375,7 @@ test("3,000 safe discards stay completed and keep a bounded summary", async () =
   assert.equal(database.currentUpserts.length, 0);
   assert.equal(persisted.status, "completed");
   assert.deepEqual(persisted.error_log, []);
-  assert.deepEqual(persisted.summary.skipped.reasons, {
-    package_without_usable_units_per_package: 3_000,
-  });
+  assert.deepEqual(persisted.summary.skipped.reasons, { invalid_observed_price: 3_000 });
   assert.equal(persisted.summary.skipped.examples.length, 20);
   assert.ok(persisted.summary.skipped.examples.every((example) => example.reason === reason));
 });
@@ -416,6 +419,22 @@ test("source_type has one closed vocabulary", () => {
   for (const source of allowed) assert.equal(priceSyncSourceType(source), source);
   assert.equal(priceSyncSourceType("unexpected_source"), "n8n");
   assert.equal(priceSyncSourceType(" API "), "api");
+});
+
+test("an unknown source fallback is counted instead of becoming n8n silently", async () => {
+  const database = new FakeSupabase({
+    observations: [observation({ source: "new_external_feed" })],
+  });
+
+  const result = await runPriceSync(database);
+  const summary = database.runUpdates.at(-1).summary;
+
+  assert.equal(result.status, "completed");
+  assert.equal(database.currentUpserts[0].source_type, "n8n");
+  assert.deepEqual(summary.unknown_sources, {
+    count: 1,
+    examples: [{ product_id: "product-1", source: "new_external_feed" }],
+  });
 });
 
 test("every database operation in the sync fails closed", async (t) => {

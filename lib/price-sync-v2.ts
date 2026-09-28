@@ -94,52 +94,8 @@ type PriceSyncSourceType = typeof PRICE_SYNC_SOURCE_TYPES[number];
 const PRICE_SYNC_SOURCE_TYPE_SET = new Set<string>(PRICE_SYNC_SOURCE_TYPES);
 const MAX_SKIPPED_EXAMPLES = 20;
 
-const PACKAGE_BASES = new Set([
-  "caja",
-  "saco",
-  "rollo",
-  "paquete",
-  "pack",
-  "palet",
-  "pallet",
-  "bobina",
-  "bidon",
-]);
-
 function queryError(prefix: string, error: QueryError): string {
   return `${prefix}: ${error?.message || "unknown database error"}`;
-}
-
-function normalizeUnit(value: unknown): string {
-  const normalized = String(value ?? "")
-    .trim()
-    .toLocaleLowerCase("es")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/²/g, "2")
-    .replace(/³/g, "3")
-    .replace(/[._\s/-]+/g, "");
-
-  const aliases: Record<string, string> = {
-    u: "ud",
-    unidad: "ud",
-    unidades: "ud",
-    metro: "m",
-    metros: "m",
-    metrocuadrado: "m2",
-    metroscuadrados: "m2",
-    metrocubico: "m3",
-    metroscubicos: "m3",
-    litro: "l",
-    litros: "l",
-    ltr: "l",
-    kilogramo: "kg",
-    kilogramos: "kg",
-    hora: "h",
-    horas: "h",
-  };
-
-  return aliases[normalized] ?? normalized;
 }
 
 function observationMetadata(observation: Record<string, unknown>): Record<string, unknown> {
@@ -150,14 +106,24 @@ function observationMetadata(observation: Record<string, unknown>): Record<strin
 }
 
 function skippedReasonKey(reason: string): string {
-  if (reason.startsWith("package price_basis")) {
-    return "package_without_usable_units_per_package";
-  }
-  if (reason.startsWith("non-unit price_basis")) {
-    return "non_unit_without_usable_units_per_package";
+  if (reason.startsWith("declared pack quantity")) {
+    return "declared_pack_quantity_without_units_per_package";
   }
   if (reason.startsWith("observed_price")) return "invalid_observed_price";
   return "unsafe_price_normalization";
+}
+
+function declaredPackQuantity(productName: unknown): number | null {
+  const normalized = String(productName ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const match = normalized.match(
+    /(?:\bx\s*|\b)(\d{1,4})\s*(?:ud(?:s)?|unidades?|piezas?|pcs?)\b/,
+  );
+  if (!match) return null;
+  const quantity = Number(match[1]);
+  return Number.isInteger(quantity) && quantity > 1 ? quantity : null;
 }
 
 export function confidenceForEvidence(evidenceType: unknown): number {
@@ -173,42 +139,33 @@ export function priceSyncSourceType(source: unknown): PriceSyncSourceType {
 
 export function observedUnitPrice(
   observedPrice: unknown,
-  priceBasis: unknown,
-  saleUnit: unknown,
-  unitsPerPackage: unknown
+  _priceBasis: unknown,
+  _saleUnit: unknown,
+  unitsPerPackage: unknown,
+  productName?: unknown,
 ): { price: number | null; reason: string | null } {
   const price = Number(observedPrice);
   if (!Number.isFinite(price) || price <= 0) {
     return { price: null, reason: "observed_price is not a positive finite number" };
   }
 
-  const basis = normalizeUnit(priceBasis);
-  if (!basis) return { price, reason: null };
-
-  const unit = normalizeUnit(saleUnit);
   const quantity = Number(unitsPerPackage);
-
-  // Package labels describe the price of the whole package even when an old
-  // product row copied that same label into sale_unit. Never let that equality
-  // turn a box/sack/roll price into a unit price.
-  if (PACKAGE_BASES.has(basis) && Number.isFinite(quantity) && quantity > 1) {
+  if (Number.isFinite(quantity) && quantity > 1) {
     return { price: price / quantity, reason: null };
   }
 
-  if (!PACKAGE_BASES.has(basis) && (basis === unit || (basis === "ud" && (!unit || unit === "ud")))) {
-    return { price, reason: null };
+  const declaredQuantity = declaredPackQuantity(productName);
+  if (quantity === 1 && declaredQuantity !== null) {
+    return {
+      price: null,
+      reason: `declared pack quantity ${declaredQuantity} conflicts with units_per_package 1`,
+    };
   }
 
-  if (!PACKAGE_BASES.has(basis) && Number.isFinite(quantity) && quantity > 1) {
-    return { price: price / quantity, reason: null };
-  }
-
-  const displayBasis = String(priceBasis).trim();
-  const kind = PACKAGE_BASES.has(basis) ? "package" : "non-unit";
-  return {
-    price: null,
-    reason: `${kind} price_basis '${displayBasis}' has no usable units_per_package`,
-  };
+  // price_basis describes the sale format (bottle, box, sack, roll...), not an
+  // implicit multiplier. With no explicit package quantity the observed price
+  // is already the price of one sale unit and must be kept unchanged.
+  return { price, reason: null };
 }
 
 // ─── Main sync function ──────────────────────────────────────────────────────
@@ -346,6 +303,10 @@ export async function runPriceSync(
           reasons: matResult.skipped_by_reason,
           examples: matResult.skipped_examples,
         },
+        unknown_sources: {
+          count: matResult.unknown_source_count,
+          examples: matResult.unknown_source_examples,
+        },
         price_changes_above_threshold: priceChanges.length,
         config: cfg,
       },
@@ -385,6 +346,8 @@ interface MaterializeResult {
   skipped: number;
   skipped_by_reason: Record<string, number>;
   skipped_examples: Array<{ product_id: string; reason: string }>;
+  unknown_source_count: number;
+  unknown_source_examples: Array<{ product_id: string; source: string }>;
   fatal: boolean;
   changes: PriceChange[];
   errors: string[];
@@ -407,6 +370,8 @@ async function materializeCurrentPrices(
     skipped: 0,
     skipped_by_reason: {},
     skipped_examples: [],
+    unknown_source_count: 0,
+    unknown_source_examples: [],
     fatal: false,
     changes: [],
     errors: [],
@@ -506,7 +471,8 @@ async function materializeCurrentPrices(
         obs ? obs.observed_price : product.unit_price,
         priceBasis,
         product.sale_unit,
-        product.units_per_package
+        product.units_per_package,
+        product.commercial_name,
       );
 
       if (normalized.price === null) {
@@ -526,9 +492,19 @@ async function materializeCurrentPrices(
       const evidenceType = metadata.evidence_type;
       const confidence = obs ? confidenceForEvidence(evidenceType) : 0.30;
       const checkedAt = obs ? String(obs.observed_at) : new Date().toISOString();
+      const rawSource = String(obs?.source ?? "").trim().toLowerCase();
       const sourceType = obs
-        ? priceSyncSourceType(obs.source)
+        ? priceSyncSourceType(rawSource)
         : "product_base";
+      if (obs && !PRICE_SYNC_SOURCE_TYPE_SET.has(rawSource)) {
+        result.unknown_source_count++;
+        if (result.unknown_source_examples.length < MAX_SKIPPED_EXAMPLES) {
+          result.unknown_source_examples.push({
+            product_id: product.id,
+            source: rawSource.slice(0, 100) || "(missing)",
+          });
+        }
+      }
 
       // Compare with existing
       const existing = existingMap.get(product.id);
