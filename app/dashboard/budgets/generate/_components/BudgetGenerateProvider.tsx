@@ -58,6 +58,7 @@ import {
   isBudgetRevisionConflict,
   saveBudgetRevision,
 } from "@/lib/budget-revision-writer";
+import { billingBlockOf } from "@/lib/billing-status";
 import { canonicalProviderName, providerIdentitySlug } from "@/lib/provider-identity";
 import {
   auditAtomicMaterialName,
@@ -1585,7 +1586,8 @@ export function BudgetGenerateProvider({
         hasRevisionConflict: prev.hasRevisionConflict || conflict,
         saveError: errorMsg,
       }));
-      if (manual || conflict) toast.error("Error al guardar: " + errorMsg);
+      // Bloqueo del plan: el aviso con «Ver planes» ya sale solo (BillingProvider).
+      if ((manual || conflict) && !billingBlockOf(err)) toast.error("Error al guardar: " + errorMsg);
       return null;
     }
   };
@@ -1680,7 +1682,7 @@ export function BudgetGenerateProvider({
         saveError: conflict ? errorMsg : prev.saveError,
         finalizeError: errorMsg,
       }));
-      toast.error("Error al finalizar: " + errorMsg);
+      if (!billingBlockOf(err)) toast.error("Error al finalizar: " + errorMsg);
       return null;
     } finally {
       isFinalizingRef.current = false;

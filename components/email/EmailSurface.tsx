@@ -25,6 +25,10 @@ import Composer from "@/components/messaging/Composer";
 import ConfirmBar from "@/components/messaging/ConfirmBar";
 import Scheduler from "@/components/messaging/Scheduler";
 import ScheduledTab from "@/components/messaging/ScheduledTab";
+import { LockedFeature, useFeature } from "@/components/billing/PlanNotices";
+
+const SCHEDULING_PITCH =
+  "Deja los mensajes preparados para que salgan solos el día y la hora que digas, una vez o cada semana o cada mes.";
 import { useScheduledMessages } from "@/components/messaging/useScheduledMessages";
 import {
   AUDIENCE_TO_FILTER,
@@ -160,6 +164,8 @@ export default function EmailSurface() {
   const [senderName, setSenderName] = useState("Tu empresa");
 
   const [tab, setTab] = useState<"bandeja" | "nuevo" | "programados">("bandeja");
+  // Básico no incluye programar: solo «Enviar ahora».
+  const canSchedule = useFeature("programacion_envios");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("todos");
   const [showMore, setShowMore] = useState(false);
@@ -316,7 +322,7 @@ export default function EmailSurface() {
   const previewText = preview ? personalize(text, preview) : text;
   const previewSnippet = previewText.replace(/\n+/g, " ").slice(0, 90);
   const isNow = mode === "ahora";
-  const canSend = connected && n > 0 && !sending;
+  const canSend = connected && n > 0 && !sending && (mode === "ahora" || canSchedule);
   const summary = scheduleSummary(mode, date, time, weekdays, monthday, n, { one: "email", many: "emails" });
 
   const queue = useMemo(
@@ -761,6 +767,10 @@ export default function EmailSurface() {
             summary={summary}
           />
 
+          {mode !== "ahora" && !canSchedule && (
+            <LockedFeature feature="programacion_envios" description={SCHEDULING_PITCH} compact />
+          )}
+
           <ConfirmBar
             recap={`${n} ${n === 1 ? "destinatario" : "destinatarios"} · ${isNow ? "envío inmediato" : MODES.find((m) => m[0] === mode)![1].toLowerCase()}`}
             label={
@@ -780,6 +790,12 @@ export default function EmailSurface() {
             busy={sending}
             onConfirm={confirm}
           />
+        </div>
+      )}
+
+      {tab === "programados" && !canSchedule && (
+        <div style={{ marginBottom: 20 }}>
+          <LockedFeature feature="programacion_envios" description={SCHEDULING_PITCH} compact />
         </div>
       )}
 

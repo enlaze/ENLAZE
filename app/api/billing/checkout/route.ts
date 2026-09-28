@@ -78,8 +78,8 @@ export async function POST(req: NextRequest) {
     subscription_data: { metadata: { user_id: user.id, plan, interval } },
     metadata: { user_id: user.id, plan, interval },
     integration_identifier: "enlaze-suscripciones-qmxvtrla",
-    success_url: `${siteUrl}/dashboard/settings?billing=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${siteUrl}/dashboard/settings?billing=cancel`,
+    success_url: `${siteUrl}/dashboard/settings/plan?billing=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${siteUrl}/dashboard/settings/plan?billing=cancel`,
   });
 
   return NextResponse.json({ url: session.url });

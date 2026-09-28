@@ -1,5 +1,8 @@
 /** Thin client for the atomic budget revision RPCs deployed in FASE 2F-2. */
 
+import { blockMessage } from "./billing-messages";
+import { billingBlockOf } from "./billing-status";
+
 export type BudgetRevisionPayload = Record<string, unknown>;
 export type BudgetRevisionItem = Record<string, unknown>;
 
@@ -109,6 +112,9 @@ const DATABASE_MESSAGES: ReadonlyArray<readonly [string, string]> = [
 ];
 
 export function budgetRevisionErrorMessage(error: unknown): string {
+  // Muro de pago (trigger PT402): el motivo en palabras normales, no el SQL.
+  const block = billingBlockOf(error);
+  if (block) return blockMessage(block);
   if (isBudgetRevisionConflict(error)) {
     return "Este presupuesto ha cambiado en otra pestaña o sesión. Recarga la página antes de volver a guardar.";
   }

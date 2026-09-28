@@ -40,6 +40,7 @@ import {
   factBtnSecondary,
 } from "./ui";
 import type { IssuedInvoicesState } from "./useIssuedInvoices";
+import { billingBlockOf } from "@/lib/billing-status";
 
 export default function EmitidasTab({ state }: { state: IssuedInvoicesState }) {
   const { supabase, userId, invoices, setInvoices, clients, projects, reload } = state;
@@ -106,7 +107,8 @@ export default function EmitidasTab({ state }: { state: IssuedInvoicesState }) {
       notes: form.notes,
     });
 
-    if (error) { toast.error("Error", { description: error.message }); setSaving(false); return; }
+    // Bloqueo del plan: el aviso con «Ver planes» ya sale solo (BillingProvider).
+    if (error) { if (!billingBlockOf(error)) toast.error("No se pudo crear la factura", { description: error.message }); setSaving(false); return; }
 
     // Increment next number
     await supabase.from("fiscal_settings").update({

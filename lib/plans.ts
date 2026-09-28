@@ -29,7 +29,21 @@ export const TRIAL_DAYS = 5;
 /** Descuento del pago anual sobre 12 mensualidades. */
 export const ANNUAL_DISCOUNT = 0.2;
 
-/** Precio mensual en céntimos de euro (sin cálculo de IVA: pendiente de decidir). */
+/**
+ * ¿Los precios de aquí llevan ya el IVA dentro?
+ *
+ * PROVISIONAL: lo decide la gestoría. Con `false` toda la interfaz enseña los
+ * precios con «+ IVA». Cambiarlo es cambiar SOLO esta línea.
+ *
+ * ⚠️ Esto es solo lo que se ENSEÑA. Stripe hoy no añade IVA al cobro (ver
+ * PENDIENTES.md: bloqueante antes de pasar a modo real).
+ */
+export const PRICES_INCLUDE_VAT = false;
+
+/** Plan que se destaca como recomendado en la página de precios. */
+export const RECOMMENDED_PLAN: PaidPlanId = "profesional";
+
+/** Precio mensual en céntimos de euro (el IVA, según PRICES_INCLUDE_VAT). */
 export const MONTHLY_PRICE_CENTS: Record<PaidPlanId, number> = {
   basico: 2900,
   profesional: 5900,
@@ -41,6 +55,24 @@ export function priceCents(plan: PaidPlanId, interval: BillingInterval): number 
   if (interval === "month") return monthly;
   return Math.round(monthly * 12 * (1 - ANNUAL_DISCOUNT));
 }
+
+/** Lo que te ahorras al año pagando anual frente a 12 mensualidades. */
+export function annualSavingsCents(plan: PaidPlanId): number {
+  return MONTHLY_PRICE_CENTS[plan] * 12 - priceCents(plan, "year");
+}
+
+/** Céntimos → «29 €» o «278,40 €» (los céntimos solo si los hay). */
+export function formatEuros(cents: number): string {
+  const whole = cents % 100 === 0;
+  return new Intl.NumberFormat("es-ES", {
+    minimumFractionDigits: whole ? 0 : 2,
+    maximumFractionDigits: 2,
+    useGrouping: true,
+  }).format(cents / 100) + " €";
+}
+
+/** Coletilla del IVA para poner detrás de un precio: «+ IVA» o «IVA incluido». */
+export const VAT_SUFFIX = PRICES_INCLUDE_VAT ? "IVA incluido" : "+ IVA";
 
 // ── Límites ──────────────────────────────────────────────────────────────
 
@@ -153,6 +185,15 @@ export function planHasFeature(plan: PlanId, feature: Feature): boolean {
   return PLAN_FEATURES[plan].includes(feature);
 }
 
+/** El plan de pago más barato que incluye una función (para el «Disponible en …»). */
+export function cheapestPlanWith(feature: Feature): PaidPlanId {
+  const plan = [...PAID_PLAN_IDS]
+    .sort((a, b) => MONTHLY_PRICE_CENTS[a] - MONTHLY_PRICE_CENTS[b])
+    .find((p) => planHasFeature(p, feature));
+  if (!plan) throw new Error(`Ningún plan de pago incluye ${feature}`);
+  return plan;
+}
+
 // ── Nombres visibles (para los mensajes del 402) ─────────────────────────
 
 export const PLAN_LABELS: Record<PlanId, string> = {
@@ -179,7 +220,8 @@ export const FEATURE_LABELS: Record<Feature, string> = {
   facturas: "Facturas",
   firma: "Firma de documentos",
   portal_cliente: "Portal del cliente",
-  briefing_diario: "Briefing diario del agente",
+  // «Briefing» no: la interfaz lo llama «resumen» (ver AgentExperience).
+  briefing_diario: "Resumen diario del agente",
   seguimiento_precios: "Seguimiento de precios de proveedores",
   programacion_envios: "Programación de envíos y automatización",
 };

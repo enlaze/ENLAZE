@@ -14,6 +14,7 @@ import {
   AgentBriefingHero,
   AgentTabsPanel,
 } from "@/components/dashboard/AgentExperience";
+import { FeatureGate } from "@/components/billing/PlanNotices";
 
 /* ─────────────────────────────────────────────────────────────────────
  *  Icons — Lucide-style (stroke 1.75, 24×24, rounded)
@@ -408,7 +409,12 @@ export default function DashboardHome() {
       </div>
 
       {/* ── Briefing del agente (hero) ─────────────────────────── */}
-      <AgentBriefingHero />
+      <FeatureGate
+        feature="briefing_diario"
+        description="Cada mañana te dice qué tienes pendiente hoy: presupuestos por contestar, facturas por cobrar y lo que conviene mover primero."
+      >
+        <AgentBriefingHero />
+      </FeatureGate>
 
       {/* ── Onboarding checklist (auto-hides when all steps done) ── */}
       <OnboardingChecklist />

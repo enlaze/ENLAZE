@@ -18,6 +18,7 @@ import {
   isBudgetRevisionConflict,
   saveBudgetRevision,
 } from "@/lib/budget-revision-writer";
+import { billingBlockOf } from "@/lib/billing-status";
 
 const fallbackServiceTypes = [
   { value: "reforma", label: "Reforma integral" },
@@ -403,6 +404,11 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
           setSaving(false);
           return;
         }
+        // Bloqueo del plan: el aviso con «Ver planes» ya sale solo (BillingProvider).
+        if (billingBlockOf(error)) {
+          setSaving(false);
+          return;
+        }
         toast.error("No se pudieron guardar los cambios", {
           description: budgetRevisionErrorMessage(error),
         });
@@ -442,7 +448,7 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
       if (createdId) {
         toast.error("El borrador se creó, pero no pudo finalizarse", { description });
         router.push(`/dashboard/budgets/${createdId}/edit`);
-      } else {
+      } else if (!billingBlockOf(error)) {
         toast.error("Error al guardar", { description });
       }
       setSaving(false);

@@ -26,6 +26,7 @@ _Lista viva de cosas por arreglar o rematar. Nada urgente salvo que se indique._
 - **Catálogo compartido:** "Añadir precio" sin proveedor lo cuelga de "Referencia mercado ES", que es GLOBAL → el precio que mete un usuario lo ven todos. Decidir si debe ser privado.
 
 ## Para el lanzamiento (go-live)
+- **🔴 BLOQUEANTE antes de pasar Stripe a modo real — IVA:** hoy Stripe **no añade IVA al cobro**. La web enseña los precios con «+ IVA» (`PRICES_INCLUDE_VAT = false` en `lib/plans.ts`, provisional hasta que decida la gestoría). Si se queda en `false`, cobrar 29 € sería cobrar el IVA de nuestro bolsillo y la factura saldría mal. Antes de activar las claves `live`: que la gestoría decida (precio con o sin IVA, tratamiento de clientes con NIF intracomunitario), configurar Stripe Tax o tasas de impuesto en los precios, y comprobar una factura de prueba. Si la decisión es «IVA incluido», cambiar solo esa línea de `lib/plans.ts`.
 - Desplegar en Vercel + conectar dominio `enlaze.es` (DNS/SSL) + variables de entorno.
 - Conectar el **cron** de mensajes programados (para que se disparen solos a su hora).
 - **n8n en producción** (el agente/briefing) — incluye meter el secreto de Vercel en el llavero del Mac.

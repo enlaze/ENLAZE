@@ -29,6 +29,13 @@ function svgProps({ size = 17, stroke = "currentColor", strokeWidth = 1.9 }: Ico
   };
 }
 
+export const IcoCard = (p: IconProps) => (
+  <svg {...svgProps(p)}>
+    <rect x="3" y="5.5" width="18" height="13" rx="2.2" />
+    <path d="M3 10h18M7 15h3" />
+  </svg>
+);
+
 export const IcoCompany = (p: IconProps) => (
   <svg {...svgProps(p)}>
     <path d="M4 21V6l7-3v18M11 10h7a2 2 0 012 2v9" />
