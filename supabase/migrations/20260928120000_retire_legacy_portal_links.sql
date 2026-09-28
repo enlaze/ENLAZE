@@ -5,9 +5,9 @@
 -- projects.access_token a NULL en los proyectos que todavía lo tienen.
 --
 -- Por qué se puede hacer de una vez y no proyecto a proyecto: los tres
--- propietarios de los ocho proyectos son el equipo que construye la
--- plataforma, y ninguno envió nunca un enlace a nadie. No hay ningún cliente
--- al que dejar fuera. El plan original —sustituir uno a uno, comunicar al
+-- propietarios de los ocho proyectos que hoy tienen enlace son el equipo que
+-- construye la plataforma, y ninguno envió nunca un enlace a nadie. No hay
+-- ningún cliente al que dejar fuera. El plan original —sustituir uno a uno, comunicar al
 -- cliente y observar treinta días— estaba pensado para un escenario que no
 -- existe.
 --

@@ -132,7 +132,7 @@ test("S3.3 (a) vacía los ocho enlaces heredados sin tocar nada más",
     assert.equal(Number(despues.con), 0, "ningún enlace heredado queda");
     assert.equal(Number(despues.sin), 8);
     assert.equal(Number(despues.total), Number(antes.total),
-      "los ocho proyectos siguen existiendo: se vacía la columna, no se borra nada");
+      "no desaparece ningún proyecto: se vacía la columna, no se borra la fila");
   });
 
   await t.test("no tocó ningún otro campo de ningún proyecto", async () => {
@@ -201,6 +201,50 @@ test("S3.3 (a) vacía los ocho enlaces heredados sin tocar nada más",
       await db.query(mutante);
       assert.equal(Number((await enlaces()).con), 8,
         "sin el update los ocho enlaces siguen ahí: la aserción de arriba mide algo real");
+    } finally {
+      await db.query("rollback");
+    }
+  });
+
+  await t.test("la auditoría no confunde enlaces con proyectos", async () => {
+    /* Ocho es el número de ENLACES. Hoy coincide con el de proyectos porque
+       los ocho que hay tienen enlace, pero desde S3.1 un alta nueva nace sin
+       él. Una auditoría que comparase el recuento de proyectos contra 8
+       gritaría «se borró algo» por un alta normal, que es justo lo contrario
+       de lo que pasó. */
+    const bloque = (nombre) =>
+      sql("docs/fase2/CHECKS.sql").split(`-- BEGIN ${nombre}\n`)[1].split(`-- END ${nombre}`)[0];
+    const auditoria = bloque("CHECK_E4_L3_S33A_AUDIT");
+
+    await db.query("create schema if not exists supabase_migrations");
+    await db.query(`create table if not exists supabase_migrations.schema_migrations(version text primary key)`);
+    await db.query(`insert into supabase_migrations.schema_migrations values('20260928120000')
+                    on conflict do nothing`);
+
+    const veredicto = async () => (await db.query(auditoria)).rows[0].veredicto;
+    assert.match(await veredicto(), /^OK/, "recién aplicada, la auditoría pasa");
+
+    // Un proyecto nuevo, que por S3.1 nace sin enlace.
+    await db.query("begin");
+    try {
+      await db.query(`insert into public.projects(id,user_id,name)
+        values('97000000-0000-4000-8000-000000000001',$1,'Obra posterior')`, [OWNER]);
+      const evidencia = (await db.query(auditoria)).rows[0];
+      assert.equal(Number(evidencia.proyectos), 9, "ahora hay nueve proyectos");
+      assert.equal(Number(evidencia.con_enlace), 0, "y ningún enlace heredado");
+      assert.match(evidencia.veredicto, /^OK/,
+        "crear un proyecto no puede hacer que la auditoría diga que se borró algo");
+    } finally {
+      await db.query("rollback");
+    }
+
+    // Y lo que sí debe abortar sigue abortando.
+    await db.query("begin");
+    try {
+      await db.query(`update public.projects set access_token = gen_random_uuid()
+                       where id = '90000000-0000-4000-8000-000000000002'`);
+      assert.match(await veredicto(), /ABORTAR: quedan 1 enlaces heredados/,
+        "un enlace superviviente sí detiene la auditoría");
     } finally {
       await db.query("rollback");
     }

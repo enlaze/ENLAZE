@@ -57,7 +57,8 @@ desechable, sobre la cadena completa hasta S3.1 incluida:
   sin default;
 - el guard aborta con nueve enlaces, con siete, con uno en proyecto borrado y
   con el default repuesto;
-- vacía los ocho y **no borra ni una fila**: los ocho proyectos siguen ahí;
+- vacía los ocho enlaces y **no borra ni una fila**: el recuento de proyectos
+  no baja;
 - **ningún otro campo cambia** — id, dueño, nombre, estado, borrado y alta
   quedan byte a byte iguales, comprobado por huella;
 - un enlace retirado ya no abre el portal y responde «no encontrado» en vez de
@@ -73,8 +74,11 @@ desechable, sobre la cadena completa hasta S3.1 incluida:
 1. `CHECK_E4_L3_S33A_PRECHECK` → `veredicto = OK`.
 2. `supabase migration list`: la única pendiente debe ser `20260928120000`.
 3. Un solo `supabase db push`.
-4. `CHECK_E4_L3_S33A_AUDIT` → `veredicto = OK`: registrada, cero enlaces y los
-   ocho proyectos intactos.
+4. `CHECK_E4_L3_S33A_AUDIT` → `veredicto = OK`: registrada y cero enlaces.
+   Contrasta además su columna `proyectos` con la que imprimió el precheck:
+   igual o mayor, nunca menor. **Ocho es el número de enlaces, no de
+   proyectos**; hoy coinciden, pero desde S3.1 un alta nueva nace sin enlace y
+   dejan de coincidir en cuanto se cree un proyecto.
 
 Después de esto, el precheck del paso (b) —`CHECK_E4_L3_S33_PASO_B_PRECHECK`,
 en la rama `codex/legacy-token-s33-prep`— pasará de `ESPERAR` a `OK`, y se

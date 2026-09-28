@@ -2606,12 +2606,23 @@ from (
 -- END CHECK_E4_L3_S33A_PRECHECK
 
 -- BEGIN CHECK_E4_L3_S33A_AUDIT
--- DESPUÉS del push. ESPERADO: veredicto = 'OK', con los proyectos intactos.
+-- DESPUÉS del push. ESPERADO: veredicto = 'OK'.
+--
+-- Ocho es el número de ENLACES revisados, no de proyectos. Hoy coinciden
+-- —los ocho proyectos que hay tienen enlace—, pero desde 20260927100000 un
+-- proyecto nuevo nace SIN enlace, así que en cuanto se cree uno dejan de
+-- coincidir. Comparar el recuento de proyectos contra 8 haría que esta
+-- auditoría gritara «se borró algo» por un alta normal.
+--
+-- Que la migración vació en vez de borrar se comprueba contrastando
+-- `proyectos` con el valor que imprimió CHECK_E4_L3_S33A_PRECHECK justo antes
+-- del push: tiene que ser el mismo o mayor, nunca menor. Esa comparación la
+-- hace quien despliega, porque este bloque no puede conocer el antes. Lo que
+-- sí puede afirmar por sí solo es que no queda ningún enlace.
 select case
          when registrada = 0 then 'ABORTAR: 20260928120000 no esta registrada'
          when con_enlace > 0 then 'ABORTAR: quedan ' || con_enlace || ' enlaces heredados'
-         when proyectos <> 8 then 'ABORTAR: el numero de proyectos cambio; se esperaba vaciar, no borrar'
-         else 'OK'
+         else 'OK — contrasta ademas `proyectos` con el valor del precheck: igual o mayor, nunca menor'
        end as veredicto, *
 from (
   select
