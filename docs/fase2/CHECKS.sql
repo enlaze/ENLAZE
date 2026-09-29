@@ -2685,3 +2685,83 @@ from (
     (select count(*) from public.portal_tokens) as tokens_modernos
 ) as evidencia;
 -- END CHECK_E4_L3_S33A_AUDIT
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- E4 LOTE 3 · S3.3 paso (b) · 20260929100000_portal_rpcs_drop_legacy_token.sql
+-- Solo esquema: sustituye dos funciones. No escribe una sola fila.
+-- Estos bloques son de solo lectura y no muestran ningún valor de token.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BEGIN CHECK_E4_L3_S33B_PRECHECK
+-- ANTES del push. ESPERADO: veredicto = 'OK'.
+select case
+         when paso_a = 0 then 'ABORTAR: falta 20260928120000; el paso (a) debe ir antes'
+         when enlaces > 0 then 'ABORTAR: quedan ' || enlaces || ' enlaces heredados; (b) los dejaria fuera'
+         when snapshot_existe = 0 then 'ABORTAR: no existe portal_read_snapshot(text)'
+         when respond_existe = 0 then 'ABORTAR: no existe portal_respond_to_change(text,uuid,boolean)'
+         when con_heredado = 0 then 'NADA QUE HACER: ninguna funcion nombra ya access_token'
+         when con_heredado <> 2 then 'REVISAR: se esperaban 2 funciones con el camino heredado, hay ' || con_heredado
+         else 'OK'
+       end as veredicto, *
+from (
+  select
+    (select count(*) from supabase_migrations.schema_migrations
+       where version = '20260928120000') as paso_a,
+    (select count(*) from public.projects where access_token is not null) as enlaces,
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public' and p.proname = 'portal_read_snapshot') as snapshot_existe,
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public' and p.proname = 'portal_respond_to_change') as respond_existe,
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public' and p.prokind = 'f'
+         and pg_get_functiondef(p.oid) like '%access_token%') as con_heredado
+) as evidencia;
+-- END CHECK_E4_L3_S33B_PRECHECK
+
+-- BEGIN CHECK_E4_L3_S33B_AUDIT
+-- DESPUÉS del push. ESPERADO: veredicto = 'OK'.
+--
+-- `con_heredado = 0` es además la precondición del paso (c): la columna no se
+-- puede retirar mientras alguna función la nombre.
+--
+-- Las comparaciones de ACL y search_path usan `is distinct from` a propósito:
+-- con la función ausente el valor seria NULL, y `<>` daria "no cierto", que el
+-- case leeria como si todo estuviera bien justo cuando no hay nada.
+select case
+         when registrada = 0 then 'ABORTAR: 20260929100000 no esta registrada'
+         when con_heredado > 0 then 'ABORTAR: ' || con_heredado || ' funciones siguen nombrando access_token'
+         when funciones <> 2 then 'ABORTAR: se esperaban las 2 funciones, hay ' || funciones
+         when secdef <> 2 then 'ABORTAR: alguna dejo de ser security definer'
+         when search_path_vacio <> 2 then 'ABORTAR: alguna perdio el search_path vacio'
+         when ejecutables_anon <> 2 then 'ABORTAR: anon perdio execute en alguna'
+         -- REVISAR y no ABORTAR: despues de (b) un valor en access_token es
+         -- inerte, ninguna funcion lo mira. No significa que el despliegue
+         -- fallara; significa que algo volvio a escribir la columna, y eso hay
+         -- que mirarlo antes del paso (c).
+         when enlaces > 0 then 'REVISAR: (b) esta bien, pero han reaparecido '
+           || enlaces || ' valores en access_token; averiguar quien los escribe antes de (c)'
+         else 'OK'
+       end as veredicto, *
+from (
+  select
+    (select count(*) from supabase_migrations.schema_migrations
+       where version = '20260929100000') as registrada,
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public' and p.prokind = 'f'
+         and pg_get_functiondef(p.oid) like '%access_token%') as con_heredado,
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public'
+         and p.proname in ('portal_read_snapshot','portal_respond_to_change')) as funciones,
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public' and p.prosecdef
+         and p.proname in ('portal_read_snapshot','portal_respond_to_change')) as secdef,
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public'
+         and p.proname in ('portal_read_snapshot','portal_respond_to_change')
+         and array_to_string(p.proconfig, ',') is not distinct from 'search_path=""') as search_path_vacio,
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public'
+         and p.proname in ('portal_read_snapshot','portal_respond_to_change')
+         and array_to_string(p.proacl, ' | ') like '%anon=X%') as ejecutables_anon,
+    (select count(*) from public.projects where access_token is not null) as enlaces
+) as evidencia;
+-- END CHECK_E4_L3_S33B_AUDIT
