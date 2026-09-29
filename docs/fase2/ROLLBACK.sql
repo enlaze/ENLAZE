@@ -789,3 +789,48 @@ $$;
 notify pgrst, 'reload schema';
 commit;
 -- END ROLLBACK_E4_L3_S33B
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BLOQUE E4-L3-S33C · compensa 20260929140000_projects_drop_access_token.sql
+--
+-- Este sí compensa de verdad, y merece explicarse porque parece lo contrario.
+-- El paso (a) NO tenía compensación: destruía ocho secretos que no se guardaban
+-- en ninguna parte. El (c) elimina una columna que ya está vacía, así que
+-- reponerla —con su restricción única, su índice y su comentario— devuelve
+-- exactamente el estado anterior: ocho filas con el valor a NULL.
+--
+-- Lo que NO devuelve, porque nunca existió después de (a), son los enlaces.
+-- Si hiciera falta dar acceso por el portal, el camino es portal_issue_token.
+--
+-- Después de este bloque, el camino heredado sigue sin existir en las RPC:
+-- eso lo retiró el paso (b) y se compensa por separado con
+-- ROLLBACK_E4_L3_S33B, que debe ejecutarse DESPUÉS de este si se quiere
+-- volver al comportamiento completo de antes del lote.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BEGIN ROLLBACK_E4_L3_S33C
+begin;
+set local lock_timeout = '5s';
+do $guard$
+begin
+  if current_setting('enlaze.allow_access_token_column_rollback', true)
+     is distinct from 'restore_empty_access_token_column' then
+    raise exception 'Set explicit restore_empty_access_token_column acknowledgement; otherwise forward-fix only';
+  end if;
+  if exists (select 1 from pg_attribute
+              where attrelid = 'public.projects'::regclass
+                and attname = 'access_token' and not attisdropped) then
+    raise exception 'projects.access_token already exists; nothing to restore';
+  end if;
+end $guard$;
+
+-- Se repone tal como estaba tras S3.1: nullable y sin default. Reponerla con
+-- el default original volvería a emitir un enlace en cada alta, que es
+-- justamente lo que 20260927100000 vino a cortar.
+alter table public.projects add column access_token uuid;
+alter table public.projects add constraint projects_access_token_key unique (access_token);
+create index if not exists idx_projects_access_token on public.projects using btree (access_token);
+comment on column public.projects.access_token is
+  'Enlace heredado del portal, retirado el 2026-09-28 (S3.3 paso a): los ocho que quedaban se vaciaron y no se emiten nuevos desde 20260927100000. Las RPC del portal todavía lo aceptan por compatibilidad; retirarla es el paso (b) y eliminar la columna el (c). Ver docs/fase2/ESTADO-2F2-E4-L3.md.';
+notify pgrst, 'reload schema';
+commit;
+-- END ROLLBACK_E4_L3_S33C

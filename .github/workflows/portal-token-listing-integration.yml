@@ -17,9 +17,11 @@ on:
       - "supabase/migrations/*budget_items_allow_maquinaria.sql"
       - "supabase/migrations/*retire_legacy_portal_links.sql"
       - "supabase/migrations/*portal_rpcs_drop_legacy_token.sql"
+      - "supabase/migrations/*projects_drop_access_token.sql"
       - "__tests__/budget-item*"
       - "__tests__/legacy-links-retired.integration.test.mjs"
       - "__tests__/portal-rpcs-legacy-removed.integration.test.mjs"
+      - "__tests__/access-token-column-dropped.integration.test.mjs"
       - "app/dashboard/budgets/_components/budget-form.tsx"
       - "lib/portal-path-redaction.ts"
       - "lib/sentry-portal-scrubbing.ts"
@@ -111,6 +113,8 @@ jobs:
         run: node --test __tests__/legacy-links-retired.integration.test.mjs
       - name: The portal RPCs no longer accept legacy links
         run: node --test __tests__/portal-rpcs-legacy-removed.integration.test.mjs
+      - name: projects.access_token is gone and nothing else moved
+        run: node --test __tests__/access-token-column-dropped.integration.test.mjs
       - name: Migration conventions
         run: node --test __tests__/migration-transaction-control.test.mjs
       - name: Remove disposable database

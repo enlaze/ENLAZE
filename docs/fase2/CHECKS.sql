@@ -2765,3 +2765,81 @@ from (
     (select count(*) from public.projects where access_token is not null) as enlaces
 ) as evidencia;
 -- END CHECK_E4_L3_S33B_AUDIT
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- E4 LOTE 3 · S3.3 paso (c) · 20260929140000_projects_drop_access_token.sql
+-- Elimina la columna. Cierra el lote. Bloques de solo lectura.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BEGIN CHECK_E4_L3_S33C_PRECHECK
+-- ANTES del push. ESPERADO: veredicto = 'OK'.
+select case
+         when paso_b = 0 then 'ABORTAR: falta 20260929100000; el paso (b) debe ir antes'
+         when columna = 0 then 'NADA QUE HACER: la columna ya no existe'
+         when con_valor > 0 then 'ABORTAR: ' || con_valor || ' proyectos tienen enlace; el drop los destruiria sin vuelta atras'
+         when funciones > 0 then 'ABORTAR: ' || funciones || ' funciones siguen nombrando access_token'
+         when es_not_null then 'REVISAR: la columna volvio a ser NOT NULL; S3.1 fue deshecha'
+         when por_defecto is not null then 'REVISAR: la columna recupero un default: ' || por_defecto
+         else 'OK'
+       end as veredicto, *
+from (
+  select
+    (select count(*) from supabase_migrations.schema_migrations
+       where version = '20260929100000') as paso_b,
+    (select count(*) from pg_attribute
+       where attrelid = 'public.projects'::regclass
+         and attname = 'access_token' and not attisdropped) as columna,
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public' and p.prokind = 'f'
+         and pg_get_functiondef(p.oid) like '%access_token%') as funciones,
+    -- to_jsonb y no `where access_token is not null`: este bloque tiene que
+    -- poder ejecutarse TAMBIEN cuando la columna ya no existe, y una
+    -- referencia directa seria un error de analisis, no un veredicto. Asi
+    -- devuelve 0 y el case puede decir 'NADA QUE HACER'.
+    (select count(*) from public.projects p
+      where (to_jsonb(p) ->> 'access_token') is not null) as con_valor,
+    (select count(*) from public.projects) as proyectos,
+    (select a.attnotnull from pg_attribute a
+       where a.attrelid = 'public.projects'::regclass and a.attname = 'access_token') as es_not_null,
+    (select pg_get_expr(d.adbin, d.adrelid) from pg_attribute a
+       left join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum
+      where a.attrelid = 'public.projects'::regclass and a.attname = 'access_token') as por_defecto
+) as evidencia;
+-- END CHECK_E4_L3_S33C_PRECHECK
+
+-- BEGIN CHECK_E4_L3_S33C_AUDIT
+-- DESPUÉS del push. ESPERADO: veredicto = 'OK'.
+-- `proyectos` se contrasta a mano con el valor que imprimió el precheck: igual
+-- o mayor, nunca menor. El bloque no puede conocer el antes, y ocho no es una
+-- constante — desde 20260927100000 un alta nueva no altera nada de esto.
+select case
+         when registrada = 0 then 'ABORTAR: 20260929140000 no esta registrada'
+         when columna > 0 then 'ABORTAR: la columna access_token sigue existiendo'
+         when indices > 0 then 'ABORTAR: quedan ' || indices || ' indices de access_token'
+         when restricciones > 0 then 'ABORTAR: queda la restriccion unica de access_token'
+         when funciones > 0 then 'ABORTAR: alguna funcion volvio a nombrar access_token'
+         when tokens_modernos = 0 then 'REVISAR: no hay ningun enlace moderno; el portal quedaria sin via de acceso'
+         else 'OK — contrasta ademas `proyectos` con el valor del precheck: igual o mayor, nunca menor'
+       end as veredicto, *
+from (
+  select
+    (select count(*) from supabase_migrations.schema_migrations
+       where version = '20260929140000') as registrada,
+    (select count(*) from pg_attribute
+       where attrelid = 'public.projects'::regclass
+         and attname = 'access_token' and not attisdropped) as columna,
+    (select count(*) from pg_indexes
+       where schemaname = 'public' and tablename = 'projects'
+         and indexdef like '%access_token%') as indices,
+    (select count(*) from pg_constraint
+       where conrelid = 'public.projects'::regclass
+         and pg_get_constraintdef(oid) like '%access_token%') as restricciones,
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public' and p.prokind = 'f'
+         and pg_get_functiondef(p.oid) like '%access_token%') as funciones,
+    (select count(*) from public.projects) as proyectos,
+    (select count(*) from public.projects where deleted_at is null) as proyectos_vivos,
+    (select count(*) from public.portal_tokens
+       where is_active and revoked_at is null
+         and (expires_at is null or expires_at > now())) as tokens_modernos
+) as evidencia;
+-- END CHECK_E4_L3_S33C_AUDIT
