@@ -68,6 +68,11 @@ class FakeQuery {
     return this;
   }
 
+  range(from, to) {
+    this.rangeValue = { from, to };
+    return this;
+  }
+
   single() {
     this.cardinality = "single";
     return this;
@@ -105,6 +110,7 @@ class FakeSupabase {
       filters: query.filters,
       payload: query.payload,
       selectOptions: query.selectOptions,
+      range: query.rangeValue,
     });
 
     if (query.table === "pb_sync_runs") {
@@ -130,9 +136,13 @@ class FakeSupabase {
     }
 
     if (query.table === "pb_products") {
+      const products = this.options.products ?? [product()];
+      const from = query.rangeValue?.from ?? 0;
+      const requestedTo = query.rangeValue?.to ?? (from + 999);
+      const to = Math.min(requestedTo, from + 999);
       return this.options.productError
         ? { data: null, error: { message: this.options.productError } }
-        : { data: this.options.products ?? [product()], error: null };
+        : { data: products.slice(from, to + 1), error: null };
     }
 
     if (query.table === "pb_price_observations") {
@@ -146,7 +156,7 @@ class FakeSupabase {
 
     if (query.table === "pb_price_current") {
       if (query.operation === "upsert") {
-        this.currentUpserts.push(query.payload);
+        this.currentUpserts.push(...(Array.isArray(query.payload) ? query.payload : [query.payload]));
         return this.options.upsertError
           ? { data: null, error: { message: this.options.upsertError } }
           : { data: null, error: null };
@@ -173,9 +183,13 @@ class FakeSupabase {
           error: null,
         };
       }
+      const prices = this.options.existingPrices ?? [];
+      const from = query.rangeValue?.from ?? 0;
+      const requestedTo = query.rangeValue?.to ?? (from + 999);
+      const to = Math.min(requestedTo, from + 999);
       return this.options.existingPricesError
         ? { data: null, error: { message: this.options.existingPricesError } }
-        : { data: this.options.existingPrices ?? [], error: null };
+        : { data: prices.slice(from, to + 1), error: null };
     }
 
     throw new Error(`Unexpected fake query: ${query.table}.${query.operation}`);
@@ -248,6 +262,47 @@ test("materializes the real observation schema instead of the obsolete columns",
   assert.match(observationCall.columns, /observed_price/);
   assert.match(observationCall.columns, /observed_at/);
   assert.doesNotMatch(observationCall.columns, /price_excl_vat|checked_at|confidence_score/);
+});
+
+test("paginates past the production PostgREST 1,000-row cap", async () => {
+  const products = Array.from({ length: 2_005 }, (_, index) => product({
+    id: `product-${index + 1}`,
+    unit_price: 10 + index / 100,
+  }));
+  const existingPrices = Array.from({ length: 1_505 }, (_, index) => ({
+    product_id: `product-${index + 1}`,
+    price_excl_vat: 10 + index / 100,
+    is_available: true,
+  }));
+  const database = new FakeSupabase({ products, existingPrices, observations: [] });
+
+  const result = await runPriceSync(database);
+  const productReads = database.calls.filter((call) => call.table === "pb_products");
+  const currentReads = database.calls.filter(
+    (call) => call.table === "pb_price_current" && call.operation === "select",
+  );
+  const currentUpsertCalls = database.calls.filter(
+    (call) => call.table === "pb_price_current" && call.operation === "upsert",
+  );
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.records_checked, 2_005);
+  assert.equal(result.records_new, 500);
+  assert.equal(result.records_unchanged, 1_505);
+  assert.equal(database.currentUpserts.length, 2_005);
+  assert.equal(currentUpsertCalls.length, 41);
+  assert.ok(currentUpsertCalls.every((call) => call.payload.length <= 50));
+  assert.ok(productReads.every((call) => call.orderBy?.column === "id"));
+  assert.ok(currentReads.every((call) => call.orderBy?.column === "product_id"));
+  assert.deepEqual(productReads.map((call) => call.range), [
+    { from: 0, to: 999 },
+    { from: 1_000, to: 1_999 },
+    { from: 2_000, to: 2_999 },
+  ]);
+  assert.deepEqual(currentReads.map((call) => call.range), [
+    { from: 0, to: 999 },
+    { from: 1_000, to: 1_999 },
+  ]);
 });
 
 for (const [evidenceType, confidence] of [

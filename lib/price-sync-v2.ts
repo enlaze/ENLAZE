@@ -93,6 +93,7 @@ type PriceSyncSourceType = typeof PRICE_SYNC_SOURCE_TYPES[number];
 
 const PRICE_SYNC_SOURCE_TYPE_SET = new Set<string>(PRICE_SYNC_SOURCE_TYPES);
 const MAX_SKIPPED_EXAMPLES = 20;
+const POSTGREST_PAGE_SIZE = 1_000;
 
 function queryError(prefix: string, error: QueryError): string {
   return `${prefix}: ${error?.message || "unknown database error"}`;
@@ -353,6 +354,24 @@ interface MaterializeResult {
   errors: string[];
 }
 
+interface SyncProductRow {
+  id: string;
+  commercial_name: string;
+  provider_id: string;
+  concept_id: string | null;
+  sale_unit: string | null;
+  units_per_package: number | null;
+  unit_price: number | null;
+  is_available: boolean | null;
+  pb_providers: unknown;
+}
+
+interface CurrentPriceRow {
+  product_id: string;
+  price_excl_vat: number;
+  is_available: boolean;
+}
+
 /**
  * For each active product, find the most recent observation and upsert
  * into pb_price_current. Tracks which prices changed.
@@ -377,27 +396,39 @@ async function materializeCurrentPrices(
     errors: [],
   };
 
-  // Fetch all active products with their providers
-  let productQuery = supabase
-    .from("pb_products")
-    .select(`
-      id, commercial_name, provider_id, concept_id, sale_unit,
-      units_per_package, unit_price, is_available,
-      pb_providers!inner ( id, name )
-    `)
-    .eq("is_active", true);
+  // PostgREST caps a response at max-rows (1,000 in production). Page both
+  // source tables explicitly; otherwise a "successful" full sync silently
+  // materializes only the first page of the catalogue.
+  const products: SyncProductRow[] = [];
+  for (let from = 0; ; from += POSTGREST_PAGE_SIZE) {
+    let productQuery = supabase
+      .from("pb_products")
+      .select(`
+        id, commercial_name, provider_id, concept_id, sale_unit,
+        units_per_package, unit_price, is_available,
+        pb_providers!inner ( id, name )
+      `)
+      .eq("is_active", true)
+      .order("id", { ascending: true });
 
-  if (config.scope === "provider" && config.scope_id) {
-    productQuery = productQuery.eq("provider_id", config.scope_id);
-  }
+    if (config.scope === "provider" && config.scope_id) {
+      productQuery = productQuery.eq("provider_id", config.scope_id);
+    }
 
-  const { data: products, error: prodErr } = await productQuery;
+    const { data: page, error: prodErr } = await productQuery.range(
+      from,
+      from + POSTGREST_PAGE_SIZE - 1,
+    );
 
-  if (prodErr) {
-    result.errors.push(`Failed to fetch products: ${prodErr.message}`);
-    result.error_count++;
-    result.fatal = true;
-    return result;
+    if (prodErr) {
+      result.errors.push(`Failed to fetch products: ${prodErr.message}`);
+      result.error_count++;
+      result.fatal = true;
+      return result;
+    }
+
+    products.push(...(page ?? []));
+    if (!page || page.length < POSTGREST_PAGE_SIZE) break;
   }
 
   if (!products || products.length === 0) {
@@ -405,15 +436,23 @@ async function materializeCurrentPrices(
   }
 
   // Fetch existing current prices for comparison
-  const { data: existingPrices, error: existingPricesError } = await supabase
-    .from("pb_price_current")
-    .select("product_id, price_excl_vat, is_available");
+  const existingPrices: CurrentPriceRow[] = [];
+  for (let from = 0; ; from += POSTGREST_PAGE_SIZE) {
+    const { data: page, error: existingPricesError } = await supabase
+      .from("pb_price_current")
+      .select("product_id, price_excl_vat, is_available")
+      .order("product_id", { ascending: true })
+      .range(from, from + POSTGREST_PAGE_SIZE - 1);
 
-  if (existingPricesError) {
-    result.errors.push(queryError("Failed to fetch current prices", existingPricesError));
-    result.error_count++;
-    result.fatal = true;
-    return result;
+    if (existingPricesError) {
+      result.errors.push(queryError("Failed to fetch current prices", existingPricesError));
+      result.error_count++;
+      result.fatal = true;
+      return result;
+    }
+
+    existingPrices.push(...(page ?? []));
+    if (!page || page.length < POSTGREST_PAGE_SIZE) break;
   }
 
   const existingMap = new Map<string, { price: number; available: boolean }>();
@@ -430,6 +469,8 @@ async function materializeCurrentPrices(
   for (let i = 0; i < products.length; i += BATCH) {
     const batch = products.slice(i, i + BATCH);
     const productIds = batch.map((p) => p.id);
+    const upserts: Array<Record<string, unknown>> = [];
+    const outcomes: Array<{ isNew: boolean; priceChanged: boolean }> = [];
 
     // Get latest observation for each product in this batch
     const { data: observations, error: observationsError } = await supabase
@@ -528,37 +569,41 @@ async function materializeCurrentPrices(
         });
       }
 
-      // Upsert
-      const { error: upsertErr } = await supabase
-        .from("pb_price_current")
-        .upsert(
-          {
-            product_id: product.id,
-            observation_id: obs?.id ?? null,
-            provider_id: product.provider_id,
-            concept_id: product.concept_id,
-            price_excl_vat: price,
-            confidence_score: confidence,
-            region: "ES",
-            is_available: isAvailable,
-            source_type: sourceType,
-            checked_at: checkedAt,
-            price_changed_at: priceChanged ? new Date().toISOString() : undefined,
-          },
-          { onConflict: "product_id" }
-        );
+      upserts.push({
+        product_id: product.id,
+        observation_id: obs?.id ?? null,
+        provider_id: product.provider_id,
+        concept_id: product.concept_id,
+        price_excl_vat: price,
+        confidence_score: confidence,
+        region: "ES",
+        is_available: isAvailable,
+        source_type: sourceType,
+        checked_at: checkedAt,
+        price_changed_at: priceChanged ? new Date().toISOString() : undefined,
+      });
+      outcomes.push({ isNew, priceChanged: Boolean(priceChanged) });
+    }
 
-      if (upsertErr) {
-        result.error_count++;
-        result.fatal = true;
-        result.errors.push(`Upsert product ${product.id}: ${upsertErr.message}`);
-      } else if (isNew) {
-        result.new_count++;
-      } else if (priceChanged) {
-        result.modified++;
-      } else {
-        result.unchanged++;
-      }
+    if (upserts.length === 0) continue;
+
+    const { error: upsertErr } = await supabase
+      .from("pb_price_current")
+      .upsert(upserts, { onConflict: "product_id" });
+
+    if (upsertErr) {
+      result.error_count += upserts.length;
+      result.fatal = true;
+      result.errors.push(
+        `Upsert batch ${i / BATCH + 1} (${upserts.length} products): ${upsertErr.message}`,
+      );
+      continue;
+    }
+
+    for (const outcome of outcomes) {
+      if (outcome.isNew) result.new_count++;
+      else if (outcome.priceChanged) result.modified++;
+      else result.unchanged++;
     }
   }
 
