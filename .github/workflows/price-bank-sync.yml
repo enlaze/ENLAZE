@@ -18,14 +18,14 @@ jobs:
     timeout-minutes: 10
     env:
       PRICE_SYNC_URL: https://enlaze.vercel.app/api/pb/sync/run
-      PRICE_SYNC_TOKEN: ${{ secrets.SYNC_API_KEY }}
+      PRICE_SYNC_TOKEN: ${{ secrets.AGENT_API_KEY }}
     steps:
       - name: Require sync credential
         shell: bash
         run: |
           set -euo pipefail
           if [[ -z "${PRICE_SYNC_TOKEN}" ]]; then
-            echo "SYNC_API_KEY is not configured in GitHub Actions." >&2
+            echo "AGENT_API_KEY is not configured in GitHub Actions." >&2
             exit 1
           fi
 
@@ -37,6 +37,8 @@ jobs:
           response_file="$(mktemp)"
           trap 'rm -f "${payload_file}" "${response_file}"' EXIT
 
+          # Catch-up window: ingestion has been stopped since 2026-08-22.
+          # Lower staleness_days again once n8n is ingesting fresh observations.
           printf '{"scope":"all","staleness_days":60,"idempotency_key":"scheduled-%s-%s"}' \
             "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" > "${payload_file}"
 

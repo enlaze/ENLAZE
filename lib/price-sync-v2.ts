@@ -472,25 +472,36 @@ async function materializeCurrentPrices(
     const upserts: Array<Record<string, unknown>> = [];
     const outcomes: Array<{ isNew: boolean; priceChanged: boolean }> = [];
 
-    // Get latest observation for each product in this batch
-    const { data: observations, error: observationsError } = await supabase
-      .from("pb_price_observations")
-      .select("id, product_id, provider_id, observed_price, observed_at, source, source_url, currency, metadata, created_at")
-      .in("product_id", productIds)
-      .order("observed_at", { ascending: false });
+    // A 50-product batch can exceed PostgREST's 1,000-row cap. Keep the
+    // global newest-first order stable across pages so grouping below always
+    // retains the latest observation for every product in the batch.
+    const observations: Array<Record<string, unknown>> = [];
+    for (let from = 0; ; from += POSTGREST_PAGE_SIZE) {
+      const { data: page, error: observationsError } = await supabase
+        .from("pb_price_observations")
+        .select("id, product_id, provider_id, observed_price, observed_at, source, source_url, currency, metadata, created_at")
+        .in("product_id", productIds)
+        .order("observed_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(from, from + POSTGREST_PAGE_SIZE - 1);
 
-    if (observationsError) {
-      result.errors.push(queryError("Failed to fetch price observations", observationsError));
-      result.error_count++;
-      result.fatal = true;
-      return result;
+      if (observationsError) {
+        result.errors.push(queryError("Failed to fetch price observations", observationsError));
+        result.error_count++;
+        result.fatal = true;
+        return result;
+      }
+
+      observations.push(...(page ?? []));
+      if (!page || page.length < POSTGREST_PAGE_SIZE) break;
     }
 
     // Group by product_id, take latest per product
     const latestByProduct = new Map<string, Record<string, unknown>>();
-    for (const obs of observations || []) {
-      if (!latestByProduct.has(obs.product_id)) {
-        latestByProduct.set(obs.product_id, obs);
+    for (const obs of observations) {
+      const productId = String(obs.product_id);
+      if (!latestByProduct.has(productId)) {
+        latestByProduct.set(productId, obs);
       }
     }
 

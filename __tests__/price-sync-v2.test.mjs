@@ -16,6 +16,7 @@ class FakeQuery {
     this.table = table;
     this.operation = "select";
     this.filters = [];
+    this.orderings = [];
   }
 
   select(columns, options) {
@@ -59,7 +60,9 @@ class FakeQuery {
   }
 
   order(column, options) {
-    this.orderBy = { column, ...options };
+    const ordering = { column, ...options };
+    this.orderings.push(ordering);
+    this.orderBy ??= ordering;
     return this;
   }
 
@@ -107,6 +110,7 @@ class FakeSupabase {
       operation: query.operation,
       columns: query.columns,
       orderBy: query.orderBy,
+      orderings: query.orderings,
       filters: query.filters,
       payload: query.payload,
       selectOptions: query.selectOptions,
@@ -149,9 +153,22 @@ class FakeSupabase {
       if (query.orderBy?.column !== "observed_at") {
         return { data: null, error: { message: "column checked_at does not exist" } };
       }
-      return this.options.observationError
-        ? { data: null, error: { message: this.options.observationError } }
-        : { data: this.options.observations ?? [observation()], error: null };
+      if (this.options.observationError) {
+        return { data: null, error: { message: this.options.observationError } };
+      }
+      const requestedProductIds = query.filters.find(
+        (filter) => filter.kind === "in" && filter.column === "product_id",
+      )?.value;
+      const observations = (this.options.observations ?? [observation()])
+        .filter((row) => !requestedProductIds || requestedProductIds.includes(row.product_id))
+        .toSorted((left, right) => {
+          const byObservedAt = right.observed_at.localeCompare(left.observed_at);
+          return byObservedAt || left.id.localeCompare(right.id);
+        });
+      const from = query.rangeValue?.from ?? 0;
+      const requestedTo = query.rangeValue?.to ?? (from + 999);
+      const to = Math.min(requestedTo, from + 999);
+      return { data: observations.slice(from, to + 1), error: null };
     }
 
     if (query.table === "pb_price_current") {
@@ -303,6 +320,58 @@ test("paginates past the production PostgREST 1,000-row cap", async () => {
     { from: 0, to: 999 },
     { from: 1_000, to: 1_999 },
   ]);
+});
+
+test("paginates dense observation batches and keeps every product's latest row", async () => {
+  const products = Array.from({ length: 50 }, (_, index) => product({
+    id: `product-${index + 1}`,
+  }));
+  const denseProductObservations = Array.from({ length: 1_050 }, (_, index) => observation({
+    id: `dense-${String(index).padStart(4, "0")}`,
+    product_id: "product-1",
+    observed_at: new Date(Date.UTC(2026, 8, 30, 23, 59, 59) - index * 1_000).toISOString(),
+  }));
+  const remainingObservations = products.slice(1).flatMap((row, index) => [
+    observation({
+      id: `latest-${String(index + 2).padStart(2, "0")}`,
+      product_id: row.id,
+      observed_at: "2026-08-17T12:00:00.000Z",
+      observed_price: 100 + index,
+    }),
+    observation({
+      id: `older-${String(index + 2).padStart(2, "0")}`,
+      product_id: row.id,
+      observed_at: "2026-08-17T11:00:00.000Z",
+      observed_price: 1,
+    }),
+  ]);
+  const database = new FakeSupabase({
+    products,
+    observations: [...denseProductObservations, ...remainingObservations],
+  });
+
+  const result = await runPriceSync(database);
+  const observationReads = database.calls.filter(
+    (call) => call.table === "pb_price_observations",
+  );
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.records_checked, 50);
+  assert.equal(database.currentUpserts.length, 50);
+  for (let index = 1; index < products.length; index++) {
+    const materialized = database.currentUpserts.find(
+      (row) => row.product_id === products[index].id,
+    );
+    assert.equal(materialized.observation_id, `latest-${String(index + 1).padStart(2, "0")}`);
+  }
+  assert.deepEqual(observationReads.map((call) => call.range), [
+    { from: 0, to: 999 },
+    { from: 1_000, to: 1_999 },
+  ]);
+  assert.ok(observationReads.every((call) => JSON.stringify(call.orderings) === JSON.stringify([
+    { column: "observed_at", ascending: false },
+    { column: "id", ascending: true },
+  ])));
 });
 
 for (const [evidenceType, confidence] of [
