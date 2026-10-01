@@ -32,12 +32,17 @@ export interface SyncConfig {
   scope_id?: string;
   /** Idempotency key for dedup (e.g. "daily-2026-07-16") */
   idempotency_key?: string;
+  /** Continue strictly after this product id */
+  resume_after_id?: string;
+  /** Stop cleanly at a batch boundary before the platform timeout */
+  time_budget_ms: number;
 }
 
 export const DEFAULT_SYNC_CONFIG: SyncConfig = {
   staleness_days: 30,
   change_threshold_pct: 5,
   scope: "all",
+  time_budget_ms: 240_000,
 };
 
 export interface PriceChange {
@@ -60,10 +65,16 @@ export interface SyncResult {
   records_unchanged: number;
   records_errors: number;
   records_skipped: number;
+  skipped_by_reason: Record<string, number>;
   price_changes: PriceChange[];
   stale_marked: number;
   duration_ms: number;
   errors: string[];
+  resume_after_id: string | null;
+}
+
+export interface SyncRuntime {
+  now: () => number;
 }
 
 type QueryError = { message?: string } | null;
@@ -93,7 +104,9 @@ type PriceSyncSourceType = typeof PRICE_SYNC_SOURCE_TYPES[number];
 
 const PRICE_SYNC_SOURCE_TYPE_SET = new Set<string>(PRICE_SYNC_SOURCE_TYPES);
 const MAX_SKIPPED_EXAMPLES = 20;
-const POSTGREST_PAGE_SIZE = 1_000;
+const POSTGREST_FETCH_LIMIT = 1_000;
+const POSTGREST_PAGE_SIZE = POSTGREST_FETCH_LIMIT - 1;
+const PRODUCT_BATCH_SIZE = 500;
 
 function queryError(prefix: string, error: QueryError): string {
   return `${prefix}: ${error?.message || "unknown database error"}`;
@@ -181,10 +194,11 @@ export function observedUnitPrice(
  */
 export async function runPriceSync(
   supabase: SupabaseClient,
-  config: Partial<SyncConfig> = {}
+  config: Partial<SyncConfig> = {},
+  runtime: SyncRuntime = { now: Date.now },
 ): Promise<SyncResult> {
   const cfg = { ...DEFAULT_SYNC_CONFIG, ...config };
-  const startTime = Date.now();
+  const startTime = runtime.now();
   const errors: string[] = [];
 
   // 1. Check idempotency
@@ -206,10 +220,12 @@ export async function runPriceSync(
         records_unchanged: 0,
         records_errors: 1,
         records_skipped: 0,
+        skipped_by_reason: {},
         price_changes: [],
         stale_marked: 0,
-        duration_ms: Date.now() - startTime,
+        duration_ms: runtime.now() - startTime,
         errors: [queryError("Failed to check sync idempotency", existingError)],
+        resume_after_id: cfg.resume_after_id ?? null,
       };
     }
 
@@ -223,10 +239,12 @@ export async function runPriceSync(
         records_unchanged: 0,
         records_errors: 0,
         records_skipped: 0,
+        skipped_by_reason: {},
         price_changes: [],
         stale_marked: 0,
         duration_ms: 0,
         errors: ["Sync already completed for this idempotency key"],
+        resume_after_id: null,
       };
     }
   }
@@ -253,17 +271,19 @@ export async function runPriceSync(
       records_unchanged: 0,
       records_errors: 1,
       records_skipped: 0,
+      skipped_by_reason: {},
       price_changes: [],
       stale_marked: 0,
-      duration_ms: Date.now() - startTime,
+      duration_ms: runtime.now() - startTime,
       errors: [`Failed to create sync run: ${runErr?.message}`],
+      resume_after_id: cfg.resume_after_id ?? null,
     };
   }
 
   const runId = run.id;
 
   // 3. Materialize current prices
-  const matResult = await materializeCurrentPrices(supabase, cfg);
+  const matResult = await materializeCurrentPrices(supabase, cfg, startTime, runtime);
   errors.push(...matResult.errors);
 
   // 4. Detect price changes
@@ -274,7 +294,7 @@ export async function runPriceSync(
   // 5. Clean stale prices only when materialization did not hit a fatal query
   // error. Continuing after a failed read is how the old implementation hid a
   // broken observation schema behind a successful run.
-  const staleResult: StalePriceResult = matResult.fatal
+  const staleResult: StalePriceResult = matResult.fatal || matResult.time_budget_exhausted
     ? { count: 0, error: null }
     : await markStalePrices(supabase, cfg.staleness_days);
   if (staleResult.error) errors.push(staleResult.error);
@@ -283,6 +303,8 @@ export async function runPriceSync(
   // 6. Update sync run
   let status: SyncResult["status"] = matResult.fatal || staleResult.error
     ? "error"
+    : matResult.time_budget_exhausted
+      ? "partial"
     : errors.length > 0
       ? "partial"
       : "completed";
@@ -309,6 +331,8 @@ export async function runPriceSync(
           examples: matResult.unknown_source_examples,
         },
         price_changes_above_threshold: priceChanges.length,
+        time_budget_exhausted: matResult.time_budget_exhausted,
+        resume_after_id: matResult.resume_after_id,
         config: cfg,
       },
       error_log: errors.map((e) => ({ message: e, at: new Date().toISOString() })),
@@ -329,10 +353,12 @@ export async function runPriceSync(
     records_unchanged: matResult.unchanged,
     records_errors: recordsErrors + (updateRunError ? 1 : 0),
     records_skipped: matResult.skipped,
+    skipped_by_reason: matResult.skipped_by_reason,
     price_changes: priceChanges,
     stale_marked: staleResult.count,
-    duration_ms: Date.now() - startTime,
+    duration_ms: runtime.now() - startTime,
     errors,
+    resume_after_id: matResult.resume_after_id,
   };
 }
 
@@ -350,6 +376,8 @@ interface MaterializeResult {
   unknown_source_count: number;
   unknown_source_examples: Array<{ product_id: string; source: string }>;
   fatal: boolean;
+  time_budget_exhausted: boolean;
+  resume_after_id: string | null;
   changes: PriceChange[];
   errors: string[];
 }
@@ -367,9 +395,22 @@ interface SyncProductRow {
 }
 
 interface CurrentPriceRow {
+  id: string;
   product_id: string;
   price_excl_vat: number;
   is_available: boolean;
+}
+
+function withoutProbe<T>(page: T[]): { rows: T[]; hasMore: boolean } {
+  const hasMore = page.length === POSTGREST_FETCH_LIMIT;
+  return {
+    rows: hasMore ? page.slice(0, POSTGREST_PAGE_SIZE) : page,
+    hasMore,
+  };
+}
+
+function observationCursorFilter(observedAt: string, id: string): string {
+  return `observed_at.lt.${observedAt},and(observed_at.eq.${observedAt},id.gt.${id})`;
 }
 
 /**
@@ -378,7 +419,9 @@ interface CurrentPriceRow {
  */
 async function materializeCurrentPrices(
   supabase: SupabaseClient,
-  config: SyncConfig
+  config: SyncConfig,
+  startTime: number,
+  runtime: SyncRuntime,
 ): Promise<MaterializeResult> {
   const result: MaterializeResult = {
     checked: 0,
@@ -392,15 +435,52 @@ async function materializeCurrentPrices(
     unknown_source_count: 0,
     unknown_source_examples: [],
     fatal: false,
+    time_budget_exhausted: false,
+    resume_after_id: config.resume_after_id ?? null,
     changes: [],
     errors: [],
   };
 
-  // PostgREST caps a response at max-rows (1,000 in production). Page both
-  // source tables explicitly; otherwise a "successful" full sync silently
-  // materializes only the first page of the catalogue.
-  const products: SyncProductRow[] = [];
-  for (let from = 0; ; from += POSTGREST_PAGE_SIZE) {
+  // Fetch existing prices with a stable keyset. Each request asks for one
+  // probe row; the probe is not consumed and becomes the first row after the
+  // next cursor. This distinguishes a full final page from a page with more
+  // data without OFFSET scans.
+  const existingMap = new Map<string, { price: number; available: boolean }>();
+  let currentPriceCursor: string | null = null;
+  while (true) {
+    let currentPriceQuery = supabase
+      .from("pb_price_current")
+      .select("id, product_id, price_excl_vat, is_available")
+      .order("id", { ascending: true })
+      .limit(POSTGREST_FETCH_LIMIT);
+    if (currentPriceCursor) {
+      currentPriceQuery = currentPriceQuery.gt("id", currentPriceCursor);
+    }
+
+    const { data, error: existingPricesError } = await currentPriceQuery;
+    if (existingPricesError) {
+      result.errors.push(queryError("Failed to fetch current prices", existingPricesError));
+      result.error_count++;
+      result.fatal = true;
+      return result;
+    }
+
+    const { rows, hasMore } = withoutProbe((data ?? []) as CurrentPriceRow[]);
+    for (const row of rows) {
+      existingMap.set(row.product_id, {
+        price: Number(row.price_excl_vat),
+        available: Boolean(row.is_available),
+      });
+    }
+    if (!hasMore || rows.length === 0) break;
+    currentPriceCursor = rows.at(-1)!.id;
+  }
+
+  // Products are consumed page by page so a partial run never needs to keep
+  // the full catalogue in memory. The persisted cursor only advances after a
+  // complete batch has been written (or deliberately skipped).
+  let productCursor = config.resume_after_id ?? null;
+  while (true) {
     let productQuery = supabase
       .from("pb_products")
       .select(`
@@ -409,215 +489,202 @@ async function materializeCurrentPrices(
         pb_providers!inner ( id, name )
       `)
       .eq("is_active", true)
-      .order("id", { ascending: true });
+      .order("id", { ascending: true })
+      .limit(POSTGREST_FETCH_LIMIT);
 
     if (config.scope === "provider" && config.scope_id) {
       productQuery = productQuery.eq("provider_id", config.scope_id);
     }
+    if (productCursor) {
+      productQuery = productQuery.gt("id", productCursor);
+    }
 
-    const { data: page, error: prodErr } = await productQuery.range(
-      from,
-      from + POSTGREST_PAGE_SIZE - 1,
+    const { data, error: productError } = await productQuery;
+    if (productError) {
+      result.errors.push(queryError("Failed to fetch products", productError));
+      result.error_count++;
+      result.fatal = true;
+      return result;
+    }
+
+    const { rows: products, hasMore: hasMoreProductPages } = withoutProbe(
+      (data ?? []) as SyncProductRow[],
     );
+    if (products.length === 0) break;
 
-    if (prodErr) {
-      result.errors.push(`Failed to fetch products: ${prodErr.message}`);
-      result.error_count++;
-      result.fatal = true;
-      return result;
-    }
+    for (let index = 0; index < products.length; index += PRODUCT_BATCH_SIZE) {
+      const batch = products.slice(index, index + PRODUCT_BATCH_SIZE);
+      const productIds = batch.map((product) => product.id);
+      const upserts: Array<Record<string, unknown>> = [];
+      const outcomes: Array<{ isNew: boolean; priceChanged: boolean }> = [];
 
-    products.push(...(page ?? []));
-    if (!page || page.length < POSTGREST_PAGE_SIZE) break;
-  }
-
-  if (!products || products.length === 0) {
-    return result;
-  }
-
-  // Fetch existing current prices for comparison
-  const existingPrices: CurrentPriceRow[] = [];
-  for (let from = 0; ; from += POSTGREST_PAGE_SIZE) {
-    const { data: page, error: existingPricesError } = await supabase
-      .from("pb_price_current")
-      .select("product_id, price_excl_vat, is_available")
-      .order("product_id", { ascending: true })
-      .range(from, from + POSTGREST_PAGE_SIZE - 1);
-
-    if (existingPricesError) {
-      result.errors.push(queryError("Failed to fetch current prices", existingPricesError));
-      result.error_count++;
-      result.fatal = true;
-      return result;
-    }
-
-    existingPrices.push(...(page ?? []));
-    if (!page || page.length < POSTGREST_PAGE_SIZE) break;
-  }
-
-  const existingMap = new Map<string, { price: number; available: boolean }>();
-  for (const ep of existingPrices || []) {
-    existingMap.set(ep.product_id, {
-      price: Number(ep.price_excl_vat),
-      available: Boolean(ep.is_available),
-    });
-  }
-
-  // Process in batches
-  const BATCH = 50;
-
-  for (let i = 0; i < products.length; i += BATCH) {
-    const batch = products.slice(i, i + BATCH);
-    const productIds = batch.map((p) => p.id);
-    const upserts: Array<Record<string, unknown>> = [];
-    const outcomes: Array<{ isNew: boolean; priceChanged: boolean }> = [];
-
-    // A 50-product batch can exceed PostgREST's 1,000-row cap. Keep the
-    // global newest-first order stable across pages so grouping below always
-    // retains the latest observation for every product in the batch.
-    const observations: Array<Record<string, unknown>> = [];
-    for (let from = 0; ; from += POSTGREST_PAGE_SIZE) {
-      const { data: page, error: observationsError } = await supabase
-        .from("pb_price_observations")
-        .select("id, product_id, provider_id, observed_price, observed_at, source, source_url, currency, metadata, created_at")
-        .in("product_id", productIds)
-        .order("observed_at", { ascending: false })
-        .order("id", { ascending: true })
-        .range(from, from + POSTGREST_PAGE_SIZE - 1);
-
-      if (observationsError) {
-        result.errors.push(queryError("Failed to fetch price observations", observationsError));
-        result.error_count++;
-        result.fatal = true;
-        return result;
-      }
-
-      observations.push(...(page ?? []));
-      if (!page || page.length < POSTGREST_PAGE_SIZE) break;
-    }
-
-    // Group by product_id, take latest per product
-    const latestByProduct = new Map<string, Record<string, unknown>>();
-    for (const obs of observations) {
-      const productId = String(obs.product_id);
-      if (!latestByProduct.has(productId)) {
-        latestByProduct.set(productId, obs);
-      }
-    }
-
-    // Build upserts
-    for (const product of batch) {
-      result.checked++;
-
-      const obs = latestByProduct.get(product.id);
-      const provRaw = product.pb_providers as unknown;
-      const prov = Array.isArray(provRaw) ? provRaw[0] as Record<string, unknown> | undefined : provRaw as Record<string, unknown> | null;
-      const providerName = String(prov?.name ?? "");
-
-      const metadata = obs ? observationMetadata(obs) : {};
-      // Old product rows also copied package labels into sale_unit, and some
-      // observations have no price_basis metadata. Falling back to sale_unit
-      // keeps those rows from publishing a package price as a unit price.
-      const priceBasis = metadata.price_basis ?? product.sale_unit;
-      const normalized = observedUnitPrice(
-        obs ? obs.observed_price : product.unit_price,
-        priceBasis,
-        product.sale_unit,
-        product.units_per_package,
-        product.commercial_name,
-      );
-
-      if (normalized.price === null) {
-        const reason = normalized.reason ?? "unsafe price normalization";
-        const reasonKey = skippedReasonKey(reason);
-        result.skipped++;
-        result.skipped_by_reason[reasonKey] = (result.skipped_by_reason[reasonKey] ?? 0) + 1;
-        if (result.skipped_examples.length < MAX_SKIPPED_EXAMPLES) {
-          result.skipped_examples.push({ product_id: product.id, reason });
+      // Observations use a composite keyset because newest rows come first,
+      // while id is the deterministic ascending tie-breaker.
+      const observations: Array<Record<string, unknown>> = [];
+      let observationCursor: { observedAt: string; id: string } | null = null;
+      while (true) {
+        let observationQuery = supabase
+          .from("pb_price_observations")
+          .select("id, product_id, provider_id, observed_price, observed_at, source, source_url, currency, metadata, created_at")
+          .in("product_id", productIds)
+          .order("observed_at", { ascending: false })
+          .order("id", { ascending: true })
+          .limit(POSTGREST_FETCH_LIMIT);
+        if (observationCursor) {
+          observationQuery = observationQuery.or(observationCursorFilter(
+            observationCursor.observedAt,
+            observationCursor.id,
+          ));
         }
-        continue;
+
+        const { data: observationData, error: observationsError } = await observationQuery;
+        if (observationsError) {
+          result.errors.push(queryError("Failed to fetch price observations", observationsError));
+          result.error_count++;
+          result.fatal = true;
+          return result;
+        }
+
+        const { rows, hasMore } = withoutProbe(
+          (observationData ?? []) as Array<Record<string, unknown>>,
+        );
+        observations.push(...rows);
+        if (!hasMore || rows.length === 0) break;
+        const last = rows.at(-1)!;
+        observationCursor = {
+          observedAt: String(last.observed_at),
+          id: String(last.id),
+        };
       }
 
-      // Use observation price if available, else product base price
-      const price = normalized.price;
-      const isAvailable = Boolean(product.is_available);
-      const evidenceType = metadata.evidence_type;
-      const confidence = obs ? confidenceForEvidence(evidenceType) : 0.30;
-      const checkedAt = obs ? String(obs.observed_at) : new Date().toISOString();
-      const rawSource = String(obs?.source ?? "").trim().toLowerCase();
-      const sourceType = obs
-        ? priceSyncSourceType(rawSource)
-        : "product_base";
-      if (obs && !PRICE_SYNC_SOURCE_TYPE_SET.has(rawSource)) {
-        result.unknown_source_count++;
-        if (result.unknown_source_examples.length < MAX_SKIPPED_EXAMPLES) {
-          result.unknown_source_examples.push({
+      // Group by product_id, take latest per product.
+      const latestByProduct = new Map<string, Record<string, unknown>>();
+      for (const observation of observations) {
+        const productId = String(observation.product_id);
+        if (!latestByProduct.has(productId)) {
+          latestByProduct.set(productId, observation);
+        }
+      }
+
+      for (const product of batch) {
+        result.checked++;
+
+        const obs = latestByProduct.get(product.id);
+        const provRaw = product.pb_providers as unknown;
+        const prov = Array.isArray(provRaw) ? provRaw[0] as Record<string, unknown> | undefined : provRaw as Record<string, unknown> | null;
+        const providerName = String(prov?.name ?? "");
+
+        const metadata = obs ? observationMetadata(obs) : {};
+        const priceBasis = metadata.price_basis ?? product.sale_unit;
+        const normalized = observedUnitPrice(
+          obs ? obs.observed_price : product.unit_price,
+          priceBasis,
+          product.sale_unit,
+          product.units_per_package,
+          product.commercial_name,
+        );
+
+        if (normalized.price === null) {
+          const reason = normalized.reason ?? "unsafe price normalization";
+          const reasonKey = skippedReasonKey(reason);
+          result.skipped++;
+          result.skipped_by_reason[reasonKey] = (result.skipped_by_reason[reasonKey] ?? 0) + 1;
+          if (result.skipped_examples.length < MAX_SKIPPED_EXAMPLES) {
+            result.skipped_examples.push({ product_id: product.id, reason });
+          }
+          continue;
+        }
+
+        const price = normalized.price;
+        const isAvailable = Boolean(product.is_available);
+        const evidenceType = metadata.evidence_type;
+        const confidence = obs ? confidenceForEvidence(evidenceType) : 0.30;
+        const checkedAt = obs ? String(obs.observed_at) : new Date().toISOString();
+        const rawSource = String(obs?.source ?? "").trim().toLowerCase();
+        const sourceType = obs ? priceSyncSourceType(rawSource) : "product_base";
+        if (obs && !PRICE_SYNC_SOURCE_TYPE_SET.has(rawSource)) {
+          result.unknown_source_count++;
+          if (result.unknown_source_examples.length < MAX_SKIPPED_EXAMPLES) {
+            result.unknown_source_examples.push({
+              product_id: product.id,
+              source: rawSource.slice(0, 100) || "(missing)",
+            });
+          }
+        }
+
+        const existing = existingMap.get(product.id);
+        const isNew = !existing;
+        const priceChanged = existing && Math.abs(existing.price - price) > 0.001;
+
+        if (priceChanged && existing) {
+          const changePct = existing.price > 0
+            ? ((price - existing.price) / existing.price) * 100
+            : 0;
+
+          result.changes.push({
             product_id: product.id,
-            source: rawSource.slice(0, 100) || "(missing)",
+            product_name: product.commercial_name,
+            provider_id: product.provider_id,
+            provider_name: providerName,
+            old_price: existing.price,
+            new_price: price,
+            change_pct: Math.round(changePct * 100) / 100,
+            direction: price > existing.price ? "up" : "down",
           });
         }
-      }
 
-      // Compare with existing
-      const existing = existingMap.get(product.id);
-      const isNew = !existing;
-      const priceChanged = existing && Math.abs(existing.price - price) > 0.001;
-
-      if (priceChanged && existing) {
-        const changePct = existing.price > 0
-          ? ((price - existing.price) / existing.price) * 100
-          : 0;
-
-        result.changes.push({
+        upserts.push({
           product_id: product.id,
-          product_name: product.commercial_name,
+          observation_id: obs?.id ?? null,
           provider_id: product.provider_id,
-          provider_name: providerName,
-          old_price: existing.price,
-          new_price: price,
-          change_pct: Math.round(changePct * 100) / 100,
-          direction: price > existing.price ? "up" : "down",
+          concept_id: product.concept_id,
+          price_excl_vat: price,
+          confidence_score: confidence,
+          region: "ES",
+          is_available: isAvailable,
+          source_type: sourceType,
+          checked_at: checkedAt,
+          price_changed_at: priceChanged ? new Date().toISOString() : undefined,
         });
+        outcomes.push({ isNew, priceChanged: Boolean(priceChanged) });
       }
 
-      upserts.push({
-        product_id: product.id,
-        observation_id: obs?.id ?? null,
-        provider_id: product.provider_id,
-        concept_id: product.concept_id,
-        price_excl_vat: price,
-        confidence_score: confidence,
-        region: "ES",
-        is_available: isAvailable,
-        source_type: sourceType,
-        checked_at: checkedAt,
-        price_changed_at: priceChanged ? new Date().toISOString() : undefined,
-      });
-      outcomes.push({ isNew, priceChanged: Boolean(priceChanged) });
+      if (upserts.length > 0) {
+        const { error: upsertError } = await supabase
+          .from("pb_price_current")
+          .upsert(upserts, { onConflict: "product_id" });
+
+        if (upsertError) {
+          result.error_count += upserts.length;
+          result.fatal = true;
+          result.errors.push(
+            `Upsert batch (${upserts.length} products): ${upsertError.message}`,
+          );
+          return result;
+        }
+
+        for (const outcome of outcomes) {
+          if (outcome.isNew) result.new_count++;
+          else if (outcome.priceChanged) result.modified++;
+          else result.unchanged++;
+        }
+      }
+
+      productCursor = batch.at(-1)!.id;
+      result.resume_after_id = productCursor;
+
+      const moreProductsRemain = index + batch.length < products.length
+        || hasMoreProductPages;
+      if (moreProductsRemain && runtime.now() - startTime >= config.time_budget_ms) {
+        result.time_budget_exhausted = true;
+        return result;
+      }
     }
 
-    if (upserts.length === 0) continue;
-
-    const { error: upsertErr } = await supabase
-      .from("pb_price_current")
-      .upsert(upserts, { onConflict: "product_id" });
-
-    if (upsertErr) {
-      result.error_count += upserts.length;
-      result.fatal = true;
-      result.errors.push(
-        `Upsert batch ${i / BATCH + 1} (${upserts.length} products): ${upsertErr.message}`,
-      );
-      continue;
-    }
-
-    for (const outcome of outcomes) {
-      if (outcome.isNew) result.new_count++;
-      else if (outcome.priceChanged) result.modified++;
-      else result.unchanged++;
-    }
+    if (!hasMoreProductPages) break;
   }
 
+  result.resume_after_id = null;
   return result;
 }
 

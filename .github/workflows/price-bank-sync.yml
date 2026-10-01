@@ -15,7 +15,7 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 360
     env:
       PRICE_SYNC_URL: https://enlaze.vercel.app/api/pb/sync/run
       PRICE_SYNC_TOKEN: ${{ secrets.PRICE_SYNC_TOKEN }}
@@ -37,24 +37,35 @@ jobs:
           response_file="$(mktemp)"
           trap 'rm -f "${payload_file}" "${response_file}"' EXIT
 
-          # Catch-up window: ingestion has been stopped since 2026-08-22.
-          # Lower staleness_days again once n8n is ingesting fresh observations.
-          printf '{"scope":"all","staleness_days":60,"idempotency_key":"scheduled-%s-%s"}' \
-            "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" > "${payload_file}"
+          resume_after_id=""
+          segment=0
+          while true; do
+            # Catch-up window: ingestion has been stopped since 2026-08-22.
+            # Lower staleness_days again once n8n is ingesting fresh observations.
+            RESUME_AFTER_ID="${resume_after_id}" SEGMENT="${segment}" node > "${payload_file}" <<'NODE'
+          const body = {
+            scope: "all",
+            staleness_days: 60,
+            time_budget_ms: 240000,
+            idempotency_key: `scheduled-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}-${process.env.SEGMENT}`,
+          };
+          if (process.env.RESUME_AFTER_ID) body.resume_after_id = process.env.RESUME_AFTER_ID;
+          process.stdout.write(JSON.stringify(body));
+          NODE
 
-          http_code="$(curl \
-            --silent \
-            --show-error \
-            --max-time 360 \
-            --output "${response_file}" \
-            --write-out '%{http_code}' \
-            --request POST \
-            --header "Authorization: Bearer ${PRICE_SYNC_TOKEN}" \
-            --header 'Content-Type: application/json' \
-            --data-binary "@${payload_file}" \
-            "${PRICE_SYNC_URL}")"
+            http_code="$(curl \
+              --silent \
+              --show-error \
+              --max-time 285 \
+              --output "${response_file}" \
+              --write-out '%{http_code}' \
+              --request POST \
+              --header "Authorization: Bearer ${PRICE_SYNC_TOKEN}" \
+              --header 'Content-Type: application/json' \
+              --data-binary "@${payload_file}" \
+              "${PRICE_SYNC_URL}")"
 
-          RESPONSE_FILE="${response_file}" HTTP_CODE="${http_code}" node <<'NODE'
+            mapfile -t state < <(RESPONSE_FILE="${response_file}" HTTP_CODE="${http_code}" PREVIOUS_CURSOR="${resume_after_id}" node <<'NODE'
           const fs = require("node:fs");
           const path = process.env.RESPONSE_FILE;
           const httpCode = Number(process.env.HTTP_CODE);
@@ -74,10 +85,23 @@ jobs:
           if (httpCode < 200 || httpCode >= 300) {
             throw new Error(`Price sync returned HTTP ${httpCode}: ${errors.join("; ") || "unknown error"}`);
           }
-          if (result.status !== "completed" || result.records_errors !== 0 || errors.length !== 0) {
+          if (!["partial", "completed"].includes(result.status)
+              || result.records_errors !== 0 || errors.length !== 0) {
             throw new Error(
               `Price sync did not complete cleanly: status=${result.status}, records_errors=${result.records_errors}, errors=${errors.length}`,
             );
+          }
+
+          const cursor = result.resume_after_id || "";
+          if (result.status === "partial") {
+            if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cursor)) {
+              throw new Error("Partial price sync returned an invalid resume_after_id");
+            }
+            if (cursor === process.env.PREVIOUS_CURSOR) {
+              throw new Error("Partial price sync did not advance resume_after_id");
+            }
+          } else if (cursor) {
+            throw new Error("Completed price sync unexpectedly returned a resume cursor");
           }
 
           console.log(JSON.stringify({
@@ -88,7 +112,24 @@ jobs:
             records_modified: result.records_modified,
             records_unchanged: result.records_unchanged,
             records_skipped: result.records_skipped,
+            skipped_by_reason: result.skipped_by_reason,
             stale_marked: result.stale_marked,
             duration_ms: result.duration_ms,
           }));
+          console.log(result.status);
+          console.log(cursor);
           NODE
+            )
+
+            status="${state[1]}"
+            resume_after_id="${state[2]}"
+            echo "${state[0]}"
+            if [[ "${status}" == "completed" ]]; then
+              break
+            fi
+            segment=$((segment + 1))
+            if (( segment >= 1000 )); then
+              echo "Price sync exceeded 1000 resumable segments." >&2
+              exit 1
+            fi
+          done

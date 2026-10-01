@@ -45,3 +45,19 @@ test("PRICE_SYNC_TOKEN is not accepted by any other API route", async () => {
   assert.match(syncRoute, /process\.env\.PRICE_SYNC_TOKEN/);
   assert.match(syncRoute, /error: "No autorizado"[\s\S]*status: 401/);
 });
+
+test("the sync route and workflow carry a bounded resume cursor until completion", async () => {
+  const route = await readFile(join(process.cwd(), "app/api/pb/sync/run/route.ts"), "utf8");
+  const workflow = await readFile(
+    join(process.cwd(), ".github/workflows/price-bank-sync.yml"),
+    "utf8",
+  );
+
+  assert.match(route, /body\.resume_after_id/);
+  assert.match(route, /body\.time_budget_ms/);
+  assert.match(workflow, /while true/);
+  assert.match(workflow, /time_budget_ms: 240000/);
+  assert.match(workflow, /body\.resume_after_id = process\.env\.RESUME_AFTER_ID/);
+  assert.match(workflow, /\["partial", "completed"\]/);
+  assert.match(workflow, /Partial price sync did not advance resume_after_id/);
+});

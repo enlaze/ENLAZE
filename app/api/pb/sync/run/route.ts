@@ -12,6 +12,8 @@
  *   - staleness_days: number (default 30)
  *   - change_threshold_pct: number (default 5)
  *   - idempotency_key: string (e.g. "daily-2026-07-16")
+ *   - resume_after_id: string (cursor returned by a partial run)
+ *   - time_budget_ms: number (default 240000)
  */
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
@@ -90,6 +92,17 @@ export async function POST(request: Request) {
     if (body.staleness_days) config.staleness_days = Number(body.staleness_days);
     if (body.change_threshold_pct) config.change_threshold_pct = Number(body.change_threshold_pct);
     if (body.idempotency_key) config.idempotency_key = body.idempotency_key;
+    if (body.resume_after_id) config.resume_after_id = String(body.resume_after_id);
+    if (body.time_budget_ms !== undefined) {
+      const timeBudgetMs = Number(body.time_budget_ms);
+      if (!Number.isFinite(timeBudgetMs) || timeBudgetMs < 1_000 || timeBudgetMs > 270_000) {
+        return NextResponse.json(
+          { error: "time_budget_ms debe estar entre 1000 y 270000" },
+          { status: 400 },
+        );
+      }
+      config.time_budget_ms = timeBudgetMs;
+    }
 
     // Auto-generate daily idempotency key if not provided and called by cron
     if (isCronAuth && !config.idempotency_key) {
