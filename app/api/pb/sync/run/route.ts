@@ -4,7 +4,7 @@
  * Triggers a price sync run. Can be called manually from the UI
  * or by a cron job / Supabase edge function.
  *
- * Auth: cookie-based (user) OR Bearer AGENT_API_KEY (cron)
+ * Auth: cookie-based (user) OR a server-side Bearer token (cron)
  *
  * Body (all optional):
  *   - scope: "all" | "source" | "provider"
@@ -17,6 +17,7 @@ import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { bearerMatchesToken } from "@/lib/price-sync-auth";
 import { runPriceSync, type SyncConfig } from "@/lib/price-sync-v2";
 import { requireWriteAccess } from "@/lib/subscription";
 
@@ -28,13 +29,12 @@ export const maxDuration = 300;
 export async function POST(request: Request) {
   // Try Bearer auth first (cron/agent), then cookie auth (user)
   const authHeader = request.headers.get("authorization") || "";
-  const bearerToken = authHeader.replace(/^Bearer\s+/i, "").trim();
   const validTokens = [
+    process.env.PRICE_SYNC_TOKEN,
     process.env.WEBHOOK_SECRET,
     process.env.AGENT_API_KEY,
-  ].filter(Boolean);
-
-  const isCronAuth = bearerToken && validTokens.includes(bearerToken);
+  ];
+  const isCronAuth = bearerMatchesToken(authHeader, validTokens);
 
   let supabase;
 

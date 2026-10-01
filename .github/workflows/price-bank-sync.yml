@@ -18,14 +18,14 @@ jobs:
     timeout-minutes: 10
     env:
       PRICE_SYNC_URL: https://enlaze.vercel.app/api/pb/sync/run
-      PRICE_SYNC_TOKEN: ${{ secrets.AGENT_API_KEY }}
+      PRICE_SYNC_TOKEN: ${{ secrets.PRICE_SYNC_TOKEN }}
     steps:
       - name: Require sync credential
         shell: bash
         run: |
           set -euo pipefail
           if [[ -z "${PRICE_SYNC_TOKEN}" ]]; then
-            echo "AGENT_API_KEY is not configured in GitHub Actions." >&2
+            echo "PRICE_SYNC_TOKEN is not configured in GitHub Actions." >&2
             exit 1
           fi
 
