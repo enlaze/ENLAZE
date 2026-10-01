@@ -16,6 +16,7 @@ class FakeQuery {
     this.table = table;
     this.operation = "select";
     this.filters = [];
+    this.orderings = [];
   }
 
   select(columns, options) {
@@ -59,12 +60,19 @@ class FakeQuery {
   }
 
   order(column, options) {
-    this.orderBy = { column, ...options };
+    const ordering = { column, ...options };
+    this.orderings.push(ordering);
+    this.orderBy ??= ordering;
     return this;
   }
 
   limit(value) {
     this.limitValue = value;
+    return this;
+  }
+
+  range(from, to) {
+    this.rangeValue = { from, to };
     return this;
   }
 
@@ -102,9 +110,11 @@ class FakeSupabase {
       operation: query.operation,
       columns: query.columns,
       orderBy: query.orderBy,
+      orderings: query.orderings,
       filters: query.filters,
       payload: query.payload,
       selectOptions: query.selectOptions,
+      range: query.rangeValue,
     });
 
     if (query.table === "pb_sync_runs") {
@@ -130,23 +140,40 @@ class FakeSupabase {
     }
 
     if (query.table === "pb_products") {
+      const products = this.options.products ?? [product()];
+      const from = query.rangeValue?.from ?? 0;
+      const requestedTo = query.rangeValue?.to ?? (from + 999);
+      const to = Math.min(requestedTo, from + 999);
       return this.options.productError
         ? { data: null, error: { message: this.options.productError } }
-        : { data: this.options.products ?? [product()], error: null };
+        : { data: products.slice(from, to + 1), error: null };
     }
 
     if (query.table === "pb_price_observations") {
       if (query.orderBy?.column !== "observed_at") {
         return { data: null, error: { message: "column checked_at does not exist" } };
       }
-      return this.options.observationError
-        ? { data: null, error: { message: this.options.observationError } }
-        : { data: this.options.observations ?? [observation()], error: null };
+      if (this.options.observationError) {
+        return { data: null, error: { message: this.options.observationError } };
+      }
+      const requestedProductIds = query.filters.find(
+        (filter) => filter.kind === "in" && filter.column === "product_id",
+      )?.value;
+      const observations = (this.options.observations ?? [observation()])
+        .filter((row) => !requestedProductIds || requestedProductIds.includes(row.product_id))
+        .toSorted((left, right) => {
+          const byObservedAt = right.observed_at.localeCompare(left.observed_at);
+          return byObservedAt || left.id.localeCompare(right.id);
+        });
+      const from = query.rangeValue?.from ?? 0;
+      const requestedTo = query.rangeValue?.to ?? (from + 999);
+      const to = Math.min(requestedTo, from + 999);
+      return { data: observations.slice(from, to + 1), error: null };
     }
 
     if (query.table === "pb_price_current") {
       if (query.operation === "upsert") {
-        this.currentUpserts.push(query.payload);
+        this.currentUpserts.push(...(Array.isArray(query.payload) ? query.payload : [query.payload]));
         return this.options.upsertError
           ? { data: null, error: { message: this.options.upsertError } }
           : { data: null, error: null };
@@ -173,9 +200,13 @@ class FakeSupabase {
           error: null,
         };
       }
+      const prices = this.options.existingPrices ?? [];
+      const from = query.rangeValue?.from ?? 0;
+      const requestedTo = query.rangeValue?.to ?? (from + 999);
+      const to = Math.min(requestedTo, from + 999);
       return this.options.existingPricesError
         ? { data: null, error: { message: this.options.existingPricesError } }
-        : { data: this.options.existingPrices ?? [], error: null };
+        : { data: prices.slice(from, to + 1), error: null };
     }
 
     throw new Error(`Unexpected fake query: ${query.table}.${query.operation}`);
@@ -248,6 +279,99 @@ test("materializes the real observation schema instead of the obsolete columns",
   assert.match(observationCall.columns, /observed_price/);
   assert.match(observationCall.columns, /observed_at/);
   assert.doesNotMatch(observationCall.columns, /price_excl_vat|checked_at|confidence_score/);
+});
+
+test("paginates past the production PostgREST 1,000-row cap", async () => {
+  const products = Array.from({ length: 2_005 }, (_, index) => product({
+    id: `product-${index + 1}`,
+    unit_price: 10 + index / 100,
+  }));
+  const existingPrices = Array.from({ length: 1_505 }, (_, index) => ({
+    product_id: `product-${index + 1}`,
+    price_excl_vat: 10 + index / 100,
+    is_available: true,
+  }));
+  const database = new FakeSupabase({ products, existingPrices, observations: [] });
+
+  const result = await runPriceSync(database);
+  const productReads = database.calls.filter((call) => call.table === "pb_products");
+  const currentReads = database.calls.filter(
+    (call) => call.table === "pb_price_current" && call.operation === "select",
+  );
+  const currentUpsertCalls = database.calls.filter(
+    (call) => call.table === "pb_price_current" && call.operation === "upsert",
+  );
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.records_checked, 2_005);
+  assert.equal(result.records_new, 500);
+  assert.equal(result.records_unchanged, 1_505);
+  assert.equal(database.currentUpserts.length, 2_005);
+  assert.equal(currentUpsertCalls.length, 41);
+  assert.ok(currentUpsertCalls.every((call) => call.payload.length <= 50));
+  assert.ok(productReads.every((call) => call.orderBy?.column === "id"));
+  assert.ok(currentReads.every((call) => call.orderBy?.column === "product_id"));
+  assert.deepEqual(productReads.map((call) => call.range), [
+    { from: 0, to: 999 },
+    { from: 1_000, to: 1_999 },
+    { from: 2_000, to: 2_999 },
+  ]);
+  assert.deepEqual(currentReads.map((call) => call.range), [
+    { from: 0, to: 999 },
+    { from: 1_000, to: 1_999 },
+  ]);
+});
+
+test("paginates dense observation batches and keeps every product's latest row", async () => {
+  const products = Array.from({ length: 50 }, (_, index) => product({
+    id: `product-${index + 1}`,
+  }));
+  const denseProductObservations = Array.from({ length: 1_050 }, (_, index) => observation({
+    id: `dense-${String(index).padStart(4, "0")}`,
+    product_id: "product-1",
+    observed_at: new Date(Date.UTC(2026, 8, 30, 23, 59, 59) - index * 1_000).toISOString(),
+  }));
+  const remainingObservations = products.slice(1).flatMap((row, index) => [
+    observation({
+      id: `latest-${String(index + 2).padStart(2, "0")}`,
+      product_id: row.id,
+      observed_at: "2026-08-17T12:00:00.000Z",
+      observed_price: 100 + index,
+    }),
+    observation({
+      id: `older-${String(index + 2).padStart(2, "0")}`,
+      product_id: row.id,
+      observed_at: "2026-08-17T11:00:00.000Z",
+      observed_price: 1,
+    }),
+  ]);
+  const database = new FakeSupabase({
+    products,
+    observations: [...denseProductObservations, ...remainingObservations],
+  });
+
+  const result = await runPriceSync(database);
+  const observationReads = database.calls.filter(
+    (call) => call.table === "pb_price_observations",
+  );
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.records_checked, 50);
+  assert.equal(database.currentUpserts.length, 50);
+  for (let index = 1; index < products.length; index++) {
+    const materialized = database.currentUpserts.find(
+      (row) => row.product_id === products[index].id,
+    );
+    assert.equal(materialized.observation_id, `latest-${String(index + 1).padStart(2, "0")}`);
+  }
+  assert.deepEqual(observationReads.map((call) => call.range), [
+    { from: 0, to: 999 },
+    { from: 1_000, to: 1_999 },
+  ]);
+  assert.ok(observationReads.every((call) => JSON.stringify(call.orderings) === JSON.stringify([
+    { column: "observed_at", ascending: false },
+    { column: "id", ascending: true },
+  ])));
 });
 
 for (const [evidenceType, confidence] of [

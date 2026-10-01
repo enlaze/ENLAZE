@@ -20,6 +20,11 @@ import { NextResponse } from "next/server";
 import { runPriceSync, type SyncConfig } from "@/lib/price-sync-v2";
 import { requireWriteAccess } from "@/lib/subscription";
 
+// A full catalogue pass currently covers more than 42,000 active products.
+// Keep the platform limit explicit so scheduled runs can finish after the
+// paginated reads and batched writes in the sync engine.
+export const maxDuration = 300;
+
 export async function POST(request: Request) {
   // Try Bearer auth first (cron/agent), then cookie auth (user)
   const authHeader = request.headers.get("authorization") || "";

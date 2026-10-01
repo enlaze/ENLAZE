@@ -1,0 +1,94 @@
+name: Price bank sync
+
+on:
+  schedule:
+    - cron: "43 */2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: price-bank-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PRICE_SYNC_URL: https://enlaze.vercel.app/api/pb/sync/run
+      PRICE_SYNC_TOKEN: ${{ secrets.AGENT_API_KEY }}
+    steps:
+      - name: Require sync credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${PRICE_SYNC_TOKEN}" ]]; then
+            echo "AGENT_API_KEY is not configured in GitHub Actions." >&2
+            exit 1
+          fi
+
+      - name: Materialize current prices
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload_file="$(mktemp)"
+          response_file="$(mktemp)"
+          trap 'rm -f "${payload_file}" "${response_file}"' EXIT
+
+          # Catch-up window: ingestion has been stopped since 2026-08-22.
+          # Lower staleness_days again once n8n is ingesting fresh observations.
+          printf '{"scope":"all","staleness_days":60,"idempotency_key":"scheduled-%s-%s"}' \
+            "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" > "${payload_file}"
+
+          http_code="$(curl \
+            --silent \
+            --show-error \
+            --max-time 360 \
+            --output "${response_file}" \
+            --write-out '%{http_code}' \
+            --request POST \
+            --header "Authorization: Bearer ${PRICE_SYNC_TOKEN}" \
+            --header 'Content-Type: application/json' \
+            --data-binary "@${payload_file}" \
+            "${PRICE_SYNC_URL}")"
+
+          RESPONSE_FILE="${response_file}" HTTP_CODE="${http_code}" node <<'NODE'
+          const fs = require("node:fs");
+          const path = process.env.RESPONSE_FILE;
+          const httpCode = Number(process.env.HTTP_CODE);
+          const raw = fs.readFileSync(path, "utf8");
+          let result;
+          try {
+            result = JSON.parse(raw);
+          } catch {
+            throw new Error(`Price sync returned HTTP ${httpCode} with a non-JSON body`);
+          }
+
+          const errors = Array.isArray(result.errors)
+            ? result.errors
+            : result.error
+              ? [result.error]
+              : [];
+          if (httpCode < 200 || httpCode >= 300) {
+            throw new Error(`Price sync returned HTTP ${httpCode}: ${errors.join("; ") || "unknown error"}`);
+          }
+          if (result.status !== "completed" || result.records_errors !== 0 || errors.length !== 0) {
+            throw new Error(
+              `Price sync did not complete cleanly: status=${result.status}, records_errors=${result.records_errors}, errors=${errors.length}`,
+            );
+          }
+
+          console.log(JSON.stringify({
+            run_id: result.run_id,
+            status: result.status,
+            records_checked: result.records_checked,
+            records_new: result.records_new,
+            records_modified: result.records_modified,
+            records_unchanged: result.records_unchanged,
+            records_skipped: result.records_skipped,
+            stale_marked: result.stale_marked,
+            duration_ms: result.duration_ms,
+          }));
+          NODE
