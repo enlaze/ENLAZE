@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "43 */2 * * *"
   workflow_dispatch:
+    inputs:
+      provider_ids:
+        description: "Provider UUIDs separated by commas, or 'all'"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -31,30 +36,59 @@ jobs:
 
       - name: Materialize current prices
         shell: bash
+        env:
+          MANUAL_PROVIDER_IDS: ${{ inputs.provider_ids }}
         run: |
           set -euo pipefail
-          payload_file="$(mktemp)"
-          response_file="$(mktemp)"
-          trap 'rm -f "${payload_file}" "${response_file}"' EXIT
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "${tmp_dir}"' EXIT
 
-          # Catch-up window: ingestion has been stopped since 2026-08-22.
-          # Lower staleness_days again once n8n is ingesting fresh observations.
-          printf '{"scope":"all","staleness_days":60,"idempotency_key":"scheduled-%s-%s"}' \
-            "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" > "${payload_file}"
+          if [[ "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
+            targets=("all")
+          else
+            IFS=',' read -r -a targets <<< "${MANUAL_PROVIDER_IDS}"
+          fi
 
-          http_code="$(curl \
-            --silent \
-            --show-error \
-            --max-time 360 \
-            --output "${response_file}" \
-            --write-out '%{http_code}' \
-            --request POST \
-            --header "Authorization: Bearer ${PRICE_SYNC_TOKEN}" \
-            --header 'Content-Type: application/json' \
-            --data-binary "@${payload_file}" \
-            "${PRICE_SYNC_URL}")"
+          if [[ "${#targets[@]}" -eq 0 ]]; then
+            echo "No provider targets were supplied." >&2
+            exit 1
+          fi
 
-          RESPONSE_FILE="${response_file}" HTTP_CODE="${http_code}" node <<'NODE'
+          target_index=0
+          for raw_target in "${targets[@]}"; do
+            target="${raw_target//[[:space:]]/}"
+            if [[ "${target}" != "all" && ! "${target}" =~ ^[0-9a-fA-F-]{36}$ ]]; then
+              echo "Invalid provider target: ${target}" >&2
+              exit 1
+            fi
+
+            target_index=$((target_index + 1))
+            payload_file="${tmp_dir}/payload-${target_index}.json"
+            response_file="${tmp_dir}/response-${target_index}.json"
+
+            # Catch-up window: ingestion has been stopped since 2026-08-22.
+            # Lower staleness_days again once n8n is ingesting fresh observations.
+            if [[ "${target}" == "all" ]]; then
+              printf '{"scope":"all","staleness_days":60,"idempotency_key":"sync-%s-%s-all"}' \
+                "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" > "${payload_file}"
+            else
+              printf '{"scope":"provider","scope_id":"%s","staleness_days":60,"idempotency_key":"sync-%s-%s-%s"}' \
+                "${target}" "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" "${target}" > "${payload_file}"
+            fi
+
+            http_code="$(curl \
+              --silent \
+              --show-error \
+              --max-time 360 \
+              --output "${response_file}" \
+              --write-out '%{http_code}' \
+              --request POST \
+              --header "Authorization: Bearer ${PRICE_SYNC_TOKEN}" \
+              --header 'Content-Type: application/json' \
+              --data-binary "@${payload_file}" \
+              "${PRICE_SYNC_URL}")"
+
+            RESPONSE_FILE="${response_file}" HTTP_CODE="${http_code}" TARGET="${target}" node <<'NODE'
           const fs = require("node:fs");
           const path = process.env.RESPONSE_FILE;
           const httpCode = Number(process.env.HTTP_CODE);
@@ -81,6 +115,7 @@ jobs:
           }
 
           console.log(JSON.stringify({
+            target: process.env.TARGET,
             run_id: result.run_id,
             status: result.status,
             records_checked: result.records_checked,
@@ -92,3 +127,4 @@ jobs:
             duration_ms: result.duration_ms,
           }));
           NODE
+          done
