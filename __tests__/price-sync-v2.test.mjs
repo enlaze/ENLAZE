@@ -59,6 +59,16 @@ class FakeQuery {
     return this;
   }
 
+  gt(column, value) {
+    this.filters.push({ kind: "gt", column, value });
+    return this;
+  }
+
+  or(expression) {
+    this.filters.push({ kind: "or", expression });
+    return this;
+  }
+
   order(column, options) {
     const ordering = { column, ...options };
     this.orderings.push(ordering);
@@ -115,6 +125,7 @@ class FakeSupabase {
       payload: query.payload,
       selectOptions: query.selectOptions,
       range: query.rangeValue,
+      limit: query.limitValue,
     });
 
     if (query.table === "pb_sync_runs") {
@@ -140,13 +151,21 @@ class FakeSupabase {
     }
 
     if (query.table === "pb_products") {
-      const products = this.options.products ?? [product()];
+      const products = [...(this.options.products ?? [product()])]
+        .filter((row) => query.filters.every((filter) => {
+          if (filter.kind === "gt") return String(row[filter.column]) > String(filter.value);
+          if (filter.kind === "eq") return row[filter.column] === filter.value;
+          return true;
+        }))
+        .toSorted((left, right) => left.id.localeCompare(right.id));
       const from = query.rangeValue?.from ?? 0;
       const requestedTo = query.rangeValue?.to ?? (from + 999);
-      const to = Math.min(requestedTo, from + 999);
+      const to = Math.min(requestedTo, from + (query.limitValue ?? 1_000) - 1, from + 999);
+      const data = products.slice(from, to + 1);
+      this.options.afterProductRead?.(this.calls.filter((call) => call.table === "pb_products").length, data);
       return this.options.productError
         ? { data: null, error: { message: this.options.productError } }
-        : { data: products.slice(from, to + 1), error: null };
+        : { data, error: null };
     }
 
     if (query.table === "pb_price_observations") {
@@ -161,13 +180,22 @@ class FakeSupabase {
       )?.value;
       const observations = (this.options.observations ?? [observation()])
         .filter((row) => !requestedProductIds || requestedProductIds.includes(row.product_id))
+        .filter((row) => query.filters.every((filter) => {
+          if (filter.kind !== "or") return true;
+          const match = filter.expression.match(
+            /^observed_at\.lt\.([^,]+),and\(observed_at\.eq\.([^,]+),id\.gt\.(.+)\)$/,
+          );
+          assert.ok(match, `unexpected observation cursor: ${filter.expression}`);
+          return row.observed_at < match[1]
+            || (row.observed_at === match[2] && row.id > match[3]);
+        }))
         .toSorted((left, right) => {
           const byObservedAt = right.observed_at.localeCompare(left.observed_at);
           return byObservedAt || left.id.localeCompare(right.id);
         });
       const from = query.rangeValue?.from ?? 0;
       const requestedTo = query.rangeValue?.to ?? (from + 999);
-      const to = Math.min(requestedTo, from + 999);
+      const to = Math.min(requestedTo, from + (query.limitValue ?? 1_000) - 1, from + 999);
       return { data: observations.slice(from, to + 1), error: null };
     }
 
@@ -200,10 +228,16 @@ class FakeSupabase {
           error: null,
         };
       }
-      const prices = this.options.existingPrices ?? [];
+      const prices = (this.options.existingPrices ?? [])
+        .map((row, index) => ({ id: row.id ?? `current-${String(index).padStart(6, "0")}`, ...row }))
+        .filter((row) => query.filters.every((filter) => {
+          if (filter.kind === "gt") return String(row[filter.column]) > String(filter.value);
+          return true;
+        }))
+        .toSorted((left, right) => left.id.localeCompare(right.id));
       const from = query.rangeValue?.from ?? 0;
       const requestedTo = query.rangeValue?.to ?? (from + 999);
-      const to = Math.min(requestedTo, from + 999);
+      const to = Math.min(requestedTo, from + (query.limitValue ?? 1_000) - 1, from + 999);
       return this.options.existingPricesError
         ? { data: null, error: { message: this.options.existingPricesError } }
         : { data: prices.slice(from, to + 1), error: null };
@@ -283,11 +317,12 @@ test("materializes the real observation schema instead of the obsolete columns",
 
 test("paginates past the production PostgREST 1,000-row cap", async () => {
   const products = Array.from({ length: 2_005 }, (_, index) => product({
-    id: `product-${index + 1}`,
+    id: `product-${String(index + 1).padStart(5, "0")}`,
     unit_price: 10 + index / 100,
   }));
   const existingPrices = Array.from({ length: 1_505 }, (_, index) => ({
-    product_id: `product-${index + 1}`,
+    id: `current-${String(index + 1).padStart(5, "0")}`,
+    product_id: `product-${String(index + 1).padStart(5, "0")}`,
     price_excl_vat: 10 + index / 100,
     is_available: true,
   }));
@@ -307,19 +342,114 @@ test("paginates past the production PostgREST 1,000-row cap", async () => {
   assert.equal(result.records_new, 500);
   assert.equal(result.records_unchanged, 1_505);
   assert.equal(database.currentUpserts.length, 2_005);
-  assert.equal(currentUpsertCalls.length, 41);
-  assert.ok(currentUpsertCalls.every((call) => call.payload.length <= 50));
+  assert.equal(currentUpsertCalls.length, 5);
+  assert.ok(currentUpsertCalls.every((call) => call.payload.length <= 500));
   assert.ok(productReads.every((call) => call.orderBy?.column === "id"));
-  assert.ok(currentReads.every((call) => call.orderBy?.column === "product_id"));
-  assert.deepEqual(productReads.map((call) => call.range), [
-    { from: 0, to: 999 },
-    { from: 1_000, to: 1_999 },
-    { from: 2_000, to: 2_999 },
-  ]);
-  assert.deepEqual(currentReads.map((call) => call.range), [
-    { from: 0, to: 999 },
-    { from: 1_000, to: 1_999 },
-  ]);
+  assert.ok(currentReads.every((call) => call.orderBy?.column === "id"));
+  assert.ok(productReads.every((call) => call.range === undefined && call.limit === 1_000));
+  assert.ok(currentReads.every((call) => call.range === undefined && call.limit === 1_000));
+  assert.deepEqual(
+    productReads.slice(1).map((call) => call.filters.find((filter) => filter.kind === "gt")?.value),
+    ["product-00999", "product-01998"],
+  );
+  assert.deepEqual(
+    currentReads.slice(1).map((call) => call.filters.find((filter) => filter.kind === "gt")?.value),
+    ["current-00999"],
+  );
+});
+
+test("keyset pagination walks the initial catalogue once when rows are inserted mid-run", async () => {
+  const products = Array.from({ length: 1_500 }, (_, index) => product({
+    id: `product-${String(index + 1).padStart(5, "0")}`,
+  }));
+  const initialIds = products.map((row) => row.id);
+  const database = new FakeSupabase({
+    products,
+    observations: [],
+    afterProductRead(readNumber) {
+      if (readNumber === 1) {
+        products.push(product({ id: "product-00000" }));
+      }
+    },
+  });
+
+  const result = await runPriceSync(database);
+  const writtenIds = database.currentUpserts.map((row) => row.product_id);
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.records_checked, initialIds.length);
+  assert.deepEqual(writtenIds.toSorted(), initialIds.toSorted());
+  assert.equal(new Set(writtenIds).size, writtenIds.length);
+  assert.equal(writtenIds.includes("product-00000"), false);
+});
+
+test("negative control: offset pagination duplicates a row inserted before its next page", () => {
+  const rows = Array.from({ length: 1_500 }, (_, index) =>
+    `product-${String(index + 1).padStart(5, "0")}`);
+  const firstPage = rows.slice(0, 1_000);
+  rows.unshift("product-00000");
+  const secondPage = rows.slice(1_000, 2_000);
+  const traversed = [...firstPage, ...secondPage];
+
+  assert.equal(traversed.length, 1_501);
+  assert.equal(new Set(traversed).size, 1_500);
+  assert.equal(traversed.filter((id) => id === "product-01000").length, 2);
+});
+
+test("writes a 500-product batch with one upsert", async () => {
+  const products = Array.from({ length: 500 }, (_, index) => product({
+    id: `product-${String(index + 1).padStart(5, "0")}`,
+  }));
+  const database = new FakeSupabase({ products, observations: [] });
+
+  const result = await runPriceSync(database);
+  const upserts = database.calls.filter(
+    (call) => call.table === "pb_price_current" && call.operation === "upsert",
+  );
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.records_checked, 500);
+  assert.equal(upserts.length, 1);
+  assert.equal(upserts[0].payload.length, 500);
+});
+
+test("a timed segment resumes after its last committed product without gaps or repeats", async () => {
+  const products = Array.from({ length: 1_200 }, (_, index) => product({
+    id: `product-${String(index + 1).padStart(5, "0")}`,
+  }));
+  const database = new FakeSupabase({ products, observations: [] });
+  let clock = 0;
+  const runtime = { now: () => {
+    const value = clock;
+    clock += 60;
+    return value;
+  } };
+
+  const first = await runPriceSync(database, { time_budget_ms: 100 }, runtime);
+  assert.equal(first.status, "partial");
+  assert.equal(first.resume_after_id, "product-00999");
+  assert.equal(first.records_checked, 999);
+  assert.equal(first.stale_marked, 0);
+  assert.equal(database.staleUpdates, 0);
+
+  clock = 0;
+  const second = await runPriceSync(database, {
+    time_budget_ms: 1_000,
+    resume_after_id: first.resume_after_id,
+  }, runtime);
+  const writtenIds = database.currentUpserts.map((row) => row.product_id);
+
+  assert.equal(second.status, "completed");
+  assert.equal(second.resume_after_id, null);
+  assert.equal(second.records_checked, 201);
+  assert.equal(database.staleUpdates, 1);
+  assert.equal(writtenIds.length, 1_200);
+  assert.equal(new Set(writtenIds).size, 1_200);
+  assert.deepEqual(
+    writtenIds.toSorted(),
+    products.map((row) => row.id).toSorted(),
+  );
+  assert.deepEqual(database.runUpdates.slice(-2).map((row) => row.status), ["partial", "completed"]);
 });
 
 test("paginates dense observation batches and keeps every product's latest row", async () => {
@@ -329,7 +459,7 @@ test("paginates dense observation batches and keeps every product's latest row",
   const denseProductObservations = Array.from({ length: 1_050 }, (_, index) => observation({
     id: `dense-${String(index).padStart(4, "0")}`,
     product_id: "product-1",
-    observed_at: new Date(Date.UTC(2026, 8, 30, 23, 59, 59) - index * 1_000).toISOString(),
+    observed_at: "2026-09-30T23:59:59.000Z",
   }));
   const remainingObservations = products.slice(1).flatMap((row, index) => [
     observation({
@@ -364,10 +494,13 @@ test("paginates dense observation batches and keeps every product's latest row",
     );
     assert.equal(materialized.observation_id, `latest-${String(index + 1).padStart(2, "0")}`);
   }
-  assert.deepEqual(observationReads.map((call) => call.range), [
-    { from: 0, to: 999 },
-    { from: 1_000, to: 1_999 },
-  ]);
+  assert.ok(observationReads.every((call) => call.range === undefined && call.limit === 1_000));
+  assert.equal(observationReads.length, 2);
+  assert.equal(observationReads[1].filters.some((filter) => filter.kind === "or"), true);
+  assert.match(
+    observationReads[1].filters.find((filter) => filter.kind === "or").expression,
+    /observed_at\.eq\.2026-09-30T23:59:59\.000Z,id\.gt\.dense-0998/,
+  );
   assert.ok(observationReads.every((call) => JSON.stringify(call.orderings) === JSON.stringify([
     { column: "observed_at", ascending: false },
     { column: "id", ascending: true },
