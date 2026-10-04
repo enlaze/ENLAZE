@@ -10,6 +10,26 @@ import {
   runPriceSync,
 } from "../lib/price-sync-v2.ts";
 
+// Production contract verified on 2026-10-04. This is the complete column
+// inventory of public.pb_price_current; sync payloads may use only this set.
+// Keeping the contract beside the fake prevents it from accepting fields that
+// PostgREST would reject against the real table.
+const PB_PRICE_CURRENT_COLUMNS = new Set([
+  "id",
+  "product_id",
+  "observation_id",
+  "provider_id",
+  "price_excl_vat",
+  "confidence_score",
+  "region",
+  "is_available",
+  "source_type",
+  "checked_at",
+  "price_changed_at",
+  "created_at",
+  "updated_at",
+]);
+
 class FakeQuery {
   constructor(database, table) {
     this.database = database;
@@ -201,7 +221,20 @@ class FakeSupabase {
 
     if (query.table === "pb_price_current") {
       if (query.operation === "upsert") {
-        this.currentUpserts.push(...(Array.isArray(query.payload) ? query.payload : [query.payload]));
+        const payload = Array.isArray(query.payload) ? query.payload : [query.payload];
+        const unknownColumns = [...new Set(
+          payload.flatMap((row) => Object.keys(row))
+            .filter((column) => !PB_PRICE_CURRENT_COLUMNS.has(column)),
+        )];
+        if (unknownColumns.length > 0) {
+          return {
+            data: null,
+            error: {
+              message: `pb_price_current schema contract rejects: ${unknownColumns.join(", ")}`,
+            },
+          };
+        }
+        this.currentUpserts.push(...payload);
         return this.options.upsertError
           ? { data: null, error: { message: this.options.upsertError } }
           : { data: null, error: null };
@@ -298,7 +331,6 @@ test("materializes the real observation schema instead of the obsolete columns",
     product_id: "product-1",
     observation_id: "observation-1",
     provider_id: "provider-1",
-    concept_id: "concept-1",
     price_excl_vat: 21.5,
     confidence_score: 0.85,
     region: "ES",
@@ -313,6 +345,37 @@ test("materializes the real observation schema instead of the obsolete columns",
   assert.match(observationCall.columns, /observed_price/);
   assert.match(observationCall.columns, /observed_at/);
   assert.doesNotMatch(observationCall.columns, /price_excl_vat|checked_at|confidence_score/);
+});
+
+test("current-price upsert names only real production columns", async () => {
+  const database = new FakeSupabase({
+    products: [product()],
+    observations: [observation()],
+  });
+
+  const result = await runPriceSync(database);
+
+  assert.equal(result.status, "completed");
+  assert.equal(database.currentUpserts.length, 1);
+  assert.deepEqual(
+    Object.keys(database.currentUpserts[0]).toSorted(),
+    [
+      "checked_at",
+      "confidence_score",
+      "is_available",
+      "observation_id",
+      "price_changed_at",
+      "price_excl_vat",
+      "product_id",
+      "provider_id",
+      "region",
+      "source_type",
+    ],
+  );
+  assert.ok(
+    Object.keys(database.currentUpserts[0])
+      .every((column) => PB_PRICE_CURRENT_COLUMNS.has(column)),
+  );
 });
 
 test("paginates past the production PostgREST 1,000-row cap", async () => {
