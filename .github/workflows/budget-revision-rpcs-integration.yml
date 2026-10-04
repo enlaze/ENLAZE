@@ -32,7 +32,10 @@ on:
       - "docs/fase2/ROLLBACK.sql"
       - "package.json"
       - "package-lock.json"
+      - "lib/budget-items-writer.ts"
       - "lib/budget-revision-writer.ts"
+      - "app/api/agent/budget-analysis/route.ts"
+      - "lib/budget-engine.ts"
       - "app/dashboard/budgets/**"
       - ".github/workflows/budget-revision-rpcs-integration.yml"
   workflow_dispatch:
