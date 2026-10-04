@@ -164,6 +164,133 @@ escrito.
 
 ## Bloque 4 · Fabricantes y distribuidores por capítulo
 
+### Por qué esto dejó de ser una mejora y pasó a ser urgente
+
+Actualizado el 2026-10-04, después de medir de dónde sale cada cosa.
+
+**ManoMano es la única fuente de fontanería, electricidad y carpintería.** No es
+redundante con OBRAMAT: son capítulos distintos.
+
+| Categoría | ManoMano | OBRAMAT | Roca |
+|---|---:|---:|---:|
+| herramientas | 6.766 | 0 | 0 |
+| fontanería | 6.656 | 8 | 1.987 |
+| electricidad | 3.951 | 3 | 0 |
+| carpintería | 501 | 3 | 0 |
+| material | 388 | **16.641** | 0 |
+
+OBRAMAT es material y casi nada más. De los 18.262 de ManoMano, unos 6.766 son
+herramientas —que no son partida de presupuesto, son del constructor— así que
+lo que de verdad aporta son unos **11.100 productos** de fontanería,
+electricidad y carpintería que no tiene nadie más.
+
+Y esa fuente no es sostenible:
+
+- confianza **0,55**, la más baja del banco, sin evidencia de procedencia;
+- precio medio **86,75 €** frente a los 38,58 € de OBRAMAT — es precio de
+  particular, no de profesional;
+- va contra las condiciones de uso del sitio, y en la UE contra el derecho
+  *sui generis* de base de datos;
+- depende de un n8n que corre en el portátil de Álvaro, que nadie arranca
+  automáticamente y que estuvo seis semanas parado sin que nadie se enterara;
+- y **ManoMano bloquea el acceso desde centros de datos**. Probado el
+  2026-10-04 con los runners de GitHub Actions: cinco categorías, cero
+  productos, verificación anti-bot en las cinco. Un VPS daría lo mismo, porque
+  la variable es residencial frente a centro de datos, no IP fija frente a
+  dinámica.
+
+Conclusión: **fontanería y electricidad no son «más cobertura». Son el
+reemplazo de una fuente que estamos perdiendo.** Suben de prioridad.
+
+### Empezar por fabricantes, no por distribuidores
+
+| | Fabricante | Distribuidor |
+|---|---|---|
+| Qué da | tarifa oficial anual, normalmente en PDF | el precio real al que compra tu usuario |
+| Facilidad del «sí» | alta: les interesa la prescripción | baja: es su margen |
+| Formato | estructurado, como el de OBRAMAT que ya se ingiere | variable |
+
+El «sí» del fabricante es más fácil, el formato ya funciona, y da la línea
+base. Los distribuidores vienen después, cuando haya usuarios que enseñarles.
+
+**Primeros objetivos**, dos de cada uno bastan para empezar y para aprender
+cómo responden:
+
+- **Fontanería:** Jimten (de Alicante, ventaja de proximidad), Adequa/Uralita,
+  Baxi, Vaillant.
+- **Electricidad:** Simon (española), Schneider, Legrand, Hager.
+
+### Qué pedir exactamente
+
+El sistema ya está construido para esto. `import-authorized-supplier-feed.js`
+marca estas fuentes como `authorized_price_tariff`, y el workflow
+`authorized-supplier-feed-sync.yml` **exige dos cosas por proveedor** y omite
+la importación si falta cualquiera:
+
+```
+<PROVEEDOR>_AUTHORIZED_FEED_URL        la tarifa
+<PROVEEDOR>_AUTHORIZATION_REFERENCE    el permiso por escrito
+```
+
+Está diseñado para no ingerir nada sin autorización. Así que hay que pedir las
+dos cosas, no solo el fichero.
+
+**Formato, por orden de preferencia:** Excel o CSV; un feed o API si lo tienen;
+PDF como última opción, que funciona pero exige extracción.
+
+**Campos necesarios por referencia:** descripción, referencia o código, precio,
+unidad de venta y, si lo tienen, familia o categoría.
+
+### Plantilla de correo
+
+Al **departamento comercial o de prescripción**, no a atención al cliente. En
+los fabricantes suele haber una figura de «prescriptor» o «técnico comercial»
+que es quien tramita esto.
+
+> **Asunto:** Solicitud de tarifa oficial para prescripción — ENLAZE (software
+> de presupuestos para constructoras)
+>
+> Buenos días,
+>
+> Somos ENLAZE, una plataforma de presupuestos para empresas de construcción y
+> reforma, con foco inicial en la Comunitat Valenciana.
+>
+> Nuestros usuarios elaboran presupuestos seleccionando materiales y nosotros
+> calculamos el coste. Para que el precio que ven sea real y no una estimación,
+> trabajamos únicamente con tarifas oficiales facilitadas por el fabricante.
+>
+> Les escribimos para solicitar:
+>
+> 1. **Su tarifa vigente** en el formato que les resulte cómodo. Por orden de
+>    preferencia: Excel o CSV, un feed o API si disponen de él, o PDF.
+> 2. **Autorización por escrito** para incorporar esos precios a nuestra
+>    plataforma, mostrándolos a nuestros usuarios profesionales con indicación
+>    de que la fuente es su tarifa oficial.
+>
+> Los datos que necesitamos por referencia son: descripción, referencia o
+> código, precio, unidad de venta y, si lo tienen, familia o categoría.
+>
+> Qué obtienen a cambio: sus productos aparecen por nombre y referencia en los
+> presupuestos que nuestros usuarios entregan a sus clientes finales. Es
+> prescripción directa en el momento de la decisión de compra.
+>
+> Quedamos a su disposición para firmar lo que consideren necesario y para
+> actualizar la tarifa con la periodicidad que ustedes marquen.
+>
+> Un saludo,
+> [nombre] — ENLAZE
+
+### Cuando llegue la primera respuesta
+
+1. **La autorización se guarda como secreto**, no en el repositorio: la
+   referencia del acuerdo va en `<PROVEEDOR>_AUTHORIZATION_REFERENCE`.
+2. **Hay una tarea pequeña de código.** `import-authorized-supplier-feed.js`
+   está programado solo para Leroy y Puma: añadir un proveedor es extender su
+   mapa con el prefijo de referencia y el patrón de códigos de ese fabricante.
+   Se hace cuando sepamos qué formato manda el primero que diga que sí.
+
+### El resto de capítulos
+
 Por orden de aparición en una reforma:
 
 | Capítulo | Nombres |
@@ -214,14 +341,18 @@ con su RLS, como ya está previsto en la cadena del resolutor.
 | 1 | Convenio de las tres provincias | Álvaro / Dani + Codex | precio de mano de obra | gratis |
 | 2 | Residuos, ICIO y tasas | Codex + verificación | presupuesto completo | gratis |
 | 3 | Tarifas de cerámica | Álvaro / Dani | diferenciación | gratis |
-| 4 | Resto de fabricantes | Álvaro / Dani + Codex | cobertura | gratis |
+| **4a** | **Fontanería y electricidad** | **Álvaro / Dani + Codex** | **reemplaza a ManoMano** | **gratis** |
+| 4b | Resto de fabricantes | Álvaro / Dani + Codex | cobertura | gratis |
 | 5 | Facturas propias | Codex | precisión por empresa | gratis |
 
 **Cuatro de los seis bloques no cuestan dinero.** El único con coste es el 0, y
 es el que lo desbloquea todo.
 
-Los bloques 1, 2 y 3 se pueden hacer **en paralelo** con la negociación del 0,
-porque no dependen de ella.
+Los bloques 1, 2, 3 y 4a se pueden hacer **en paralelo** con la negociación del
+0, porque no dependen de ella.
+
+**4a es el que más urge de los gratuitos**, porque sustituye una fuente que ya
+no es sostenible y que hoy cubre dos capítulos enteros en exclusiva.
 
 ## Cómo verificamos que cada bloque está hecho
 
