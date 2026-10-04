@@ -834,3 +834,35 @@ comment on column public.projects.access_token is
 notify pgrst, 'reload schema';
 commit;
 -- END ROLLBACK_E4_L3_S33C
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BLOQUE E5 · compensa 20261004180000_anon_loses_table_privileges.sql
+--
+-- Devuelve a `anon` los privilegios de tabla que la migracion retiro, y el
+-- defecto del esquema que los concedia a las tablas nuevas.
+--
+-- Conviene leer lo que eso significa antes de ejecutarlo: reponerlos devuelve
+-- el estado en el que una sola politica escrita USING (true) abre una tabla
+-- entera a internet, y en el que `anon` tiene TRUNCATE sobre noventa y una
+-- tablas sin que RLS lo cubra. No es volver a un estado neutro: es volver a un
+-- estado peor, y por eso exige reconocimiento explicito.
+--
+-- Si lo que fallo fue una superficie anonima concreta, la compensacion
+-- proporcionada es conceder a esa tabla y solo a esa, no deshacerlo todo.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BEGIN ROLLBACK_E5
+begin;
+set local lock_timeout = '5s';
+do $guard$
+begin
+  if current_setting('enlaze.allow_anon_privileges_rollback', true)
+     is distinct from 'restore_anon_table_privileges' then
+    raise exception 'Set explicit restore_anon_table_privileges acknowledgement; otherwise forward-fix only';
+  end if;
+end $guard$;
+
+grant all privileges on all tables in schema public to anon;
+alter default privileges in schema public grant all on tables to anon;
+notify pgrst, 'reload schema';
+commit;
+-- END ROLLBACK_E5
