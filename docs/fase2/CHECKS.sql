@@ -2843,3 +2843,102 @@ from (
          and (expires_at is null or expires_at > now())) as tokens_modernos
 ) as evidencia;
 -- END CHECK_E4_L3_S33C_AUDIT
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- E5 · 20261004180000_anon_loses_table_privileges.sql
+-- Retira los privilegios de tabla de `anon`. Solo privilegios: no toca datos ni
+-- esquema. Bloques de solo lectura.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BEGIN CHECK_E5_PRECHECK
+-- ANTES del push. ESPERADO: veredicto = 'OK'.
+-- ANOTA `tablas_authenticated`: la auditoria lo compara contra este valor, y
+-- tiene que salir IDENTICO. Si cambiara, la migracion habria tocado al rol
+-- equivocado y eso romperia el panel.
+select case
+         when rpcs_portal <> 3 then 'ABORTAR: solo ' || rpcs_portal || ' de las 3 RPC del portal son SECURITY DEFINER ejecutables por anon'
+         when tablas_anon = 0 then 'NADA QUE HACER: ninguna tabla concede ya privilegios a anon'
+         when lote3 = 0 then 'ABORTAR: falta 20260929100000; el portal aun leeria tablas como anon'
+         else 'OK'
+       end as veredicto, *
+from (
+  select
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public' and p.prosecdef
+         and p.proname in ('portal_read_snapshot','portal_respond_to_change','portal_respond_to_budget')
+         and array_to_string(p.proacl, ' ') like '%anon=X%') as rpcs_portal,
+    (select count(*) from supabase_migrations.schema_migrations
+       where version = '20260929100000') as lote3,
+    (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+       where n.nspname = 'public' and c.relkind = 'r'
+         and array_to_string(c.relacl, ' ') like '%anon=%') as tablas_anon,
+    (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+       where n.nspname = 'public' and c.relkind = 'r'
+         and array_to_string(c.relacl, ' ') like '%authenticated=%') as tablas_authenticated,
+    (select count(*) from pg_default_acl d
+       left join pg_namespace n on n.oid = d.defaclnamespace
+      where coalesce(n.nspname,'public') = 'public' and d.defaclobjtype = 'r'
+        and array_to_string(d.defaclacl, ' ') like '%anon=%') as defectos_con_anon
+) as evidencia;
+-- END CHECK_E5_PRECHECK
+
+-- BEGIN CHECK_E5_AUDIT
+-- DESPUÉS del push. ESPERADO: veredicto = 'OK'.
+--
+-- `defectos_con_anon` puede quedar en 1 y NO es un fallo: los privilegios por
+-- defecto estan declarados dos veces, por `postgres` y por `supabase_admin`, y
+-- una migracion que corre como postgres solo puede alterar los suyos. El que
+-- quede es el de supabase_admin, que aplica a tablas creadas desde el panel.
+-- Por eso hace falta el centinela periodico.
+select case
+         when registrada = 0 then 'ABORTAR: 20261004180000 no esta registrada'
+         when tablas_anon > 0 then 'ABORTAR: ' || tablas_anon || ' tablas siguen concediendo privilegios a anon'
+         when rpcs_portal <> 3 then 'ABORTAR: el portal perdio alguna de sus 3 RPC: quedaria incomunicado'
+         when defecto_postgres > 0 then 'ABORTAR: el defecto de postgres sigue concediendo a anon'
+         when defectos_con_anon > 0 then 'REVISAR: queda el defecto de supabase_admin; una tabla creada desde el panel nacera abierta'
+         else 'OK — contrasta `tablas_authenticated` con el valor del precheck: tiene que ser IDENTICO'
+       end as veredicto, *
+from (
+  select
+    (select count(*) from supabase_migrations.schema_migrations
+       where version = '20261004180000') as registrada,
+    (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+       where n.nspname = 'public' and c.relkind = 'r'
+         and array_to_string(c.relacl, ' ') like '%anon=%') as tablas_anon,
+    (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+       where n.nspname = 'public' and c.relkind = 'r'
+         and array_to_string(c.relacl, ' ') like '%authenticated=%') as tablas_authenticated,
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public' and p.prosecdef
+         and p.proname in ('portal_read_snapshot','portal_respond_to_change','portal_respond_to_budget')
+         and array_to_string(p.proacl, ' ') like '%anon=X%') as rpcs_portal,
+    (select count(*) from pg_default_acl d
+       left join pg_namespace n on n.oid = d.defaclnamespace
+      where coalesce(n.nspname,'public') = 'public' and d.defaclobjtype = 'r'
+        and pg_get_userbyid(d.defaclrole) = 'postgres'
+        and array_to_string(d.defaclacl, ' ') like '%anon=%') as defecto_postgres,
+    (select count(*) from pg_default_acl d
+       left join pg_namespace n on n.oid = d.defaclnamespace
+      where coalesce(n.nspname,'public') = 'public' and d.defaclobjtype = 'r'
+        and array_to_string(d.defaclacl, ' ') like '%anon=%') as defectos_con_anon
+) as evidencia;
+-- END CHECK_E5_AUDIT
+
+-- BEGIN CHECK_E5_CENTINELA
+-- Periodico, no de despliegue. ESPERADO: veredicto = 'OK' siempre.
+-- Existe porque el defecto de supabase_admin puede seguir concediendo: una
+-- tabla creada desde el panel de Supabase nacera con anon=arwdDxtm y nadie se
+-- enterara hasta que alguien la mire. migraciones-check compara versiones de
+-- migracion, no privilegios, asi que esto no lo ve.
+select case
+         when reaparecidas = 0 then 'OK'
+         else 'REVISAR: ' || reaparecidas || ' tablas conceden privilegios a anon: ' || nombres
+       end as veredicto, *
+from (
+  select count(*) as reaparecidas,
+         coalesce(string_agg(relname, ', ' order by relname), '') as nombres
+    from (select c.relname
+            from pg_class c join pg_namespace n on n.oid = c.relnamespace
+           where n.nspname = 'public' and c.relkind = 'r'
+             and array_to_string(c.relacl, ' ') like '%anon=%') t
+) as evidencia;
+-- END CHECK_E5_CENTINELA
