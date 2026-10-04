@@ -57,6 +57,9 @@ test("the sync route and workflow carry a bounded resume cursor until completion
   assert.match(route, /body\.time_budget_ms/);
   assert.match(workflow, /while true/);
   assert.match(workflow, /time_budget_ms: 240000/);
+  assert.doesNotMatch(workflow, /staleness_days:/);
+  assert.match(workflow, /OBRAMAT imports only when the[\s\S]*catalogue fingerprint changes/);
+  assert.doesNotMatch(workflow, /ingestion has been stopped/);
   assert.match(workflow, /body\.resume_after_id = process\.env\.RESUME_AFTER_ID/);
   assert.match(workflow, /\["partial", "completed"\]/);
   assert.match(workflow, /Partial price sync did not advance resume_after_id/);

@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  PRICE_STALENESS_DAYS_BY_SOURCE,
   PRICE_SYNC_SOURCE_TYPES,
   confidenceForEvidence,
   getSyncStatus,
@@ -76,6 +77,11 @@ class FakeQuery {
 
   lt(column, value) {
     this.filters.push({ kind: "lt", column, value });
+    return this;
+  }
+
+  not(column, operator, value) {
+    this.filters.push({ kind: "not", column, operator, value });
     return this;
   }
 
@@ -241,9 +247,25 @@ class FakeSupabase {
       }
       if (query.operation === "update") {
         this.staleUpdates++;
-        return this.options.staleError
-          ? { data: null, error: { message: this.options.staleError } }
-          : { data: this.options.staleRows ?? [], error: null };
+        if (this.options.staleError) {
+          return { data: null, error: { message: this.options.staleError } };
+        }
+        const rows = (this.options.staleRows ?? []).filter((row) =>
+          query.filters.every((filter) => {
+            if (filter.kind === "eq") return row[filter.column] === filter.value;
+            if (filter.kind === "lt") return String(row[filter.column]) < String(filter.value);
+            if (filter.kind === "not" && filter.operator === "in") {
+              const excluded = String(filter.value).slice(1, -1).split(",");
+              return !excluded.includes(String(row[filter.column]));
+            }
+            return true;
+          }),
+        );
+        for (const row of rows) row.is_available = false;
+        return {
+          data: rows.map((row) => ({ id: row.id, source_type: row.source_type })),
+          error: null,
+        };
       }
       if (query.selectOptions?.head) {
         const available = query.filters.some(
@@ -313,6 +335,28 @@ function observation(overrides = {}) {
     created_at: "2026-09-28T08:31:00.000Z",
     ...overrides,
   };
+}
+
+function stalePrice(overrides = {}) {
+  return {
+    id: "current-1",
+    source_type: "n8n",
+    checked_at: "2026-08-25T12:00:00.000Z",
+    is_available: true,
+    ...overrides,
+  };
+}
+
+const STALENESS_TEST_NOW = Date.parse("2026-10-04T12:00:00.000Z");
+
+async function runStalenessScenario(staleRows, stalenessDays = 30) {
+  const database = new FakeSupabase({ products: [], observations: [], staleRows });
+  const result = await runPriceSync(
+    database,
+    { staleness_days: stalenessDays },
+    { now: () => STALENESS_TEST_NOW },
+  );
+  return { database, result };
 }
 
 test("materializes the real observation schema instead of the obsolete columns", async () => {
@@ -505,7 +549,10 @@ test("a timed segment resumes after its last committed product without gaps or r
   assert.equal(second.status, "completed");
   assert.equal(second.resume_after_id, null);
   assert.equal(second.records_checked, 201);
-  assert.equal(database.staleUpdates, 1);
+  assert.equal(
+    database.staleUpdates,
+    Object.keys(PRICE_STALENESS_DAYS_BY_SOURCE).length + 1,
+  );
   assert.equal(writtenIds.length, 1_200);
   assert.equal(new Set(writtenIds).size, 1_200);
   assert.deepEqual(
@@ -754,6 +801,99 @@ test("an unknown source fallback is counted instead of becoming n8n silently", a
   assert.deepEqual(summary.unknown_sources, {
     count: 1,
     examples: [{ product_id: "product-1", source: "new_external_feed" }],
+  });
+});
+
+test("staleness windows follow the real dated source scenario", async (t) => {
+  assert.deepEqual(PRICE_STALENESS_DAYS_BY_SOURCE, {
+    provider_catalog: 400,
+    n8n: 30,
+    product_base: 30,
+  });
+
+  await t.test("a 90-day provider catalogue price stays available", async () => {
+    const catalogue = stalePrice({
+      id: "catalogue-90-days",
+      source_type: "provider_catalog",
+      checked_at: "2026-07-06T12:00:00.000Z",
+    });
+    const globalCutoff = new Date(
+      STALENESS_TEST_NOW - 30 * 24 * 60 * 60 * 1_000,
+    ).toISOString();
+
+    // Mutation guard: a single global 30-day window would mark this fixture.
+    assert.ok(catalogue.checked_at < globalCutoff);
+
+    const { result } = await runStalenessScenario([catalogue]);
+    assert.equal(result.status, "completed");
+    assert.equal(result.stale_marked, 0);
+    assert.equal(catalogue.is_available, true);
+  });
+
+  await t.test("a 40-day n8n price becomes unavailable", async () => {
+    const n8n = stalePrice({ id: "n8n-40-days", source_type: "n8n" });
+    const { result } = await runStalenessScenario([n8n], 90);
+
+    assert.equal(result.stale_marked, 1);
+    assert.deepEqual(result.stale_marked_by_source, { n8n: 1 });
+    assert.equal(n8n.is_available, false);
+  });
+
+  await t.test("a 40-day product base price becomes unavailable", async () => {
+    const base = stalePrice({ id: "base-40-days", source_type: "product_base" });
+    const { result } = await runStalenessScenario([base], 90);
+
+    assert.equal(result.stale_marked, 1);
+    assert.deepEqual(result.stale_marked_by_source, { product_base: 1 });
+    assert.equal(base.is_available, false);
+  });
+
+  await t.test("an unknown source uses the configured default window", async () => {
+    const recent = stalePrice({
+      id: "manual-40-days",
+      source_type: "manual",
+      checked_at: "2026-08-25T12:00:00.000Z",
+    });
+    const old = stalePrice({
+      id: "manual-46-days",
+      source_type: "manual",
+      checked_at: "2026-08-19T12:00:00.000Z",
+    });
+    const { result } = await runStalenessScenario([recent, old], 45);
+
+    assert.equal(result.stale_marked, 1);
+    assert.deepEqual(result.stale_marked_by_source, { manual: 1 });
+    assert.equal(recent.is_available, true);
+    assert.equal(old.is_available, false);
+  });
+
+  await t.test("the persisted run summary includes the per-source breakdown", async () => {
+    const catalogue = stalePrice({
+      id: "catalogue-summary",
+      source_type: "provider_catalog",
+      checked_at: "2026-07-06T12:00:00.000Z",
+    });
+    const n8n = stalePrice({ id: "n8n-summary", source_type: "n8n" });
+    const base = stalePrice({ id: "base-summary", source_type: "product_base" });
+    const fallback = stalePrice({
+      id: "fallback-summary",
+      source_type: "scraper",
+      checked_at: "2026-08-19T12:00:00.000Z",
+    });
+    const { database, result } = await runStalenessScenario(
+      [catalogue, n8n, base, fallback],
+      45,
+    );
+    const summary = database.runUpdates.at(-1).summary;
+
+    assert.equal(result.stale_marked, 3);
+    assert.deepEqual(summary.stale_marked_by_source, {
+      n8n: 1,
+      product_base: 1,
+      scraper: 1,
+    });
+    assert.deepEqual(result.stale_marked_by_source, summary.stale_marked_by_source);
+    assert.equal(catalogue.is_available, true);
   });
 });
 
