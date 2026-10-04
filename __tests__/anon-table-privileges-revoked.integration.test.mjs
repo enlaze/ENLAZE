@@ -51,6 +51,7 @@ test("E5 retira los privilegios de tabla de anon sin tocar el resto",
   assert.equal(identity.other_dbs, 0);
 
   await db.query("drop schema if exists portal_token_internal cascade");
+  await db.query("drop schema if exists budget_internal cascade");
   await db.query(sql("__tests__/support/bootstrap-budget-schema.sql"));
   await db.query(sql("__tests__/support/portal-token-access-schema.sql"));
   for (const m of [
