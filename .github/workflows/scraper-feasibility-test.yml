@@ -1,0 +1,76 @@
+name: ManoMano scraper feasibility test
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_products:
+        description: "Máximo de productos por categoría"
+        required: false
+        default: 10
+        type: number
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    name: Probar acceso de GitHub Actions a ManoMano
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MAX_PRODUCTS: ${{ inputs.max_products || 10 }}
+      SCRAPER_DEBUG: "1"
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v6
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Instalar Chrome para Puppeteer
+        run: npx puppeteer browsers install chrome
+
+      - name: Ejecutar el scraper en seco
+        shell: bash
+        run: |
+          if ! [[ "$MAX_PRODUCTS" =~ ^[1-9][0-9]*$ ]]; then
+            echo "max_products debe ser un entero positivo" >&2
+            exit 1
+          fi
+
+          CHROME_EXECUTABLE="$(node -e 'process.stdout.write(require("puppeteer").executablePath())')"
+          test -x "$CHROME_EXECUTABLE"
+
+          PUPPETEER_EXECUTABLE_PATH="$CHROME_EXECUTABLE" \
+            node scripts/scraper-precios.js \
+              --dry-run \
+              --max-products "$MAX_PRODUCTS"
+
+      - name: Mostrar un fragmento del HTML obtenido
+        if: always()
+        shell: bash
+        run: |
+          HTML_FILE="$(find debug-scraper -type f -name '*.html' -print -quit 2>/dev/null || true)"
+          if [[ -z "$HTML_FILE" ]]; then
+            echo "No se generó ningún HTML de diagnóstico."
+            exit 0
+          fi
+
+          echo "HTML_FRAGMENT_BEGIN"
+          node -e '
+            const fs = require("node:fs");
+            const html = fs.readFileSync(process.argv[1], "utf8")
+              .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+              .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+              .replace(/\s+/g, " ")
+              .slice(0, 2000);
+            process.stdout.write(`${html}\n`);
+          ' "$HTML_FILE"
+          echo "HTML_FRAGMENT_END"
