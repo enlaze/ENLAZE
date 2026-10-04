@@ -637,7 +637,6 @@ async function materializeCurrentPrices(
           product_id: product.id,
           observation_id: obs?.id ?? null,
           provider_id: product.provider_id,
-          concept_id: product.concept_id,
           price_excl_vat: price,
           confidence_score: confidence,
           region: "ES",
