@@ -45,7 +45,7 @@ jobs:
             exit 1
           fi
 
-          CHROME_EXECUTABLE="$(node -e 'process.stdout.write(require("puppeteer").executablePath())')"
+          CHROME_EXECUTABLE="$(node -e 'Promise.resolve(require("puppeteer").executablePath()).then((path) => process.stdout.write(path))')"
           test -x "$CHROME_EXECUTABLE"
 
           PUPPETEER_EXECUTABLE_PATH="$CHROME_EXECUTABLE" \
