@@ -22,7 +22,7 @@ import type { PBSyncRun } from "./types/price-bank";
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface SyncConfig {
-  /** Max age in days before a price is considered stale */
+  /** Default max age; source-specific windows override it when configured */
   staleness_days: number;
   /** Minimum % change to trigger a price change alert (e.g. 5 = 5%) */
   change_threshold_pct: number;
@@ -68,6 +68,7 @@ export interface SyncResult {
   skipped_by_reason: Record<string, number>;
   price_changes: PriceChange[];
   stale_marked: number;
+  stale_marked_by_source: Record<string, number>;
   duration_ms: number;
   errors: string[];
   resume_after_id: string | null;
@@ -81,6 +82,7 @@ type QueryError = { message?: string } | null;
 
 type StalePriceResult = {
   count: number;
+  by_source: Record<string, number>;
   error: string | null;
 };
 
@@ -99,6 +101,16 @@ export const PRICE_SYNC_SOURCE_TYPES = Object.freeze([
   "scraper",
   "product_base",
 ] as const);
+
+export const PRICE_STALENESS_DAYS_BY_SOURCE = Object.freeze({
+  // A fixed TTL is only a temporary substitute for provider catalogues. Their
+  // correct invalidation signal is a newly published edition, which the
+  // OBRAMAT workflow already detects by fingerprint. Remove this 400-day
+  // fallback once that edition-change signal reaches the current-price bank.
+  provider_catalog: 400,
+  n8n: 30,
+  product_base: 30,
+} as const);
 
 type PriceSyncSourceType = typeof PRICE_SYNC_SOURCE_TYPES[number];
 
@@ -223,6 +235,7 @@ export async function runPriceSync(
         skipped_by_reason: {},
         price_changes: [],
         stale_marked: 0,
+        stale_marked_by_source: {},
         duration_ms: runtime.now() - startTime,
         errors: [queryError("Failed to check sync idempotency", existingError)],
         resume_after_id: cfg.resume_after_id ?? null,
@@ -242,6 +255,7 @@ export async function runPriceSync(
         skipped_by_reason: {},
         price_changes: [],
         stale_marked: 0,
+        stale_marked_by_source: {},
         duration_ms: 0,
         errors: ["Sync already completed for this idempotency key"],
         resume_after_id: null,
@@ -274,6 +288,7 @@ export async function runPriceSync(
       skipped_by_reason: {},
       price_changes: [],
       stale_marked: 0,
+      stale_marked_by_source: {},
       duration_ms: runtime.now() - startTime,
       errors: [`Failed to create sync run: ${runErr?.message}`],
       resume_after_id: cfg.resume_after_id ?? null,
@@ -295,8 +310,8 @@ export async function runPriceSync(
   // error. Continuing after a failed read is how the old implementation hid a
   // broken observation schema behind a successful run.
   const staleResult: StalePriceResult = matResult.fatal || matResult.time_budget_exhausted
-    ? { count: 0, error: null }
-    : await markStalePrices(supabase, cfg.staleness_days);
+    ? { count: 0, by_source: {}, error: null }
+    : await markStalePrices(supabase, cfg.staleness_days, runtime.now());
   if (staleResult.error) errors.push(staleResult.error);
   const recordsErrors = matResult.error_count + (staleResult.error ? 1 : 0);
 
@@ -321,6 +336,7 @@ export async function runPriceSync(
       records_errors: recordsErrors,
       summary: {
         stale_marked: staleResult.count,
+        stale_marked_by_source: staleResult.by_source,
         records_skipped: matResult.skipped,
         skipped: {
           reasons: matResult.skipped_by_reason,
@@ -356,6 +372,7 @@ export async function runPriceSync(
     skipped_by_reason: matResult.skipped_by_reason,
     price_changes: priceChanges,
     stale_marked: staleResult.count,
+    stale_marked_by_source: staleResult.by_source,
     duration_ms: runtime.now() - startTime,
     errors,
     resume_after_id: matResult.resume_after_id,
@@ -690,31 +707,56 @@ async function materializeCurrentPrices(
 // ─── Stale price cleanup ─────────────────────────────────────────────────────
 
 /**
- * Mark products as unavailable if their latest check is older than
- * staleness_days. Returns count of rows updated.
+ * Mark products as unavailable if their latest check exceeds the window for
+ * their source. staleness_days is the fallback for sources without an
+ * explicit override. Returns the total and a per-source breakdown.
  */
 async function markStalePrices(
   supabase: SupabaseClient,
-  staleness_days: number
+  staleness_days: number,
+  now: number,
 ): Promise<StalePriceResult> {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - staleness_days);
+  const bySource: Record<string, number> = {};
+  let count = 0;
+  const overriddenSources = Object.keys(PRICE_STALENESS_DAYS_BY_SOURCE);
+  const windows: Array<{ sourceType: string; days: number; fallback: boolean }> =
+    Object.entries(PRICE_STALENESS_DAYS_BY_SOURCE).map(
+    ([sourceType, days]) => ({ sourceType, days, fallback: false }),
+  );
+  windows.push({ sourceType: "", days: staleness_days, fallback: true });
 
-  const { data, error } = await supabase
-    .from("pb_price_current")
-    .update({ is_available: false })
-    .eq("is_available", true)
-    .lt("checked_at", cutoff.toISOString())
-    .select("id");
+  for (const window of windows) {
+    const cutoff = new Date(now - window.days * 24 * 60 * 60 * 1_000).toISOString();
+    let query = supabase
+      .from("pb_price_current")
+      .update({ is_available: false })
+      .eq("is_available", true);
 
-  if (error) {
-    return {
-      count: 0,
-      error: queryError("Failed to mark stale prices", error),
-    };
+    query = window.fallback
+      ? query.not("source_type", "in", `(${overriddenSources.join(",")})`)
+      : query.eq("source_type", window.sourceType);
+
+    const { data, error } = await query
+      .lt("checked_at", cutoff)
+      .select("id, source_type");
+
+    if (error) {
+      const target = window.fallback ? "default sources" : window.sourceType;
+      return {
+        count,
+        by_source: bySource,
+        error: queryError(`Failed to mark stale prices for ${target}`, error),
+      };
+    }
+
+    for (const row of data ?? []) {
+      const sourceType = String(row.source_type ?? "unknown");
+      bySource[sourceType] = (bySource[sourceType] ?? 0) + 1;
+      count += 1;
+    }
   }
 
-  return { count: data?.length ?? 0, error: null };
+  return { count, by_source: bySource, error: null };
 }
 
 // ─── Get last sync info ──────────────────────────────────────────────────────

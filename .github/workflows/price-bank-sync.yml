@@ -40,12 +40,12 @@ jobs:
           resume_after_id=""
           segment=0
           while true; do
-            # Catch-up window: ingestion has been stopped since 2026-08-22.
-            # Lower staleness_days again once n8n is ingesting fresh observations.
+            # Ingestion checks still run daily. OBRAMAT imports only when the
+            # catalogue fingerprint changes, and the current edition has not.
+            # Source-specific staleness windows are enforced by the sync engine.
             RESUME_AFTER_ID="${resume_after_id}" SEGMENT="${segment}" node > "${payload_file}" <<'NODE'
           const body = {
             scope: "all",
-            staleness_days: 60,
             time_budget_ms: 240000,
             idempotency_key: `scheduled-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}-${process.env.SEGMENT}`,
           };
@@ -114,6 +114,7 @@ jobs:
             records_skipped: result.records_skipped,
             skipped_by_reason: result.skipped_by_reason,
             stale_marked: result.stale_marked,
+            stale_marked_by_source: result.stale_marked_by_source,
             duration_ms: result.duration_ms,
           }));
           console.log(result.status);
