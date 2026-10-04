@@ -1,10 +1,8 @@
 name: Price bank sync
 
 on:
-  # Scheduled runs are paused while the pb_price_current schema contract fix
-  # is deployed and verified. Keep manual dispatch available for the catch-up.
-  # schedule:
-  #   - cron: "43 */2 * * *"
+  schedule:
+    - cron: "43 */2 * * *"
   workflow_dispatch:
 
 permissions:
