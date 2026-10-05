@@ -866,3 +866,46 @@ alter default privileges in schema public grant all on tables to anon;
 notify pgrst, 'reload schema';
 commit;
 -- END ROLLBACK_E5
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BLOQUE E6-L1 · compensa 20261005160000_authenticated_drop_unused_privileges.sql
+--
+-- Devuelve a `authenticated` TRUNCATE, REFERENCES, TRIGGER y MAINTAIN.
+--
+-- Antes de ejecutarlo conviene saber que ninguna de esas cuatro operaciones
+-- aparece en el codigo de la aplicacion ni la expone PostgREST. Si algo se
+-- rompio tras la migracion, lo mas probable es que NO sea por esto, y
+-- reponerlos devolveria el TRUNCATE que RLS no cubre sin arreglar la causa.
+--
+-- La compensacion proporcionada, si se identifica una tabla concreta que de
+-- verdad necesita uno de los cuatro, es concederselo a esa tabla y solo a esa.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BEGIN ROLLBACK_E6_L1
+begin;
+set local lock_timeout = '5s';
+do $guard$
+begin
+  if current_setting('enlaze.allow_authenticated_privileges_rollback', true)
+     is distinct from 'restore_truncate_references_trigger_maintain' then
+    raise exception 'Set explicit restore_truncate_references_trigger_maintain acknowledgement; otherwise forward-fix only';
+  end if;
+end $guard$;
+
+do $restore$
+declare t record;
+begin
+  for t in
+    select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'public' and c.relkind = 'r'
+       and array_to_string(c.relacl, ' ') like '%authenticated=%'
+     order by c.relname
+  loop
+    execute format('grant truncate, references, trigger, maintain on table public.%I to authenticated', t.relname);
+  end loop;
+end $restore$;
+
+alter default privileges in schema public
+  grant truncate, references, trigger, maintain on tables to authenticated;
+notify pgrst, 'reload schema';
+commit;
+-- END ROLLBACK_E6_L1
