@@ -26,7 +26,7 @@ do $guard$
 declare
   v_quedarian_sin_nada integer;
 begin
-  -- Una tabla que solo concediera x, t o m —sin r, a, w ni d— se quedaría sin
+  -- Una tabla que solo concediera D, x, t o m —sin r, a, w ni d— se quedaría sin
   -- ningún privilegio tras esta migración, y eso sería una pérdida silenciosa
   -- en vez de una limpieza. Hoy no hay ninguna; si apareciera, hay que mirarla
   -- antes y no descubrirlo después.
@@ -39,7 +39,7 @@ begin
     ) g
    where n.nspname = 'public' and c.relkind = 'r'
      and g.acl <> ''
-     and split_part(split_part(g.acl, '=', 2), '/', 1) ~ '^[xtm]+$';
+     and split_part(split_part(g.acl, '=', 2), '/', 1) ~ '^[Dxtm]+$';
   if v_quedarian_sin_nada > 0 then
     raise exception
       '% tables would be left with no privileges for authenticated; review them first', v_quedarian_sin_nada;

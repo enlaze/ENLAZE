@@ -2973,7 +2973,7 @@ from (
        join pg_catalog.pg_namespace n on n.oid = c.relnamespace
       cross join lateral (select coalesce((select split_part(split_part(a,'=',2),'/',1)
           from unnest(c.relacl::text[]) a where a like 'authenticated=%'),'') as p) g
-      where n.nspname = 'public' and c.relkind = 'r' and g.p <> '' and g.p ~ '^[xtm]+$') as sin_nada_tras_revocar,
+      where n.nspname = 'public' and c.relkind = 'r' and g.p <> '' and g.p ~ '^[Dxtm]+$') as sin_nada_tras_revocar,
     (select count(*) from pg_catalog.pg_class c
        join pg_catalog.pg_namespace n on n.oid = c.relnamespace
       where n.nspname = 'public' and c.relkind = 'r'

@@ -111,6 +111,19 @@ test("E6 L1 retira los cuatro privilegios sobrantes sin tocar los cuatro útiles
     }
   });
 
+  await t.test("el guard aborta si la tabla solo concede TRUNCATE", async () => {
+    await db.query("begin");
+    try {
+      await db.query("create table public.solo_d_e6(id integer)");
+      await db.query("revoke all on table public.solo_d_e6 from authenticated");
+      await db.query("grant truncate on table public.solo_d_e6 to authenticated");
+      await assert.rejects(() => db.query(inlined(MIGRACION)),
+        (e) => /would be left with no privileges for authenticated/.test(e.message));
+    } finally {
+      await db.query("rollback");
+    }
+  });
+
   await t.test("aplicada: desaparecen los cuatro sobrantes", async () => {
     await db.query(inlined(MIGRACION));
     for (const letra of ["D", "x", "t", "m"]) {
