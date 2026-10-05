@@ -2950,7 +2950,7 @@ from (
 -- ─────────────────────────────────────────────────────────────────────────────────────
 -- BEGIN CHECK_E6_L1_PRECHECK
 -- ANTES del push. ESPERADO: veredicto = 'OK'.
--- ANOTA `con_arwd`: la auditoria lo compara y tiene que salir IDENTICO. Si
+-- ANOTA `con_arwd` y pegalo en `con_arwd_precheck` de la auditoria. Si
 -- bajara, la migracion se habria llevado privilegios que el panel usa.
 select case
          when sin_nada_tras_revocar > 0 then 'ABORTAR: ' || sin_nada_tras_revocar || ' tablas se quedarian sin ningun privilegio para authenticated'
@@ -2988,6 +2988,9 @@ from (
 -- como postgres.
 select case
          when registrada = 0 then 'ABORTAR: 20261005160000 no esta registrada'
+         when con_arwd_precheck < 0 then 'ABORTAR: anota en con_arwd_precheck el valor que dio el precheck'
+         when con_arwd <> con_arwd_precheck then 'ABORTAR: con_arwd paso de ' || con_arwd_precheck || ' a ' || con_arwd
+           || '; authenticated ha perdido privilegios que el panel usa'
          when con_sobrantes > 0 then 'ABORTAR: ' || con_sobrantes || ' tablas siguen concediendo D, x, t o m'
          when defecto_postgres > 0 then 'ABORTAR: el defecto de postgres sigue concediendo los sobrantes'
          when defectos_restantes > 0 then 'REVISAR: queda el defecto de supabase_admin; una tabla creada desde el panel nacera con ellos'
@@ -2996,10 +2999,11 @@ select case
          -- fallo de esta migracion. Un gate que aborta por el trabajo de otro
          -- confunde a quien despliega.
          when tablas_con_anon > 0 then 'REVISAR: E6 esta bien, pero hay ' || tablas_con_anon || ' tablas con privilegios para anon; eso lo mira el centinela de E5'
-         else 'OK — contrasta `con_arwd` con el valor del precheck: tiene que ser IDENTICO'
+         else 'OK — con_arwd intacto en ' || con_arwd
        end as veredicto, *
 from (
   select
+    -1::bigint as con_arwd_precheck, -- <<< ANOTA AQUI el valor del precheck
     (select count(*) from supabase_migrations.schema_migrations
        where version = '20261005160000') as registrada,
     (select count(*) from pg_catalog.pg_class c
