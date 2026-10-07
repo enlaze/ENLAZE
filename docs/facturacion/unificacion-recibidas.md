@@ -12,6 +12,8 @@ Base: `origin/main` `b9ed8dd24fe7f42a6bcff535c5057edd80bd6b83`.
 
 | 3 | OK | 218 errores / 156 avisos; archivos modificados sin errores ni avisos | 25/25: periodos, CSV, resumen completo y formulario por cliente | Mismo bloqueo en prebuild; compilación directa adicional bloqueada por descarga de Inter (red) |
 
+| 4 | OK | 218 errores / 156 avisos (sin cambios) | 27/27: incluye pagos parciales y alcance por obra | Mismo bloqueo en prebuild |
+
 Los registros de esta ejecución están en `/private/tmp/enlaze-unify-checks`.
 
 ## Límites y diferencias respecto al encargo

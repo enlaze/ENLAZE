@@ -49,3 +49,10 @@ export function receivedInvoicesCsv(invoices: ReceivedInvoiceRow[]) {
   ].join(";"));
   return "\uFEFF" + [header.map(text).join(";"), ...rows].join("\r\n") + "\r\n";
 }
+
+/** Payments follow actual amounts, including partial payments, not workflow labels. */
+export function receivedInvoiceCostTotals(invoices: { total: number; amount_paid: number | null }[]) {
+  const totalCents = invoices.reduce((sum, i) => sum + Math.round(Number(i.total || 0) * 100), 0);
+  const paidCents = invoices.reduce((sum, i) => sum + Math.round(Number(i.amount_paid || 0) * 100), 0);
+  return { total: totalCents / 100, paid: paidCents / 100, pending: (totalCents - paidCents) / 100 };
+}

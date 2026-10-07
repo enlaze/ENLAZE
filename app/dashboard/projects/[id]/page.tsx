@@ -1,5 +1,7 @@
 "use client";
 
+import { getAllReceivedInvoices } from "@/lib/suppliers";
+import { receivedInvoiceCostTotals } from "@/lib/received-invoices";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
@@ -70,13 +72,14 @@ interface Invoice {
   id: string;
   supplier_name: string;
   invoice_number: string;
-  invoice_date: string;
-  base_amount: number;
+  issue_date: string;
+  subtotal: number;
   iva_amount: number;
   irpf_amount: number;
-  total_amount: number;
+  total: number;
   category: string;
-  payment_status: string;
+  status: string;
+  amount_paid: number | null;
   created_at: string;
 }
 
@@ -193,6 +196,9 @@ const budgetStatusMap: Record<string, { label: string; color: string }> = {
   rejected: { label: "Rechazado", color: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
 };
 const invoiceStatusMap: Record<string, { label: string; color: string }> = {
+  approved: { label: "Aprobada", color: "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+  partial: { label: "Pago parcial", color: "bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300" },
+  rejected: { label: "Rechazada", color: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
   pending: { label: "Pendiente", color: "bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300" },
   paid: { label: "Pagada", color: "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
   overdue: { label: "Vencida", color: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
@@ -347,9 +353,6 @@ export default function ProjectDetailPage() {
       const budgetFilter = cid
         ? `project_id.eq.${pid},and(client_id.eq.${cid},project_id.is.null)`
         : `project_id.eq.${pid}`;
-      const invoiceFilter = cid
-        ? `project_id.eq.${pid},and(client_id.eq.${cid},project_id.is.null)`
-        : `project_id.eq.${pid}`;
 
       const [clientRes, budgetsRes, invoicesRes, paymentsRes, changesRes, milestonesRes, projSuppliersRes, allSuppliersRes, ordersRes, dnRes] =
         await Promise.all([
@@ -359,9 +362,7 @@ export default function ProjectDetailPage() {
           supabase.from("budgets")
             .select("id, budget_number, title, service_type, status, subtotal, iva_amount, total, total_cost, created_at")
             .or(budgetFilter).order("created_at", { ascending: false }),
-          supabase.from("invoices")
-            .select("id, supplier_name, invoice_number, invoice_date, base_amount, iva_amount, irpf_amount, total_amount, category, payment_status, created_at")
-            .or(invoiceFilter).order("invoice_date", { ascending: false }),
+          getAllReceivedInvoices(supabase, { project_id: pid }),
           supabase.from("payments")
             .select("*").eq("project_id", params.id as string).order("payment_date", { ascending: false }),
           supabase.from("project_changes")
@@ -384,6 +385,7 @@ export default function ProjectDetailPage() {
 
       if (clientRes.data) setClient(clientRes.data as Client);
       setBudgets((budgetsRes.data as Budget[]) || []);
+      if (invoicesRes.error) throw invoicesRes.error;
       setInvoices((invoicesRes.data as Invoice[]) || []);
       setPayments((paymentsRes.data as Payment[]) || []);
       setChanges((changesRes.data as ProjectChange[]) || []);
@@ -745,12 +747,7 @@ export default function ProjectDetailPage() {
       .reduce((s, c) => s + Number(c.economic_impact || 0), 0);
     const presupuestoAjustado = totalAprobado + extrasAprobados;
 
-    const costeReal = invoices.reduce((s, i) => s + Number(i.total_amount || 0), 0);
-    const costeRealPagado = invoices.filter((i) => i.payment_status === "paid")
-      .reduce((s, i) => s + Number(i.total_amount || 0), 0);
-    const costePendientePago = invoices
-      .filter((i) => i.payment_status === "pending" || i.payment_status === "overdue")
-      .reduce((s, i) => s + Number(i.total_amount || 0), 0);
+    const { total: costeReal, paid: costeRealPagado, pending: costePendientePago } = receivedInvoiceCostTotals(invoices);
 
     const totalCobrado = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
 
@@ -939,7 +936,7 @@ export default function ProjectDetailPage() {
           { key: "documentos" as TabKey, label: "Documentos" },
           { key: "firmas" as TabKey, label: "Firmas" },
           { key: "presupuestos" as TabKey, label: "Presupuestos", count: kpis.nPresupuestos },
-          { key: "facturas" as TabKey, label: "Facturas", count: kpis.nFacturas },
+          { key: "facturas" as TabKey, label: "Facturas recibidas", count: kpis.nFacturas },
           { key: "cobros" as TabKey, label: "Cobros", count: kpis.nCobros },
           { key: "cambios" as TabKey, label: "Cambios", count: kpis.nCambios },
           { key: "hitos" as TabKey, label: "Hitos", count: kpis.hitosTotal },
@@ -972,7 +969,7 @@ export default function ProjectDetailPage() {
             <div className="space-y-2">
               {[
                 ...budgets.slice(0, 3).map((b) => ({ date: b.created_at, label: `Presupuesto ${b.budget_number} — ${b.title}`, amount: Number(b.total || 0), status: budgetStatusMap[b.status]?.label || b.status, color: "text-blue-600 dark:text-blue-400", sign: "" })),
-                ...invoices.slice(0, 3).map((i) => ({ date: i.invoice_date || i.created_at, label: `Factura ${i.invoice_number || "s/n"} — ${i.supplier_name}`, amount: Number(i.total_amount || 0), status: invoiceStatusMap[i.payment_status]?.label || i.payment_status, color: "text-orange-600 dark:text-orange-400", sign: "−" })),
+                ...invoices.slice(0, 3).map((i) => ({ date: i.issue_date || i.created_at, label: `Factura ${i.invoice_number || "s/n"} — ${i.supplier_name}`, amount: Number(i.total || 0), status: invoiceStatusMap[i.status]?.label || i.status, color: "text-orange-600 dark:text-orange-400", sign: "−" })),
                 ...payments.slice(0, 3).map((p) => ({ date: p.payment_date, label: `Cobro — ${p.concept}`, amount: Number(p.amount || 0), status: p.payment_method, color: "text-emerald-600 dark:text-emerald-400", sign: "+" })),
                 ...changes.filter((c) => c.status === "approved" || c.status === "executed").slice(0, 3).map((c) => ({ date: c.approved_date || c.created_at, label: `Extra — ${c.title}`, amount: Number(c.economic_impact || 0), status: changeStatusMap[c.status]?.label || c.status, color: "text-purple-600 dark:text-purple-400", sign: "+" })),
               ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10).map((item, i) => (
@@ -1055,8 +1052,8 @@ export default function ProjectDetailPage() {
       {activeTab === "facturas" && (
         <Card padding={false} className="mb-10 overflow-hidden">
           <div className="p-5 border-b border-navy-100 dark:border-zinc-800 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider">Facturas ({invoices.length})</h3>
-            <Link href="/dashboard/facturas" className="text-xs text-brand-green hover:underline">+ Nueva factura</Link>
+            <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider">Facturas recibidas ({invoices.length})</h3>
+            <Link href={`/dashboard/facturacion?tab=recibidas&project=${project.id}`} className="text-xs text-brand-green hover:underline">+ Nueva factura</Link>
           </div>
           {invoices.length === 0 ? (
             <div className="p-8 text-center"><p className="text-sm text-navy-500 dark:text-zinc-400">No hay facturas vinculadas.</p></div>
@@ -1067,16 +1064,16 @@ export default function ProjectDetailPage() {
                   <Th align="left">Nº</Th><Th align="left">Proveedor</Th><Th>Categoría</Th><Th>Estado</Th><Th align="right">Base</Th><Th align="right">Total</Th><Th>Fecha</Th>
                 </tr></thead>
                 <tbody>{invoices.map((inv) => {
-                  const st = invoiceStatusMap[inv.payment_status] || { label: inv.payment_status, color: defaultStatusColor };
+                  const st = invoiceStatusMap[inv.status] || { label: inv.status, color: defaultStatusColor };
                   return (
                     <tr key={inv.id} className="border-b border-navy-100 dark:border-zinc-800 hover:bg-navy-50/40 dark:hover:bg-zinc-800/50 transition">
                       <td className="px-5 py-3 text-sm text-navy-600 dark:text-zinc-400 font-mono">{inv.invoice_number || "—"}</td>
                       <td className="px-3 py-3 text-sm text-navy-900 dark:text-white font-medium">{inv.supplier_name}</td>
                       <td className="px-3 py-3 text-center text-xs text-navy-600 dark:text-zinc-400">{categoryLabels[inv.category] || inv.category}</td>
                       <td className="px-3 py-3 text-center"><span className={`text-xs px-2 py-1 rounded-full font-medium ${st.color}`}>{st.label}</span></td>
-                      <td className="px-3 py-3 text-right text-sm text-navy-700 dark:text-zinc-200">{eur(inv.base_amount)}</td>
-                      <td className="px-3 py-3 text-right text-sm font-semibold text-navy-900 dark:text-white">{eur(inv.total_amount)}</td>
-                      <td className="px-5 py-3 text-center text-xs text-navy-500 dark:text-zinc-400">{fmtDate(inv.invoice_date)}</td>
+                      <td className="px-3 py-3 text-right text-sm text-navy-700 dark:text-zinc-200">{eur(inv.subtotal)}</td>
+                      <td className="px-3 py-3 text-right text-sm font-semibold text-navy-900 dark:text-white">{eur(inv.total)}</td>
+                      <td className="px-5 py-3 text-center text-xs text-navy-500 dark:text-zinc-400">{fmtDate(inv.issue_date)}</td>
                     </tr>
                   );
                 })}</tbody>
