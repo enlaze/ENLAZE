@@ -331,7 +331,7 @@ export async function POST(request: Request) {
 
     // ── FASE 3: Price resolution (deterministic, V2 preferred → V1 fallback) ──
     let resolverUsed: "v1" | "v2" = "v1";
-    let itemAlternatives: Map<string, PriceAlternativeV2[]> = new Map();
+    const itemAlternatives: Map<string, PriceAlternativeV2[]> = new Map();
 
     if (hasPBData && v2PrefetchedData && company_id) {
       // ── V2 path: 11-level cascade with pb_* data ──
