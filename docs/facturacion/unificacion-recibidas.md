@@ -8,6 +8,8 @@ Base: `origin/main` `b9ed8dd24fe7f42a6bcff535c5057edd80bd6b83`.
 | --- | --- | --- | --- | --- |
 | 1 | OK (`tsc --noEmit`) | 218 errores / 157 avisos ya en la base (solo se ha añadido SQL y tests) | 18/18 | Bloqueado en prebuild: faltan credenciales para `plans:check` |
 
+| 2 | OK | Sin cambios: 218 errores / 157 avisos | 21/21, incluye paginación y fallo intermedio | Mismo bloqueo en prebuild |
+
 Los registros de esta ejecución están en `/private/tmp/enlaze-unify-checks`.
 
 ## Límites y diferencias respecto al encargo
