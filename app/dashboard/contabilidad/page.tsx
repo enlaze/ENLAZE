@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { getAllReceivedInvoices } from "@/lib/suppliers";
+import { toFiscalReceivedInvoice, receivedInvoiceDateRange } from "@/lib/received-invoices";
 import { createClient } from "@/lib/supabase-browser";
 import PageHeader from "@/components/ui/page-header";
 import { Card, StatCard } from "@/components/ui/card";
@@ -54,6 +56,9 @@ const paymentLabels: Record<string, { label: string; color: string }> = {
   paid: { label: "Pagada", color: "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
   pending: { label: "Pendiente", color: "bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300" },
   overdue: { label: "Vencida", color: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
+  approved: { label: "Aprobada", color: "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+  partial: { label: "Pago parcial", color: "bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300" },
+  rejected: { label: "Rechazada", color: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
   cancelled: { label: "Anulada", color: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300" },
 };
 
@@ -66,6 +71,7 @@ export default function ContabilidadPage() {
   const [received, setReceived] = useState<ReceivedInvoice[]>([]);
   const [issued, setIssued] = useState<IssuedInvoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const downloading = false; // kept for button disabled state
 
   // Filters
@@ -82,11 +88,7 @@ export default function ContabilidadPage() {
     setUserId(user.id);
 
     const [recRes, issRes] = await Promise.all([
-      supabase
-        .from("invoices")
-        .select("id, invoice_number, supplier_name, invoice_date, base_amount, iva_amount, irpf_amount, total_amount, category, payment_status")
-        .eq("user_id", user.id)
-        .order("invoice_date", { ascending: false }),
+      getAllReceivedInvoices(supabase),
       supabase
         .from("issued_invoices")
         .select("id, invoice_number, client_name, issue_date, subtotal, iva_amount, irpf_amount, total, payment_status")
@@ -94,7 +96,12 @@ export default function ContabilidadPage() {
         .order("issue_date", { ascending: false }),
     ]);
 
-    setReceived((recRes.data as ReceivedInvoice[]) || []);
+    if (recRes.error || issRes.error) {
+      setLoadError("No se pudieron cargar todas las facturas. Recarga la página para reintentar.");
+      setLoading(false);
+      return;
+    }
+    setReceived(recRes.data.map(toFiscalReceivedInvoice));
     setIssued((issRes.data as IssuedInvoice[]) || []);
     setLoading(false);
   }
@@ -103,16 +110,8 @@ export default function ContabilidadPage() {
 
   // Filter by period
   const filteredReceived = useMemo(() => {
-    return received.filter((inv) => {
-      const d = new Date(inv.invoice_date);
-      if (d.getFullYear() !== year) return false;
-      if (period === "quarter") {
-        const q = Math.ceil((d.getMonth() + 1) / 3);
-        return q === quarter;
-      }
-      if (period === "month") return d.getMonth() + 1 === month;
-      return true;
-    });
+    const range = receivedInvoiceDateRange(period, year, month, quarter);
+    return received.filter((inv) => inv.invoice_date >= range.issue_date_from && inv.invoice_date <= range.issue_date_to);
   }, [received, year, period, quarter, month]);
 
   const filteredIssued = useMemo(() => {
@@ -181,6 +180,8 @@ export default function ContabilidadPage() {
       </div>
     );
   }
+
+  if (loadError) return <div className="max-w-6xl mx-auto"><p role="alert">{loadError}</p></div>;
 
   return (
     <div className="max-w-6xl mx-auto">

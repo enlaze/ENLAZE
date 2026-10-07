@@ -56,3 +56,22 @@ export function receivedInvoiceCostTotals(invoices: { total: number; amount_paid
   const paidCents = invoices.reduce((sum, i) => sum + Math.round(Number(i.amount_paid || 0) * 100), 0);
   return { total: totalCents / 100, paid: paidCents / 100, pending: (totalCents - paidCents) / 100 };
 }
+
+/** Preserve the accounting screen/report contract while reading the single source. */
+export function toFiscalReceivedInvoice(invoice: ReceivedInvoiceRow) {
+  return {
+    id: invoice.id,
+    invoice_number: invoice.invoice_number,
+    supplier_name: invoice.supplier_name,
+    supplier_nif: invoice.supplier_nif || "",
+    invoice_date: invoice.issue_date,
+    base_amount: Number(invoice.subtotal || 0),
+    iva_percentage: Number(invoice.iva_percent || 0),
+    iva_amount: Number(invoice.iva_amount || 0),
+    irpf_percentage: Number(invoice.irpf_percent || 0),
+    irpf_amount: Number(invoice.irpf_amount || 0),
+    total_amount: Number(invoice.total || 0),
+    category: invoice.category,
+    payment_status: invoice.status,
+  };
+}

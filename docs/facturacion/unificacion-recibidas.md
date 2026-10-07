@@ -14,6 +14,8 @@ Base: `origin/main` `b9ed8dd24fe7f42a6bcff535c5057edd80bd6b83`.
 
 | 4 | OK | 218 errores / 156 avisos (sin cambios) | 27/27: incluye pagos parciales y alcance por obra | Mismo bloqueo en prebuild |
 
+| 5 | OK | 218 errores / 156 avisos (sin cambios) | 30/30: endpoint fiscal ejecutado con siete recibidas sintéticas, totales, paginación, errores y sesión | Mismo bloqueo en prebuild |
+
 Los registros de esta ejecución están en `/private/tmp/enlaze-unify-checks`.
 
 ## Límites y diferencias respecto al encargo
@@ -22,6 +24,7 @@ Los registros de esta ejecución están en `/private/tmp/enlaze-unify-checks`.
 - El portal en esta base ya usa exclusivamente `portal_read_snapshot`. Se conserva ese consumidor y el contrato JSON. El campo JSON `payment_status` recibe `received_invoices.status`, conservando el vocabulario de tramitación y ampliando sus etiquetas.
 - Se revocan INSERT y UPDATE de `invoices` e `invoice_items` a los roles del navegador. Se conservan tablas, lecturas y borrado administrativo, además de las RPC SECURITY DEFINER existentes.
 - El CSV aplica todos los filtros; el enlace al PDF fiscal usa el mismo periodo y muestra todas las recibidas de ese periodo, como el informe existente. Se indica expresamente en el hub.
+- `app/contabilidad-print/page.tsx` ya consume y representa las filas del endpoint fiscal; su contrato no cambia y no necesita modificación.
 - No se ha aplicado la migración a producción ni a una rama Supabase: no hay conector/CLI de Supabase disponible. El intento de preparar PostgreSQL local tampoco pudo arrancar: el sandbox deniega la memoria compartida de `initdb`. Las pruebas de contrato SQL NO equivalen a aplicar la migración.
 
 ## Despliegue pendiente
