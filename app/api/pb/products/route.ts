@@ -54,7 +54,7 @@ export async function GET(request: Request) {
     .select(`
       *,
       pb_providers!inner ( id, name, is_preferred, company_id ),
-      pb_normalized_concepts ( id, canonical_name, category )
+      canonical_concepts ( id, display_name_es, family )
     `, { count: "exact" })
     .or(`pb_providers.company_id.is.null,pb_providers.company_id.eq.${company_id}`)
     .eq("is_active", true);

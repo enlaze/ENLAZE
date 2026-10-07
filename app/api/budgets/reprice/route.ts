@@ -124,7 +124,7 @@ export async function POST(request: Request) {
           pb_products!inner (
             id, commercial_name, concept_id, brand, sku, sale_unit,
             units_per_package, unit_price,
-            pb_normalized_concepts ( id, canonical_name )
+            canonical_concepts ( id, display_name_es )
           ),
           pb_providers!inner (
             id, name, province, supply_zones, is_preferred,
@@ -162,12 +162,12 @@ export async function POST(request: Request) {
         current_prices: (pbCurrentRows || []).map((row: Record<string, unknown>): CurrentPriceRow => {
           const prod = row.pb_products as Record<string, unknown> | null;
           const prov = row.pb_providers as Record<string, unknown> | null;
-          const concept = prod?.pb_normalized_concepts as Record<string, unknown> | null;
+          const concept = prod?.canonical_concepts as Record<string, unknown> | null;
           return {
             product_id: String(prod?.id ?? ""),
             product_name: String(prod?.commercial_name ?? ""),
             concept_id: concept?.id ? String(concept.id) : null,
-            concept_name: concept?.canonical_name ? String(concept.canonical_name) : null,
+            concept_name: concept?.display_name_es ? String(concept.display_name_es) : null,
             provider_id: String(prov?.id ?? ""),
             provider_name: String(prov?.name ?? ""),
             provider_province: prov?.province ? String(prov.province) : null,
