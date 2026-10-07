@@ -10,21 +10,32 @@
  * las dos, así que escanear en una y registrar desde la otra es continuo.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { useToast } from "@/components/ui/toast";
 import { prepareInvoiceImage } from "@/lib/invoice-image-client";
 import {
-  getReceivedInvoices,
+  getAllReceivedInvoices,
   createReceivedInvoice,
   getExpenseSummary,
   paymentMethodLabels,
-  type ReceivedInvoice,
+  type ReceivedInvoiceRow,
   type Supplier,
   type ExpenseSummary,
 } from "@/lib/suppliers";
 
+import {
+  expenseCategoryLabels, receivedInvoiceDateRange, receivedInvoiceFiscalTotals,
+  receivedInvoicesCsv, type FiscalPeriod,
+} from "@/lib/received-invoices";
+
+type InvoiceClient = { id: string; name: string };
+type InvoiceProject = { id: string; name: string; client_id: string | null };
+
 export const emptyForm = {
+  client_id: "",
+  project_id: "",
+  category: "general",
   invoice_number: "",
   supplier_id: "",
   supplier_name: "",
@@ -45,50 +56,143 @@ export function useReceivedInvoices(
   supplierFilter: string,
   /** Se llama tras registrar una factura (el hub lo usa para volver a la lista). */
   onRegistered?: () => void,
+  initialProjectId = "",
 ) {
   const [supabase] = useState(() => createClient());
   const toast = useToast();
 
-  const [invoices, setInvoices] = useState<ReceivedInvoice[]>([]);
+  const [invoices, setInvoices] = useState<ReceivedInvoiceRow[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [clients, setClients] = useState<InvoiceClient[]>([]);
+  const [projects, setProjects] = useState<InvoiceProject[]>([]);
+  const [firstYear, setFirstYear] = useState(new Date().getFullYear());
+  const [projectFilter, setProjectFilter] = useState(initialProjectId);
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [period, setPeriod] = useState<FiscalPeriod>("year");
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [month, setMonth] = useState(new Date().getMonth() + 1);
+  const [quarter, setQuarter] = useState(Math.ceil((new Date().getMonth() + 1) / 3));
+  const [page, setPage] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const loadVersion = useRef({ version: 0 });
   const [summary, setSummary] = useState<ExpenseSummary | null>(null);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState({ ...emptyForm, project_id: initialProjectId });
   const [saving, setSaving] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [pendingInvoiceId, setPendingInvoiceId] = useState("");
   /** Se pone a true tras un escaneo para que el hub salte a "Recibidas". */
   const [justScanned, setJustScanned] = useState(false);
 
-  const load = useCallback(async () => {
-    const [invoiceResult, summaryResult, suppliersResult] = await Promise.all([
-      getReceivedInvoices(supabase, {
-        status: statusFilter,
-        supplier_id: supplierFilter || undefined,
-        search: search || undefined,
-        limit: 50,
-      }),
-      getExpenseSummary(supabase),
-      supabase.from("suppliers").select("id, name, nif").eq("status", "active").order("name"),
-    ]);
+  const filters = useMemo(() => ({
+    status: statusFilter,
+    supplier_id: supplierFilter || undefined,
+    project_id: projectFilter || undefined,
+    category: categoryFilter || undefined,
+    search: search || undefined,
+    ...receivedInvoiceDateRange(period, year, month, quarter),
+  }), [statusFilter, supplierFilter, projectFilter, categoryFilter, search, period, year, month, quarter]);
 
-    setInvoices(invoiceResult.data);
-    setTotal(invoiceResult.count);
-    setSummary(summaryResult);
-    setSuppliers((suppliersResult.data || []) as Supplier[]);
-    setLoading(false);
-  }, [search, statusFilter, supabase, supplierFilter]);
+  const load = useCallback(async () => {
+    const version = ++loadVersion.current.version;
+    setLoading(true);
+    setLoadError("");
+    try {
+      const result = await getAllReceivedInvoices(supabase, filters);
+      if (version !== loadVersion.current.version) return;
+      if (result.error) throw result.error;
+      setInvoices(result.data);
+      setTotal(result.data.length);
+      setPage(0);
+    } catch {
+      if (version !== loadVersion.current.version) return;
+      setInvoices([]);
+      setTotal(0);
+      setLoadError("No se pudieron cargar las facturas. Reintenta la consulta.");
+    } finally {
+      if (version === loadVersion.current.version) setLoading(false);
+    }
+  }, [supabase, filters]);
 
   useEffect(() => {
-    // `search` se pasa a la misma consulta de siempre (getReceivedInvoices);
-    // aquí solo se le pone un respiro para no lanzar una petición por tecla.
+    const tracker = loadVersion.current;
     const t = setTimeout(load, search ? 300 : 0);
-    return () => clearTimeout(t);
-  }, [statusFilter, supplierFilter, search]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { clearTimeout(t); ++tracker.version; };
+  }, [load, search]);
+
+  useEffect(() => {
+    let active = true;
+    async function loadOptions() {
+      const [summaryResult, suppliersResult, clientsResult, projectsResult, earliestResult] = await Promise.all([
+        getExpenseSummary(supabase),
+        supabase.from("suppliers").select("id, name, nif").eq("status", "active").order("name"),
+        supabase.from("clients").select("id, name").order("name"),
+        supabase.from("projects").select("id, name, client_id").is("deleted_at", null).order("name"),
+        supabase.from("received_invoices").select("issue_date").is("deleted_at", null).order("issue_date").limit(1),
+      ]);
+      if (!active) return;
+      setSummary(summaryResult);
+      setSuppliers((suppliersResult.data || []) as Supplier[]);
+      setClients(clientsResult.data || []);
+      setProjects(projectsResult.data || []);
+      const project = projectsResult.data?.find((p) => p.id === initialProjectId);
+      setForm((f) => f.project_id === initialProjectId && !f.client_id
+        ? { ...f, client_id: project?.client_id || "" } : f);
+      const earliest = earliestResult.data?.[0]?.issue_date;
+      if (earliest) setFirstYear(Math.min(Number(earliest.slice(0, 4)), new Date().getFullYear()));
+      if (clientsResult.error || projectsResult.error || suppliersResult.error) {
+        toast.error("No se pudieron cargar todos los clientes, obras o proveedores");
+      }
+    }
+    void loadOptions();
+    return () => { active = false; };
+  }, [supabase, initialProjectId, toast]);
+
+  const fiscalTotals = receivedInvoiceFiscalTotals(invoices);
+  const visibleInvoices = invoices.slice(page * 50, (page + 1) * 50);
+  const availableYears = Array.from({ length: new Date().getFullYear() + 2 - firstYear }, (_, i) => new Date().getFullYear() + 1 - i);
+  const pdfParams = new URLSearchParams({ type: "received", period, year: String(year) });
+  if (period === "month") pdfParams.set("month", String(month));
+  if (period === "quarter") pdfParams.set("quarter", String(quarter));
+  const fiscalPdfHref = `/contabilidad-print?${pdfParams}`;
+
+  function newForm() {
+    const project = projects.find((p) => p.id === projectFilter);
+    return { ...emptyForm, issue_date: new Date().toISOString().split("T")[0], project_id: project?.id || "", client_id: project?.client_id || "" };
+  }
+
+  function handleClientSelect(clientId: string) {
+    setForm((f) => ({ ...f, client_id: clientId, project_id: "" }));
+  }
+
+  function handleProjectSelect(projectId: string) {
+    const project = projects.find((p) => p.id === projectId);
+    setForm((f) => ({ ...f, project_id: projectId, client_id: project ? project.client_id || "" : f.client_id }));
+  }
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      // A fresh full query; never export the 50 visible rows or a stale page.
+      const result = await getAllReceivedInvoices(supabase, filters);
+      if (result.error) throw result.error;
+      const url = URL.createObjectURL(new Blob([receivedInvoicesCsv(result.data)], { type: "text/csv;charset=utf-8;" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `facturas-recibidas-${filters.issue_date_from}-${filters.issue_date_to}.csv`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      toast.error("No se pudo exportar el conjunto completo de facturas");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   function handleSupplierSelect(supplierId: string) {
     const s = suppliers.find((x) => x.id === supplierId);
@@ -148,7 +252,7 @@ export function useReceivedInvoices(
       }
     }
 
-    setForm(emptyForm);
+    setForm(newForm());
     setShowForm(true);
   }
 
@@ -171,7 +275,7 @@ export function useReceivedInvoices(
       }
     }
 
-    setForm(emptyForm);
+    setForm(newForm());
     setShowForm(false);
   }
 
@@ -241,6 +345,9 @@ export function useReceivedInvoices(
       const paymentMethod = String(data.payment_method || "").toLowerCase();
 
       setForm({
+        ...newForm(),
+        ...(showForm ? { client_id: form.client_id, project_id: form.project_id } : {}),
+        category: expenseCategoryLabels[String(data.category)] ? String(data.category) : "general",
         invoice_number: String(data.invoice_number || ""),
         supplier_id: matchingSupplier?.id || "",
         supplier_name: matchingSupplier?.name || supplierName,
@@ -288,6 +395,9 @@ export function useReceivedInvoices(
 
     if (!invoiceId) {
       const { data, error } = await createReceivedInvoice(supabase, {
+        client_id: form.client_id || null,
+        project_id: form.project_id || null,
+        category: form.category,
         invoice_number: form.invoice_number,
         supplier_id: form.supplier_id || null,
         supplier_name: form.supplier_name,
@@ -320,14 +430,9 @@ export function useReceivedInvoices(
       // form in the meantime, or they are silently discarded once this
       // retry succeeds and the form closes.
       //
-      // The invoice UPDATE and the suppliers.total_invoiced adjustment run
-      // as ONE atomic RPC instead of two separate client calls: the RPC
-      // re-reads the invoice's pre-edit supplier/total itself (under a row
-      // lock) at write time, so the delta is always computed from the true
-      // current DB state — a best-effort follow-up call that only logs on
-      // failure could leave the invoice corrected but the supplier balance
-      // stale, with no retry path (a later retry re-reads the already-
-      // corrected invoice and sees a zero delta).
+      // Keep the existing locked financial update. Supplier totals are
+      // derived from received_invoices; classification is saved separately
+      // and any failure keeps the retry open before document promotion.
       const { error } = await supabase.rpc("update_received_invoice_and_reconcile", {
         p_invoice_id: invoiceId,
         p_invoice_number: form.invoice_number,
@@ -353,6 +458,14 @@ export function useReceivedInvoices(
         setSaving(false);
         return;
       }
+      const { error: classificationError } = await supabase.from("received_invoices")
+        .update({ client_id: form.client_id || null, project_id: form.project_id || null, category: form.category })
+        .eq("id", invoiceId).select("id").single();
+      if (classificationError) {
+        toast.error("No se pudo guardar la obra o categoría", { description: "Reintenta antes de conservar el documento." });
+        setSaving(false);
+        return;
+      }
     }
 
     if (isOcrDraftUrl(form.document_url)) {
@@ -371,16 +484,21 @@ export function useReceivedInvoices(
 
     setPendingInvoiceId("");
     toast.success("Factura registrada");
-    setForm(emptyForm);
+    setForm(newForm());
     setShowForm(false);
     setJustScanned(false);
     await load();
+    setSummary(await getExpenseSummary(supabase));
     setSaving(false);
     onRegistered?.();
   }
 
   return {
-    invoices, suppliers, summary, total, loading,
+    invoices, visibleInvoices, suppliers, clients, projects, summary, total, loading, loadError,
+    projectFilter, setProjectFilter, categoryFilter, setCategoryFilter,
+    period, setPeriod, year, setYear, month, setMonth, quarter, setQuarter, availableYears,
+    page, setPage, fiscalTotals, fiscalPdfHref, exporting, handleExport,
+    handleClientSelect, handleProjectSelect,
     search, setSearch, statusFilter, setStatusFilter,
     showForm, setShowForm, form, setForm, saving, scanning, pendingInvoiceId,
     justScanned, setJustScanned,
