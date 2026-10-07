@@ -4,7 +4,7 @@
  * Types for the Price Bank V2 system.
  * Maps directly to Supabase tables: pb_providers, pb_products,
  * pb_price_sources, pb_price_observations,
- * pb_price_current, pb_sync_runs, pb_sync_run_details.
+ * pb_price_current, pb_sync_runs.
  * Concepts are now read from canonical_concepts, outside this module.
  *
  * Conventions:
