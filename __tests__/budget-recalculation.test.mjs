@@ -172,6 +172,26 @@ test("derived, fetched and transient state cannot trigger autosave", () => {
   }
 });
 
+test("price provenance alone does not change the autosave signature", () => {
+  const editable = Object.fromEntries(
+    BUDGET_AUTOSAVE_EDITABLE_KEYS.map((key) => [key, null]),
+  );
+  editable.partidas = [{ id: "p1", unit_price: 12, quantity: 2, price_source_type: "technical_bank",
+    price_confidence: 0.78, price_checked_at: "2026-10-08T10:00:00Z" }];
+  editable.materials = [{ id: "m1", unit_price: 8, sourceType: "technical_bank",
+    price_confidence: 0.78, resolved_unit_price: 8 }];
+  const baseline = buildAutosaveSignature(editable);
+  assert.equal(buildAutosaveSignature({ ...editable,
+    partidas: [{ ...editable.partidas[0], price_source_type: "user_edited",
+      price_confidence: 1, price_checked_at: "2026-10-08T12:00:00Z" }],
+    materials: [{ ...editable.materials[0], sourceType: "provider_updated",
+      price_confidence: 0.9, resolved_unit_price: 8 }],
+  }), baseline);
+  assert.notEqual(buildAutosaveSignature({ ...editable,
+    partidas: [{ ...editable.partidas[0], unit_price: 13 }],
+  }), baseline, "a real price edit must still start autosave");
+});
+
 test("every BudgetState field is deliberately classified", () => {
   const source = ts.createSourceFile(
     "BudgetGenerateProvider.tsx",
