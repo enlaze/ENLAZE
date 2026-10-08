@@ -3088,3 +3088,91 @@ from (
          and col_description(a.attrelid, a.attnum) like '%user_edited%') as comentario_actualizado
 ) as evidencia;
 -- END CHECK_G3_L1B_AUDIT
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- E6 lote 1 · 20261005160000_authenticated_drop_unused_privileges.sql
+-- Retira de `authenticated` TRUNCATE, REFERENCES, TRIGGER y MAINTAIN.
+-- NO toca SELECT, INSERT, UPDATE ni DELETE. Bloques de solo lectura.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- BEGIN CHECK_E6_L1_PRECHECK
+-- ANTES del push. ESPERADO: veredicto = 'OK'.
+-- ANOTA `con_arwd` y pegalo en `con_arwd_precheck` de la auditoria. Si
+-- bajara, la migracion se habria llevado privilegios que el panel usa.
+select case
+         when sin_nada_tras_revocar > 0 then 'ABORTAR: ' || sin_nada_tras_revocar || ' tablas se quedarian sin ningun privilegio para authenticated'
+         when con_sobrantes = 0 then 'NADA QUE HACER: ninguna tabla concede ya D, x, t ni m a authenticated'
+         else 'OK'
+       end as veredicto, *
+from (
+  select
+    (select count(*) from pg_catalog.pg_class c
+       join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+      cross join lateral (select coalesce((select split_part(split_part(a,'=',2),'/',1)
+          from unnest(c.relacl::text[]) a where a like 'authenticated=%'),'') as p) g
+      where n.nspname = 'public' and c.relkind = 'r' and g.p ~ '[Dxtm]') as con_sobrantes,
+    (select count(*) from pg_catalog.pg_class c
+       join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+      cross join lateral (select coalesce((select split_part(split_part(a,'=',2),'/',1)
+          from unnest(c.relacl::text[]) a where a like 'authenticated=%'),'') as p) g
+      where n.nspname = 'public' and c.relkind = 'r' and g.p ~ '[arwd]') as con_arwd,
+    (select count(*) from pg_catalog.pg_class c
+       join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+      cross join lateral (select coalesce((select split_part(split_part(a,'=',2),'/',1)
+          from unnest(c.relacl::text[]) a where a like 'authenticated=%'),'') as p) g
+      where n.nspname = 'public' and c.relkind = 'r' and g.p <> '' and g.p ~ '^[Dxtm]+$') as sin_nada_tras_revocar,
+    (select count(*) from pg_catalog.pg_class c
+       join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public' and c.relkind = 'r'
+        and array_to_string(c.relacl,' ') like '%anon=%') as tablas_con_anon
+) as evidencia;
+-- END CHECK_E6_L1_PRECHECK
+
+-- BEGIN CHECK_E6_L1_AUDIT
+-- DESPUÉS del push. ESPERADO: veredicto = 'OK'.
+-- `defectos_restantes` puede quedar en 1 por el mismo motivo que en E5: el
+-- defecto de supabase_admin no se puede alterar desde una migracion que corre
+-- como postgres.
+select case
+         when registrada = 0 then 'ABORTAR: 20261005160000 no esta registrada'
+         when con_arwd_precheck < 0 then 'ABORTAR: anota en con_arwd_precheck el valor que dio el precheck'
+         when con_arwd <> con_arwd_precheck then 'ABORTAR: con_arwd paso de ' || con_arwd_precheck || ' a ' || con_arwd
+           || '; authenticated ha perdido privilegios que el panel usa'
+         when con_sobrantes > 0 then 'ABORTAR: ' || con_sobrantes || ' tablas siguen concediendo D, x, t o m'
+         when defecto_postgres > 0 then 'ABORTAR: el defecto de postgres sigue concediendo los sobrantes'
+         when defectos_restantes > 0 then 'REVISAR: queda el defecto de supabase_admin; una tabla creada desde el panel nacera con ellos'
+         -- `tablas_con_anon` se publica como evidencia pero NO aborta: que
+         -- reaparezcan privilegios de anon es cosa del centinela de E5, no un
+         -- fallo de esta migracion. Un gate que aborta por el trabajo de otro
+         -- confunde a quien despliega.
+         when tablas_con_anon > 0 then 'REVISAR: E6 esta bien, pero hay ' || tablas_con_anon || ' tablas con privilegios para anon; eso lo mira el centinela de E5'
+         else 'OK — con_arwd intacto en ' || con_arwd
+       end as veredicto, *
+from (
+  select
+    -1::bigint as con_arwd_precheck, -- <<< ANOTA AQUI el valor del precheck
+    (select count(*) from supabase_migrations.schema_migrations
+       where version = '20261005160000') as registrada,
+    (select count(*) from pg_catalog.pg_class c
+       join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+      cross join lateral (select coalesce((select split_part(split_part(a,'=',2),'/',1)
+          from unnest(c.relacl::text[]) a where a like 'authenticated=%'),'') as p) g
+      where n.nspname = 'public' and c.relkind = 'r' and g.p ~ '[Dxtm]') as con_sobrantes,
+    (select count(*) from pg_catalog.pg_class c
+       join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+      cross join lateral (select coalesce((select split_part(split_part(a,'=',2),'/',1)
+          from unnest(c.relacl::text[]) a where a like 'authenticated=%'),'') as p) g
+      where n.nspname = 'public' and c.relkind = 'r' and g.p ~ '[arwd]') as con_arwd,
+    (select count(*) from pg_catalog.pg_class c
+       join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public' and c.relkind = 'r'
+        and array_to_string(c.relacl,' ') like '%anon=%') as tablas_con_anon,
+    (select count(*) from pg_catalog.pg_default_acl d
+       left join pg_catalog.pg_namespace n on n.oid = d.defaclnamespace
+      where coalesce(n.nspname,'public') = 'public' and d.defaclobjtype = 'r'
+        and pg_get_userbyid(d.defaclrole) = 'postgres'
+        and array_to_string(d.defaclacl,' ') ~ 'authenticated=[a-z]*[Dxtm]') as defecto_postgres,
+    (select count(*) from pg_catalog.pg_default_acl d
+       left join pg_catalog.pg_namespace n on n.oid = d.defaclnamespace
+      where coalesce(n.nspname,'public') = 'public' and d.defaclobjtype = 'r'
+        and array_to_string(d.defaclacl,' ') ~ 'authenticated=[a-z]*[Dxtm]') as defectos_restantes
+) as evidencia;
+-- END CHECK_E6_L1_AUDIT

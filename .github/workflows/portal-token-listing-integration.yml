@@ -19,6 +19,7 @@ on:
       - "supabase/migrations/*portal_rpcs_drop_legacy_token.sql"
       - "supabase/migrations/*projects_drop_access_token.sql"
       - "supabase/migrations/*anon_loses_table_privileges.sql"
+      - "supabase/migrations/*authenticated_drop_unused_privileges.sql"
       - "supabase/migrations/*anon_privileges_sentinel.sql"
       - "__tests__/anon-privileges-sentinel*"
       - "app/api/internal/anon-privileges-check/route.ts"
@@ -31,6 +32,7 @@ on:
       - "__tests__/portal-rpcs-legacy-removed.integration.test.mjs"
       - "__tests__/access-token-column-dropped.integration.test.mjs"
       - "__tests__/anon-table-privileges-revoked.integration.test.mjs"
+      - "__tests__/authenticated-unused-privileges.integration.test.mjs"
       - "app/dashboard/budgets/_components/budget-form.tsx"
       - "lib/portal-path-redaction.ts"
       - "lib/sentry-portal-scrubbing.ts"
@@ -126,6 +128,8 @@ jobs:
         run: node --test __tests__/access-token-column-dropped.integration.test.mjs
       - name: anon no longer holds table privileges
         run: node --test __tests__/anon-table-privileges-revoked.integration.test.mjs
+      - name: authenticated no longer holds unused privileges
+        run: node --test __tests__/authenticated-unused-privileges.integration.test.mjs
       - name: E5 sentinel matches its documented query and keeps the token isolated
         run: node --import tsx --test __tests__/anon-privileges-sentinel.test.mjs
       - name: E5 sentinel restricts execution to service_role
