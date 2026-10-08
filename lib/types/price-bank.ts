@@ -285,6 +285,8 @@ export interface PriceResolutionResult {
   checked_at: string;
   alternatives: PriceAlternativeV2[];
   warnings: string[];
+  /** Set when the user's own price was not applied because its unit differs. */
+  manual_price_notice?: string;
 }
 
 export interface EffectiveCostBreakdown {

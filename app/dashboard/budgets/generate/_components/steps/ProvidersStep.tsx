@@ -164,7 +164,7 @@ export function ProvidersStep() {
     }
     // A price the user fixed by hand always shows as theirs.
     if (sourceType === "manual_locked") {
-      return { label: "TU PRECIO", className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800" };
+      return { label: "Tu precio", className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800" };
     }
     // Provider enrichment flags take priority (commit 1.1.b.2)
     if (material?.missing_in_selected_provider === true) {
@@ -518,7 +518,7 @@ export function ProvidersStep() {
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="text-sm font-medium text-navy-900 dark:text-white">{m.name}</p>
                               <span
-                                className={`${getBadgeProps(m.sourceType, m.isRealData, m).className} border text-[9px] px-1 rounded-sm uppercase tracking-wider font-semibold`}
+                                className={`${getBadgeProps(m.sourceType, m.isRealData, m).className} border text-[9px] px-1 rounded-sm font-semibold ${m.sourceType === "manual_locked" ? "" : "uppercase tracking-wider"}`}
                                 title={(m as any).provider_fallback_reason || "Fuente de datos"}
                               >
                                 {getBadgeProps(m.sourceType, m.isRealData, m).label}
@@ -548,6 +548,9 @@ export function ProvidersStep() {
                               )}
                               {m.priceCheckedAt && (
                                 <span>Comprobado: {new Date(m.priceCheckedAt).toLocaleDateString("es-ES")}</span>
+                              )}
+                              {m.manualPriceNotice && (
+                                <span className="basis-full font-semibold text-amber-700 dark:text-amber-400">{m.manualPriceNotice}</span>
                               )}
                               {m.sourceType === "manual_locked" ? (
                                 <span className="font-semibold text-green-700 dark:text-green-400">Precio fijado por ti en Precios</span>

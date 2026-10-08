@@ -20,7 +20,7 @@ import {
   type ManualPriceRow,
   type TechnicalPriceRow,
   type EnlazePriceRow,
-  findManualPrice,
+  matchManualPrice,
 } from "@/lib/price-resolver-v2";
 import { buildUniqueCatalogTokenGroups } from "@/lib/price-catalog-search";
 import { canonicalProviderName, providerIdentitySlug } from "@/lib/provider-identity";
@@ -608,6 +608,7 @@ export async function POST(request: Request) {
           evidenceVerified: selectedEvidence?.verified || false,
           evidenceType: selectedEvidence?.evidenceType || undefined,
           evidenceVerification: selectedEvidence?.verification || undefined,
+          manualPriceNotice: r.manual_price_notice,
           alternatives: r.alternatives.map((a): PriceAlternative => {
             const evidence = evidenceByProduct.get(a.product_id);
             const sourceUrl = a.source_url || evidence?.sourceUrl || "";
@@ -772,15 +773,19 @@ export async function POST(request: Request) {
     // ── Step 4: First pass — resolve with levels 1-3 + cache ──
     const resolved: ResolvedPrice[] = [];
     const needsWebSearch: WebSearchRequest[] = [];
+    // Same product as one of the user's prices but in another unit: the line
+    // keeps the next source and carries this notice. Units are never converted.
+    const manualNotices: (string | undefined)[] = [];
 
     for (const mat of materials) {
       const normalized = normalizeMaterialName(mat.materialName);
       const normalizedUnit = normalizeUnit(mat.unit);
       const cacheKey = `${normalized}|${normalizedUnit}|${mat.qualityTier}`;
 
-      const manual = findManualPrice(mat.materialName, mat.unit, manualPrices);
-      if (manual) {
-        resolved.push(buildManualResolvedPrice(mat, manual));
+      const manualMatch = matchManualPrice(mat.materialName, mat.unit, manualPrices);
+      manualNotices.push(manualMatch.unitMismatchNotice);
+      if (manualMatch.price) {
+        resolved.push(buildManualResolvedPrice(mat, manualMatch.price));
         continue;
       }
 
@@ -856,6 +861,12 @@ export async function POST(request: Request) {
         }
       }
     }
+
+    manualNotices.forEach((notice, index) => {
+      if (notice && resolved[index]) {
+        resolved[index] = { ...resolved[index], manualPriceNotice: notice };
+      }
+    });
 
     // ── Step 6: Cache all results (upsert into resolved_prices) ──
     const rowsToUpsert = resolved

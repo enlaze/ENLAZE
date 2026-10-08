@@ -2,7 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { resolveForConcept, findManualPrice } from "../lib/price-resolver-v2.ts";
+import {
+  resolveForConcept,
+  matchManualPrice,
+  manualPriceSimilarity,
+  MANUAL_PRICE_MIN_SIMILARITY,
+} from "../lib/price-resolver-v2.ts";
 import { applyProviderToAIMaterials } from "../lib/provider-materials.ts";
 
 // Decision (b1-mi-precio): a price the user fixed by hand wins over
@@ -110,11 +115,63 @@ test("the closest manual price is chosen, not the first one listed", () => {
     manual({ name: "Cemento cola blanco", unit_price: 99 }),
     manual({ name: "Saco de cemento gris 25 kg", unit_price: 7.77 }),
   ];
-  assert.equal(findManualPrice(input.concept_name, "ud", rows)?.unit_price, 7.77);
+  assert.equal(matchManualPrice(input.concept_name, "ud", rows).price?.unit_price, 7.77);
 });
 
 test("a zero manual price is ignored instead of zeroing the line", () => {
-  assert.equal(findManualPrice(input.concept_name, "ud", [manual({ unit_price: 0 })]), undefined);
+  assert.equal(matchManualPrice(input.concept_name, "ud", [manual({ unit_price: 0 })]).price, undefined);
+});
+
+test("\"Cemento gris\" never takes the price of \"Cemento cola\" (nor the reverse)", () => {
+  assert.ok(manualPriceSimilarity("Cemento gris", "Cemento cola") < MANUAL_PRICE_MIN_SIMILARITY);
+  for (const [mine, line] of [["Cemento gris", "Cemento cola"], ["Cemento cola", "Cemento gris"]]) {
+    const match = matchManualPrice(line, "saco", [manual({ name: mine, unit: "saco" })]);
+    assert.equal(match.price, undefined);
+    assert.equal(match.unitMismatchNotice, undefined);
+  }
+  // A short generic name is not "the same product" as a longer specific one.
+  assert.equal(matchManualPrice("Cemento cola", "saco", [manual({ name: "Cemento", unit: "saco" })]).price, undefined);
+});
+
+test("the similarity threshold accepts the same product written differently", () => {
+  for (const [a, b] of [
+    ["Saco de cemento gris 25 kg", "Cemento gris saco 25kg"],
+    ["Sacos de cemento gris (25 kg)", "Saco de cemento gris 25 kg"],
+    ["Pintura plástica blanca 15 l", "Pintura plastica blanca 15 l interior"],
+  ]) {
+    assert.ok(manualPriceSimilarity(a, b) >= MANUAL_PRICE_MIN_SIMILARITY, `${a} ~ ${b}`);
+  }
+  for (const [a, b] of [
+    ["Azulejo blanco 20x20 mate", "Azulejo blanco 20x20 brillo"],
+    ["Saco de cemento gris 25 kg", "Saco de cemento gris 35 kg"],
+    ["Placa de yeso 13 mm", "Placa de yeso 15 mm"],
+  ]) {
+    assert.ok(manualPriceSimilarity(a, b) < MANUAL_PRICE_MIN_SIMILARITY, `${a} !~ ${b}`);
+  }
+});
+
+test("a manual price in another unit is not applied: next source plus a short notice", () => {
+  const result = resolveForConcept(
+    { ...input, unit: "kg", reference_unit_price: undefined },
+    context,
+    data({
+      manual_prices: [manual({ unit: "saco" })],
+      current_prices: [],
+      technical_prices: [],
+      enlaze_prices: [{ name: "Saco de cemento gris 25 kg", unit: "kg", unit_price: 0.3, chapter: "", supplier_ref: "x" }],
+    }),
+  );
+  assert.equal(result.source_type, "enlaze_base");
+  assert.equal(result.unit_price, 0.3);
+  assert.equal(result.manual_price_notice, "Tu precio es por saco; esta partida va en kg");
+});
+
+test("units are compared after normalising aliases, never converted", () => {
+  assert.ok(matchManualPrice(input.concept_name, "uds", [manual({ unit: "ud" })]).price);
+  assert.ok(matchManualPrice(input.concept_name, "sacos", [manual({ unit: "saco" })]).price);
+  const kg = matchManualPrice(input.concept_name, "kg", [manual({ unit: "saco" })]);
+  assert.equal(kg.price, undefined);
+  assert.match(kg.unitMismatchNotice, /^Tu precio es por saco; esta partida va en kg$/);
 });
 
 test("choosing a provider never replaces a manual material price", () => {
@@ -146,7 +203,7 @@ test("the resolve route reads is_manual_override, never the missing is_locked co
   assert.match(route, /\.eq\("is_manual_override", true\)/);
   // v1 path: manual prices are checked before the cache and never cached.
   const v1 = route.slice(route.indexOf("// ── V1 Path"));
-  assert.ok(v1.indexOf("findManualPrice(") < v1.indexOf("cacheMap.get(cacheKey)"));
+  assert.ok(v1.indexOf("matchManualPrice(") < v1.indexOf("cacheMap.get(cacheKey)"));
   assert.match(v1, /sourceType !== "manual_locked"/);
 });
 
@@ -156,4 +213,17 @@ test("the Precios lock button reads and writes is_manual_override", () => {
   assert.doesNotMatch(page, /row\.source_type === "manual" \?/);
   const types = readFileSync("lib/types/price.ts", "utf8");
   assert.match(types, /PRICE_LIST_COLUMNS[\s\S]*is_manual_override/);
+});
+
+test("the client PDFs never say where a price comes from", () => {
+  const pdf = readFileSync("lib/pdf-generator.ts", "utf8");
+  const start = (name) => pdf.indexOf(`function ${name}(`);
+  const bodies = [
+    pdf.slice(start("generateClientPDFHTML"), start("generateInternalPDFHTML")),
+    pdf.slice(start("renderPresupixClientHTML"), pdf.indexOf("\n}\n", start("renderPresupixClientHTML"))),
+  ];
+  for (const body of bodies) {
+    assert.ok(body.length > 200);
+    assert.doesNotMatch(body, /sourceType|source_type|price_source|confidence|srcIcon|Tu precio/i);
+  }
 });

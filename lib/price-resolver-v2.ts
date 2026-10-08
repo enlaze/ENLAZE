@@ -157,16 +157,19 @@ export function resolveForConcept(
 
   // A price the user fixed by hand wins over every other source, whatever
   // priority_order says. It is never re-ranked against suppliers or n8n.
-  const manual = tryManualLocked(input, data, now);
+  const manualMatch = matchManualPrice(input.concept_name, input.unit, data.manual_prices);
+  const manual = tryManualLocked(input, manualMatch, now);
   if (manual) {
     return { ...manual, alternatives, warnings };
   }
+  const manual_price_notice = manualMatch.unitMismatchNotice;
+  if (manual_price_notice) warnings.push(manual_price_notice);
 
   // Try each level in priority order
   for (const level of priority) {
     const result = tryLevel(level, input, context, data, normalized, now, warnings);
     if (result) {
-      return { ...result, alternatives, warnings };
+      return { ...result, alternatives, warnings, manual_price_notice };
     }
   }
 
@@ -179,7 +182,7 @@ export function resolveForConcept(
     unit_price: 0, effective_price: 0, effective_cost_breakdown: null,
     source_type: "estimated", confidence_score: 0.05,
     selection_reason: "Sin fuente disponible",
-    checked_at: now, alternatives, warnings,
+    checked_at: now, alternatives, warnings, manual_price_notice,
   };
 }
 
@@ -387,28 +390,101 @@ function buildEffectiveCost(
 // ─── Level 1: Manual locked ──────────────────────────────────────────────
 
 /**
- * Best user-fixed price for a concept: the closest name wins, and on a tie
- * the one whose unit matches the requested unit.
+ * Minimum name similarity for a hand-fixed price to apply (0-1).
+ *
+ * The score is a Dice coefficient over significant words, counted in both
+ * directions: 2 * shared / (words in A + words in B). Containment earns no
+ * bonus, so "Cemento" never matches "Cemento cola". At 0.85:
+ *   - names of 2-3 words must match word for word;
+ *   - longer names may differ by a single descriptive word
+ *     ("Pintura plástica blanca 15 l" vs "... 15 l interior" = 0.89);
+ *   - a different variant is rejected ("Azulejo 20x20 mate" vs "... brillo" = 0.75).
+ * Measurements (25 kg, 20x20, 48mm) must agree when both names carry them.
+ * Applying nothing is better than applying the price of another product.
  */
-export function findManualPrice(
+export const MANUAL_PRICE_MIN_SIMILARITY = 0.85;
+
+const MANUAL_STOPWORDS = new Set([
+  "de", "del", "la", "el", "los", "las", "y", "e", "o", "a", "en",
+  "para", "con", "sin", "por", "tipo", "un", "una",
+]);
+
+function manualNameTokens(value: string): string[] {
+  const normalized = value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/,/g, ".")
+    // "25 kg" and "25kg" are the same measurement.
+    .replace(/(\d)\s+(mm|cm|m2|m3|ml|kg|gr|g|l|m)\b/g, "$1$2")
+    .replace(/[^a-z0-9.x]+/g, " ")
+    .trim();
+  const tokens = normalized
+    .split(" ")
+    .map((token) => token.replace(/^\.+|\.+$/g, ""))
+    .filter((token) => token && !MANUAL_STOPWORDS.has(token))
+    // Light plural folding: "sacos" = "saco", "placas" = "placa".
+    .map((token) => (/^[a-z]{4,}s$/.test(token) ? token.slice(0, -1) : token));
+  return Array.from(new Set(tokens));
+}
+
+function isMeasurementToken(token: string): boolean {
+  return /^\d/.test(token);
+}
+
+/** Similarity between a hand-fixed price name and a budget concept (0-1). */
+export function manualPriceSimilarity(a: string, b: string): number {
+  const tokensA = manualNameTokens(a);
+  const tokensB = manualNameTokens(b);
+  if (tokensA.length === 0 || tokensB.length === 0) return 0;
+  const measuresA = tokensA.filter(isMeasurementToken);
+  const measuresB = tokensB.filter(isMeasurementToken);
+  if (
+    measuresA.length > 0 && measuresB.length > 0
+    && (measuresA.length !== measuresB.length || measuresA.some((m) => !measuresB.includes(m)))
+  ) {
+    return 0;
+  }
+  const shared = tokensA.filter((token) => tokensB.includes(token)).length;
+  return (2 * shared) / (tokensA.length + tokensB.length);
+}
+
+export interface ManualPriceMatch {
+  /** The hand-fixed price to apply, when name and unit both agree. */
+  price?: ManualPriceRow;
+  /** Short notice when the product matches but the unit does not. */
+  unitMismatchNotice?: string;
+}
+
+/**
+ * Hand-fixed price for a concept. It applies only to the same product
+ * (similarity >= MANUAL_PRICE_MIN_SIMILARITY) in the same unit. A product
+ * match in another unit is not applied and never converted: the line keeps
+ * the next source of the cascade and gets a short notice instead.
+ */
+export function matchManualPrice(
   conceptName: string,
   unit: string,
   manualPrices: ManualPriceRow[],
-): ManualPriceRow | undefined {
-  return manualPrices
+): ManualPriceMatch {
+  const candidates = manualPrices
     .filter((p) => p.is_manual_override && p.unit_price > 0)
-    .map((p) => ({ p, score: technicalMaterialMatchScore(p.name, conceptName) }))
-    .filter(({ score }) => score >= 0.5)
-    .sort((left, right) =>
-      right.score - left.score
-      || Number(technicalUnitCompatible(unit, right.p.unit)) - Number(technicalUnitCompatible(unit, left.p.unit))
-    )[0]?.p;
+    .map((p) => ({ p, score: manualPriceSimilarity(p.name, conceptName) }))
+    .filter(({ score }) => score >= MANUAL_PRICE_MIN_SIMILARITY)
+    .sort((left, right) => right.score - left.score);
+  const sameUnit = candidates.find(({ p }) => technicalUnitCompatible(unit, p.unit));
+  if (sameUnit) return { price: sameUnit.p };
+  const best = candidates[0];
+  if (!best) return {};
+  return {
+    unitMismatchNotice: `Tu precio es por ${best.p.unit}; esta partida va en ${unit}`,
+  };
 }
 
 function tryManualLocked(
-  input: ResolveConceptInput, data: PrefetchedPriceData, now: string
+  input: ResolveConceptInput, manualMatch: ManualPriceMatch, now: string,
 ): Omit<PriceResolutionResult, "alternatives" | "warnings"> | null {
-  const match = findManualPrice(input.concept_name, input.unit, data.manual_prices);
+  const match = manualMatch.price;
   if (!match) return null;
   return {
     concept_id: null, concept_name: input.concept_name,
