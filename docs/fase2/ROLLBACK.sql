@@ -868,8 +868,9 @@ commit;
 -- END ROLLBACK_E5
 
 
+
 -- BEGIN ROLLBACK_G3_L1B
--- Reponer estos dos cuerpos ANTES de ROLLBACK_G3_L1A: las funciones de
+-- Reponer estos tres cuerpos ANTES de ROLLBACK_G3_L1A: las funciones de
 -- G3 L1b no compilan sin las tres columnas. El orden NO es intercambiable.
 begin;
 create or replace function public.replace_budget_items(p_budget_id uuid, p_items jsonb)
@@ -1385,6 +1386,54 @@ begin
   return to_jsonb(v_budget);
 end;
 $$;
+
+create or replace function budget_internal.replace_items(p_id uuid, p_items jsonb)
+returns integer language plpgsql security invoker set search_path = '' as $fn$
+declare x jsonb; k text; n numeric; v_count integer;
+begin
+  if jsonb_typeof(p_items) is distinct from 'array' then raise exception 'items must be an array' using errcode = '22023'; end if;
+  for x in select value from jsonb_array_elements(p_items) loop
+    if jsonb_typeof(x) <> 'object' or nullif(btrim(x->>'concept'), '') is null then
+      raise exception 'Each item needs concept' using errcode = '22023';
+    end if;
+    foreach k in array array['quantity','unit_price','subtotal','unit_price_cost','subtotal_cost','canonical_confidence'] loop
+      if k in ('quantity','unit_price') and nullif(x->>k, '') is null then
+        raise exception 'Item requires %', k using errcode = '22023';
+      end if;
+      if nullif(x->>k, '') is not null then
+        begin n := (x->>k)::numeric;
+        exception when invalid_text_representation or numeric_value_out_of_range then
+          raise exception 'Invalid item %', k using errcode = '22023';
+        end;
+        if n::text in ('NaN','Infinity','-Infinity') then raise exception 'Item % must be finite', k using errcode = '22023'; end if;
+      end if;
+    end loop;
+  end loop;
+  delete from public.budget_items where budget_id = p_id;
+  insert into public.budget_items (
+    budget_id, sort_order, concept, description, quantity, unit, category, chapter,
+    unit_price, subtotal, unit_price_cost, subtotal_cost, canonical_id,
+    canonical_status, canonical_confidence, canonical_source, canonical_origin,
+    canonical_source_ref, price_type)
+  select p_id, (t.ordinality - 1)::integer, btrim(t.item->>'concept'),
+    coalesce(t.item->>'description', ''), (t.item->>'quantity')::numeric,
+    coalesce(nullif(t.item->>'unit', ''), 'ud'),
+    coalesce(nullif(t.item->>'category', ''), 'otros'), nullif(t.item->>'chapter', ''),
+    (t.item->>'unit_price')::numeric,
+    coalesce(nullif(t.item->>'subtotal', '')::numeric,
+      round((t.item->>'quantity')::numeric * (t.item->>'unit_price')::numeric, 2)),
+    coalesce(nullif(t.item->>'unit_price_cost', '')::numeric, 0),
+    coalesce(nullif(t.item->>'subtotal_cost', '')::numeric,
+      round((t.item->>'quantity')::numeric * coalesce(nullif(t.item->>'unit_price_cost', '')::numeric, 0), 2)),
+    nullif(t.item->>'canonical_id', ''),
+    coalesce(nullif(t.item->>'canonical_status', ''), 'unmatched'),
+    nullif(t.item->>'canonical_confidence', '')::numeric,
+    nullif(t.item->>'canonical_source', ''), nullif(t.item->>'canonical_origin', ''),
+    nullif(t.item->>'canonical_source_ref', ''), nullif(t.item->>'price_type', '')
+  from jsonb_array_elements(p_items) with ordinality t(item, ordinality);
+  get diagnostics v_count = row_count;
+  return v_count;
+end $fn$;
 
 comment on column public.budget_items.price_source_type is
   'G3. Nivel que eligio el resolutor para el precio. Valores esperados: manual_locked, private_tariff, negotiated, historical_approved, preferred_supplier, provider_updated, private_bc3, technical_bank, enlaze_base, market_estimate, estimated. NULL = partida anterior a G3; no significa que careciera de fuente.';

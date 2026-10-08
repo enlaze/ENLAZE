@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { config, guard, read, setup } from "./lib/budget-revision-rpcs-bench.mjs";
 import { detectarControlTransaccion } from "./lib/sql-toplevel.mjs";
-import { originalBodies, upgradedBodies, extractFunction } from "../scripts/g3-l1b-generate.mjs";
+import { originalBodies, deployableOriginalBodies, upgradedBodies, extractFunction } from "../scripts/g3-l1b-generate.mjs";
 
 const migration = read("supabase/migrations/20261008130000_budget_items_price_provenance_writers.sql");
 const rollback = read("docs/fase2/ROLLBACK.sql");
@@ -30,20 +30,24 @@ function hash(value) {
   return createHash("md5").update(JSON.stringify(value)).digest("hex");
 }
 
-test("G3 L1b changes only the two INSERTs and restores literal original bodies", () => {
+test("G3 L1b changes only three INSERTs and restores literal original bodies", () => {
   assert.deepEqual(detectarControlTransaccion(migration), []);
   const originals = originalBodies();
+  const deployable = deployableOriginalBodies();
   const upgraded = upgradedBodies();
   const rollbackL1b = rollback.slice(rollback.indexOf("-- BEGIN ROLLBACK_G3_L1B"),
     rollback.indexOf("-- END ROLLBACK_G3_L1B") + "-- END ROLLBACK_G3_L1B".length);
   for (const [name, signature, end] of [
     ["replace", "create or replace function public.replace_budget_items(", "$function$;"],
     ["update", "create or replace function public.update_budget_with_items(", "$$;"],
+    ["internal", "create or replace function budget_internal.replace_items(", "$fn$;"],
   ]) {
     assert.equal(extractFunction(migration, signature, end), upgraded[name]);
-    assert.equal(extractFunction(rollbackL1b, signature, end), originals[name]);
+    assert.equal(extractFunction(rollbackL1b, signature, end), deployable[name]);
     assert.notEqual(upgraded[name], originals[name]);
   }
+  assert.equal(deployable.internal.replace("create or replace function", "create function"), originals.internal);
+  assert.doesNotMatch(migration, /\bdrop\s+function\b/i);
   assert.match(rollback, /ROLLBACK_G3_L1B[\s\S]*ANTES de ROLLBACK_G3_L1A/);
   assert.match(migration, /user_edited/);
   const vectors = readFileSync(new URL("./fixtures/budget-economic-golden-vectors.json", import.meta.url));
@@ -89,9 +93,18 @@ test("G3 L1b keeps rows and economic vectors byte-identical except provenance", 
     try {
       if (fn === "replace") {
         await db.query("select public.replace_budget_items($1,$2::jsonb)", [budget, JSON.stringify(items)]);
-      } else {
+      } else if (fn === "update") {
         await db.query("select public.update_budget_with_items($1,$2::jsonb,$3::jsonb)",
           [budget, JSON.stringify({ title: "Test", iva_percent: 21 }), JSON.stringify(items)]);
+      } else if (fn === "core") {
+        // This is the wizard's real save path: public.save_budget -> save_core
+        // -> budget_internal.replace_items. Calling the legacy writer here
+        // would leave the most important route untested.
+        await db.query("select public.save_budget($1,$2,$3::jsonb,$4::jsonb)",
+          [budget, 1, JSON.stringify({ title: "Test", subtotal: 46.5,
+            iva_percent: 21, iva_amount: 9.77, total: 56.27 }), JSON.stringify(items)]);
+      } else {
+        assert.fail(`unknown writer ${fn}`);
       }
       return { rows: await rows(), totals: await totals() };
     } finally {
@@ -104,13 +117,18 @@ test("G3 L1b keeps rows and economic vectors byte-identical except provenance", 
   assert.equal(Number(pre.rows[0].partidas), 0);
 
   const before = {};
-  for (const fn of ["replace", "update"]) before[fn] = await run(fn, payload);
+  for (const fn of ["core", "replace", "update"]) before[fn] = await run(fn, payload);
   if (process.env.G3_L1B_SKIP_MIGRATION !== "1") {
     await db.query(migration);
     await db.query("insert into supabase_migrations.schema_migrations(version) values ('20261008130000')");
+    // Mutation: keep both public writers upgraded, but restore the internal
+    // writer. The first assertion below must still fail through save_core.
+    if (process.env.G3_L1B_SKIP_INTERNAL === "1") {
+      await db.query(deployableOriginalBodies().internal);
+    }
   }
 
-  for (const fn of ["replace", "update"]) {
+  for (const fn of ["core", "replace", "update"]) {
     const after = await run(fn, payload);
     assert.equal(hash(after.rows.map((r) => r.economic)), hash(before[fn].rows.map((r) => r.economic)),
       `${fn}: economic row hash changed`);
@@ -131,5 +149,12 @@ test("G3 L1b keeps rows and economic vectors byte-identical except provenance", 
     assert.match((await db.query(pasted)).rows[0].veredicto, /^OK/);
     await db.query(`insert into public.budget_items(budget_id,concept,sort_order) values ($1,'Extra',0)`, [budget]);
     assert.match((await db.query(pasted)).rows[0].veredicto, /^ABORTAR: budget_items paso de 0 a 1 filas$/);
+
+    const rollbackL1b = rollback.slice(rollback.indexOf("-- BEGIN ROLLBACK_G3_L1B"),
+      rollback.indexOf("-- END ROLLBACK_G3_L1B") + "-- END ROLLBACK_G3_L1B".length);
+    await db.query(rollbackL1b);
+    const restored = await run("core", payload);
+    assert.equal(restored.rows[0].price_source_type, null,
+      "rollback must restore the original internal writer without breaking save_core");
   }
 });
