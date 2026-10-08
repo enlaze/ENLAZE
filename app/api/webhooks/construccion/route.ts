@@ -524,9 +524,15 @@ async function triggerAlertProcessing() {
         ? `https://${process.env.VERCEL_URL}`
         : "http://localhost:3000");
 
+    // process-alerts is a system route: it needs the shared secret.
+    const secret = process.env.WEBHOOK_SECRET?.trim() || process.env.AGENT_API_KEY?.trim();
+    if (!secret) {
+      console.error("[Webhook] Sin WEBHOOK_SECRET ni AGENT_API_KEY: no se procesan alertas");
+      return;
+    }
     await fetch(`${baseUrl}/api/prices/process-alerts`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
       body: JSON.stringify({ source: "webhook" }),
     });
   } catch (err) {

@@ -35,6 +35,8 @@ const PUBLIC_API_ROUTES = [
   "/api/prices/n8n-sync",  // n8n polling (Bearer token auth internally)
   "/api/technical-prices/import", // BC3 import (Bearer token auth internally)
   "/api/billing/webhook",  // Stripe (verifica la firma con STRIPE_WEBHOOK_SECRET)
+  "/api/prices/process-alerts",      // Sistema (Bearer WEBHOOK_SECRET/AGENT_API_KEY dentro)
+  "/api/prices/weekly-report/send",  // Sistema (Bearer WEBHOOK_SECRET/AGENT_API_KEY dentro)
 ];
 
 function isPublicRoute(pathname: string): boolean {

@@ -93,3 +93,23 @@ test("shared-secret webhooks compare the bearer with requireBearer (constant tim
     assert.doesNotMatch(source, /validTokens\.includes\(token\)/, file);
   }
 });
+
+test("system routes that email every user require the shared secret", () => {
+  for (const file of [
+    "app/api/prices/process-alerts/route.ts",
+    "app/api/prices/weekly-report/send/route.ts",
+  ]) {
+    const source = readFileSync(file, "utf8");
+    const post = source.slice(source.indexOf("export async function POST("));
+    assert.match(post, /^export async function POST\(request: Request\)/, file);
+    // The bearer check runs before the service client or any query.
+    const bearerAt = post.indexOf('requireBearer(request, "WEBHOOK_SECRET", "AGENT_API_KEY")');
+    const clientAt = post.indexOf("getServiceRoleClient()");
+    assert.ok(bearerAt >= 0 && clientAt > bearerAt, file);
+  }
+  const proxy = readFileSync("proxy.ts", "utf8");
+  assert.match(proxy, /"\/api\/prices\/process-alerts",/);
+  assert.match(proxy, /"\/api\/prices\/weekly-report\/send",/);
+  const construction = readFileSync("app/api/webhooks/construccion/route.ts", "utf8");
+  assert.match(construction, /Authorization: `Bearer \$\{secret\}`/);
+});

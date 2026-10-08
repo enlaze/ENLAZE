@@ -1,13 +1,18 @@
 import { getServiceRoleClient, serviceRoleUnavailable } from "@/lib/supabase-service-role";
 import { NextResponse } from "next/server";
+import { requireBearer } from "@/lib/api-key-auth";
 import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
 import { featureActive } from "@/lib/subscription";
 
 export const maxDuration = 300;
 
 // POST /api/prices/weekly-report/send
-// Called by cron (every Monday) or manually to generate and email weekly reports to all users with alerts
-export async function POST() {
+// Called by cron (every Monday) or manually to generate and email weekly reports to all users with alerts.
+// System route: it emails every user, so it needs the shared secret, not just any logged-in session.
+export async function POST(request: Request) {
+  const denied = requireBearer(request, "WEBHOOK_SECRET", "AGENT_API_KEY");
+  if (denied) return denied;
+
   const supabase = getServiceRoleClient();
   if (!supabase) return serviceRoleUnavailable("prices/weekly-report/send");
 
