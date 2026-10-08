@@ -21,16 +21,18 @@
  *   - Tracks sync runs for auditing
  */
 
-import { createClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
+import { requireBearer } from "@/lib/api-key-auth";
+import { getServiceRoleClient, serviceRoleUnavailable } from "@/lib/supabase-service-role";
 
-// Use service role for webhook (no cookie auth)
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Service role for the webhook (no cookie auth). POST assigns it after
+// checking it exists, before any helper runs: there is no anon-key fallback.
+// getServiceRoleClient() always returns the same cached client, so sharing it
+// at module level between requests is safe.
+let supabase: SupabaseClient;
 
 export const maxDuration = 60;
 
@@ -116,20 +118,12 @@ interface WebhookResult {
 export async function POST(request: Request) {
   const startTime = Date.now();
 
-  // Auth
-  const authHeader = request.headers.get("authorization");
-  const webhookSecret = process.env.WEBHOOK_SECRET;
-
-  if (!webhookSecret) {
-    return NextResponse.json(
-      { error: "WEBHOOK_SECRET no configurado en el servidor" },
-      { status: 500 }
-    );
-  }
-
-  if (authHeader !== `Bearer ${webhookSecret}`) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
+  // Auth: exact, constant-time Bearer check; 500 without WEBHOOK_SECRET.
+  const denied = requireBearer(request, "WEBHOOK_SECRET");
+  if (denied) return denied;
+  const serviceClient = getServiceRoleClient();
+  if (!serviceClient) return serviceRoleUnavailable("pb/webhook");
+  supabase = serviceClient;
 
   let body: WebhookBody;
   try {

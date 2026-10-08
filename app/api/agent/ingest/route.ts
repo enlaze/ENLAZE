@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getServiceRoleClient, serviceRoleUnavailable } from "@/lib/supabase-service-role";
 import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
 import { hasFeature } from "@/lib/subscription";
 import { requireBearer } from "@/lib/api-key-auth";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 // A full payload can touch up to ~8 tables in sequence over separate
 // round-trips; the lease TTL below (180s) must stay comfortably above this.
@@ -22,7 +20,8 @@ export async function POST(req: NextRequest) {
   const denied = requireBearer(req, "AGENT_API_KEY");
   if (denied) return denied;
 
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  const supabase = getServiceRoleClient();
+  if (!supabase) return serviceRoleUnavailable("agent/ingest");
 
   try {
     const payload = await req.json();

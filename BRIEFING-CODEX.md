@@ -32,7 +32,7 @@ n8n (local) → scraping webs proveedores → Gemini AI (normalización) → POS
 - **Auth**: Bearer token → compara contra env vars SYNC_API_KEY, AGENT_API_KEY, WEBHOOK_SECRET (o tabla sync_api_keys)
 - **Body**: `{ provider_name, sector, source_url, products: [{ name, price, unit, category, subcategory, brand, sku }] }`
 - **Comportamiento**: auto-crea proveedores si no existen, upsert productos (actualiza precio si cambió con tracking de tendencia up/down/stable), registra observación en historial
-- **SYNC_API_KEY actual**: `enlaze-sync-2026-precio` (en Vercel env vars)
+- **SYNC_API_KEY actual**: `<SYNC_API_KEY>` (en Vercel env vars)
 
 ### Middleware (`middleware.ts`):
 - `/api/pb/ingest` y `/api/pb/sync/run` están en PUBLIC_API_ROUTES (no requieren cookie auth, manejan su propia auth con Bearer token)
@@ -100,7 +100,7 @@ supabase/migrations/                 ← Migraciones SQL
 - "En presupuesto, poder volver a editarlo para modificar cantidades, precios, nombre del cliente, obra, etc."
 
 ## Variables de entorno en Vercel
-- `SYNC_API_KEY` = `enlaze-sync-2026-precio`
+- `SYNC_API_KEY` = `<SYNC_API_KEY>`
 - `NEXT_PUBLIC_SUPABASE_URL` = URL de Supabase
 - `SUPABASE_SERVICE_ROLE_KEY` = Service role key
 - `WEBHOOK_SECRET` = para webhooks existentes
@@ -109,7 +109,7 @@ supabase/migrations/                 ← Migraciones SQL
 ## Cómo probar que la API funciona
 ```bash
 curl -s -X POST https://enlaze.vercel.app/api/pb/ingest \
-  -H "Authorization: Bearer enlaze-sync-2026-precio" \
+  -H "Authorization: Bearer <SYNC_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"provider_name":"Test","sector":"construccion","products":[{"name":"Cemento Portland 25kg","price":4.95}]}'
 ```

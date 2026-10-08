@@ -30,7 +30,7 @@ Schedule Trigger (24h) + Manual Trigger
 ## ENDPOINTS DE LA PLATAFORMA
 
 ### 1. POST /api/pb/ingest (SOLO para precios retail)
-- **Auth**: `Authorization: Bearer enlaze-sync-2026-precio`
+- **Auth**: `Authorization: Bearer <SYNC_API_KEY>`
 - **Body**:
 ```json
 {
@@ -106,7 +106,7 @@ Esto mete datos falsos en la plataforma. Si el scraping no funciona, NO debería
 ```
 Method: POST
 URL: https://enlaze.vercel.app/api/pb/ingest
-Auth: Header Auth "ENLAZE Sync API" (Authorization: Bearer enlaze-sync-2026-precio)
+Auth: Header Auth "ENLAZE Sync API" (Authorization: Bearer <SYNC_API_KEY>)
 Body: {{ JSON.stringify($json) }}
 ← recibe de: "Code - Validar JSON precios IA"
 ```
@@ -145,7 +145,7 @@ Payload format: { action: "update_prices", sector: "construccion", data: { price
 ```
 
 ## CREDENCIALES EN N8N
-- **"Header Auth ENLAZE Sync API"** (id: 00WTdAFCZp67qL2k): `Authorization: Bearer enlaze-sync-2026-precio` → para /api/pb/ingest
+- **"Header Auth ENLAZE Sync API"** (id: 00WTdAFCZp67qL2k): `Authorization: Bearer <SYNC_API_KEY>` → para /api/pb/ingest
 - **Credential original** (id: MxfBS0YmCERT2Ouh): para /api/webhooks/construccion
 - **Google Gemini API**: usado en todos los nodos Gemini para normalizar datos con IA
 
@@ -154,8 +154,8 @@ Ya reescrito y funcional. Usa puppeteer-core, pagina automáticamente las catego
 
 **Ejecución**:
 ```bash
-SYNC_API_KEY=enlaze-sync-2026-precio node scripts/scraper-precios.js
-SYNC_API_KEY=enlaze-sync-2026-precio node scripts/scraper-precios.js --dry-run --max-products 10
+SYNC_API_KEY=<SYNC_API_KEY> node scripts/scraper-precios.js
+SYNC_API_KEY=<SYNC_API_KEY> node scripts/scraper-precios.js --dry-run --max-products 10
 ```
 
 ## TABLAS SUPABASE
@@ -191,14 +191,14 @@ status, sector, source, provider_name, products_total, products_inserted, produc
 ### Probar /api/pb/ingest (precios retail):
 ```bash
 curl -s -X POST https://enlaze.vercel.app/api/pb/ingest \
-  -H "Authorization: Bearer enlaze-sync-2026-precio" \
+  -H "Authorization: Bearer <SYNC_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"provider_name":"Test","sector":"construccion","products":[{"name":"Cemento Portland 25kg","price":4.95}]}'
 ```
 
 ### Probar el scraper Puppeteer:
 ```bash
-SYNC_API_KEY=enlaze-sync-2026-precio node scripts/scraper-precios.js --dry-run --max-products 5
+SYNC_API_KEY=<SYNC_API_KEY> node scripts/scraper-precios.js --dry-run --max-products 5
 ```
 
 ### Probar webhook (CYPE, BOE, etc):

@@ -48,7 +48,12 @@ const SOURCES = [
 
 // ── Configuración de ENLAZE API ───────────────────────────────────
 const ENLAZE_API_URL = process.env.ENLAZE_API_URL || 'https://enlaze.vercel.app/api/pb/ingest';
-const ENLAZE_API_KEY = process.env.ENLAZE_API_KEY || 'enlaze-sync-2026-precio';
+// Sin valor por defecto: la clave nunca va escrita en el código.
+const ENLAZE_API_KEY = process.env.ENLAZE_API_KEY;
+if (!ENLAZE_API_KEY) {
+  console.error('Falta ENLAZE_API_KEY en el entorno: no se envía nada a ENLAZE.');
+  process.exit(1);
+}
 
 async function scrapeCategory(browser, source) {
   const page = await browser.newPage();

@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+import { getServiceRoleClient, serviceRoleUnavailable } from "@/lib/supabase-service-role";
 
 /**
  * Shared auth + Supabase client for all /api/agent/* endpoints.
@@ -26,7 +22,10 @@ export function verifyAgentRequest(
     );
   }
 
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  // Agent calls act on any user_id: they need the service role. Without it
+  // the route fails (500) instead of silently running with the anon key.
+  const supabase = getServiceRoleClient();
+  if (!supabase) return serviceRoleUnavailable("agent");
   return { supabase, userId };
 }
 
@@ -62,9 +61,8 @@ export async function verifyAgentOrBrowserRequest(
         { status: 400 },
       );
     }
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = getServiceRoleClient();
+    if (!supabase) return serviceRoleUnavailable("agent");
 
     return { supabase, userId };
   }

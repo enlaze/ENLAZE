@@ -17,7 +17,7 @@
 import { headers } from "next/headers";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
-import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { getServiceRoleClient } from "@/lib/supabase-service-role";
 import { buildInspectionContext } from "@/lib/agent/build-context";
 
 export const dynamic = "force-dynamic";
@@ -63,11 +63,6 @@ interface DailySummaryRow {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-function service() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createServiceClient(url, key);
-}
 
 async function resolveBaseUrl(): Promise<string> {
   const h = await headers();
@@ -182,7 +177,18 @@ export default async function AgentInspectorPage({ searchParams }: { searchParam
   const params = await searchParams;
   const selectedUserId = params?.user_id || user.id;
 
-  const svc = service();
+  // Cross-user reads need the service role. Without it, say so: never fall
+  // back to the anon key and show a silently empty inspector.
+  const svc = getServiceRoleClient();
+  if (!svc) {
+    console.error("[agent-inspector] falta SUPABASE_SERVICE_ROLE_KEY: inspector desactivado");
+    return (
+      <main className="prose max-w-3xl">
+        <h1>Agent Inspector</h1>
+        <p>Falta <code>SUPABASE_SERVICE_ROLE_KEY</code> en el servidor: el inspector no puede leer los datos.</p>
+      </main>
+    );
+  }
   // List all agent-enabled profiles for the dropdown (intentionally not deleting
   // the "Panadería San Juan" ghost — see brief Bug C).
   const { data: profilesData } = await svc

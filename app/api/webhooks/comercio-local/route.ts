@@ -1,14 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { getServiceRoleClient, serviceRoleUnavailable } from "@/lib/supabase-service-role";
 import { syncUserPrices } from "@/lib/services/price-sync";
 import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
 import { requireBearer } from "@/lib/api-key-auth";
-
-// Usamos el Service Role Key para operaciones de webhook que necesitan saltarse RLS
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 // POST /api/webhooks/comercio-local - Endpoint exclusivo para n8n de comercio local
 // n8n puede enviar actualizaciones de precios, normativas, etc.
@@ -18,6 +12,10 @@ export async function POST(request: Request) {
     // definida, 500 y no se procesa nada.
     const denied = requireBearer(request, "WEBHOOK_SECRET", "AGENT_API_KEY");
     if (denied) return denied;
+
+    // Service role para saltarse RLS. Sin la clave, 500: nunca la anon key.
+    const supabase = getServiceRoleClient();
+    if (!supabase) return serviceRoleUnavailable("webhooks/comercio-local");
 
     const body = await request.json();
 
