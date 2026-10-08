@@ -1,0 +1,57 @@
+name: Budget price provenance integration
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "supabase/migrations/*budget_items_price_provenance.sql"
+      - "__tests__/budget-items-price-provenance.integration.test.mjs"
+      - "docs/fase2/CHECKS.sql"
+      - "docs/fase2/ROLLBACK.sql"
+      - "lib/price-resolver-v2.ts"
+      - ".github/workflows/budget-price-provenance-integration.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  g3-l1a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      G3_TEST_ACK: DISPOSABLE_ONLY
+      G3_TEST_DATABASE_URL: postgres://postgres:g3_disposable_database_only@127.0.0.1:55436/enlaze_g3_price_provenance_test
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Locked dependencies without installation scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Disposable PostgreSQL 17 only
+        run: |
+          docker run --detach --name enlaze-g3-l1a-db \
+            --publish 127.0.0.1:55436:5432 \
+            --env POSTGRES_PASSWORD=g3_disposable_database_only \
+            --env POSTGRES_DB=enlaze_g3_price_provenance_test \
+            --health-cmd 'pg_isready -h 127.0.0.1 -U postgres -d enlaze_g3_price_provenance_test' \
+            --health-interval 2s --health-timeout 3s --health-retries 5 \
+            postgres:17
+      - name: Wait for disposable database
+        run: |
+          for attempt in $(seq 1 60); do
+            state="$(docker inspect --format '{{.State.Status}} {{.State.Health.Status}}' enlaze-g3-l1a-db)"
+            case "$state" in
+              'running healthy') exit 0 ;;
+              exited*|dead*) exit 1 ;;
+            esac
+            sleep 1
+          done
+          exit 1
+      - name: Migration, gates and resolver vocabulary
+        run: node --test __tests__/budget-items-price-provenance.integration.test.mjs
+      - name: Remove only this job's disposable database
+        if: always()
+        run: docker rm --force enlaze-g3-l1a-db || true

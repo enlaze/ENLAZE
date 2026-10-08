@@ -20,6 +20,7 @@ import {
   type ManualPriceRow,
   type TechnicalPriceRow,
   type EnlazePriceRow,
+  matchManualPrice,
 } from "@/lib/price-resolver-v2";
 import { buildUniqueCatalogTokenGroups } from "@/lib/price-catalog-search";
 import { canonicalProviderName, providerIdentitySlug } from "@/lib/provider-identity";
@@ -123,6 +124,40 @@ async function fetchLatestProductEvidence(
   }
 
   return evidenceByProduct;
+}
+
+function buildManualResolvedPrice(
+  request: PriceRequest,
+  manual: ManualPriceRow,
+): ResolvedPrice {
+  const supplier = manual.supplier_name || "Precio propio";
+  return {
+    materialName: request.materialName,
+    normalizedName: normalizeMaterialName(request.materialName),
+    selectedProductName: manual.name,
+    category: request.category,
+    unit: request.unit,
+    sourceUnit: manual.unit,
+    quantity: request.quantity,
+    qualityTier: request.qualityTier,
+    selectedPrice: manual.unit_price,
+    priceMin: manual.unit_price,
+    priceMedian: manual.unit_price,
+    priceMax: manual.unit_price,
+    selectedSupplier: supplier,
+    sourceUrl: "",
+    sourceType: "manual_locked",
+    confidenceScore: 1,
+    capturedAt: new Date().toISOString(),
+    alternatives: [{
+      supplier,
+      title: manual.name,
+      price: manual.unit_price,
+      unit: manual.unit,
+      qualityTier: request.qualityTier,
+      sourceType: "manual_locked",
+    }],
+  };
 }
 
 // ─── POST /api/prices/resolve ───────────────────────────────────────────────
@@ -291,12 +326,14 @@ export async function POST(request: Request) {
           }
           return { data: Array.from(rowsById.values()) };
         })(),
+        // "Marcar como manual" on the Precios screen sets is_manual_override.
+        // Those prices win over every other source (level 1, no exceptions).
         supabase
           .from("price_items")
-          .select("name, unit_price, unit, supplier_name, source_type, is_locked")
+          .select("name, unit_price, unit, supplier_name, source_type, is_manual_override")
           .eq("user_id", user.id)
           .eq("is_active", true)
-          .eq("is_locked", true),
+          .eq("is_manual_override", true),
         (async () => {
           const rowsByKey = new Map<string, Record<string, unknown>>();
           const searchController = new AbortController();
@@ -354,7 +391,7 @@ export async function POST(request: Request) {
       const mappedCurrentRows = (pbCurrentRows || []).map((row: Record<string, unknown>): CurrentPriceRow => {
           const prod = row.pb_products as Record<string, unknown> | null;
           const prov = row.pb_providers as Record<string, unknown> | null;
-          const concept = prod?.pb_normalized_concepts as Record<string, unknown> | null;
+          const concept = prod?.canonical_concepts as Record<string, unknown> | null;
           const sourceUrl = prod?.source_url
             ? String(prod.source_url)
             : prod?.url
@@ -364,7 +401,7 @@ export async function POST(request: Request) {
             product_id: String(prod?.id ?? ""),
             product_name: String(prod?.commercial_name ?? ""),
             concept_id: concept?.id ? String(concept.id) : null,
-            concept_name: concept?.canonical_name ? String(concept.canonical_name) : null,
+            concept_name: concept?.display_name_es ? String(concept.display_name_es) : null,
             provider_id: String(prov?.id ?? ""),
             provider_name: canonicalProviderName(String(prov?.name ?? ""), sourceUrl),
             provider_province: prov?.province ? String(prov.province) : null,
@@ -483,7 +520,7 @@ export async function POST(request: Request) {
           unit_price: Number(p.unit_price) || 0,
           supplier_name: String(p.supplier_name || ""),
           source_type: String(p.source_type || "manual"),
-          is_locked: Boolean(p.is_locked),
+          is_manual_override: Boolean(p.is_manual_override),
         })),
         historical_prices: [],
         technical_prices: (pbTechnicalRows || []).map((r): TechnicalPriceRow => ({
@@ -571,6 +608,7 @@ export async function POST(request: Request) {
           evidenceVerified: selectedEvidence?.verified || false,
           evidenceType: selectedEvidence?.evidenceType || undefined,
           evidenceVerification: selectedEvidence?.verification || undefined,
+          manualPriceNotice: r.manual_price_notice,
           alternatives: r.alternatives.map((a): PriceAlternative => {
             const evidence = evidenceByProduct.get(a.product_id);
             const sourceUrl = a.source_url || evidence?.sourceUrl || "";
@@ -643,9 +681,22 @@ export async function POST(request: Request) {
     // ── Step 1: Fetch user's price_items (level 1 — user_catalog) ──
     const { data: userPriceItems } = await supabase
       .from("price_items")
-      .select("name, unit_price, unit, supplier_name, source_type")
+      .select("name, unit_price, unit, supplier_name, source_type, is_manual_override")
       .eq("user_id", user.id)
       .eq("is_active", true);
+
+    // Prices the user fixed by hand: checked before the cache and every
+    // other source, so a stale cached market price can never beat them.
+    const manualPrices: ManualPriceRow[] = (userPriceItems || [])
+      .filter(p => p.is_manual_override)
+      .map(p => ({
+        name: String(p.name || ""),
+        unit: String(p.unit || "ud"),
+        unit_price: Number(p.unit_price) || 0,
+        supplier_name: String(p.supplier_name || ""),
+        source_type: String(p.source_type || "manual"),
+        is_manual_override: true,
+      }));
 
     const userPrices = (userPriceItems || []).map(p => ({
       name: p.name,
@@ -722,11 +773,21 @@ export async function POST(request: Request) {
     // ── Step 4: First pass — resolve with levels 1-3 + cache ──
     const resolved: ResolvedPrice[] = [];
     const needsWebSearch: WebSearchRequest[] = [];
+    // Same product as one of the user's prices but in another unit: the line
+    // keeps the next source and carries this notice. Units are never converted.
+    const manualNotices: (string | undefined)[] = [];
 
     for (const mat of materials) {
       const normalized = normalizeMaterialName(mat.materialName);
       const normalizedUnit = normalizeUnit(mat.unit);
       const cacheKey = `${normalized}|${normalizedUnit}|${mat.qualityTier}`;
+
+      const manualMatch = matchManualPrice(mat.materialName, mat.unit, manualPrices);
+      manualNotices.push(manualMatch.unitMismatchNotice);
+      if (manualMatch.price) {
+        resolved.push(buildManualResolvedPrice(mat, manualMatch.price));
+        continue;
+      }
 
       // Check cache first (valid, non-expired entry with real source)
       const cached = cacheMap.get(cacheKey);
@@ -801,9 +862,18 @@ export async function POST(request: Request) {
       }
     }
 
+    manualNotices.forEach((notice, index) => {
+      if (notice && resolved[index]) {
+        resolved[index] = { ...resolved[index], manualPriceNotice: notice };
+      }
+    });
+
     // ── Step 6: Cache all results (upsert into resolved_prices) ──
     const rowsToUpsert = resolved
       .filter(r => r.selectedPrice > 0) // Don't cache zero-price results
+      // Manual prices are read fresh every time; caching them would keep an
+      // old value alive for 48h after the user changes or unlocks it.
+      .filter(r => r.sourceType !== "manual_locked")
       .map(r => buildCacheRow(r, user.id, location || ""));
 
     if (rowsToUpsert.length > 0) {
@@ -822,7 +892,7 @@ export async function POST(request: Request) {
     // ── Response ──
     const summary = {
       total: resolved.length,
-      fromUserCatalog: resolved.filter(r => r.sourceType === "user_catalog").length,
+      fromUserCatalog: resolved.filter(r => r.sourceType === "user_catalog" || r.sourceType === "manual_locked").length,
       fromTechnicalBank: resolved.filter(r => r.sourceType === "technical_bank").length,
       fromEnlaze: resolved.filter(r => r.sourceType === "enlaze_base").length,
       fromN8n: resolved.filter(r => r.sourceType === "n8n_market").length,

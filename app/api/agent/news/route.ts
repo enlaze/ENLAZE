@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getServiceRoleClient, serviceRoleUnavailable } from "@/lib/supabase-service-role";
 import Anthropic from "@anthropic-ai/sdk";
 import {
   getSectorIntel,
@@ -12,10 +12,6 @@ import { requireBearer } from "@/lib/api-key-auth";
 
 export const maxDuration = 30;
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -70,7 +66,8 @@ export async function GET(req: NextRequest) {
       req.nextUrl.searchParams.get("write") === "1" ||
       req.nextUrl.searchParams.get("persist") === "1";
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = getServiceRoleClient();
+    if (!supabase) return serviceRoleUnavailable("agent/news");
 
     const { data: profile } = await supabase
       .from("profiles")

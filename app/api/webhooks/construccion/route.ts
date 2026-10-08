@@ -1,11 +1,15 @@
-import { createClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { requireBearer } from "@/lib/api-key-auth";
+import { getServiceRoleClient, serviceRoleUnavailable } from "@/lib/supabase-service-role";
 
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  serviceRoleKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Service role only. POST checks it exists before doing anything, so the
+// helpers below can rely on it: there is no anon-key fallback.
+function db(): SupabaseClient {
+  const client = getServiceRoleClient();
+  if (!client) throw new Error("SUPABASE_SERVICE_ROLE_KEY no está configurada");
+  return client;
+}
 
 function throwIfSupabaseError(
   error: { message: string } | null,
@@ -20,7 +24,7 @@ async function markUpdate(
   updateId: string,
   status: "completed" | "failed"
 ) {
-  const { error } = await supabaseAdmin
+  const { error } = await db()
     .from("n8n_updates")
     .update({ status, processed_at: new Date().toISOString() })
     .eq("id", updateId);
@@ -34,23 +38,10 @@ export async function POST(request: Request) {
   let updateId: string | null = null;
 
   try {
-    const authHeader = request.headers.get("authorization") || "";
-    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-    const validTokens = [
-      process.env.WEBHOOK_SECRET,
-      process.env.AGENT_API_KEY,
-    ].filter(Boolean);
-
-    if (!token || !validTokens.includes(token)) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-    }
-
-    if (!serviceRoleKey) {
-      return NextResponse.json(
-        { error: "SUPABASE_SERVICE_ROLE_KEY no está configurada" },
-        { status: 503 }
-      );
-    }
+    // Exact, constant-time Bearer check; 500 when neither secret is set.
+    const denied = requireBearer(request, "WEBHOOK_SECRET", "AGENT_API_KEY");
+    if (denied) return denied;
+    if (!getServiceRoleClient()) return serviceRoleUnavailable("webhooks/construccion");
 
     const body = await request.json();
 
@@ -100,7 +91,7 @@ export async function POST(request: Request) {
     }
 
     // Log de la actualizacion
-    const { data: updateLog, error: updateLogError } = await supabaseAdmin
+    const { data: updateLog, error: updateLogError } = await db()
       .from("n8n_updates")
       .insert({
         sector,
@@ -131,7 +122,7 @@ export async function POST(request: Request) {
           }
 
           // Buscar si ya existe
-          const { data: existingRows, error: existingError } = await supabaseAdmin
+          const { data: existingRows, error: existingError } = await db()
             .from("sector_data")
             .select("id")
             .eq("sector", sector)
@@ -177,7 +168,7 @@ export async function POST(request: Request) {
           }
 
           if (existingIds.length > 0) {
-            const { error } = await supabaseAdmin
+            const { error } = await db()
               .from("sector_data")
               .update({
                 value: Number(price.value),
@@ -197,7 +188,7 @@ export async function POST(request: Request) {
 
             throwIfSupabaseError(error, `No se pudo actualizar el precio ${price.title}`);
           } else {
-            const { error } = await supabaseAdmin
+            const { error } = await db()
               .from("sector_data")
               .insert({
                 sector,
@@ -247,7 +238,7 @@ export async function POST(request: Request) {
             throw new Error("Cada normativa necesita title");
           }
 
-          const { data: existingRows, error: existingError } = await supabaseAdmin
+          const { data: existingRows, error: existingError } = await db()
             .from("sector_data")
             .select("id")
             .eq("sector", sector)
@@ -258,7 +249,7 @@ export async function POST(request: Request) {
           const existingIds = (existingRows || []).map((row) => row.id);
 
           if (existingIds.length > 0) {
-            const { error } = await supabaseAdmin
+            const { error } = await db()
               .from("sector_data")
               .update({
                 description: reg.description || "",
@@ -270,7 +261,7 @@ export async function POST(request: Request) {
 
             throwIfSupabaseError(error, `No se pudo actualizar la normativa ${reg.title}`);
           } else {
-            const { error } = await supabaseAdmin
+            const { error } = await db()
               .from("sector_data")
               .insert({
                 sector,
@@ -307,7 +298,7 @@ export async function POST(request: Request) {
             throw new Error("Cada noticia necesita title");
           }
 
-          const { data: existingRows, error: existingError } = await supabaseAdmin
+          const { data: existingRows, error: existingError } = await db()
             .from("sector_data")
             .select("id")
             .eq("sector", sector)
@@ -325,14 +316,14 @@ export async function POST(request: Request) {
           };
 
           if (existingIds.length > 0) {
-            const { error } = await supabaseAdmin
+            const { error } = await db()
               .from("sector_data")
               .update(newsData)
               .in("id", existingIds);
 
             throwIfSupabaseError(error, `No se pudo actualizar la noticia ${newsItem.title}`);
           } else {
-            const { error } = await supabaseAdmin.from("sector_data").insert({
+            const { error } = await db().from("sector_data").insert({
               sector,
               data_type: "news",
               title: newsItem.title,
@@ -417,7 +408,7 @@ async function bridgeToPriceBank(
 
     for (const [provName, items] of byProvider) {
       // Get or create provider
-      const { data: existingProv } = await supabaseAdmin
+      const { data: existingProv } = await db()
         .from("pb_providers")
         .select("id")
         .eq("name", provName)
@@ -428,7 +419,7 @@ async function bridgeToPriceBank(
       if (existingProv && existingProv.length > 0) {
         providerId = existingProv[0].id;
       } else {
-        const { data: newProv } = await supabaseAdmin
+        const { data: newProv } = await db()
           .from("pb_providers")
           .insert({
             name: provName,
@@ -444,7 +435,7 @@ async function bridgeToPriceBank(
 
       // Get or create source
       const sourceName = sourceGroup || "n8n-construccion-scraper";
-      const { data: existingSrc } = await supabaseAdmin
+      const { data: existingSrc } = await db()
         .from("pb_price_sources")
         .select("id")
         .eq("name", sourceName)
@@ -454,12 +445,12 @@ async function bridgeToPriceBank(
       let sourceId: string;
       if (existingSrc && existingSrc.length > 0) {
         sourceId = existingSrc[0].id;
-        await supabaseAdmin
+        await db()
           .from("pb_price_sources")
           .update({ last_checked_at: now, last_success_at: now })
           .eq("id", sourceId);
       } else {
-        const { data: newSrc } = await supabaseAdmin
+        const { data: newSrc } = await db()
           .from("pb_price_sources")
           .insert({
             name: sourceName,
@@ -484,7 +475,7 @@ async function bridgeToPriceBank(
         if (!productName) continue;
         const price = item.value ?? 0;
 
-        const { data: existingProd } = await supabaseAdmin
+        const { data: existingProd } = await db()
           .from("pb_products")
           .select("id, unit_price")
           .eq("provider_id", providerId)
@@ -492,7 +483,7 @@ async function bridgeToPriceBank(
           .limit(1);
 
         if (existingProd && existingProd.length > 0) {
-          await supabaseAdmin
+          await db()
             .from("pb_products")
             .update({
               unit_price: price,
@@ -502,7 +493,7 @@ async function bridgeToPriceBank(
             })
             .eq("id", existingProd[0].id);
         } else {
-          await supabaseAdmin
+          await db()
             .from("pb_products")
             .insert({
               provider_id: providerId,
@@ -533,9 +524,15 @@ async function triggerAlertProcessing() {
         ? `https://${process.env.VERCEL_URL}`
         : "http://localhost:3000");
 
+    // process-alerts is a system route: it needs the shared secret.
+    const secret = process.env.WEBHOOK_SECRET?.trim() || process.env.AGENT_API_KEY?.trim();
+    if (!secret) {
+      console.error("[Webhook] Sin WEBHOOK_SECRET ni AGENT_API_KEY: no se procesan alertas");
+      return;
+    }
     await fetch(`${baseUrl}/api/prices/process-alerts`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
       body: JSON.stringify({ source: "webhook" }),
     });
   } catch (err) {

@@ -18,8 +18,8 @@ Hay **dos generadores en paralelo**, y el bueno es el que nadie llama.
 | Ruta | Cómo fija el precio | ¿La usa la interfaz? |
 |---|---|---|
 | `/api/agent/budget-analysis` (662 líneas) | mete el catálogo en el *prompt* y pide al modelo un `unit_cost` «realista de mercado español» | **sí** |
-| `/api/budgets/generate-v2` (525 líneas) | llama a `resolvePricesForBudget()` del resolutor determinista | **no** |
-| `/api/budgets/analyze`, `/api/budgets/reprice` | — | **no** |
+| `/api/budgets/generate-v2` (525 líneas) | llama a `resolvePricesForBudget()` del resolutor determinista | **no** (borrada el 2026-10-08) |
+| `/api/budgets/analyze`, `/api/budgets/reprice` | — | **no** (`reprice` borrada el 2026-10-08) |
 
 El prompt de la ruta viva llega a admitirlo: «los `unit_cost` son provisionales:
 no los presentes como precios comprobados». Son 1.383 líneas de generador sin
@@ -198,7 +198,8 @@ mal.
 Ya existen dos cortes de **0.50** con este mismo significado:
 `lib/price-resolver-v2.ts:705` incrementa `needs_review`, y
 `app/api/budgets/generate-v2/route.ts:389` selecciona partidas estimadas para
-la siguiente vía. La decisión no debe añadir un tercer número: debe sustituir
+la siguiente vía (esa ruta se borró el 2026-10-08 por no tener llamantes; queda
+solo el corte del resolutor). La decisión no debe añadir un tercer número: debe sustituir
 los tres usos por una política única. Si se aprueba 0.40, esos dos 0.50 y el
 nuevo control deben leer el mismo valor. El número final lo decide quien firma
 los presupuestos, después de medirlo con presupuestos reales.

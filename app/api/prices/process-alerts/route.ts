@@ -1,5 +1,7 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { getServiceRoleClient, serviceRoleUnavailable } from "@/lib/supabase-service-role";
 import { NextResponse } from "next/server";
+import { requireBearer } from "@/lib/api-key-auth";
 import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
 import { featureActive } from "@/lib/subscription";
 
@@ -15,11 +17,14 @@ export const maxDuration = 300;
 // This endpoint is called after price sync (from webhook or cron)
 // It checks all active alerts against current prices and creates notifications
 export async function POST(request: Request) {
+  // System route: it reads and notifies every user's alerts, so it needs the
+  // shared secret, not just any logged-in session.
+  const denied = requireBearer(request, "WEBHOOK_SECRET", "AGENT_API_KEY");
+  if (denied) return denied;
+
   // Use service role for cross-user operations
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  const supabase = getServiceRoleClient();
+  if (!supabase) return serviceRoleUnavailable("prices/process-alerts");
 
   try {
     const body = await request.json().catch(() => ({}));

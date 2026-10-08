@@ -3,8 +3,9 @@
  *
  * Types for the Price Bank V2 system.
  * Maps directly to Supabase tables: pb_providers, pb_products,
- * pb_normalized_concepts, pb_price_sources, pb_price_observations,
- * pb_price_current, pb_sync_runs, pb_sync_run_details.
+ * pb_price_sources, pb_price_observations,
+ * pb_price_current, pb_sync_runs.
+ * Concepts are now read from canonical_concepts, outside this module.
  *
  * Conventions:
  *   - All amounts in EUR, excl. VAT unless suffixed _incl_vat
@@ -285,6 +286,8 @@ export interface PriceResolutionResult {
   checked_at: string;
   alternatives: PriceAlternativeV2[];
   warnings: string[];
+  /** Set when the user's own price was not applied because its unit differs. */
+  manual_price_notice?: string;
 }
 
 export interface EffectiveCostBreakdown {

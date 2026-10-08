@@ -62,12 +62,14 @@ const RUTA = join(DIR_MIGRACIONES, FICHERO);
 // enuncia así a propósito.
 const MIGRACION_SORT_ORDER = "20260901120000_budget_items_sort_order.sql";
 
-// Las DOS migraciones que definen la RPC, en el orden en que deben aplicarse.
-// La segunda redefine a la primera para persistir el coste real de cada línea.
+// Las migraciones que definen la RPC, en el orden en que deben aplicarse.
+// La tercera transporta la procedencia del precio sin alterar los importes;
+// su equivalencia económica se custodia en g3-price-provenance-writers.
 const MIGRACION_COSTES = "20260908111706_replace_budget_items_persist_cost.sql";
-const DEFINIDORAS_ESPERADAS = [FICHERO, MIGRACION_COSTES];
+const MIGRACION_PROCEDENCIA = "20261008130000_budget_items_price_provenance_writers.sql";
+const DEFINIDORAS_ESPERADAS = [FICHERO, MIGRACION_COSTES, MIGRACION_PROCEDENCIA];
 
-// Firma normalizada. Las dos migraciones la escriben con formato distinto —una
+// Firma normalizada. Las migraciones la escriben con formato distinto —una
 // en varias líneas, otra en una sola—, así que compararla exige normalizar el
 // espacio; lo que NO se normaliza son los nombres ni los tipos.
 const FIRMA_CANONICA = "p_budget_id uuid, p_items jsonb";
@@ -954,17 +956,16 @@ describe("FASE 2F-1DB · BLOQUE C — encaje en el historial", () => {
     assert.doesNotThrow(() => comprobarDependenciaDeOrden(ficheros));
   });
 
-  test("las migraciones que definen replace_budget_items son exactamente las dos conocidas, en orden y con la misma firma", () => {
+  test("las migraciones que definen replace_budget_items son exactamente las conocidas, en orden y con la misma firma", () => {
     const definidoras = ficheros.filter((f) =>
       trocearStatements(readFileSync(join(RAIZ, DIR_MIGRACIONES, f), "utf8")).some((s) =>
         /^create\s+or\s+replace\s+function\s+public\.replace_budget_items\b/i.test(s),
       ),
     );
 
-    // El orden importa: la de costes redefine la original, así que aplicarlas
-    // al revés dejaría desplegada la versión sin `unit_price_cost`. Comparar la
-    // lista completa —y no `includes`— es lo que hace que una TERCERA
-    // definición inesperada siga saltando aquí en vez de colarse.
+    // El orden importa: la de costes redefine la original, y G3 añade
+    // procedencia sobre la versión con costes. Comparar la lista completa
+    // —y no `includes`— hace saltar cualquier definición inesperada.
     assert.deepEqual(
       definidoras,
       DEFINIDORAS_ESPERADAS,

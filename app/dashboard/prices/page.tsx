@@ -481,7 +481,7 @@ export default function PricesPage() {
 
   async function handleToggleManual(item: PriceListItem) {
     if (!userId) return;
-    const newVal = !(item.source_type === "manual");
+    const newVal = !item.is_manual_override;
     await supabase
       .from("price_items")
       .update({
@@ -491,7 +491,7 @@ export default function PricesPage() {
       .eq("id", item.id)
       .eq("user_id", userId);
     await loadItems();
-    toast.success(newVal ? "Marcado como manual (no se sobrescribirá en sync)" : "Desbloqueado para sync automático");
+    toast.success(newVal ? "Precio fijado: manda en tus presupuestos y no se sobrescribe en sync" : "Precio desbloqueado");
   }
 
   /* ─── Sync from market (n8n + PB V2) ─────────────────────────────── */
@@ -974,20 +974,21 @@ export default function PricesPage() {
         const isPbV2 = row.source_type === "n8n_sync" && !row.subcategory;
         return (
           <div className="flex items-center justify-end gap-1">
-            {isRetail && !isPbV2 && (
+            {!isPbV2 && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   handleToggleManual(row);
                 }}
-                title={row.source_type === "manual" ? "Desbloquear para sync" : "Marcar como manual"}
+                title={row.is_manual_override ? "Precio fijado por ti. Pulsa para desbloquear" : "Fijar este precio: mandará en tus presupuestos"}
+                aria-pressed={Boolean(row.is_manual_override)}
                 className={`p-1.5 rounded-lg text-xs transition ${
-                  row.source_type === "manual"
+                  row.is_manual_override
                     ? "text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
                     : "text-navy-400 hover:bg-navy-50 dark:text-zinc-500 dark:hover:bg-zinc-800"
                 }`}
               >
-                {row.source_type === "manual" ? "\uD83D\uDD12" : "\uD83D\uDD13"}
+                {row.is_manual_override ? "\uD83D\uDD12" : "\uD83D\uDD13"}
               </button>
             )}
             {isPbV2 && (

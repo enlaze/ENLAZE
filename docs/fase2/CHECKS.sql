@@ -2943,6 +2943,151 @@ from (
 ) as evidencia;
 -- END CHECK_E5_CENTINELA
 
+-- ─────────────────────────────────────────────────────────────────────────────
+-- G3 lote 1a · 20261008120000_budget_items_price_provenance.sql
+-- Solo esquema. No ejecuta escrituras sobre budget_items.
+-- ─────────────────────────────────────────────────────────────────────────────
+-- BEGIN CHECK_G3_L1A_PRECHECK
+-- ANTES del push. ESPERADO: veredicto = 'OK'. ANOTA `partidas` para pegarlo
+-- en partidas_precheck de CHECK_G3_L1A_AUDIT. No uses una cifra histórica.
+select case
+         when registrada > 0 then 'NADA QUE HACER: 20261008120000 ya esta registrada'
+         when columnas_incompatibles > 0 then 'ABORTAR: ' || columnas_incompatibles || ' columnas existentes tienen tipo, nulabilidad o default inesperado'
+         else 'OK'
+       end as veredicto, *
+from (
+  select
+    (select count(*) from supabase_migrations.schema_migrations
+       where version = '20261008120000') as registrada,
+    (select count(*) from public.budget_items) as partidas,
+    (select count(*) from pg_attribute a
+       where a.attrelid = 'public.budget_items'::regclass
+         and a.attname in ('price_source_type','price_confidence','price_checked_at')
+         and a.attnum > 0 and not a.attisdropped) as columnas_presentes,
+    (select count(*) from pg_attribute a
+       left join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum
+       where a.attrelid = 'public.budget_items'::regclass
+         and a.attname in ('price_source_type','price_confidence','price_checked_at')
+         and a.attnum > 0 and not a.attisdropped
+         and (a.attnotnull or d.oid is not null
+              or (a.attname = 'price_source_type' and format_type(a.atttypid,a.atttypmod) <> 'text')
+              or (a.attname = 'price_confidence' and format_type(a.atttypid,a.atttypmod) <> 'numeric(3,2)')
+              or (a.attname = 'price_checked_at' and format_type(a.atttypid,a.atttypmod) <> 'timestamp with time zone'))
+    ) as columnas_incompatibles
+) as evidencia;
+-- END CHECK_G3_L1A_PRECHECK
+
+-- BEGIN CHECK_G3_L1A_AUDIT
+-- DESPUÉS del push. Pega el `partidas` del precheck en el placeholder -1.
+-- No se compara a ojo: un número ausente o cambiado da ABORTAR antes de OK.
+select case
+         when registrada <> 1 then 'ABORTAR: 20261008120000 no esta registrada exactamente una vez'
+         when partidas_precheck < 0 then 'ABORTAR: pega el valor de partidas del precheck en partidas_precheck'
+         when partidas <> partidas_precheck then 'ABORTAR: budget_items paso de ' || partidas_precheck || ' a ' || partidas || ' filas'
+         when columnas <> 3 then 'ABORTAR: se esperaban tres columnas nuevas; hay ' || columnas
+         when tipos_correctos <> 3 then 'ABORTAR: algun tipo de procedencia no coincide'
+         when anulables <> 3 then 'ABORTAR: alguna columna nueva no es anulable'
+         when sin_default <> 3 then 'ABORTAR: alguna columna nueva tiene default'
+         when check_confianza <> 1 then 'ABORTAR: falta el CHECK de confianza validado'
+         when check_fuente <> 0 then 'ABORTAR: price_source_type no debe tener CHECK'
+         when con_valor <> 0 then 'ABORTAR: ' || con_valor || ' partidas ya tienen procedencia escrita en lote 1a'
+         else 'OK — ' || partidas || ' partidas intactas y procedencia inicial a NULL'
+       end as veredicto, *
+from (
+  select
+    -1::bigint as partidas_precheck, -- <<< PEGA AQUI `partidas` del precheck
+    (select count(*) from supabase_migrations.schema_migrations
+       where version = '20261008120000') as registrada,
+    (select count(*) from public.budget_items) as partidas,
+    (select count(*) from pg_attribute a
+       where a.attrelid = 'public.budget_items'::regclass
+         and a.attname in ('price_source_type','price_confidence','price_checked_at')
+         and a.attnum > 0 and not a.attisdropped) as columnas,
+    (select count(*) from pg_attribute a
+       where a.attrelid = 'public.budget_items'::regclass and not a.attisdropped
+         and ((a.attname = 'price_source_type' and format_type(a.atttypid,a.atttypmod) = 'text')
+           or (a.attname = 'price_confidence' and format_type(a.atttypid,a.atttypmod) = 'numeric(3,2)')
+           or (a.attname = 'price_checked_at' and format_type(a.atttypid,a.atttypmod) = 'timestamp with time zone'))
+    ) as tipos_correctos,
+    (select count(*) from pg_attribute a
+       where a.attrelid = 'public.budget_items'::regclass
+         and a.attname in ('price_source_type','price_confidence','price_checked_at')
+         and a.attnum > 0 and not a.attisdropped and not a.attnotnull) as anulables,
+    (select count(*) from pg_attribute a
+       left join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum
+       where a.attrelid = 'public.budget_items'::regclass
+         and a.attname in ('price_source_type','price_confidence','price_checked_at')
+         and a.attnum > 0 and not a.attisdropped and d.oid is null) as sin_default,
+    (select count(*) from pg_constraint c
+       where c.conrelid = 'public.budget_items'::regclass
+         and c.conname = 'ck_budget_items_price_confidence_range'
+         and c.contype = 'c' and c.convalidated) as check_confianza,
+    (select count(*) from pg_constraint c
+       where c.conrelid = 'public.budget_items'::regclass
+         and c.contype = 'c' and pg_get_constraintdef(c.oid) like '%price_source_type%') as check_fuente,
+    (select count(*) from public.budget_items
+       where price_source_type is not null
+          or price_confidence is not null
+          or price_checked_at is not null) as con_valor
+) as evidencia;
+-- END CHECK_G3_L1A_AUDIT
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- G3 lote 1b · 20261008130000_budget_items_price_provenance_writers.sql
+-- Cuatro cuerpos de RPC; ninguna partida debe cambiar durante el despliegue.
+-- ─────────────────────────────────────────────────────────────────────────────
+-- BEGIN CHECK_G3_L1B_PRECHECK
+-- ANTES del push. ANOTA `partidas` y pegalo en CHECK_G3_L1B_AUDIT.
+select case
+         when anterior <> 1 then 'ABORTAR: falta la migracion G3 L1a'
+         when registrada > 0 then 'NADA QUE HACER: G3 L1b ya esta registrada'
+         when columnas <> 3 then 'ABORTAR: faltan columnas de procedencia'
+         when funciones <> 4 then 'ABORTAR: faltan funciones de guardado'
+         else 'OK'
+       end as veredicto, *
+from (
+  select
+    (select count(*) from supabase_migrations.schema_migrations where version = '20261008120000') as anterior,
+    (select count(*) from supabase_migrations.schema_migrations where version = '20261008130000') as registrada,
+    (select count(*) from public.budget_items) as partidas,
+    (select count(*) from pg_attribute where attrelid = 'public.budget_items'::regclass
+       and attname in ('price_source_type','price_confidence','price_checked_at')
+       and attnum > 0 and not attisdropped) as columnas,
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where ((n.nspname = 'public' and p.proname in ('replace_budget_items','update_budget_with_items','duplicate_budget'))
+          or (n.nspname = 'budget_internal' and p.proname = 'replace_items'))
+         and p.prokind = 'f') as funciones
+) as evidencia;
+-- END CHECK_G3_L1B_PRECHECK
+
+-- BEGIN CHECK_G3_L1B_AUDIT
+-- DESPUES del push. Pega `partidas` del precheck en el placeholder -1.
+-- Una diferencia aborta incluso si las dos funciones y la version existen.
+select case
+         when registrada <> 1 then 'ABORTAR: G3 L1b no esta registrada exactamente una vez'
+         when partidas_precheck < 0 then 'ABORTAR: pega partidas del precheck en partidas_precheck'
+         when partidas <> partidas_precheck then 'ABORTAR: budget_items paso de ' || partidas_precheck || ' a ' || partidas || ' filas'
+         when funciones_actualizadas <> 4 then 'ABORTAR: falta procedencia en alguna funcion de guardado'
+         when comentario_actualizado <> 1 then 'ABORTAR: falta user_edited en el comentario de la columna'
+         else 'OK — ' || partidas || ' partidas intactas y cuatro funciones actualizadas'
+       end as veredicto, *
+from (
+  select
+    -1::bigint as partidas_precheck, -- <<< PEGA AQUI `partidas` del precheck
+    (select count(*) from supabase_migrations.schema_migrations where version = '20261008130000') as registrada,
+    (select count(*) from public.budget_items) as partidas,
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where ((n.nspname = 'public' and p.proname in ('replace_budget_items','update_budget_with_items','duplicate_budget'))
+          or (n.nspname = 'budget_internal' and p.proname = 'replace_items'))
+         and p.prokind = 'f'
+         and pg_get_functiondef(p.oid) like '%price_source_type%'
+         and pg_get_functiondef(p.oid) like '%price_confidence%'
+         and pg_get_functiondef(p.oid) like '%price_checked_at%') as funciones_actualizadas,
+    (select count(*) from pg_attribute a
+       where a.attrelid = 'public.budget_items'::regclass and a.attname = 'price_source_type'
+         and col_description(a.attrelid, a.attnum) like '%user_edited%') as comentario_actualizado
+) as evidencia;
+-- END CHECK_G3_L1B_AUDIT
 -- ─────────────────────────────────────────────────────────────────────────────────────
 -- E6 lote 1 · 20261005160000_authenticated_drop_unused_privileges.sql
 -- Retira de `authenticated` TRUNCATE, REFERENCES, TRIGGER y MAINTAIN.

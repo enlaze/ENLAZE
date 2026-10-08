@@ -26,7 +26,7 @@
  * Respuesta:
  * { "ok": true, "inserted": 15, "updated": 3, "errors": 0, "details": [...] }
  */
-import { createClient } from "@supabase/supabase-js";
+import { getServiceRoleClient, serviceRoleUnavailable } from "@/lib/supabase-service-role";
 import { NextResponse } from "next/server";
 import * as crypto from "crypto";
 import {
@@ -125,10 +125,8 @@ export async function POST(request: Request) {
   let isAuthorized = validStaticKeys.includes(token);
 
   // Si no coincide con keys estáticas, verificar en tabla sync_api_keys
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  const supabase = getServiceRoleClient();
+  if (!supabase) return serviceRoleUnavailable("pb/ingest");
 
   if (!isAuthorized) {
     const keyHash = crypto.createHash("sha256").update(token).digest("hex");

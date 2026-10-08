@@ -67,6 +67,12 @@ import {
   type ProcurementKind,
 } from "@/lib/material-procurement";
 import { buildAutosaveSignature } from "@/lib/budget-autosave-signature";
+import {
+  evidenceAfterPriceEdit,
+  evidenceForSave,
+  resolvedPriceEvidence,
+  type BudgetPriceEvidence,
+} from "@/lib/budget-price-provenance";
 
 // The v2 price resolver (/api/prices/resolve, resolver_used: "v2") can
 // return several low-confidence "estimate" source types — market_estimate,
@@ -140,7 +146,7 @@ export function calculateBudgetFinancials(
   };
 }
 
-export interface Partida {
+export interface Partida extends BudgetPriceEvidence {
   id: string;
   concept: string;
   description: string;
@@ -158,7 +164,8 @@ export interface Partida {
   geographic_profile?: string;
   price_source?: string;
   price_source_detail?: string;
-  price_checked_at?: string;
+  /** The user's own price matched this line but in another unit (not applied). */
+  manual_price_notice?: string;
   confidence_score?: number;
   cost_breakdown?: EnginePartida["cost_breakdown"];
   market_adjustment?: EnginePartida["market_adjustment"];
@@ -192,6 +199,9 @@ export function partidasFromBudgetItems(rows: readonly Record<string, unknown>[]
     subtotal_client: number(row.subtotal),
     // budget_items only ever receives the non-optional lines.
     status: "incluida" as const,
+    price_source_type: text(row.price_source_type) || null,
+    price_confidence: row.price_confidence == null ? null : number(row.price_confidence),
+    price_checked_at: text(row.price_checked_at) || null,
   }));
 }
 
@@ -209,7 +219,7 @@ export interface ProviderOption {
   sourceType?: string;
 }
 
-export interface Material {
+export interface Material extends BudgetPriceEvidence {
   id: string;
   name: string;
   specification?: string;
@@ -230,6 +240,8 @@ export interface Material {
   isAvailable?: boolean;
   deliveryDays?: number;
   priceAlternatives?: PriceAlternative[];
+  /** The user's own price matched this material but in another unit (not applied). */
+  manualPriceNotice?: string;
   /** Budget chapter this material is consumed by */
   linkedChapter?: string;
   /** True when the selected provider does not carry this material */
@@ -434,6 +446,7 @@ async function verifyMaterialsAgainstTracker(
         isAvailable: resolved?.isAvailable,
         deliveryDays: resolved?.deliveryDays,
         priceAlternatives: resolved?.alternatives || [],
+        manualPriceNotice: resolved?.manualPriceNotice,
       };
     }
 
@@ -443,6 +456,9 @@ async function verifyMaterialsAgainstTracker(
       ...material,
       unit_price: resolved.selectedPrice,
       subtotal: resolved.selectedPrice * material.quantity,
+      ...resolvedPriceEvidence(
+        resolved.selectedPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt,
+      ),
       provider_id: providerId || "rastreador-enlaze",
       isRealData: isTraceableCommercialPrice(resolved),
       sourceType: resolved.sourceType,
@@ -454,6 +470,7 @@ async function verifyMaterialsAgainstTracker(
       isAvailable: resolved.isAvailable,
       deliveryDays: resolved.deliveryDays,
       priceAlternatives: resolved.alternatives || [],
+      manualPriceNotice: resolved.manualPriceNotice,
     };
   });
 
@@ -1160,6 +1177,10 @@ export function BudgetGenerateProvider({
       const newPartidas = prev.partidas.map(p => {
         if (p.id !== id) return p;
         const updated = { ...p, ...updates };
+        if (updates.unit_price !== undefined && updates.unit_price !== p.unit_price) {
+          Object.assign(updated, evidenceAfterPriceEdit(updated, updates.unit_price, new Date().toISOString()));
+          updated.unit_price = updates.unit_price;
+        }
         // Recalculate
         updated.subtotal_cost = updated.quantity * updated.unit_price;
         updated.unit_price_client = updated.unit_price * multiplier;
@@ -1232,12 +1253,20 @@ export function BudgetGenerateProvider({
       const materials = prev.materials.map(m => {
         if (m.id !== id) return m;
         const updated = { ...m, ...updates };
+        if (updates.unit_price !== undefined && updates.unit_price !== m.unit_price) {
+          Object.assign(updated, evidenceAfterPriceEdit(updated, updates.unit_price, new Date().toISOString()));
+          updated.unit_price = updates.unit_price;
+        }
         updated.subtotal = updated.quantity * updated.unit_price;
         return updated;
       });
       const baseAIMaterials = prev.baseAIMaterials.map((material) => {
         if (material.id !== id) return material;
         const updated = { ...material, ...updates };
+        if (updates.unit_price !== undefined && updates.unit_price !== material.unit_price) {
+          Object.assign(updated, evidenceAfterPriceEdit(updated, updates.unit_price, new Date().toISOString()));
+          updated.unit_price = updates.unit_price;
+        }
         updated.subtotal = updated.quantity * updated.unit_price;
         return updated;
       });
@@ -1365,6 +1394,7 @@ export function BudgetGenerateProvider({
       subtotal: p.subtotal_client,
       unit_price_cost: p.unit_price,
       subtotal_cost: p.subtotal_cost,
+      ...evidenceForSave(p, p.unit_price),
     }));
     const materials = state.materials.filter(m => m.included).map(m => ({
       concept: m.name,
@@ -1377,6 +1407,7 @@ export function BudgetGenerateProvider({
       subtotal: m.subtotal * multiplier,
       unit_price_cost: m.unit_price,
       subtotal_cost: m.subtotal,
+      ...evidenceForSave(m, m.unit_price),
     }));
     return [...partidas, ...materials];
   };
@@ -2240,6 +2271,7 @@ export function BudgetGenerateProvider({
                 isAvailable: resolved?.isAvailable,
                 deliveryDays: resolved?.deliveryDays,
                 priceAlternatives: resolved?.alternatives || [],
+                manualPriceNotice: resolved?.manualPriceNotice,
               };
             }
 
@@ -2248,6 +2280,9 @@ export function BudgetGenerateProvider({
               ...material,
               unit_price: resolved.selectedPrice,
               subtotal: resolved.selectedPrice * material.quantity,
+              ...resolvedPriceEvidence(
+                resolved.selectedPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt,
+              ),
               provider_id: providerId || "rastreador-enlaze",
               isRealData: isTraceableCommercialPrice(resolved),
               sourceType: resolved.sourceType,
@@ -2258,6 +2293,7 @@ export function BudgetGenerateProvider({
               isAvailable: resolved.isAvailable,
               deliveryDays: resolved.deliveryDays,
               priceAlternatives: resolved.alternatives || [],
+              manualPriceNotice: resolved.manualPriceNotice,
             };
           });
 
@@ -2330,7 +2366,10 @@ export function BudgetGenerateProvider({
                 (isSupplyLine && isTraceableCommercialPrice(resolved))
               );
 
-            if (!canUseResolved) return partida;
+            const manual_price_notice = resolved?.manualPriceNotice;
+            if (!canUseResolved) {
+              return manual_price_notice ? { ...partida, manual_price_notice } : partida;
+            }
             verifiedPartidaCount += 1;
             const unitPrice = Math.round(resolved.selectedPrice * 100) / 100;
             return {
@@ -2339,10 +2378,14 @@ export function BudgetGenerateProvider({
               geographic_factor: 1,
               geographic_profile: "Precio del banco técnico o tarifa vinculada",
               price_source: String(resolved.sourceType),
+              manual_price_notice,
               price_source_detail:
                 resolved.selectedProductName || resolved.selectedSupplier || "Banco de precios ENLAZE",
               price_checked_at: resolved.capturedAt,
               confidence_score: resolved.confidenceScore,
+              ...resolvedPriceEvidence(
+                unitPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt,
+              ),
               unit_price: unitPrice,
               subtotal_cost: unitPrice * partida.quantity,
               unit_price_client: unitPrice * multiplier,
