@@ -1,4 +1,5 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { getServiceRoleClient, serviceRoleUnavailable } from "@/lib/supabase-service-role";
 import { NextResponse } from "next/server";
 import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
 import { featureActive } from "@/lib/subscription";
@@ -16,10 +17,8 @@ export const maxDuration = 300;
 // It checks all active alerts against current prices and creates notifications
 export async function POST(request: Request) {
   // Use service role for cross-user operations
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  const supabase = getServiceRoleClient();
+  if (!supabase) return serviceRoleUnavailable("prices/process-alerts");
 
   try {
     const body = await request.json().catch(() => ({}));
