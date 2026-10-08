@@ -38,6 +38,21 @@ COMMENT ON COLUMN public.received_invoices.supplier_address IS
 COMMENT ON COLUMN public.received_invoices.description IS
   'Descripción de la operación facturada. Nota interna aparte, en notes.';
 
+-- 1b. Recuperar el domicilio que ya estaba anotado en la tabla heredada.
+--
+--     `invoices` guardaba `supplier_address`, pero la unificación no lo
+--     trasladó porque en `received_invoices` no existía esa columna todavía.
+--     Al validar con datos reales se vio que una de las facturas trasladadas
+--     llevaba domicilio y lo perdía de vista. La unificación conserva el `id`,
+--     así que se recupera por ahí. Solo rellena lo que está a null, de modo que
+--     no pisa nada escrito después y la reejecución no deshace correcciones.
+UPDATE public.received_invoices ri
+   SET supplier_address = nullif(btrim(i.supplier_address), '')
+  FROM public.invoices i
+ WHERE i.id = ri.id
+   AND ri.supplier_address IS NULL
+   AND nullif(btrim(i.supplier_address), '') IS NOT NULL;
+
 -- 2. Desglose por tipos de IVA.
 --
 --    Una factura con varios tipos (21 % de material y 10 % de mano de obra, por

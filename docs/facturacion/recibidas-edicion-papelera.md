@@ -88,6 +88,15 @@ afecta; la ficha de la factura sí lista los tipos con su base y su cuota.
   dentro del worktree para poder compilar; `npm ci` en el checkout principal lo
   resuelve de verdad.
 
+## Validado con datos reales
+
+Se reprodujo producción —esquema del catálogo, permisos y filas, anonimizadas en
+lo personal— en un PostgreSQL 17 local y desechable, y se aplicaron ahí las dos
+migraciones: 19 comprobaciones, todas correctas. Apareció un dato que se perdía
+(el domicilio del proveedor que `invoices` ya guardaba) y está arreglado.
+Detalle en `validacion-datos-reales.md`; el banco, en
+`supabase/validacion/recibidas/`.
+
 ## Pendiente antes de desplegar
 
 Lo de `unificacion-recibidas.md` sigue vigente y ahora son dos migraciones, en

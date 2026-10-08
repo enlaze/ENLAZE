@@ -190,6 +190,22 @@ test("la migración añade el contenido de factura sin volverlo obligatorio", ()
   assert.deepEqual(migration.match(/ADD COLUMN IF NOT EXISTS \w+ \w+ NOT NULL[^;]*/g), null);
 });
 
+test("rescata el domicilio que la unificación dejaba atrás, sin pisar correcciones", () => {
+  // `invoices` ya guardaba supplier_address, pero la unificación no lo trasladó
+  // porque received_invoices no tenía esa columna todavía. Se vio validando con
+  // datos reales: una de las dos facturas trasladadas lo perdía de vista.
+  const backfill = migration.slice(
+    migration.indexOf("UPDATE public.received_invoices ri"),
+    migration.indexOf("-- 2. Desglose"),
+  );
+  assert.match(backfill, /SET supplier_address = nullif\(btrim\(i\.supplier_address\), ''\)/);
+  // Por id, que la unificación conserva.
+  assert.match(backfill, /WHERE i\.id = ri\.id/);
+  // Solo lo que está a null: reejecutar no deshace lo que se escriba luego.
+  assert.match(backfill, /AND ri\.supplier_address IS NULL/);
+  assert.match(backfill, /AND nullif\(btrim\(i\.supplier_address\), ''\) IS NOT NULL/);
+});
+
 test("el desglose guardado tiene que cuadrar con la base y la cuota de la factura", () => {
   assert.match(migration, /ADD CONSTRAINT received_invoices_vat_breakdown_check/);
   assert.match(migration, /received_invoice_vat_breakdown_is_valid\(vat_breakdown\)/);
