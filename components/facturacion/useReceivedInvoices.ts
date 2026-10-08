@@ -13,11 +13,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { prepareInvoiceImage } from "@/lib/invoice-image-client";
 import {
   getAllReceivedInvoices,
   createReceivedInvoice,
   getExpenseSummary,
+  trashReceivedInvoice,
   paymentMethodLabels,
   type ReceivedInvoiceRow,
   type Supplier,
@@ -25,8 +27,9 @@ import {
 } from "@/lib/suppliers";
 
 import {
-  expenseCategoryLabels, receivedInvoiceDateRange, receivedInvoiceFiscalTotals,
-  receivedInvoicesCsv, type FiscalPeriod,
+  expenseCategoryLabels, receivedInvoiceAmounts, receivedInvoiceDateRange,
+  receivedInvoiceFiscalTotals, receivedInvoicesCsv, parseVatBreakdown,
+  type FiscalPeriod, type VatFormLine,
 } from "@/lib/received-invoices";
 
 type InvoiceClient = { id: string; name: string };
@@ -37,14 +40,24 @@ export const emptyForm = {
   project_id: "",
   category: "general",
   invoice_number: "",
+  /** Serie de la factura del proveedor; el correlativo va en invoice_number. */
+  invoice_series: "",
   supplier_id: "",
   supplier_name: "",
   supplier_nif: "",
+  /** Domicilio fiscal del expedidor; obligatorio en la factura completa. */
+  supplier_address: "",
   issue_date: new Date().toISOString().split("T")[0],
+  /** Solo si la operación es de otra fecha que la de expedición. */
+  operation_date: "",
   due_date: "",
+  /** Descripción de la operación facturada; la nota interna va en notes. */
+  description: "",
   subtotal: "",
   iva_percent: "21",
   irpf_percent: "0",
+  /** Vacío = un tipo único de IVA. Con líneas, manda el desglose. */
+  vat_lines: [] as VatFormLine[],
   payment_method: "transferencia",
   notes: "",
   document_url: "",
@@ -60,12 +73,14 @@ export function useReceivedInvoices(
 ) {
   const [supabase] = useState(() => createClient());
   const toast = useToast();
+  const confirm = useConfirm();
 
   const [invoices, setInvoices] = useState<ReceivedInvoiceRow[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [clients, setClients] = useState<InvoiceClient[]>([]);
   const [projects, setProjects] = useState<InvoiceProject[]>([]);
   const [firstYear, setFirstYear] = useState(new Date().getFullYear());
+  const [clientFilter, setClientFilter] = useState("");
   const [projectFilter, setProjectFilter] = useState(initialProjectId);
   const [categoryFilter, setCategoryFilter] = useState("");
   const [period, setPeriod] = useState<FiscalPeriod>("year");
@@ -83,6 +98,9 @@ export function useReceivedInvoices(
   const [statusFilter, setStatusFilter] = useState("all");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ ...emptyForm, project_id: initialProjectId });
+  /** Id de la factura que se está corrigiendo; vacío cuando el alta es nueva. */
+  const [editingId, setEditingId] = useState("");
+  const [deletingId, setDeletingId] = useState("");
   const [saving, setSaving] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [pendingInvoiceId, setPendingInvoiceId] = useState("");
@@ -92,11 +110,12 @@ export function useReceivedInvoices(
   const filters = useMemo(() => ({
     status: statusFilter,
     supplier_id: supplierFilter || undefined,
+    client_id: clientFilter || undefined,
     project_id: projectFilter || undefined,
     category: categoryFilter || undefined,
     search: search || undefined,
     ...receivedInvoiceDateRange(period, year, month, quarter),
-  }), [statusFilter, supplierFilter, projectFilter, categoryFilter, search, period, year, month, quarter]);
+  }), [statusFilter, supplierFilter, clientFilter, projectFilter, categoryFilter, search, period, year, month, quarter]);
 
   const load = useCallback(async () => {
     const version = ++loadVersion.current.version;
@@ -203,6 +222,99 @@ export function useReceivedInvoices(
     }
   }
 
+  /**
+   * Filtrar por cliente reajusta la obra: una obra de otro cliente dejaría la
+   * lista vacía sin que se vea el motivo.
+   */
+  function handleClientFilter(clientId: string) {
+    setClientFilter(clientId);
+    setProjectFilter((current) => {
+      if (!clientId || !current) return current;
+      const project = projects.find((p) => p.id === current);
+      return project && project.client_id === clientId ? current : "";
+    });
+  }
+
+  /** Abre una factura ya registrada en el mismo formulario, para corregirla. */
+  function handleEditInvoice(invoice: ReceivedInvoiceRow) {
+    if (pendingInvoiceId) {
+      toast.error("Hay una factura con el documento pendiente", {
+        description: "Reintenta primero su conservación.",
+      });
+      return;
+    }
+
+    const lines = parseVatBreakdown(invoice.vat_breakdown);
+    setEditingId(invoice.id);
+    setForm({
+      client_id: invoice.client_id || "",
+      project_id: invoice.project_id || "",
+      category: invoice.category || "general",
+      invoice_number: invoice.invoice_number || "",
+      invoice_series: invoice.invoice_series || "",
+      supplier_id: invoice.supplier_id || "",
+      supplier_name: invoice.supplier_name || "",
+      supplier_nif: invoice.supplier_nif || "",
+      supplier_address: invoice.supplier_address || "",
+      issue_date: invoice.issue_date,
+      operation_date: invoice.operation_date || "",
+      due_date: invoice.due_date || "",
+      description: invoice.description || "",
+      // Con desglose, la base sale de sus líneas y el campo único no se usa.
+      subtotal: lines.length > 0 ? "" : String(invoice.subtotal ?? ""),
+      iva_percent: String(invoice.iva_percent ?? 21),
+      irpf_percent: String(invoice.irpf_percent ?? 0),
+      vat_lines: lines.map((line) => ({ base: String(line.base), rate: String(line.rate) })),
+      payment_method: invoice.payment_method || "transferencia",
+      notes: invoice.notes || "",
+      // Se arrastra tal cual: el documento conservado no se reescribe desde el
+      // navegador, ni al corregir ni al reintentar.
+      document_url: invoice.document_url || "",
+    });
+    setShowForm(true);
+    // La tabla puede ser larga: si no, el formulario se abre fuera de la vista
+    // y parece que el botón no ha hecho nada.
+    if (typeof document !== "undefined") {
+      setTimeout(() => {
+        document
+          .getElementById("received-invoice-form")
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 0);
+    }
+  }
+
+  /** Papelera, no borrado: la factura se conserva y se puede recuperar. */
+  async function handleDeleteInvoice(invoice: ReceivedInvoiceRow) {
+    const ok = await confirm({
+      title: "Mover factura recibida a la papelera",
+      description: `${invoice.invoice_number} de ${invoice.supplier_name}. Se conservará y podrás recuperarla desde Papelera.`,
+      variant: "danger",
+      confirmLabel: "Mover a la papelera",
+    });
+    if (!ok) return;
+
+    setDeletingId(invoice.id);
+    const { moved, error } = await trashReceivedInvoice(supabase, invoice.id);
+    if (error || !moved) {
+      toast.error("No se pudo mover la factura a la papelera");
+      setDeletingId("");
+      return;
+    }
+
+    // Si era la que estaba abierta, el formulario ya no tiene a qué apuntar.
+    if (editingId === invoice.id) {
+      setEditingId("");
+      setShowForm(false);
+      setForm(newForm());
+    }
+    toast.success("Factura movida a la papelera", {
+      description: "Puedes recuperarla desde Papelera.",
+    });
+    await load();
+    setSummary(await getExpenseSummary(supabase));
+    setDeletingId("");
+  }
+
   const isOcrDraftUrl = (value: string) =>
     value.startsWith("storage://received-invoice-documents/") &&
     value.includes("/drafts/");
@@ -252,6 +364,7 @@ export function useReceivedInvoices(
       }
     }
 
+    setEditingId("");
     setForm(newForm());
     setShowForm(true);
   }
@@ -275,6 +388,7 @@ export function useReceivedInvoices(
       }
     }
 
+    setEditingId("");
     setForm(newForm());
     setShowForm(false);
   }
@@ -384,14 +498,15 @@ export function useReceivedInvoices(
     e.preventDefault();
     setSaving(true);
 
-    const subtotal = parseFloat(form.subtotal) || 0;
-    const ivaPct = parseFloat(form.iva_percent) || 0;
-    const irpfPct = parseFloat(form.irpf_percent) || 0;
-    const ivaAmount = subtotal * (ivaPct / 100);
-    const irpfAmount = subtotal * (irpfPct / 100);
-    const totalAmount = subtotal + ivaAmount - irpfAmount;
+    // Con desglose por tipos manda la suma de sus líneas; con un tipo único,
+    // el cálculo de siempre. Vive en lib para poder probar el redondeo aparte.
+    const { subtotal, ivaPct, ivaAmount, irpfPct, irpfAmount, total: totalAmount, breakdown } =
+      receivedInvoiceAmounts(form);
 
-    let invoiceId = pendingInvoiceId;
+    // Corregir una factura y reintentar la conservación del documento de una
+    // recién creada son la misma escritura: un único RPC con todo el contenido.
+    const correcting = Boolean(editingId || pendingInvoiceId);
+    let invoiceId = editingId || pendingInvoiceId;
 
     if (!invoiceId) {
       const { data, error } = await createReceivedInvoice(supabase, {
@@ -399,17 +514,22 @@ export function useReceivedInvoices(
         project_id: form.project_id || null,
         category: form.category,
         invoice_number: form.invoice_number,
+        invoice_series: form.invoice_series.trim() || null,
         supplier_id: form.supplier_id || null,
         supplier_name: form.supplier_name,
         supplier_nif: form.supplier_nif || null,
+        supplier_address: form.supplier_address.trim() || null,
         issue_date: form.issue_date,
+        operation_date: form.operation_date || null,
         due_date: form.due_date || null,
+        description: form.description.trim() || null,
         subtotal,
         iva_percent: ivaPct,
         iva_amount: ivaAmount,
         irpf_percent: irpfPct,
         irpf_amount: irpfAmount,
         total: totalAmount,
+        vat_breakdown: breakdown,
         payment_method: form.payment_method || null,
         notes: form.notes || null,
         document_url: form.document_url || null,
@@ -425,14 +545,14 @@ export function useReceivedInvoices(
         setPendingInvoiceId(invoiceId);
       }
     } else {
-      // A previous submit already created the invoice and only failed while
-      // retrying OCR promotion below. Persist any corrections made to the
-      // form in the meantime, or they are silently discarded once this
-      // retry succeeds and the form closes.
+      // Dos caminos llegan aquí: corregir una factura ya registrada, y el
+      // reintento de una recién creada cuya conservación de documento falló
+      // (ahí, además, hay que no perder las correcciones hechas mientras).
       //
-      // Keep the existing locked financial update. Supplier totals are
-      // derived from received_invoices; classification is saved separately
-      // and any failure keeps the retry open before document promotion.
+      // Todo el contenido va en el MISMO RPC, bajo un solo bloqueo de fila:
+      // antes cliente, obra y categoría se guardaban en un UPDATE aparte que
+      // podía fallar por su cuenta y dejar la factura a medio corregir.
+      // document_url no viaja: el documento solo lo escribe el servidor.
       const { error } = await supabase.rpc("update_received_invoice_and_reconcile", {
         p_invoice_id: invoiceId,
         p_invoice_number: form.invoice_number,
@@ -449,20 +569,22 @@ export function useReceivedInvoices(
         p_total: totalAmount,
         p_payment_method: form.payment_method || null,
         p_notes: form.notes || null,
+        p_client_id: form.client_id || null,
+        p_project_id: form.project_id || null,
+        p_category: form.category,
+        p_invoice_series: form.invoice_series.trim() || null,
+        p_operation_date: form.operation_date || null,
+        p_supplier_address: form.supplier_address.trim() || null,
+        p_description: form.description.trim() || null,
+        p_vat_breakdown: breakdown,
       });
 
       if (error) {
         toast.error("No se pudieron guardar las correcciones", {
-          description: "Reintenta antes de conservar el documento.",
+          description: pendingInvoiceId
+            ? "Reintenta antes de conservar el documento."
+            : "Vuelve a intentarlo.",
         });
-        setSaving(false);
-        return;
-      }
-      const { error: classificationError } = await supabase.from("received_invoices")
-        .update({ client_id: form.client_id || null, project_id: form.project_id || null, category: form.category })
-        .eq("id", invoiceId).select("id").single();
-      if (classificationError) {
-        toast.error("No se pudo guardar la obra o categoría", { description: "Reintenta antes de conservar el documento." });
         setSaving(false);
         return;
       }
@@ -483,7 +605,8 @@ export function useReceivedInvoices(
     }
 
     setPendingInvoiceId("");
-    toast.success("Factura registrada");
+    setEditingId("");
+    toast.success(correcting ? "Factura actualizada" : "Factura registrada");
     setForm(newForm());
     setShowForm(false);
     setJustScanned(false);
@@ -495,6 +618,8 @@ export function useReceivedInvoices(
 
   return {
     invoices, visibleInvoices, suppliers, clients, projects, summary, total, loading, loadError,
+    clientFilter, handleClientFilter, editingId, deletingId,
+    handleEditInvoice, handleDeleteInvoice,
     projectFilter, setProjectFilter, categoryFilter, setCategoryFilter,
     period, setPeriod, year, setYear, month, setMonth, quarter, setQuarter, availableYears,
     page, setPage, fiscalTotals, fiscalPdfHref, exporting, handleExport,

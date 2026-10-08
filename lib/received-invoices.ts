@@ -58,6 +58,64 @@ export function vatBreakdownTotals(lines: VatBreakdownLine[]) {
   };
 }
 
+/** Una línea del desglose tal y como se teclea: importes aún como texto. */
+export type VatFormLine = { base: string; rate: string };
+
+const cents = (n: number) => Math.round((Number.isFinite(n) ? n : 0) * 100);
+
+/**
+ * Importes que se guardan, a partir de lo escrito en el formulario.
+ *
+ * Con varios tipos manda el desglose: la base imponible es la suma de sus
+ * bases y la cuota la suma de sus cuotas, cada una redondeada a céntimos
+ * ANTES de sumar, que es como las compara el CHECK de la migración. En ese caso
+ * `iva_percent` se queda a null, porque no hay un tipo único que anotar.
+ *
+ * Con un tipo único se mantiene el cálculo de siempre: base por el tipo.
+ */
+export function receivedInvoiceAmounts(form: {
+  subtotal: string;
+  iva_percent: string;
+  irpf_percent: string;
+  vat_lines?: VatFormLine[];
+}) {
+  const lines = (form.vat_lines || [])
+    .map((line) => ({ base: parseFloat(line.base) || 0, rate: parseFloat(line.rate) || 0 }))
+    .map((line) => ({ ...line, quota: Math.round(line.base * line.rate) / 100 }));
+
+  const irpfPct = parseFloat(form.irpf_percent) || 0;
+
+  if (lines.length > 0) {
+    const subtotalCents = lines.reduce((sum, line) => sum + cents(line.base), 0);
+    const ivaCents = lines.reduce((sum, line) => sum + cents(line.quota), 0);
+    const subtotal = subtotalCents / 100;
+    const irpfAmount = Math.round(subtotal * irpfPct) / 100;
+    return {
+      subtotal,
+      ivaPct: null as number | null,
+      ivaAmount: ivaCents / 100,
+      irpfPct,
+      irpfAmount,
+      total: (subtotalCents + ivaCents - cents(irpfAmount)) / 100,
+      breakdown: lines as VatBreakdownLine[],
+    };
+  }
+
+  const subtotal = parseFloat(form.subtotal) || 0;
+  const ivaPct = parseFloat(form.iva_percent) || 0;
+  const ivaAmount = subtotal * (ivaPct / 100);
+  const irpfAmount = subtotal * (irpfPct / 100);
+  return {
+    subtotal,
+    ivaPct: ivaPct as number | null,
+    ivaAmount,
+    irpfPct,
+    irpfAmount,
+    total: subtotal + ivaAmount - irpfAmount,
+    breakdown: null as VatBreakdownLine[] | null,
+  };
+}
+
 /** Número que puso la migración a la factura heredada que no traía ninguno. */
 const PLACEHOLDER_NUMBER = /^SIN-NUMERO-/;
 

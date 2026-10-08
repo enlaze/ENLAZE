@@ -216,6 +216,7 @@ export async function updateSupplier(supabase: SupabaseClient, id: string, updat
 export interface ReceivedInvoiceRow extends ReceivedInvoice {
   suppliers: { name: string } | null;
   projects: { name: string } | null;
+  clients: { name: string } | null;
 }
 
 export interface ReceivedInvoiceFilters {
@@ -235,7 +236,7 @@ export async function getReceivedInvoices(
 ) {
   let query = supabase
     .from("received_invoices")
-    .select("*, suppliers(name), projects(name)", { count: "exact" })
+    .select("*, suppliers(name), projects(name), clients(name)", { count: "exact" })
     .is("deleted_at", null)
     .order("issue_date", { ascending: false })
     .order("id", { ascending: true });
