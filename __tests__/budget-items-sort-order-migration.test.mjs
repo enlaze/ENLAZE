@@ -265,12 +265,12 @@ describe("2E-2 · la RPC es la de 2D-5 con exactamente tres cambios", () => {
     );
   });
 
-  test("CASO M4b — esta migración es la ÚLTIMA que redefine la RPC", () => {
+  test("CASO M4b — la cadena de redefiniciones termina en G3 L1b", () => {
     // La cadena de custodia de la función es: `canonical-wiring-edit-rpc.test.mjs`
     // custodia la de 2D-5, y el CASO M1 demuestra que la desplegada es aquélla más tres
-    // cambios. Esa cadena sólo vale mientras la última migración que redefine la RPC sea
-    // ésta. En cuanto alguien añada otra, este caso se pone rojo y avisa de que hay que
-    // prolongar la cadena en vez de dejar que las dos suites midan versiones históricas.
+    // cambios. G3 L1b parte literalmente de esta versión y sólo amplía el INSERT
+    // con procedencia; g3-price-provenance-writers.integration.test.mjs verifica
+    // esa equivalencia. Una redefinición posterior debe prolongar la cadena.
     const dir = path.join(root, "supabase/migrations");
     const queRedefinen = fs
       .readdirSync(dir)
@@ -284,9 +284,9 @@ describe("2E-2 · la RPC es la de 2D-5 con exactamente tres cambios", () => {
 
     assert.equal(
       queRedefinen[queRedefinen.length - 1],
-      path.basename(MIG_2E2),
-      "hay una migración posterior que redefine update_budget_with_items: el CASO M1 " +
-        "estaría comparando dos versiones históricas y nadie custodiaría la que corre",
+      "20261008130000_budget_items_price_provenance_writers.sql",
+      "hay una migración posterior a G3 L1b que redefine update_budget_with_items: " +
+        "hay que prolongar la cadena de equivalencia antes de integrarla",
     );
     assert.ok(
       queRedefinen.includes(path.basename(MIG_2D5)),
