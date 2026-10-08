@@ -39,13 +39,24 @@ export interface ReceivedInvoice {
   category: string;
   category_id: string | null;
   invoice_number: string;
+  /** Serie de la factura del proveedor; el correlativo va en invoice_number. */
+  invoice_series: string | null;
   supplier_name: string;
   supplier_nif: string | null;
+  /** Domicilio fiscal del expedidor, obligatorio en la factura completa. */
+  supplier_address: string | null;
   issue_date: string;
+  /** Fecha de la operación cuando difiere de la de expedición. */
+  operation_date: string | null;
   reception_date: string;
   due_date: string | null;
+  /** Descripción de la operación facturada. Nota interna aparte, en notes. */
+  description: string | null;
+  /** Desglose por tipos de IVA; null cuando hay un tipo único. */
+  vat_breakdown: unknown;
   subtotal: number;
-  iva_percent: number;
+  /** Null cuando la factura trae varios tipos: el detalle va en vat_breakdown. */
+  iva_percent: number | null;
   iva_amount: number;
   irpf_percent: number;
   irpf_amount: number;
@@ -368,6 +379,24 @@ export async function createReceivedInvoice(supabase: SupabaseClient, invoice: P
   }
 
   return { data: data as ReceivedInvoice | null, error };
+}
+
+/**
+ * Manda una factura recibida a la papelera.
+ *
+ * No se borra: `move_to_trash` marca `deleted_at` y la política restrictiva
+ * `received_invoices_hide_trashed` la saca de todas las consultas de la app, así
+ * que los totales por proveedor —que se suman al leer— se ajustan solos y
+ * `restore_trash_item` la devuelve entera desde /dashboard/trash.
+ *
+ * Devuelve false si la factura no es del usuario o ya estaba en la papelera.
+ */
+export async function trashReceivedInvoice(supabase: SupabaseClient, id: string) {
+  const { data, error } = await supabase.rpc("move_to_trash", {
+    p_entity_type: "received_invoice",
+    p_entity_id: id,
+  });
+  return { moved: data === true, error };
 }
 
 export async function updateReceivedInvoice(supabase: SupabaseClient, id: string, updates: Partial<ReceivedInvoice>) {
