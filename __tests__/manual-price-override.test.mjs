@@ -191,15 +191,8 @@ test("choosing a provider never replaces a manual material price", () => {
 });
 
 test("the resolve route reads is_manual_override, never the missing is_locked column", () => {
-  for (const file of [
-    "app/api/prices/resolve/route.ts",
-    "app/api/budgets/reprice/route.ts",
-    "app/api/budgets/generate-v2/route.ts",
-  ]) {
-    const route = readFileSync(file, "utf8");
-    assert.doesNotMatch(route, /is_locked/, file);
-  }
   const route = readFileSync("app/api/prices/resolve/route.ts", "utf8");
+  assert.doesNotMatch(route, /is_locked/);
   assert.match(route, /\.eq\("is_manual_override", true\)/);
   // v1 path: manual prices are checked before the cache and never cached.
   const v1 = route.slice(route.indexOf("// ── V1 Path"));

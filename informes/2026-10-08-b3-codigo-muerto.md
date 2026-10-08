@@ -39,3 +39,7 @@ Las cinco candidatas **no tienen ningún llamante**. He buscado en todo el repos
 ## Revisar con tus ojos en 10 minutos
 
 - Que ninguna pantalla que uses a diario cargue proveedores o productos del banco de precios desde `/api/pb/providers` o `/api/pb/products`. En el código no lo hace ninguna; las pantallas leen Supabase directamente.
+
+## Actualización (2026-10-08, tarde)
+
+Con el permiso de Daniil, borradas las 5 rutas y `lib/budget-generator-v2.ts` (su único importador era `generate-v2`; comprobado con grep en app, lib, components, tests, scripts y services). Rama puesta al día con `main` (que ya incluía b1) antes de borrar, así que no queda conflicto con b1. Documentos actualizados: `PENDIENTES.md`, `docs/fase3/G1-PRECIOS-DETERMINISTAS.md`, `docs/architecture-budget-v2.md` (nota), comentario de `lib/plans.ts`, y la prueba de b1 que leía `reprice` y `generate-v2`.
