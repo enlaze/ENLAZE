@@ -391,7 +391,7 @@ export async function POST(request: Request) {
       const mappedCurrentRows = (pbCurrentRows || []).map((row: Record<string, unknown>): CurrentPriceRow => {
           const prod = row.pb_products as Record<string, unknown> | null;
           const prov = row.pb_providers as Record<string, unknown> | null;
-          const concept = prod?.pb_normalized_concepts as Record<string, unknown> | null;
+          const concept = prod?.canonical_concepts as Record<string, unknown> | null;
           const sourceUrl = prod?.source_url
             ? String(prod.source_url)
             : prod?.url
@@ -401,7 +401,7 @@ export async function POST(request: Request) {
             product_id: String(prod?.id ?? ""),
             product_name: String(prod?.commercial_name ?? ""),
             concept_id: concept?.id ? String(concept.id) : null,
-            concept_name: concept?.canonical_name ? String(concept.canonical_name) : null,
+            concept_name: concept?.display_name_es ? String(concept.display_name_es) : null,
             provider_id: String(prov?.id ?? ""),
             provider_name: canonicalProviderName(String(prov?.name ?? ""), sourceUrl),
             provider_province: prov?.province ? String(prov.province) : null,
