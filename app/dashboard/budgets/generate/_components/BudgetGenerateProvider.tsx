@@ -140,6 +140,19 @@ export function calculateBudgetFinancials(
   };
 }
 
+/** Aviso normativo devuelto por el análisis (se pinta como título + descripción). */
+export interface RegulatoryNote {
+  title?: string;
+  description?: string;
+  [key: string]: unknown;
+}
+
+/** Fase del calendario de obra devuelta por el análisis. */
+export interface CalendarPhase {
+  duration_days?: number;
+  [key: string]: unknown;
+}
+
 export interface Partida {
   id: string;
   concept: string;
@@ -637,6 +650,9 @@ export interface BudgetState {
   validationError: string | null;
 
   // Dynamic Sector Data
+  // Campos del formulario de alcance; sus claves vienen de la configuración
+  // del sector en la base, así que no hay un tipo cerrado que darles aquí.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   sectorData: Record<string, any>;
   // Partidas
   partidas: Partida[];
@@ -663,8 +679,8 @@ export interface BudgetState {
   aiInsights: {
     summary?: string;
     confidence_score?: number;
-    regulatory_notes?: any[];
-    calendar_phases?: any[];
+    regulatory_notes?: RegulatoryNote[];
+    calendar_phases?: CalendarPhase[];
     missing_questions?: string[];
     estimated_timeline?: {
       total_duration_days?: number;
@@ -734,6 +750,7 @@ export interface BudgetState {
 interface BudgetContextProps {
   state: BudgetState;
   updateState: (updates: Partial<BudgetState>) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ver sectorData
   updateSectorData: (key: string, value: any) => void;
   nextStep: () => void;
   prevStep: () => void;
@@ -873,7 +890,19 @@ export function BudgetGenerateProvider({
         if (!mounted) return;
 
         // Normalization logic for providers
-        function normalizeSupplierName(item: any): string {
+        function normalizeSupplierName(item: {
+          supplier_name?: unknown;
+          source_url?: unknown;
+          description?: unknown;
+          name?: unknown;
+          category?: unknown;
+          source?: unknown;
+          provider?: unknown;
+          provider_name?: unknown;
+          supplier?: unknown;
+          source_type?: unknown;
+          metadata?: { source?: unknown } | null;
+        }): string {
           const rawSource = [item.supplier_name, item.source_url, item.description, item.name, item.category, item.source, item.provider, item.metadata?.source].join(" ").toLowerCase();
 
           if (activeSector === "construccion") {
@@ -1127,6 +1156,7 @@ export function BudgetGenerateProvider({
     }));
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ver sectorData
   const updateSectorData = (key: string, value: any) => {
     setState(prev => ({
       ...prev,
@@ -1200,8 +1230,8 @@ export function BudgetGenerateProvider({
         const provName = provOption?.name || id;
 
         const enriched = applyProviderToAIMaterials(
-          prev.baseAIMaterials as any,
-          prev.allFetchedMaterials as any,
+          prev.baseAIMaterials,
+          prev.allFetchedMaterials,
           id,
           provName
         );
@@ -1577,7 +1607,7 @@ export function BudgetGenerateProvider({
     try {
       const outcome = await saveDraftOrThrow(manual);
       return outcome.skipped ? null : outcome.budgetId;
-    } catch (err: any) {
+    } catch (err: unknown) {
       const errorMsg = budgetRevisionErrorMessage(err);
       const conflict = isBudgetRevisionConflict(err);
       if (conflict) {
@@ -1672,7 +1702,7 @@ export function BudgetGenerateProvider({
       analytics.budgetFinalized(budgetId, state.totals.clientPrice * (1 + state.ivaPercent / 100));
       return budgetId;
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       const errorMsg = budgetRevisionErrorMessage(err);
       const conflict = isBudgetRevisionConflict(err);
       if (conflict) {
@@ -1920,6 +1950,9 @@ export function BudgetGenerateProvider({
         occupied_during_works: state.sectorData.occupied_during_works ?? false,
         building_age_band: state.sectorData.building_age_band || "unknown",
       };
+      // Respuesta JSON de /api/agent/budget-analysis (IA o motor determinista);
+      // su forma la define esa ruta y aún no tiene un tipo compartido.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let data: any;
       try {
         const res = await fetch("/api/agent/budget-analysis", {
@@ -1952,7 +1985,8 @@ export function BudgetGenerateProvider({
       const multiplier = marginMultiplier(state.marginPercent);
 
       // Map suggested_items to Partidas
-      let newPartidas: Partida[] = (data.suggested_items || []).map((item: any, idx: number) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- elementos de `data`
+      const newPartidas: Partida[] = (data.suggested_items || []).map((item: any, idx: number) => {
         const cost = item.unit_cost || item.unit_price || 0;
         const qty = item.quantity || 1;
         return {
@@ -1974,6 +2008,7 @@ export function BudgetGenerateProvider({
 
       // Map materials AND build provider options from them
       const provMap = new Map<string, { name: string; count: number; total: number; isReal: boolean; sourceType: string }>();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- elementos de `data`
       const newMaterials: Material[] = (data.suggested_materials || []).map((item: any, idx: number) => {
         const rawSupplier = item.supplier_name || "Referencia mercado";
         const provId = rawSupplier.toLowerCase().replace(/[^a-z0-9]/g, '-') || "generic";
@@ -2060,7 +2095,7 @@ export function BudgetGenerateProvider({
         // A) Convert AI partidas to EnginePartida, normalize quantities + add missing chapters
         const engineItems: EnginePartida[] = newPartidas.map(p => ({
           ...p,
-          chapter: (p as any).chapter || "",
+          chapter: p.chapter || "",
           status: (p.status || "incluida") as "incluida" | "estimada" | "opcional",
         }));
 
@@ -2466,7 +2501,7 @@ export function BudgetGenerateProvider({
         : data.calendar_phases || [];
       const executionDays = engineTimeline
         ? Math.round((engineTimeline.execution_working_days_min + engineTimeline.execution_working_days_max) / 2)
-        : calendarPhases.reduce((s: number, p: any) => s + (p.duration_days || 0), 0);
+        : calendarPhases.reduce((s: number, p: { duration_days?: number }) => s + (p.duration_days || 0), 0);
       const totalDays = engineTimeline
         ? Math.round(((engineTimeline.total_weeks_min + engineTimeline.total_weeks_max) / 2) * 5)
         : executionDays;
@@ -2604,12 +2639,12 @@ export function BudgetGenerateProvider({
       }
       return true;
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("AI Analysis failed:", error);
       setState(prev => ({
         ...prev,
         isAnalyzing: false,
-        analysisError: error.message,
+        analysisError: (error as Error).message,
         priceVerification: {
           ...prev.priceVerification,
           status: "error",

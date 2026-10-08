@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       .replace(/\//g, "_")
       .replace(/=+$/, "");
 
-    const draftBody: any = {
+    const draftBody: { message: { raw: string; threadId?: string } } = {
       message: {
         raw: encodedMessage
       }

@@ -45,6 +45,9 @@ test("catalogue search adds supplier synonyms without weakening exact validation
     [
       ["imprimacion", "fijadora"],
       ["imprimacion"],
+      // 3e0230f añadió "fondo fijador" a propósito (el material de la cesta
+      // pasó a ser "Fondo fijador acrílico 15 L"); la prueba no se actualizó.
+      ["fondo", "fijador"],
       ["fijador"],
     ],
   );

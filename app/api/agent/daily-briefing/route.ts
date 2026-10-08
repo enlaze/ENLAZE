@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
       fetchModule("sheets")
     ]);
 
-    const modules: Record<string, any> = {};
+    const modules: Record<string, unknown> = {};
     const module_status: Record<string, string> = {};
     const summaryParts: string[] = [];
 

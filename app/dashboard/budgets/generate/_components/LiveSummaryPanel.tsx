@@ -115,8 +115,8 @@ export function LiveSummaryPanel() {
       <h3 className="text-lg font-bold text-navy-900 dark:text-white mb-4">Resumen en vivo</h3>
 
       {isConstruction && activeProvider && (() => {
-        const matchedCount = materials?.filter(m => (m as any).provider_adjustment?.applied === true).length || 0;
-        const missingCount = materials?.filter(m => (m as any).missing_in_selected_provider === true).length || 0;
+        const matchedCount = materials?.filter(m => m.provider_adjustment?.applied === true).length || 0;
+        const missingCount = materials?.filter(m => m.missing_in_selected_provider === true).length || 0;
         const hasEnrichment = matchedCount > 0 || missingCount > 0;
         return (
           <div className="bg-navy-50 dark:bg-zinc-800/50 p-3 rounded-xl mb-4 border border-navy-100 dark:border-zinc-700">
@@ -470,7 +470,7 @@ export function LiveSummaryPanel() {
             <li className="mb-2">
               <strong className="block text-xs uppercase opacity-80 mb-1">Avisos normativos:</strong>
               <ul className="list-disc pl-4 space-y-1">
-                {state.aiInsights.regulatory_notes.map((n: any, idx: number) => (
+                {state.aiInsights.regulatory_notes.map((n, idx: number) => (
                   <li key={idx}><strong>{n.title}:</strong> {n.description}</li>
                 ))}
               </ul>

@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { encryptToken, safeDecryptToken } from "@/lib/crypto";
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ? process.env.GOOGLE_CLIENT_ID.replace(/^["']|["']$/g, '').trim() : undefined;
@@ -44,9 +45,8 @@ export interface AccessTokenInfo {
  * this to render `{ connected: false, status: 'decrypt_failed', ... }` instead
  * of dying with a 500.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getAccessTokenInfo(
-  supabase: any,
+  supabase: SupabaseClient,
   userId: string,
   module: string,
 ): Promise<AccessTokenInfo> {
@@ -198,8 +198,7 @@ export async function getAccessTokenInfo(
  * {@link getAccessTokenInfo} directly.
  */
 export async function getValidAccessToken(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
+  supabase: SupabaseClient,
   userId: string,
   module: string,
 ): Promise<string | null> {

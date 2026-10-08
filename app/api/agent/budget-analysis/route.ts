@@ -162,7 +162,7 @@ export async function POST(request: Request) {
         ? sharedTrackerProductsCount ?? 0
         : privateTrackerProductsCount ?? 0;
 
-    const technicalDocuments = await Promise.all((technicalDocumentsData || []).map(async (document: any) => {
+    const technicalDocuments = await Promise.all((technicalDocumentsData || []).map(async (document) => {
       const publicMarker = "/storage/v1/object/public/project-docs/";
       const storedValue = String(document.file_url || "");
       const storedPath = storedValue.includes(publicMarker)
@@ -247,7 +247,7 @@ RASTREADOR DE PRECIOS ENLAZE:
 
     const technicalDocumentsContext = technicalDocuments.length > 0
       ? `DOCUMENTACION TECNICA SELECCIONADA:
-${technicalDocuments.map((doc: any) => {
+${technicalDocuments.map((doc) => {
   const extracted = doc.extracted_measurements
     ? ` | Mediciones extraidas: ${JSON.stringify(doc.extracted_measurements).slice(0, 1500)}`
     : "";
@@ -480,8 +480,8 @@ Tipo: ${service_type || "general"}
 
 Para construccion necesito MINIMO 20 partidas y 15 materiales. Los precios de producto son provisionales hasta la verificacion del rastreador.`;
 
-    const messageContent: any[] = [];
-    for (const doc of technicalDocuments as any[]) {
+    const messageContent: Anthropic.Messages.ContentBlockParam[] = [];
+    for (const doc of technicalDocuments) {
       const analysisUrl = doc.analysis_url || doc.file_url;
       if (!analysisUrl) continue;
       const mimeType = String(doc.mime_type || "").toLowerCase();
@@ -501,6 +501,10 @@ Para construccion necesito MINIMO 20 partidas y 15 materiales. Los precios de pr
     }
     messageContent.push({ type: "text", text: userPrompt });
 
+    // JSON del modelo o del motor determinista; la forma real es más ancha que
+    // el tipo del motor (data_sources, price_items_count...). Tiparlo es una
+    // refactorización aparte, no un arreglo de lint.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let result: any;
     let aiFallbackReason = "";
     const aiPolicy = getAiUsagePolicy();
@@ -619,7 +623,7 @@ Para construccion necesito MINIMO 20 partidas y 15 materiales. Los precios de pr
 
     // Post-processing: ensure timeline exists
     if (!result.estimated_timeline && result.calendar_phases.length > 0) {
-      const totalDays = result.calendar_phases.reduce((s: number, p: any) => s + (p.duration_days || 0), 0);
+      const totalDays = result.calendar_phases.reduce((s: number, p: { duration_days?: number }) => s + (p.duration_days || 0), 0);
       result.estimated_timeline = {
         total_duration_days: totalDays,
         total_duration_weeks: Math.ceil(totalDays / 5),
@@ -641,7 +645,7 @@ Para construccion necesito MINIMO 20 partidas y 15 materiales. Los precios de pr
       sector_price_count: refPrices.length,
       sector_regulation_count: regulations.length,
       real_suppliers: realSuppliers,
-      documents_used: technicalDocuments.map((doc: any) => ({ id: doc.id, name: doc.name })),
+      documents_used: technicalDocuments.map((doc) => ({ id: doc.id, name: doc.name })),
       analysis_mode: result.analysis_mode || "external_enhanced",
       using_ai_fallback: result.analysis_mode === "deterministic_engine",
       ai_fallback_reason: aiFallbackReason || result.data_sources?.ai_fallback_reason || "",
@@ -655,8 +659,8 @@ Para construccion necesito MINIMO 20 partidas y 15 materiales. Los precios de pr
     console.log(`[budget-analysis] OK: ${result.suggested_items.length} partidas, ${result.suggested_materials.length} materials, area=${result.detected_scope?.area_m2}m2`);
 
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[budget-analysis] Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }
 }

@@ -2,6 +2,19 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
+interface ComparedProduct {
+  id: string;
+  commercial_name: string | null;
+  description: string | null;
+  brand: string | null;
+  sale_unit: string | null;
+  unit_price: number | string | null;
+  is_available: boolean | null;
+  updated_at: string | null;
+  provider_id: string | null;
+  pb_providers: { id: string; name: string | null; website: string | null } | null;
+}
+
 export async function GET(request: Request) {
   const cookieStore = await cookies();
   const supabase = createServerClient(
@@ -43,8 +56,11 @@ export async function GET(request: Request) {
     if (error) throw error;
 
     // Group by similar product name (fuzzy grouping)
-    const groups: Record<string, any[]> = {};
-    for (const p of (products || [])) {
+    // pb_providers es una relación muchos-a-uno: PostgREST devuelve un objeto,
+    // aunque el cliente sin tipos generados lo infiera como array.
+    const rows = (products || []) as unknown as ComparedProduct[];
+    const groups: Record<string, ComparedProduct[]> = {};
+    for (const p of rows) {
       // Normalize name for grouping: lowercase, remove brand, trim
       const normalized = (p.commercial_name || "")
         .toLowerCase()
@@ -70,7 +86,7 @@ export async function GET(request: Request) {
     const comparisons = Object.entries(groups)
       .map(([key, items]) => ({
         product_name: items[0].commercial_name,
-        providers: items.map((p: any) => ({
+        providers: items.map((p) => ({
           provider_id: p.pb_providers?.id || p.provider_id,
           provider_name: p.pb_providers?.name || "Desconocido",
           provider_website: p.pb_providers?.website,
@@ -82,19 +98,19 @@ export async function GET(request: Request) {
           is_available: p.is_available,
           updated_at: p.updated_at,
         })),
-        min_price: Math.min(...items.map((p: any) => Number(p.unit_price) || Infinity)),
-        max_price: Math.max(...items.map((p: any) => Number(p.unit_price) || 0)),
+        min_price: Math.min(...items.map((p) => Number(p.unit_price) || Infinity)),
+        max_price: Math.max(...items.map((p) => Number(p.unit_price) || 0)),
         price_spread_pct: items.length > 1
-          ? ((Math.max(...items.map((p: any) => Number(p.unit_price) || 0)) -
-              Math.min(...items.map((p: any) => Number(p.unit_price) || Infinity)) ) /
-             Math.min(...items.map((p: any) => Number(p.unit_price) || 1)) * 100).toFixed(1)
+          ? ((Math.max(...items.map((p) => Number(p.unit_price) || 0)) -
+              Math.min(...items.map((p) => Number(p.unit_price) || Infinity)) ) /
+             Math.min(...items.map((p) => Number(p.unit_price) || 1)) * 100).toFixed(1)
           : "0",
       }))
       .sort((a, b) => b.providers.length - a.providers.length);
 
     return NextResponse.json({ comparisons });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }
 

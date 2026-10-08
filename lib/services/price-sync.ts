@@ -1,10 +1,45 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 
+// Lo que llega de n8n o del sync manual. Los importes pueden venir como
+// número o como texto; parseFloat(String(x)) da lo mismo que parseFloat(x).
+type MarketPriceValue = string | number | null | undefined;
+
+export interface MarketPriceMetadata {
+  name?: string;
+  category?: string;
+  subcategory?: string;
+  unit?: string;
+  unit_price?: MarketPriceValue;
+  value?: MarketPriceValue;
+  source?: string;
+  source_url?: string;
+  confidence_score?: number;
+  captured_at?: string;
+  purchase_price?: MarketPriceValue;
+  recommended_sale_price?: MarketPriceValue;
+  gross_margin_pct?: MarketPriceValue;
+  supplier_name?: string;
+}
+
+export interface MarketPrice {
+  title?: string;
+  category?: string;
+  subcategory?: string;
+  unit?: string;
+  value?: MarketPriceValue;
+  source?: string;
+  source_url?: string;
+  confidence_score?: number;
+  captured_at?: string;
+  last_updated?: string | number;
+  metadata?: MarketPriceMetadata | null;
+}
+
 export async function syncUserPrices(
   supabase: SupabaseClient,
   userId: string,
   sector: string,
-  marketPrices: any[],
+  marketPrices: MarketPrice[],
   syncSource: "n8n_workflow" | "manual" = "manual"
 ) {
   // 1. Insert into price_sync_logs
@@ -41,7 +76,7 @@ export async function syncUserPrices(
 
     // 3. Process each market price
     for (const mp of marketPrices) {
-      const meta = mp.metadata || {};
+      const meta: MarketPriceMetadata = mp.metadata || {};
 
       const itemName = meta.name || mp.title || "";
       if (!itemName) continue;
@@ -54,13 +89,13 @@ export async function syncUserPrices(
       const unit = meta.unit || mp.unit || "ud";
 
       const rawPrice = meta.unit_price !== undefined ? meta.unit_price : (meta.value !== undefined ? meta.value : mp.value);
-      const priceValue = parseFloat(rawPrice) || 0;
+      const priceValue = parseFloat(String(rawPrice)) || 0;
       if (priceValue <= 0) continue;
 
       const lowerName = itemName.toLowerCase();
 
       // Common fields from market payload
-      const updateData: any = {
+      const updateData: Record<string, unknown> = {
         unit_price: priceValue,
         description: `Precio de mercado \u00B7 ${meta.source || mp.source || "n8n"} \u00B7 ${new Date(mp.last_updated || new Date()).toLocaleDateString("es-ES")}`,
         source_type: "n8n_sync",
@@ -70,9 +105,9 @@ export async function syncUserPrices(
       };
 
       // Retail specific fields via metadata
-      if (meta.purchase_price !== undefined) updateData.purchase_price = parseFloat(meta.purchase_price);
-      if (meta.recommended_sale_price !== undefined) updateData.recommended_sale_price = parseFloat(meta.recommended_sale_price);
-      if (meta.gross_margin_pct !== undefined) updateData.gross_margin_pct = parseFloat(meta.gross_margin_pct);
+      if (meta.purchase_price !== undefined) updateData.purchase_price = parseFloat(String(meta.purchase_price));
+      if (meta.recommended_sale_price !== undefined) updateData.recommended_sale_price = parseFloat(String(meta.recommended_sale_price));
+      if (meta.gross_margin_pct !== undefined) updateData.gross_margin_pct = parseFloat(String(meta.gross_margin_pct));
       if (meta.supplier_name !== undefined) updateData.supplier_name = meta.supplier_name;
 
       if (existingMap.has(lowerName)) {

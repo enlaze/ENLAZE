@@ -25,7 +25,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Calendar token missing or expired" }, { status: 401 });
     }
 
-    const eventPayload: any = {
+    const eventPayload: {
+      summary: string;
+      description: string;
+      start: { dateTime: string };
+      end: { dateTime: string };
+      attendees?: { email: string }[];
+    } = {
       summary,
       description: description || "",
       start: { dateTime: start_time },

@@ -3,6 +3,21 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { requireFeature } from "@/lib/subscription";
 
+interface ObservationProduct {
+  commercial_name?: string | null;
+  pb_providers?: { name?: string | null } | null;
+}
+
+interface PriceChange {
+  product_id: string;
+  product_name: string;
+  provider: string;
+  old_price: number;
+  new_price: number;
+  change_pct: number;
+  direction: "up" | "down";
+}
+
 export async function GET(request: Request) {
   const cookieStore = await cookies();
   const supabase = createServerClient(
@@ -84,7 +99,7 @@ export async function GET(request: Request) {
 
     for (const obs of observations) {
       const pid = obs.product_id;
-      const product = obs.pb_products as any;
+      const product = obs.pb_products as ObservationProduct | null;
       if (!productChanges[pid]) {
         productChanges[pid] = {
           name: product?.commercial_name || "Desconocido",
@@ -95,7 +110,7 @@ export async function GET(request: Request) {
       productChanges[pid].prices.push(Number(obs.price_excl_vat) || 0);
     }
 
-    const changes: any[] = [];
+    const changes: PriceChange[] = [];
     let totalChangePct = 0;
     let changedCount = 0;
 
@@ -143,8 +158,8 @@ export async function GET(request: Request) {
     await supabase.from("price_weekly_reports").insert(report);
 
     return NextResponse.json({ report });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[weekly-report] Error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }

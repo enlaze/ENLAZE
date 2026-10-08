@@ -1,8 +1,9 @@
- import { NextRequest, NextResponse } from "next/server";
+ import type { SupabaseClient } from "@supabase/supabase-js";
+import { NextRequest, NextResponse } from "next/server";
 import { verifyAgentRequest, isErrorResponse } from "../../_lib/auth";
 
 async function syncModuleState(
-  supabase: any,
+  supabase: SupabaseClient,
   userId: string,
   moduleName: string,
   data: {

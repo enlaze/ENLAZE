@@ -189,6 +189,9 @@ export default function SoftAurora({
     const gl = renderer.gl;
     gl.clearColor(0, 0, 0, 0);
 
+    // resize() se llama antes de crear el programa y comprueba `if (program)`;
+    // con const ese acceso lanzaría ReferenceError (zona muerta temporal).
+    // eslint-disable-next-line prefer-const
     let program: Program;
     const currentMouse: [number, number] = [0.5, 0.5];
     let targetMouse: [number, number] = [0.5, 0.5];

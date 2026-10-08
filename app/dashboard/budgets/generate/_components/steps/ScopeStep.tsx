@@ -247,9 +247,9 @@ export function ScopeStep() {
       updateSectorData("technical_document_names", []);
       setIsCreatingProject(false);
       setNewProjectName("");
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
-      toast.error("No se pudo crear la obra", { description: e?.message || "Error desconocido" });
+      toast.error("No se pudo crear la obra", { description: (e as Error | undefined)?.message || "Error desconocido" });
     } finally {
       setIsSavingProject(false);
     }
