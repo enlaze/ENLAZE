@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getServiceRoleClient, serviceRoleUnavailable } from "@/lib/supabase-service-role";
 import { requireBearer } from "@/lib/api-key-auth";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 /** Días sin actividad a partir de los cuales una cuenta se considera dormida. */
 const DEFAULT_INACTIVE_DAYS = 14;
@@ -63,7 +59,8 @@ export async function GET(req: NextRequest) {
     const sector = req.nextUrl.searchParams.get("sector") || "comercio_local";
     const inactiveDays = resolveInactiveDays(req);
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = getServiceRoleClient();
+    if (!supabase) return serviceRoleUnavailable("agent/users");
 
     const { data, error } = await supabase.rpc("agent_eligible_users", {
       p_sector: sector,

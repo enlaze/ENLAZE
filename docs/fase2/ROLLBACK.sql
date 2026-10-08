@@ -866,3 +866,16 @@ alter default privileges in schema public grant all on tables to anon;
 notify pgrst, 'reload schema';
 commit;
 -- END ROLLBACK_E5
+
+-- BEGIN ROLLBACK_G3_L1A
+-- Compensa solo el esquema de G3 lote 1a. Es destructivo en cuanto el lote 1b
+-- escriba procedencia: entonces se perderian los origenes, confianzas y fechas
+-- ya recogidos. No ejecutar automaticamente tras desplegar 1b.
+begin;
+alter table public.budget_items
+  drop column if exists price_source_type,
+  drop column if exists price_confidence,
+  drop column if exists price_checked_at;
+notify pgrst, 'reload schema';
+commit;
+-- END ROLLBACK_G3_L1A

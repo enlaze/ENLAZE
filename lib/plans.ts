@@ -147,7 +147,7 @@ export function limitPeriod(plan: PlanId, resource: LimitedResource): LimitPerio
 /**
  * Límite efectivo de un recurso en un plan.
  *
- * Las generaciones con IA (generate-budget, budgets/generate-v2,
+ * Las generaciones con IA (generate-budget,
  * agent/budgets/generate, budgets/analyze, agent/budget-analysis) tienen el MISMO número que los presupuestos, pero
  * con contador propio: así generar un presupuesto con IA y luego guardarlo no
  * cuenta dos veces contra el mismo cupo.

@@ -37,7 +37,7 @@ async function ready(url, child) {
   throw new Error("postgrest did not become ready");
 }
 
-test("repointed product and concept queries resolve against PostgreSQL 17", { timeout: 120_000 }, async (t) => {
+test("the surviving concepts GET resolves against PostgreSQL 17 and POST stays unavailable", { timeout: 120_000 }, async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "enlaze-canonical-l1-"));
   const pgData = join(directory, "pgdata");
   const pgPort = await freePort();
@@ -69,25 +69,9 @@ test("repointed product and concept queries resolve against PostgreSQL 17", { ti
     create table public.canonical_concepts (
       id uuid primary key, display_name_es text not null, family text not null
     );
-    create table public.pb_providers (
-      id uuid primary key, name text, is_preferred boolean, company_id uuid
-    );
-    create table public.pb_products (
-      id uuid primary key,
-      provider_id uuid references public.pb_providers(id),
-      concept_id uuid references public.canonical_concepts(id),
-      commercial_name text not null, is_active boolean, is_available boolean
-    );
     grant select on all tables in schema public to anon;
     insert into public.canonical_concepts values
       ('11111111-1111-4111-8111-111111111111', 'Pintura plástica', 'PAINT');
-    insert into public.pb_providers values
-      ('22222222-2222-4222-8222-222222222222', 'Proveedor', false, null);
-    insert into public.pb_products values
-      ('33333333-3333-4333-8333-333333333333',
-       '22222222-2222-4222-8222-222222222222',
-       '11111111-1111-4111-8111-111111111111',
-       'Pintura', true, true);
   ` });
 
   rest = spawn("postgrest", [], {
@@ -104,19 +88,6 @@ test("repointed product and concept queries resolve against PostgreSQL 17", { ti
   const base = `http://127.0.0.1:${restPort}`;
   await ready(`${base}/`, rest);
 
-  const products = source("app/api/pb/products/route.ts");
-  const select = products.match(/\.from\("pb_products"\)\s*\.select\(`([\s\S]*?)`\s*,\s*\{ count:/)?.[1];
-  assert.ok(select, "extract the actual embedded selection from the products endpoint");
-  // postgrest-js strips whitespace from .select() before sending the request.
-  const productResponse = await fetch(`${base}/pb_products?${new URLSearchParams({ select: select.replace(/\s+/g, "") })}`);
-  const productBody = await productResponse.json();
-  assert.equal(productResponse.status, 200, JSON.stringify(productBody));
-  assert.equal(productBody.length, 1, JSON.stringify(productBody));
-  assert.ok(productBody[0].canonical_concepts, JSON.stringify(productBody));
-  assert.equal(productBody[0].canonical_concepts.id, "11111111-1111-4111-8111-111111111111");
-  assert.equal(productBody[0].canonical_concepts.display_name_es, "Pintura plástica");
-  assert.equal(productBody[0].canonical_concepts.family, "PAINT");
-
   const concepts = source("app/api/pb/concepts/route.ts");
   const getSource = concepts.split("export async function GET(")[1]?.split("export async function POST(")[0];
   const table = getSource?.match(/\.from\("([^"]+)"\)/)?.[1];
@@ -125,15 +96,7 @@ test("repointed product and concept queries resolve against PostgreSQL 17", { ti
   const conceptBody = await conceptResponse.json();
   assert.equal(conceptResponse.status, 200, JSON.stringify(conceptBody));
   assert.equal(conceptBody[0].display_name_es, "Pintura plástica");
-  for (const path of [
-    "app/api/budgets/generate-v2/route.ts",
-    "app/api/budgets/reprice/route.ts",
-    "app/api/pb/concepts/route.ts",
-    "app/api/pb/products/route.ts",
-    "app/api/prices/resolve/route.ts",
-  ]) {
-    assert.doesNotMatch(source(path), /pb_normalized_concepts/, `${path} still names the missing table`);
-  }
+  assert.doesNotMatch(concepts, /pb_normalized_concepts/, "concepts GET still names the missing table");
 
   // Next.js itself, not a mocked handler, must reject the removed POST.
   next = spawn(process.execPath, [
@@ -168,4 +131,11 @@ test("repointed product and concept queries resolve against PostgreSQL 17", { ti
   }
   assert.ok(postResponse, "Next.js did not become ready");
   assert.equal(postResponse.status, 405, (await postResponse.text()).slice(0, 1_000));
+});
+
+test("the live price resolver reads canonical concept fields", () => {
+  const resolver = source("app/api/prices/resolve/route.ts");
+  assert.ok(/const concept = prod\?\.canonical_concepts\b/.test(resolver), "resolver must read canonical_concepts");
+  assert.ok(/concept_name: concept\?\.display_name_es\b/.test(resolver), "resolver must use display_name_es");
+  assert.ok(!/pb_normalized_concepts|concept\?\.canonical_name/.test(resolver), "resolver must not use legacy concept fields");
 });

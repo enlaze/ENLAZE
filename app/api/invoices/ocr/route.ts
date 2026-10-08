@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { createClient as createServiceClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { getServiceRoleClient, serviceRoleUnavailable } from "@/lib/supabase-service-role";
 import { createClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
 import sharp from "sharp";
@@ -77,11 +78,9 @@ async function prepareImageForClaude(file: File) {
   };
 }
 
-// Service client only for storage uploads (needs cross-bucket access)
-const supabaseService = createServiceClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Storage uploads use the service client (cross-bucket access). Each handler
+// gets it with getServiceRoleClient() and fails with 500 when it is missing:
+// there is no anon-key fallback.
 
 export async function POST(request: Request) {
   try {
@@ -93,6 +92,9 @@ export async function POST(request: Request) {
         { status: 429 }
       );
     }
+
+    const supabaseService = getServiceRoleClient();
+    if (!supabaseService) return serviceRoleUnavailable("invoices/ocr");
 
     // Authenticate user from session
     const supabase = await createClient();
@@ -391,7 +393,10 @@ Responde SOLO con el JSON, sin texto adicional:
   }
 }
 
-async function retainedObjectExists(objectPath: string): Promise<boolean> {
+async function retainedObjectExists(
+  supabaseService: SupabaseClient,
+  objectPath: string,
+): Promise<boolean> {
   const separator = objectPath.lastIndexOf("/");
   const directory = objectPath.slice(0, separator);
   const fileName = objectPath.slice(separator + 1);
@@ -416,7 +421,9 @@ export async function PATCH(request: Request) {
     );
   }
 
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  const supabaseService = getServiceRoleClient();
+  if (!supabaseService) {
+    console.error("[invoices/ocr] falta SUPABASE_SERVICE_ROLE_KEY: ruta desactivada");
     return NextResponse.json(
       { error: "La conservación de documentos no está configurada." },
       { status: 500 }
@@ -502,7 +509,7 @@ export async function PATCH(request: Request) {
     if (copyError) {
       // A retry may find the destination created by a previous request that
       // failed after copying. Only continue after verifying that exact object.
-      if (!(await retainedObjectExists(confirmed.objectPath))) {
+      if (!(await retainedObjectExists(supabaseService, confirmed.objectPath))) {
         console.error("OCR draft copy error:", copyError);
         return NextResponse.json(
           { error: "No se pudo conservar el documento de la factura" },
@@ -574,7 +581,9 @@ export async function DELETE(request: Request) {
     );
   }
 
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  const supabaseService = getServiceRoleClient();
+  if (!supabaseService) {
+    console.error("[invoices/ocr] falta SUPABASE_SERVICE_ROLE_KEY: ruta desactivada");
     return NextResponse.json(
       { error: "La gestión de borradores no está configurada." },
       { status: 500 }

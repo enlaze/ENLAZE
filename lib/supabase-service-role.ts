@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { NextResponse } from "next/server";
 
 let cached: SupabaseClient | null = null;
 
@@ -27,4 +28,14 @@ export function getServiceRoleClient(): SupabaseClient | null {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   return cached;
+}
+
+/**
+ * Response for a route that needs the service role but runs without
+ * SUPABASE_SERVICE_ROLE_KEY: 500 plus a clear log line, never a silent
+ * fallback to the anon key. Same contract as requireBearer in api-key-auth.
+ */
+export function serviceRoleUnavailable(route: string): NextResponse {
+  console.error(`[${route}] falta SUPABASE_SERVICE_ROLE_KEY: ruta desactivada`);
+  return NextResponse.json({ error: "Servicio no configurado" }, { status: 500 });
 }

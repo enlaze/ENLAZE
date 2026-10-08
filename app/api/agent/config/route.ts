@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getServiceRoleClient, serviceRoleUnavailable } from "@/lib/supabase-service-role";
 import { getSectorConfig, normalizeBusinessSectorKey } from "@/lib/agent-prompts";
 import { getSectorIntel, resolveNewsQueries } from "@/lib/agent/sector-intel";
 import { beginAccountWriteLease, endAccountWriteLease } from "@/lib/account-write-lease";
@@ -7,10 +7,6 @@ import { requireBearer } from "@/lib/api-key-auth";
 
 export const maxDuration = 30;
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 /* ── Business-type context maps ── */
 const BUSINESS_KEYWORDS: Record<string, string[]> = {
@@ -71,7 +67,8 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = getServiceRoleClient();
+    if (!supabase) return serviceRoleUnavailable("agent/config");
 
     const { data: profile, error } = await supabase
       .from("profiles")

@@ -16,7 +16,7 @@
  *   - time_budget_ms: number (default 240000)
  */
 import { createServerClient } from "@supabase/ssr";
-import { createClient } from "@supabase/supabase-js";
+import { getServiceRoleClient, serviceRoleUnavailable } from "@/lib/supabase-service-role";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { bearerMatchesToken } from "@/lib/price-sync-auth";
@@ -42,10 +42,9 @@ export async function POST(request: Request) {
 
   if (isCronAuth) {
     // Cron/agent: use service role for full access
-    supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    );
+    const serviceClient = getServiceRoleClient();
+    if (!serviceClient) return serviceRoleUnavailable("pb/sync/run");
+    supabase = serviceClient;
   } else {
     // User: cookie-based auth
     const cookieStore = await cookies();
@@ -74,13 +73,9 @@ export async function POST(request: Request) {
     // pb_sync_runs), que desde 20260924113527 solo puede escribir
     // service_role. Ya comprobados sesión y plan, corre como sistema,
     // igual que la rama del cron.
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      return NextResponse.json({ error: "Sincronización no configurada" }, { status: 503 });
-    }
-    supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
-    );
+    const serviceClient = getServiceRoleClient();
+    if (!serviceClient) return serviceRoleUnavailable("pb/sync/run");
+    supabase = serviceClient;
   }
 
   try {
