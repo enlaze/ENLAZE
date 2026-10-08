@@ -30,7 +30,7 @@ function hash(value) {
   return createHash("md5").update(JSON.stringify(value)).digest("hex");
 }
 
-test("G3 L1b changes only three INSERTs and restores literal original bodies", () => {
+test("G3 L1b changes only four INSERTs and restores literal original bodies", () => {
   assert.deepEqual(detectarControlTransaccion(migration), []);
   const originals = originalBodies();
   const deployable = deployableOriginalBodies();
@@ -41,12 +41,14 @@ test("G3 L1b changes only three INSERTs and restores literal original bodies", (
     ["replace", "create or replace function public.replace_budget_items(", "$function$;"],
     ["update", "create or replace function public.update_budget_with_items(", "$$;"],
     ["internal", "create or replace function budget_internal.replace_items(", "$fn$;"],
+    ["duplicate", "create or replace function public.duplicate_budget(", "$fn$;"],
   ]) {
     assert.equal(extractFunction(migration, signature, end), upgraded[name]);
     assert.equal(extractFunction(rollbackL1b, signature, end), deployable[name]);
     assert.notEqual(upgraded[name], originals[name]);
   }
   assert.equal(deployable.internal.replace("create or replace function", "create function"), originals.internal);
+  assert.equal(deployable.duplicate.replace("create or replace function", "create function"), originals.duplicate);
   assert.doesNotMatch(migration, /\bdrop\s+function\b/i);
   assert.match(rollback, /ROLLBACK_G3_L1B[\s\S]*ANTES de ROLLBACK_G3_L1A/);
   assert.match(migration, /user_edited/);
@@ -121,10 +123,13 @@ test("G3 L1b keeps rows and economic vectors byte-identical except provenance", 
   if (process.env.G3_L1B_SKIP_MIGRATION !== "1") {
     await db.query(migration);
     await db.query("insert into supabase_migrations.schema_migrations(version) values ('20261008130000')");
-    // Mutation: keep both public writers upgraded, but restore the internal
+    // Mutation: keep the public writers upgraded, but restore the internal
     // writer. The first assertion below must still fail through save_core.
     if (process.env.G3_L1B_SKIP_INTERNAL === "1") {
       await db.query(deployableOriginalBodies().internal);
+    }
+    if (process.env.G3_L1B_SKIP_DUPLICATE === "1") {
+      await db.query(deployableOriginalBodies().duplicate);
     }
   }
 
@@ -143,6 +148,34 @@ test("G3 L1b keeps rows and economic vectors byte-identical except provenance", 
   }
 
   if (process.env.G3_L1B_SKIP_MIGRATION !== "1") {
+    const oldDate = "2025-04-03T09:15:00Z";
+    await db.query("begin");
+    try {
+      const historical = payload.map((item) => ({ ...item, price_checked_at: oldDate }));
+      await db.query("select public.save_budget($1,$2,$3::jsonb,$4::jsonb)",
+        [budget, 1, JSON.stringify({ title: "Test", subtotal: 46.5,
+          iva_percent: 21, iva_amount: 9.77, total: 56.27 }), JSON.stringify(historical)]);
+      const copy = (await db.query("select public.duplicate_budget($1) as result", [budget])).rows[0].result;
+      assert.ok(copy.budget_id && copy.budget_id !== budget);
+      const snapshot = async (id) => (await db.query(`select
+        to_jsonb(i) - 'id' - 'budget_id' - 'created_at' as line,
+        price_source_type, price_confidence::text, price_checked_at
+        from public.budget_items i where budget_id=$1 order by sort_order`, [id])).rows;
+      const source = await snapshot(budget);
+      const duplicated = await snapshot(copy.budget_id);
+      assert.equal(source.length, 1);
+      assert.deepEqual(duplicated.map((row) => row.line), source.map((row) => row.line),
+        "duplicate must copy money, category and provenance without recalculation");
+      assert.equal(duplicated[0].price_source_type, "provider_updated");
+      assert.equal(duplicated[0].price_confidence, "0.82");
+      assert.equal(duplicated[0].price_checked_at?.toISOString(), oldDate.replace("Z", ".000Z"),
+        "copy must retain the old price date, not the time of duplication");
+    } finally {
+      await db.query("rollback");
+    }
+  }
+
+  if (process.env.G3_L1B_SKIP_MIGRATION !== "1") {
     const audit = block("CHECK_G3_L1B_AUDIT");
     assert.match((await db.query(audit)).rows[0].veredicto, /^ABORTAR: pega partidas/);
     const pasted = audit.replace("-1::bigint as partidas_precheck", "0::bigint as partidas_precheck");
@@ -156,5 +189,20 @@ test("G3 L1b keeps rows and economic vectors byte-identical except provenance", 
     const restored = await run("core", payload);
     assert.equal(restored.rows[0].price_source_type, null,
       "rollback must restore the original internal writer without breaking save_core");
+    await db.query("begin");
+    try {
+      await db.query(`update public.budget_items set price_source_type='provider_updated',
+        price_confidence=0.82, price_checked_at='2025-04-03T09:15:00Z'
+        where budget_id=$1`, [budget]);
+      const copy = (await db.query("select public.duplicate_budget($1) as result", [budget])).rows[0].result;
+      const restoredCopy = (await db.query(`select price_source_type, price_confidence, price_checked_at
+        from public.budget_items where budget_id=$1`, [copy.budget_id])).rows[0];
+      assert.equal(restoredCopy.price_source_type, null,
+        "rollback must restore the original duplicate writer, not just save_core");
+      assert.equal(restoredCopy.price_confidence, null);
+      assert.equal(restoredCopy.price_checked_at, null);
+    } finally {
+      await db.query("rollback");
+    }
   }
 });

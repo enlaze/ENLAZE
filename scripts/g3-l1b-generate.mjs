@@ -36,6 +36,8 @@ export function originalBodies() {
       "create or replace function public.update_budget_with_items(", "$$;"),
     internal: extractFunction(read(sourcePaths.internal),
       "create function budget_internal.replace_items(", "$fn$;"),
+    duplicate: extractFunction(read(sourcePaths.internal),
+      "create function public.duplicate_budget(", "$fn$;"),
   };
 }
 
@@ -46,6 +48,9 @@ export function deployableOriginalBodies() {
     internal: replaceOnce(bodies.internal,
       "create function budget_internal.replace_items(",
       "create or replace function budget_internal.replace_items("),
+    duplicate: replaceOnce(bodies.duplicate,
+      "create function public.duplicate_budget(",
+      "create or replace function public.duplicate_budget("),
   };
 }
 
@@ -79,7 +84,16 @@ export function upgradedBodies() {
     "    nullif(t.item->>'price_source_type', ''),\n" +
     "    nullif(t.item->>'price_confidence', '')::numeric,\n" +
     "    nullif(t.item->>'price_checked_at', '')::timestamptz\n");
-  return { replace: replacement, update, internal };
+  let duplicate = deployableOriginalBodies().duplicate;
+  duplicate = replaceOnce(duplicate,
+    "    canonical_confidence, canonical_source, canonical_origin, canonical_source_ref, price_type)",
+    "    canonical_confidence, canonical_source, canonical_origin, canonical_source_ref, price_type,\n" +
+    "    price_source_type, price_confidence, price_checked_at)");
+  duplicate = replaceOnce(duplicate,
+    "    i.canonical_confidence, i.canonical_source, i.canonical_origin, i.canonical_source_ref, i.price_type\n",
+    "    i.canonical_confidence, i.canonical_source, i.canonical_origin, i.canonical_source_ref, i.price_type,\n" +
+    "    i.price_source_type, i.price_confidence, i.price_checked_at\n");
+  return { replace: replacement, update, internal, duplicate };
 }
 
 export function migrationText() {
@@ -87,8 +101,8 @@ export function migrationText() {
   return `-- G3 lote 1b: transportar procedencia sin cambiar importes ni versiones.\n` +
     `-- Los cuerpos proceden literalmente de 20260908111706, 20260901120000\n` +
     `-- y 20260915160000; la funcion interna conserva firma y dependencias.\n` +
-    `-- solo cambian las tres columnas y expresiones de sus INSERT.\n` +
-    `${bodies.replace}\n\n${bodies.update}\n\n${bodies.internal}\n\n` +
+    `-- Solo cambian las tres columnas y expresiones de sus INSERT.\n` +
+    `${bodies.replace}\n\n${bodies.update}\n\n${bodies.internal}\n\n${bodies.duplicate}\n\n` +
     `comment on column public.budget_items.price_source_type is\n` +
     `  'G3. Nivel que eligio el resolutor para el precio, o user_edited si la persona cambio el importe. Valores esperados: manual_locked, private_tariff, negotiated, historical_approved, preferred_supplier, provider_updated, private_bc3, technical_bank, enlaze_base, market_estimate, estimated, user_edited. NULL = partida anterior a G3; no significa que careciera de fuente.';\n` +
     `notify pgrst, 'reload schema';\n`;
@@ -97,9 +111,9 @@ export function migrationText() {
 export function rollbackBlock() {
   const bodies = deployableOriginalBodies();
   return `-- BEGIN ROLLBACK_G3_L1B\n` +
-    `-- Reponer estos tres cuerpos ANTES de ROLLBACK_G3_L1A: las funciones de\n` +
+    `-- Reponer estos cuatro cuerpos ANTES de ROLLBACK_G3_L1A: las funciones de\n` +
     `-- G3 L1b no compilan sin las tres columnas. El orden NO es intercambiable.\n` +
-    `begin;\n${bodies.replace}\n\n${bodies.update}\n\n${bodies.internal}\n\n` +
+    `begin;\n${bodies.replace}\n\n${bodies.update}\n\n${bodies.internal}\n\n${bodies.duplicate}\n\n` +
     `comment on column public.budget_items.price_source_type is\n` +
     `  'G3. Nivel que eligio el resolutor para el precio. Valores esperados: manual_locked, private_tariff, negotiated, historical_approved, preferred_supplier, provider_updated, private_bc3, technical_bank, enlaze_base, market_estimate, estimated. NULL = partida anterior a G3; no significa que careciera de fuente.';\n` +
     `notify pgrst, 'reload schema';\ncommit;\n-- END ROLLBACK_G3_L1B\n`;

@@ -3034,7 +3034,7 @@ from (
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- G3 lote 1b · 20261008130000_budget_items_price_provenance_writers.sql
--- Tres cuerpos de RPC; ninguna partida debe cambiar durante el despliegue.
+-- Cuatro cuerpos de RPC; ninguna partida debe cambiar durante el despliegue.
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BEGIN CHECK_G3_L1B_PRECHECK
 -- ANTES del push. ANOTA `partidas` y pegalo en CHECK_G3_L1B_AUDIT.
@@ -3042,7 +3042,7 @@ select case
          when anterior <> 1 then 'ABORTAR: falta la migracion G3 L1a'
          when registrada > 0 then 'NADA QUE HACER: G3 L1b ya esta registrada'
          when columnas <> 3 then 'ABORTAR: faltan columnas de procedencia'
-         when funciones <> 3 then 'ABORTAR: faltan funciones de guardado'
+         when funciones <> 4 then 'ABORTAR: faltan funciones de guardado'
          else 'OK'
        end as veredicto, *
 from (
@@ -3054,7 +3054,7 @@ from (
        and attname in ('price_source_type','price_confidence','price_checked_at')
        and attnum > 0 and not attisdropped) as columnas,
     (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-       where ((n.nspname = 'public' and p.proname in ('replace_budget_items','update_budget_with_items'))
+       where ((n.nspname = 'public' and p.proname in ('replace_budget_items','update_budget_with_items','duplicate_budget'))
           or (n.nspname = 'budget_internal' and p.proname = 'replace_items'))
          and p.prokind = 'f') as funciones
 ) as evidencia;
@@ -3067,9 +3067,9 @@ select case
          when registrada <> 1 then 'ABORTAR: G3 L1b no esta registrada exactamente una vez'
          when partidas_precheck < 0 then 'ABORTAR: pega partidas del precheck en partidas_precheck'
          when partidas <> partidas_precheck then 'ABORTAR: budget_items paso de ' || partidas_precheck || ' a ' || partidas || ' filas'
-         when funciones_actualizadas <> 3 then 'ABORTAR: falta procedencia en alguna funcion de guardado'
+         when funciones_actualizadas <> 4 then 'ABORTAR: falta procedencia en alguna funcion de guardado'
          when comentario_actualizado <> 1 then 'ABORTAR: falta user_edited en el comentario de la columna'
-         else 'OK — ' || partidas || ' partidas intactas y tres funciones actualizadas'
+         else 'OK — ' || partidas || ' partidas intactas y cuatro funciones actualizadas'
        end as veredicto, *
 from (
   select
@@ -3077,7 +3077,7 @@ from (
     (select count(*) from supabase_migrations.schema_migrations where version = '20261008130000') as registrada,
     (select count(*) from public.budget_items) as partidas,
     (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-       where ((n.nspname = 'public' and p.proname in ('replace_budget_items','update_budget_with_items'))
+       where ((n.nspname = 'public' and p.proname in ('replace_budget_items','update_budget_with_items','duplicate_budget'))
           or (n.nspname = 'budget_internal' and p.proname = 'replace_items'))
          and p.prokind = 'f'
          and pg_get_functiondef(p.oid) like '%price_source_type%'

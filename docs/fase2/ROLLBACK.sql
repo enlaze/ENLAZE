@@ -869,8 +869,9 @@ commit;
 
 
 
+
 -- BEGIN ROLLBACK_G3_L1B
--- Reponer estos tres cuerpos ANTES de ROLLBACK_G3_L1A: las funciones de
+-- Reponer estos cuatro cuerpos ANTES de ROLLBACK_G3_L1A: las funciones de
 -- G3 L1b no compilan sin las tres columnas. El orden NO es intercambiable.
 begin;
 create or replace function public.replace_budget_items(p_budget_id uuid, p_items jsonb)
@@ -1433,6 +1434,65 @@ begin
   from jsonb_array_elements(p_items) with ordinality t(item, ordinality);
   get diagnostics v_count = row_count;
   return v_count;
+end $fn$;
+
+create or replace function public.duplicate_budget(p_budget_id uuid)
+returns jsonb language plpgsql security definer set search_path = '' as $fn$
+declare b public.budgets%rowtype; v_id uuid; v_owner uuid := auth.uid(); v_number text;
+begin
+  perform budget_internal.lock_owner(v_owner);
+  select * into b from public.budgets where id = p_budget_id and user_id = v_owner and deleted_at is null for update;
+  if not found then raise exception 'Budget is not available' using errcode = '42501'; end if;
+  v_number := 'PRE-' || to_char(current_date, 'YYYY') || '-' || (10000 + floor(random() * 90000))::integer::text;
+  if b.client_id is not null then
+    perform 1 from public.clients where id = b.client_id and user_id = v_owner for share;
+    if not found then raise exception 'Client is not available' using errcode = '42501'; end if;
+  end if;
+  if b.project_id is not null then
+    perform 1 from public.projects where id = b.project_id and user_id = v_owner for share;
+    if not found then raise exception 'Project is not available' using errcode = '42501'; end if;
+  end if;
+  insert into public.budgets(user_id, title, budget_number, status, version, lock_version)
+    values (v_owner, b.title || ' (copia)', v_number, 'borrador', 1, 1) returning id into v_id;
+  update public.budgets set
+    client_id = b.client_id,
+    project_id = b.project_id,
+    client_name = b.client_name,
+    client_email = b.client_email,
+    client_phone = b.client_phone,
+    client_address = b.client_address,
+    client_nif = b.client_nif,
+    service_type = b.service_type,
+    subtotal = b.subtotal,
+    iva_percent = b.iva_percent,
+    iva_amount = b.iva_amount,
+    total = b.total,
+    notes = b.notes,
+    valid_until = b.valid_until,
+    deposit_percent = b.deposit_percent,
+    payment_method = b.payment_method,
+    payment_iban = b.payment_iban,
+    discount_type = b.discount_type,
+    discount_percent = b.discount_percent,
+    discount_amount = b.discount_amount,
+    payment_schedule = b.payment_schedule,
+    warranty_text = b.warranty_text,
+    execution_deadline_text = b.execution_deadline_text,
+    observations = b.observations,
+    conditions_text = b.conditions_text,
+    wizard_state = case when jsonb_typeof(b.wizard_state) = 'object'
+      then jsonb_set(b.wizard_state, '{draftId}', to_jsonb(v_id::text), true) else b.wizard_state end
+    where id = v_id;
+  insert into public.budget_items(
+    budget_id, sort_order, concept, description, quantity, unit, category, chapter,
+    unit_price, subtotal, unit_price_cost, subtotal_cost, canonical_id, canonical_status,
+    canonical_confidence, canonical_source, canonical_origin, canonical_source_ref, price_type)
+  select v_id, (row_number() over(order by i.sort_order, i.id) - 1)::integer,
+    i.concept, i.description, i.quantity, i.unit, i.category, i.chapter, i.unit_price,
+    i.subtotal, i.unit_price_cost, i.subtotal_cost, i.canonical_id, i.canonical_status,
+    i.canonical_confidence, i.canonical_source, i.canonical_origin, i.canonical_source_ref, i.price_type
+    from public.budget_items i where budget_id = p_budget_id;
+  return budget_internal.result(v_id, null);
 end $fn$;
 
 comment on column public.budget_items.price_source_type is
