@@ -17,6 +17,7 @@
 
 export type QualityTier = "basica" | "media" | "alta";
 export type PriceSourceType =
+  | "manual_locked"
   | "user_catalog"
   | "technical_bank"
   | "enlaze_base"
@@ -88,6 +89,8 @@ export interface ResolvedPrice {
   evidenceVerified?: boolean;
   evidenceType?: string;
   evidenceVerification?: string;
+  /** The user's own price matched this product but not its unit, so it was not applied. */
+  manualPriceNotice?: string;
 }
 
 export interface PriceCacheEntry {

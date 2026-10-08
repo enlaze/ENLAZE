@@ -177,7 +177,7 @@ export async function POST(request: Request) {
       // V1: price_items
       supabase
         .from("price_items")
-        .select("name, unit_price, unit, supplier_name, source_type, is_locked")
+        .select("name, unit_price, unit, supplier_name, source_type, is_manual_override")
         .eq("user_id", user.id)
         .eq("is_active", true),
       // V2: pb_price_current with joins
@@ -198,13 +198,13 @@ export async function POST(request: Request) {
           )
         `)
         .or(`pb_providers.company_id.is.null${company_id ? `,pb_providers.company_id.eq.${company_id}` : ""}`),
-      // V2: manual prices (price_items with is_locked)
+      // V2: manual prices (price_items with is_manual_override)
       supabase
         .from("price_items")
-        .select("name, unit_price, unit, supplier_name, source_type, is_locked")
+        .select("name, unit_price, unit, supplier_name, source_type, is_manual_override")
         .eq("user_id", user.id)
         .eq("is_active", true)
-        .eq("is_locked", true),
+        .eq("is_manual_override", true),
       // V2: technical prices (global + company)
       supabase
         .from("technical_price_items")
@@ -281,7 +281,7 @@ export async function POST(request: Request) {
         unit_price: Number(p.unit_price) || 0,
         supplier_name: String(p.supplier_name || ""),
         source_type: String(p.source_type || "manual"),
-        is_locked: Boolean(p.is_locked),
+        is_manual_override: Boolean(p.is_manual_override),
       })),
       historical_prices: [], // No historical data in V1 migration
       technical_prices: (pbTechnicalRows || []).map((r): TechnicalPriceRow => ({

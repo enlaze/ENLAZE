@@ -158,6 +158,8 @@ export interface Partida {
   geographic_profile?: string;
   price_source?: string;
   price_source_detail?: string;
+  /** The user's own price matched this line but in another unit (not applied). */
+  manual_price_notice?: string;
   price_checked_at?: string;
   confidence_score?: number;
   cost_breakdown?: EnginePartida["cost_breakdown"];
@@ -230,6 +232,8 @@ export interface Material {
   isAvailable?: boolean;
   deliveryDays?: number;
   priceAlternatives?: PriceAlternative[];
+  /** The user's own price matched this material but in another unit (not applied). */
+  manualPriceNotice?: string;
   /** Budget chapter this material is consumed by */
   linkedChapter?: string;
   /** True when the selected provider does not carry this material */
@@ -434,6 +438,7 @@ async function verifyMaterialsAgainstTracker(
         isAvailable: resolved?.isAvailable,
         deliveryDays: resolved?.deliveryDays,
         priceAlternatives: resolved?.alternatives || [],
+        manualPriceNotice: resolved?.manualPriceNotice,
       };
     }
 
@@ -454,6 +459,7 @@ async function verifyMaterialsAgainstTracker(
       isAvailable: resolved.isAvailable,
       deliveryDays: resolved.deliveryDays,
       priceAlternatives: resolved.alternatives || [],
+      manualPriceNotice: resolved.manualPriceNotice,
     };
   });
 
@@ -2240,6 +2246,7 @@ export function BudgetGenerateProvider({
                 isAvailable: resolved?.isAvailable,
                 deliveryDays: resolved?.deliveryDays,
                 priceAlternatives: resolved?.alternatives || [],
+                manualPriceNotice: resolved?.manualPriceNotice,
               };
             }
 
@@ -2258,6 +2265,7 @@ export function BudgetGenerateProvider({
               isAvailable: resolved.isAvailable,
               deliveryDays: resolved.deliveryDays,
               priceAlternatives: resolved.alternatives || [],
+              manualPriceNotice: resolved.manualPriceNotice,
             };
           });
 
@@ -2330,7 +2338,10 @@ export function BudgetGenerateProvider({
                 (isSupplyLine && isTraceableCommercialPrice(resolved))
               );
 
-            if (!canUseResolved) return partida;
+            const manual_price_notice = resolved?.manualPriceNotice;
+            if (!canUseResolved) {
+              return manual_price_notice ? { ...partida, manual_price_notice } : partida;
+            }
             verifiedPartidaCount += 1;
             const unitPrice = Math.round(resolved.selectedPrice * 100) / 100;
             return {
@@ -2339,6 +2350,7 @@ export function BudgetGenerateProvider({
               geographic_factor: 1,
               geographic_profile: "Precio del banco técnico o tarifa vinculada",
               price_source: String(resolved.sourceType),
+              manual_price_notice,
               price_source_detail:
                 resolved.selectedProductName || resolved.selectedSupplier || "Banco de precios ENLAZE",
               price_checked_at: resolved.capturedAt,
