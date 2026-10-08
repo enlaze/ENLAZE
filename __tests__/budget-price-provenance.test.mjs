@@ -20,7 +20,7 @@ test("editing the resolver price replaces its claim with user_edited, not the ol
   const edited = evidenceAfterPriceEdit(original, 14, "2026-10-08T12:00:00Z");
   assert.deepEqual(evidenceForSave(edited), {
     price_source_type: "user_edited",
-    price_confidence: 1,
+    price_confidence: 0.95,
     price_checked_at: "2026-10-08T12:00:00Z",
   });
   assert.deepEqual(evidenceForSave(evidenceAfterPriceEdit(edited, 12.5, "2026-10-08T13:00:00Z")),

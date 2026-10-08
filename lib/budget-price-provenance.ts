@@ -1,4 +1,6 @@
 /** Price evidence belongs to the price actually saved, not just the last quote. */
+const USER_EDITED_CONFIDENCE = 0.95;
+
 export interface BudgetPriceEvidence {
   price_source_type?: string | null;
   price_confidence?: number | null;
@@ -50,7 +52,7 @@ export function evidenceAfterPriceEdit<T extends BudgetPriceEvidence>(
   return {
     ...item,
     price_source_type: "user_edited",
-    price_confidence: 1,
+    price_confidence: USER_EDITED_CONFIDENCE,
     price_checked_at: editedAt,
   };
 }
@@ -66,7 +68,7 @@ export function evidenceForSave(
       currentUnitPrice !== item.resolved_unit_price) {
     return {
       price_source_type: "user_edited",
-      price_confidence: 1,
+      price_confidence: USER_EDITED_CONFIDENCE,
       price_checked_at: item.price_source_type === "user_edited"
         ? item.price_checked_at ?? savedAt
         : savedAt,
