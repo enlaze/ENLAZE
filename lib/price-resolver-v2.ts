@@ -89,7 +89,8 @@ export interface ManualPriceRow {
   unit_price: number;
   supplier_name: string;
   source_type: string;
-  is_locked: boolean;
+  /** price_items.is_manual_override: the user fixed this price by hand. */
+  is_manual_override: boolean;
 }
 
 export interface HistoricalPriceRow {
@@ -154,6 +155,13 @@ export function resolveForConcept(
   // Collect all alternatives first
   collectAlternatives(input, context, data, alternatives);
 
+  // A price the user fixed by hand wins over every other source, whatever
+  // priority_order says. It is never re-ranked against suppliers or n8n.
+  const manual = tryManualLocked(input, data, now);
+  if (manual) {
+    return { ...manual, alternatives, warnings };
+  }
+
   // Try each level in priority order
   for (const level of priority) {
     const result = tryLevel(level, input, context, data, normalized, now, warnings);
@@ -187,7 +195,7 @@ function tryLevel(
   warnings: string[]
 ): Omit<PriceResolutionResult, "alternatives" | "warnings"> | null {
   switch (level) {
-    case "manual_locked":     return tryManualLocked(input, data, now);
+    case "manual_locked":     return null; // already applied before the cascade
     case "private_tariff":    return tryPrivateTariff(input, context, data, now);
     case "negotiated":        return tryNegotiated(input, context, data, now);
     case "historical_approved": return tryHistorical(input, data, now, warnings);
@@ -378,12 +386,29 @@ function buildEffectiveCost(
 
 // ─── Level 1: Manual locked ──────────────────────────────────────────────
 
+/**
+ * Best user-fixed price for a concept: the closest name wins, and on a tie
+ * the one whose unit matches the requested unit.
+ */
+export function findManualPrice(
+  conceptName: string,
+  unit: string,
+  manualPrices: ManualPriceRow[],
+): ManualPriceRow | undefined {
+  return manualPrices
+    .filter((p) => p.is_manual_override && p.unit_price > 0)
+    .map((p) => ({ p, score: technicalMaterialMatchScore(p.name, conceptName) }))
+    .filter(({ score }) => score >= 0.5)
+    .sort((left, right) =>
+      right.score - left.score
+      || Number(technicalUnitCompatible(unit, right.p.unit)) - Number(technicalUnitCompatible(unit, left.p.unit))
+    )[0]?.p;
+}
+
 function tryManualLocked(
   input: ResolveConceptInput, data: PrefetchedPriceData, now: string
 ): Omit<PriceResolutionResult, "alternatives" | "warnings"> | null {
-  const match = data.manual_prices.find(
-    (p) => p.is_locked && fuzzyMatch(p.name, input.concept_name)
-  );
+  const match = findManualPrice(input.concept_name, input.unit, data.manual_prices);
   if (!match) return null;
   return {
     concept_id: null, concept_name: input.concept_name,
@@ -392,7 +417,7 @@ function tryManualLocked(
     source_id: null, unit_price: match.unit_price,
     effective_price: match.unit_price, effective_cost_breakdown: null,
     source_type: "manual_locked", confidence_score: 1.0,
-    selection_reason: "Precio manual bloqueado por la empresa", checked_at: now,
+    selection_reason: "Precio fijado a mano por la empresa", checked_at: now,
   };
 }
 
@@ -611,7 +636,7 @@ function tryMarketEstimate(
   now: string, warnings: string[]
 ): Omit<PriceResolutionResult, "alternatives" | "warnings"> | null {
   const match = data.manual_prices.find(
-    (p) => !p.is_locked && fuzzyMatch(p.name, input.concept_name)
+    (p) => !p.is_manual_override && fuzzyMatch(p.name, input.concept_name)
   );
   if (!match) return null;
   warnings.push(`"${input.concept_name}": precio basado en estimacion de mercado. Confianza baja.`);

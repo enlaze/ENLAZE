@@ -17,6 +17,7 @@
 
 export type QualityTier = "basica" | "media" | "alta";
 export type PriceSourceType =
+  | "manual_locked"
   | "user_catalog"
   | "technical_bank"
   | "enlaze_base"

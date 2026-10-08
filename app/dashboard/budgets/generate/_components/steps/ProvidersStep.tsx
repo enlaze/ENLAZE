@@ -162,6 +162,10 @@ export function ProvidersStep() {
         ? { label: "OFERTA", className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800" }
         : { label: "SERVICIO", className: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 border-violet-200 dark:border-violet-800" };
     }
+    // A price the user fixed by hand always shows as theirs.
+    if (sourceType === "manual_locked") {
+      return { label: "TU PRECIO", className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800" };
+    }
     // Provider enrichment flags take priority (commit 1.1.b.2)
     if (material?.missing_in_selected_provider === true) {
       return { label: "SIN PRECIO", className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800" };
@@ -545,7 +549,9 @@ export function ProvidersStep() {
                               {m.priceCheckedAt && (
                                 <span>Comprobado: {new Date(m.priceCheckedAt).toLocaleDateString("es-ES")}</span>
                               )}
-                              {typeof m.confidenceScore === "number" && (
+                              {m.sourceType === "manual_locked" ? (
+                                <span className="font-semibold text-green-700 dark:text-green-400">Precio fijado por ti en Precios</span>
+                              ) : typeof m.confidenceScore === "number" && (
                                 <span>{m.isRealData ? "Coincidencia verificada" : "Confianza provisional"}: {Math.round(m.confidenceScore * 100)}%</span>
                               )}
                               {typeof m.deliveryDays === "number" && (

@@ -55,14 +55,14 @@ export interface PriceItem {
  * Lightweight version for list views — omits user_id / sector
  * (already filtered in query) and heavy columns.
  */
-export type PriceListItem = Omit<PriceItem, "user_id" | "sector" | "sku" | "barcode" | "supplier_ref" | "source_url" | "captured_at" | "valid_from" | "valid_until" | "confidence_score" | "is_manual_override" | "price_scope" | "supplier_id">;
+export type PriceListItem = Omit<PriceItem, "user_id" | "sector" | "sku" | "barcode" | "supplier_ref" | "source_url" | "captured_at" | "valid_from" | "valid_until" | "confidence_score" | "price_scope" | "supplier_id">;
 
 /** Columns selected for the price list (lightweight query). */
 export const PRICE_LIST_COLUMNS = `
   id, name, description, category, subcategory, unit, unit_price,
   brand, format, purchase_price, recommended_sale_price,
   vat_rate, gross_margin_pct, supplier_name, source_type,
-  is_active, business_subsector, family
+  is_active, business_subsector, family, is_manual_override
 ` as const;
 
 /** Source type labels for UI display. */

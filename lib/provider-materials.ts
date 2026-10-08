@@ -14,6 +14,7 @@
  *   - Reversible: A → B → A produces identical output to a fresh A.
  *   - Idempotent: apply(apply(x)) === apply(x).
  *   - unit_price 0 in provider catalog is treated as no-match.
+ *   - Materials priced by hand (sourceType "manual_locked") are left as is.
  */
 
 import { normalizeMaterialName } from "@/lib/price-resolver";
@@ -92,6 +93,16 @@ export function applyProviderToAIMaterials(
   const adjustedAt = new Date().toISOString();
 
   return baseAIMaterials.map(baseMat => {
+    // A price the user fixed by hand is never replaced by a provider's price.
+    if (baseMat.sourceType === "manual_locked") {
+      return {
+        ...baseMat,
+        missing_in_selected_provider: undefined,
+        provider_fallback_reason: undefined,
+        provider_adjustment: undefined,
+      };
+    }
+
     const normalizedName = normalizeMaterialName(baseMat.name);
     const providerMatch = providerIndex.get(normalizedName);
 

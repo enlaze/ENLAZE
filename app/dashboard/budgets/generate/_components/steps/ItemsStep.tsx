@@ -168,7 +168,15 @@ export function ItemsStep() {
                             Zona ×{p.geographic_factor.toFixed(2)}
                           </span>
                         )}
-                        {p.price_source && !["base_nacional", "geographic_adjustment"].includes(p.price_source) && (
+                        {p.price_source === "manual_locked" && (
+                          <span
+                            className="text-[10px] font-semibold text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 rounded px-2 py-1"
+                            title={p.price_source_detail ? `Precio fijado por ti: ${p.price_source_detail}` : "Precio fijado por ti en Precios"}
+                          >
+                            Tu precio
+                          </span>
+                        )}
+                        {p.price_source && !["base_nacional", "geographic_adjustment", "manual_locked"].includes(p.price_source) && (
                           <span
                             className="text-[10px] font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 rounded px-2 py-1"
                             title={p.price_source_detail || "Precio contrastado"}
