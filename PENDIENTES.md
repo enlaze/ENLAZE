@@ -22,7 +22,7 @@ _Lista viva de cosas por arreglar o rematar. Nada urgente salvo que se indique._
   - `20260806_04_reconcile_supplier_invoiced`: **ya sin objeto**; `suppliers` no guarda totales (se calculan al leer). Borrar del todo cuando se decida.
   - `20260716_price_bank_v2`: NO aplicar tal cual (ver "Precios propios del usuario" abajo).
 - **Precios propios del usuario (análisis 2026-09-24):** el resolvedor v2 (`/api/prices/resolve`) busca `price_items.is_locked`, que no existe; la pantalla de Precios marca "manual" en `is_manual_override`. Son el mismo concepto con dos nombres → los niveles 1 ("manual bloqueado") y 10 no se activan nunca. Aplicar `price_bank_v2` NO lo arregla (crea `is_locked` a false y nadie lo escribe). Decisión de producto pendiente.
-- **Código muerto:** `/api/budgets/generate-v2`, `/api/budgets/reprice`, `/api/pb/providers`, `/api/pb/providers/[id]`, `/api/pb/products`: nadie los llama. `generate-v2` además tiene un `.or()` mal formado sobre `pb_providers`.
+- ~~**Código muerto:** `/api/budgets/generate-v2`, `/api/budgets/reprice`, `/api/pb/providers`, `/api/pb/providers/[id]`, `/api/pb/products`~~ **borradas el 2026-10-08** (bloque b3), junto con `lib/budget-generator-v2.ts`.
 - **Catálogo compartido:** "Añadir precio" sin proveedor lo cuelga de "Referencia mercado ES", que es GLOBAL → el precio que mete un usuario lo ven todos. Decidir si debe ser privado.
 
 ## Para el lanzamiento (go-live)

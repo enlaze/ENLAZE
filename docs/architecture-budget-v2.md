@@ -1,5 +1,7 @@
 # Arquitectura del Generador de Presupuestos v2
 
+> **Nota 2026-10-08:** `/api/budgets/generate-v2`, `/api/budgets/reprice` y `lib/budget-generator-v2.ts` se borraron por no tener llamantes (bloque b3). Este documento describe el diseño original.
+
 ENLAZE - Plataforma SaaS para autonomos y pymes de construccion
 
 Fecha: 2026-07-10
