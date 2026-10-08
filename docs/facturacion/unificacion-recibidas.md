@@ -65,6 +65,6 @@ Por defecto, esa prueba se omite. Su conexión está fijada al socket `/private/
 
 ## Despliegue pendiente
 
-1. En una rama de Supabase con datos de prueba adecuados, aplicar `20261007120000_unify_received_invoices.sql` y comprobar 7 → 9 filas, Ikea, reejecución, FK y snapshot de un token activo. La guarda debe abortar si la RPC no coincide con la versión revisada.
+1. En una rama de Supabase con datos de prueba adecuados, aplicar `20261009120000_unify_received_invoices.sql` y comprobar 7 → 9 filas, Ikea, reejecución, FK y snapshot de un token activo. La guarda debe abortar si la RPC no coincide con la versión revisada.
 2. Ejecutar `npm run build` con la configuración autorizada de ese entorno, resolver la deuda de lint según la política del repo y comprobar las siete facturas reales en Contabilidad y el PDF.
 3. Después de validar y autorizar el despliegue, aplicar primero la migración y a continuación el código. No se ha desplegado nada en producción.

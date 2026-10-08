@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 // models the tables/constraints relevant to this migration, not all Supabase.
 const enabled = process.env.RUN_RECEIVED_INVOICES_SQL_TEST === "1";
 const sql = (file) => readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
-const migration = sql("supabase/migrations/20261007120000_unify_received_invoices.sql");
+const migration = sql("supabase/migrations/20261009120000_unify_received_invoices.sql");
 const OWNER = "11111111-1111-4111-8111-111111111111";
 const OTHER = "22222222-2222-4222-8222-222222222222";
 const CLIENT = "10000000-0000-4000-8000-000000000001";

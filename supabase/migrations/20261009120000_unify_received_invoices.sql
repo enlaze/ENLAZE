@@ -120,7 +120,7 @@ DROP POLICY IF EXISTS invoices_insert_own ON public.invoices;
 DROP POLICY IF EXISTS invoices_update_own ON public.invoices;
 
 COMMENT ON TABLE public.invoices IS
-  'OBSOLETA desde 20261007: facturas recibidas unificadas en received_invoices. '
+  'OBSOLETA desde 20261009: facturas recibidas unificadas en received_invoices. '
   'Se conserva solo por invoice_items, move_to_trash y el borrado de cuenta. '
   'No insertar ni actualizar aquí.';
 

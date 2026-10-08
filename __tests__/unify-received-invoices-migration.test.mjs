@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { detectarControlTransaccion, trocearStatements } from "./lib/sql-toplevel.mjs";
 
 const read = (name) => readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), "utf8");
-const migration = read("20261007120000_unify_received_invoices.sql");
+const migration = read("20261009120000_unify_received_invoices.sql");
 const previous = read("20260929100000_portal_rpcs_drop_legacy_token.sql");
 const snapshot = (sql) => sql.match(/create or replace function public\.portal_read_snapshot[\s\S]*?as \$\$([\s\S]*?)\$\$;/i)[1];
 
