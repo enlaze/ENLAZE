@@ -789,7 +789,9 @@ test("OCR draft deletion requires this exact draft to have produced the confirme
 });
 
 test("resubmitting a pending OCR-promotion retry persists form corrections", () => {
-  const page = readFileSync("app/dashboard/suppliers/invoices/page.tsx", "utf8");
+  // La lógica salió de app/dashboard/suppliers/invoices/page.tsx (hoy un
+  // redirect al hub de Facturación) al hook que comparten sus pestañas.
+  const page = readFileSync("components/facturacion/useReceivedInvoices.ts", "utf8");
 
   // The retry-persist path now goes through a single atomic RPC instead of
   // the removed updateReceivedInvoice() + best-effort reconcile pair.
@@ -1222,7 +1224,7 @@ test("Cancel, New invoice and Scan are disabled while saving", () => {
 });
 
 test("retry submit updates the invoice and reconciles supplier balances in one atomic RPC", () => {
-  const page = readFileSync("app/dashboard/suppliers/invoices/page.tsx", "utf8");
+  const page = readFileSync("components/facturacion/useReceivedInvoices.ts", "utf8");
   assert.match(page, /supabase\.rpc\("update_received_invoice_and_reconcile", \{/);
   assert.doesNotMatch(page, /\.rpc\("reconcile_supplier_invoiced"/);
 });
