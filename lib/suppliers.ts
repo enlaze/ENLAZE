@@ -35,6 +35,8 @@ export interface ReceivedInvoice {
   user_id: string;
   supplier_id: string | null;
   project_id: string | null;
+  client_id: string | null;
+  category: string;
   category_id: string | null;
   invoice_number: string;
   supplier_name: string;
@@ -199,25 +201,72 @@ export async function updateSupplier(supabase: SupabaseClient, id: string, updat
 
 /* ═══════════════ Received Invoices ═══════════════ */
 
+/** Joined names are read-only and never part of a writable invoice payload. */
+export interface ReceivedInvoiceRow extends ReceivedInvoice {
+  suppliers: { name: string } | null;
+  projects: { name: string } | null;
+}
+
+export interface ReceivedInvoiceFilters {
+  status?: string;
+  supplier_id?: string;
+  project_id?: string;
+  client_id?: string;
+  category?: string;
+  issue_date_from?: string;
+  issue_date_to?: string;
+  search?: string;
+}
+
 export async function getReceivedInvoices(
   supabase: SupabaseClient,
-  opts?: { status?: string; supplier_id?: string; search?: string; limit?: number; offset?: number }
+  opts?: ReceivedInvoiceFilters & { limit?: number; offset?: number }
 ) {
   let query = supabase
     .from("received_invoices")
-    .select("*, suppliers(name)", { count: "exact" })
-    .order("issue_date", { ascending: false });
+    .select("*, suppliers(name), projects(name)", { count: "exact" })
+    .is("deleted_at", null)
+    .order("issue_date", { ascending: false })
+    .order("id", { ascending: true });
 
   if (opts?.status && opts.status !== "all") query = query.eq("status", opts.status);
   if (opts?.supplier_id) query = query.eq("supplier_id", opts.supplier_id);
+  if (opts?.project_id) query = query.eq("project_id", opts.project_id);
+  if (opts?.client_id) query = query.eq("client_id", opts.client_id);
+  if (opts?.category) query = query.eq("category", opts.category);
+  if (opts?.issue_date_from) query = query.gte("issue_date", opts.issue_date_from);
+  if (opts?.issue_date_to) query = query.lte("issue_date", opts.issue_date_to);
   if (opts?.search) {
     query = query.or(`invoice_number.ilike.%${opts.search}%,supplier_name.ilike.%${opts.search}%`);
   }
-  if (opts?.limit) query = query.limit(opts.limit);
-  if (opts?.offset) query = query.range(opts.offset, opts.offset + (opts.limit || 20) - 1);
+  if (opts?.offset !== undefined) {
+    query = query.range(opts.offset, opts.offset + (opts.limit || 50) - 1);
+  } else if (opts?.limit) {
+    query = query.limit(opts.limit);
+  }
 
   const { data, count, error } = await query;
-  return { data: (data || []) as ReceivedInvoice[], count: count || 0, error };
+  return { data: (data || []) as ReceivedInvoiceRow[], count: count || 0, error };
+}
+
+/** Full filtered set for fiscal totals/exports, beyond the UI and API page limits. */
+export async function getAllReceivedInvoices(
+  supabase: SupabaseClient,
+  filters?: ReceivedInvoiceFilters,
+) {
+  const invoices: ReceivedInvoiceRow[] = [];
+  const pageSize = 500;
+  while (true) {
+    const result = await getReceivedInvoices(supabase, {
+      ...filters, limit: pageSize, offset: invoices.length,
+    });
+    // Never export an incomplete set when a subsequent page failed.
+    if (result.error) return { data: [] as ReceivedInvoiceRow[], error: result.error };
+    invoices.push(...result.data);
+    if (invoices.length >= result.count || result.data.length === 0) {
+      return { data: invoices, error: null };
+    }
+  }
 }
 
 export interface SupplierInvoiceTotals {

@@ -55,7 +55,7 @@ export const PLATFORM_GUIDE: PlatformGuideEntry[] = [
     suggestions: ["¿Cómo emito una factura?", "¿Cómo marco un cobro?"],
   },
   {
-    path: "/dashboard/facturas",
+    path: "/dashboard/facturacion",
     label: "Facturas recibidas",
     purpose: "Registra gastos y facturas de proveedores.",
     suggestions: ["¿Cómo subo una factura?", "¿Cómo reviso el OCR?"],
@@ -92,7 +92,7 @@ export function suggestPathForQuestion(question: string): string | null {
     [/obra|proyecto|plano|medicion/, "/dashboard/projects"],
     [/cliente/, "/dashboard/clientes"],
     [/factura.*(emit|cliente)|cobro/, "/dashboard/issued-invoices"],
-    [/factura.*(recib|proveedor)|gasto/, "/dashboard/facturas"],
+    [/factura.*(recib|proveedor)|gasto/, "/dashboard/facturacion"],
     [/proveedor/, "/dashboard/suppliers"],
     [/ajuste|configur|empresa|fiscal/, "/dashboard/settings"],
   ];

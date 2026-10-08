@@ -7,7 +7,8 @@
  * por el OCR).
  */
 
-import { Card } from "@/components/ui/card";
+import { FactCard } from "./ui";
+import { expenseCategoryLabels } from "@/lib/received-invoices";
 import { Button } from "@/components/ui/button";
 import { FormField, Input, Select } from "@/components/ui/form-fields";
 import { paymentMethodLabels } from "@/lib/suppliers";
@@ -23,7 +24,7 @@ export default function ReceivedInvoiceForm({
   state: ReceivedInvoicesState;
   title?: string;
 }) {
-  const { form, setForm, suppliers, saving, pendingInvoiceId, handleSupplierSelect, handleSubmit, handleCancelForm } = state;
+  const { form, setForm, suppliers, clients, projects, handleClientSelect, handleProjectSelect, saving, pendingInvoiceId, handleSupplierSelect, handleSubmit, handleCancelForm } = state;
 
   const computedSubtotal = parseFloat(form.subtotal) || 0;
   const computedIva = computedSubtotal * ((parseFloat(form.iva_percent) || 0) / 100);
@@ -31,7 +32,7 @@ export default function ReceivedInvoiceForm({
   const computedTotal = computedSubtotal + computedIva - computedIrpf;
 
   return (
-    <Card className="mb-6">
+    <FactCard className="mb-6">
       <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-brand-green">{title}</h3>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -61,6 +62,28 @@ export default function ReceivedInvoiceForm({
               required
               placeholder="Nombre del proveedor"
             />
+          </FormField>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <FormField label="Cliente">
+            <Select aria-label="Cliente de la factura" value={form.client_id} onChange={(e) => handleClientSelect(e.target.value)}>
+              <option value="">Sin cliente</option>
+              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </Select>
+          </FormField>
+          <FormField label="Obra">
+            <Select aria-label="Obra de la factura" value={form.project_id} onChange={(e) => handleProjectSelect(e.target.value)}>
+              <option value="">Sin obra</option>
+              {projects.filter((p) => !form.client_id || p.client_id === form.client_id).map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </Select>
+          </FormField>
+          <FormField label="Categoría de gasto">
+            <Select aria-label="Categoría de gasto" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+              {Object.entries(expenseCategoryLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </Select>
           </FormField>
         </div>
 
@@ -154,6 +177,6 @@ export default function ReceivedInvoiceForm({
           </Button>
         </div>
       </form>
-    </Card>
+    </FactCard>
   );
 }

@@ -1,3 +1,5 @@
+import { getAllReceivedInvoices } from "@/lib/suppliers";
+import { toFiscalReceivedInvoice } from "@/lib/received-invoices";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 
@@ -83,14 +85,12 @@ export async function GET(request: Request) {
     let issued: IssuedRow[] = [];
 
     if (type === "received" || type === "all") {
-      const { data } = await supabase
-        .from("invoices")
-        .select("id, invoice_number, supplier_name, supplier_nif, invoice_date, base_amount, iva_percentage, iva_amount, irpf_percentage, irpf_amount, total_amount, category, payment_status")
-        .eq("user_id", userId)
-        .gte("invoice_date", startDate)
-        .lte("invoice_date", endDate)
-        .order("invoice_date", { ascending: true });
-      received = (data as InvoiceRow[]) || [];
+      const { data, error } = await getAllReceivedInvoices(supabase, {
+        issue_date_from: startDate,
+        issue_date_to: endDate,
+      });
+      if (error) throw new Error("No se pudieron cargar todas las facturas recibidas del periodo");
+      received = data.map(toFiscalReceivedInvoice).reverse();
     }
 
     if (type === "issued" || type === "all") {
