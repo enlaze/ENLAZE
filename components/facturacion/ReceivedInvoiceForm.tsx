@@ -52,6 +52,11 @@ export default function ReceivedInvoiceForm({
     vat_lines: vatLines,
   });
 
+  // En un formulario aún en blanco el aviso sobraría: todo está «por rellenar»,
+  // no «mal». Aparece en cuanto hay algo que juzgar.
+  const started = Boolean(
+    form.invoice_number || form.supplier_name || form.subtotal || vatLines.length > 0 || editingId,
+  );
   const issues = receivedInvoiceComplianceIssues({
     invoice_number: text(form.invoice_number),
     supplier_name: text(form.supplier_name),
@@ -334,7 +339,7 @@ export default function ReceivedInvoiceForm({
           />
         </FormField>
 
-        {issues.length > 0 && (
+        {started && issues.length > 0 && (
           <div className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs text-warning-ink">
             <p className="font-semibold">Con estos datos el IVA no sería deducible:</p>
             <ul className="mt-1 list-disc space-y-0.5 pl-4">
