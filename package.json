@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "node --env-file-if-exists=.env.local --import tsx scripts/migraciones-check.mts --warn",
+    "predev": "node --env-file-if-exists=.env.local --import tsx scripts/migraciones-check.mts --warn && node --env-file-if-exists=.env.local --import tsx scripts/entorno-check.mts --warn",
     "dev": "next dev --webpack",
-    "prebuild": "npm run plans:check",
+    "entorno:check": "node --env-file-if-exists=.env.local --import tsx scripts/entorno-check.mts",
+    "prebuild": "npm run entorno:check && npm run plans:check",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
