@@ -43,9 +43,13 @@ Cada variable va marcada **solo para su entorno**. Las que importan:
 | `NEXT_PUBLIC_SUPABASE_URL` | el proyecto de producción | el de previsualizaciones |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | la suya | la suya |
 | `SUPABASE_SERVICE_ROLE_KEY` | la suya | la suya |
-| `SUPABASE_PROJECT_REF` | `dsgnymebkxxkslyeotee` | `wowzjvlyklooqafgzuqk` |
-| `STRIPE_SECRET_KEY` | `sk_live_…` | `sk_test_…`, o sin definir |
+| `STRIPE_SECRET_KEY` | `sk_live_…` | **sin definir** (o `sk_test_…`) |
 | `RESEND_API_KEY` | la suya | **sin definir** |
+
+`SUPABASE_PROJECT_REF` **no hace falta en Vercel**: solo la lee
+`scripts/migraciones-check.mts`, que no corre en el build —el `prebuild` es
+`entorno:check && plans:check`—. En CI la pone el propio workflow por su matriz,
+y en local sale de `.env.local`.
 
 Las dos últimas no son capricho. Una previsualización con la clave real de
 Resend puede **enviar correos a clientes reales**, y con una `sk_live_` de
