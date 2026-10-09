@@ -221,6 +221,40 @@ tocan las facturas: `/api/prices/n8n-sync` devuelve 500 en bucle porque le falta
 la clave de servicio, y `/api/billing/status` devuelve 503 por no haber
 credenciales de Stripe.
 
+## Vuelta atrás
+
+`ROLLBACK-recibidas.sql` deshace las dos migraciones. No es una migración: no
+va en `supabase/migrations` y se ejecuta a mano, como `docs/fase2/ROLLBACK.sql`.
+Tiene dos niveles, porque casi nunca se necesita el segundo:
+
+- **Nivel 1**, sin pérdida de datos: devuelve la RPC a sus 15 parámetros —el
+  código anterior la llama así, y dos sobrecargas dejarían a PostgREST sin
+  saber a cuál ir— y restaura las políticas y permisos de escritura de
+  `invoices`. El esquema se queda como está. Con esto el código anterior
+  vuelve a funcionar; a cambio, las dos facturas trasladadas se verán otra vez
+  por duplicado, que es la duplicidad que había antes.
+- **Nivel 2**, con pérdida: quita las columnas nuevas, retira del hub las
+  filas que vinieron de la tabla heredada —por `id`, que la unificación
+  conserva—, devuelve la FK de albaranes a `invoices` y borra el registro de
+  las dos migraciones. Lo que se haya escrito después del despliegue en serie,
+  fecha de operación, descripción, desglose, cliente o categoría se va con las
+  columnas; el guion trae el `create table respaldo_…` para salvarlo antes.
+
+Probado en los dos sitios. En el proyecto de pruebas, el nivel 1 deja una sola
+firma de 15 parámetros y el nivel 2 devuelve las 7 recibidas originales, cero
+columnas nuevas, la FK apuntando a `invoices` y las 6 políticas de `invoices`
+que había antes. Y el ciclo entero con los ficheros reales por `psql -1` en el
+clúster local: 1+2 facturas → migrar (3, con el domicilio recuperado) → nivel 1
+→ nivel 2 (vuelta a 1, FK en `invoices`) → reaplicar las dos migraciones (3
+otra vez, domicilio otra vez). Deshacer y rehacer no deja nada a mano.
+
+Lo único que el guion no automatiza es devolver `portal_read_snapshot` a su
+versión anterior, porque su cuerpo vive en
+`20260929100000_portal_rpcs_drop_legacy_token.sql` y copiarlo aquí sería tener
+dos copias que se pueden desincronizar. El fichero explica cómo extraerlo con
+`sed`. No hace falta para reaplicar: la guarda de la unificación acepta tanto
+la huella anterior como la suya.
+
 ## Qué sigue pendiente
 
 Nada de la comprobación en sí. Queda el despliegue, con el orden de siempre: primero `20261009120000`, luego `20261010120000`, después
