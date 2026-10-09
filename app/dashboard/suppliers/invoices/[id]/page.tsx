@@ -11,6 +11,10 @@ import { FormField, Input, Select } from "@/components/ui/form-fields";
 import Loading from "@/components/ui/loading";
 import { useToast } from "@/components/ui/toast";
 import {
+  parseVatBreakdown,
+  receivedInvoiceComplianceIssues,
+} from "@/lib/received-invoices";
+import {
   getReceivedInvoice,
   updateReceivedInvoice,
   registerSupplierPayment,
@@ -107,6 +111,8 @@ export default function ReceivedInvoiceDetailPage() {
     : 0;
   const isOverdue = invoice.due_date && new Date(invoice.due_date) < new Date() && invoice.payment_status !== "paid";
   const st = receivedInvoiceStatusLabels[invoice.status] || { label: invoice.status, color: "" };
+  const vatLines = parseVatBreakdown(invoice.vat_breakdown);
+  const issues = receivedInvoiceComplianceIssues(invoice);
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -150,6 +156,21 @@ export default function ReceivedInvoiceDetailPage() {
         )}
       </div>
 
+      {/* Contenido obligatorio de la factura: lo que falta para deducir el IVA */}
+      {issues.length > 0 && (
+        <Card className="mb-6 border-warning/30 bg-warning/10">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-warning-ink">
+            Con estos datos el IVA no sería deducible
+          </h3>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-warning-ink">
+            {issues.map((issue) => <li key={issue}>{issue}</li>)}
+          </ul>
+          <p className="mt-2 text-xs text-warning-ink">
+            Corrígelo desde Facturación · Recibidas, o pide al proveedor una factura completa.
+          </p>
+        </Card>
+      )}
+
       {/* Financial summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <Card>
@@ -159,10 +180,27 @@ export default function ReceivedInvoiceDetailPage() {
               <span className="text-navy-500">Base imponible</span>
               <span className="text-navy-900">{fmtMoney(invoice.subtotal)}</span>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-navy-500">IVA ({invoice.iva_percent}%)</span>
-              <span className="text-navy-900">{fmtMoney(invoice.iva_amount)}</span>
-            </div>
+            {vatLines.length > 0 ? (
+              <>
+                {vatLines.map((line, index) => (
+                  <div key={index} className="flex justify-between text-sm">
+                    <span className="text-navy-500">
+                      IVA ({line.rate}% sobre {fmtMoney(line.base)})
+                    </span>
+                    <span className="text-navy-900">{fmtMoney(line.quota)}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between text-sm">
+                  <span className="text-navy-500">IVA total</span>
+                  <span className="text-navy-900">{fmtMoney(invoice.iva_amount)}</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex justify-between text-sm">
+                <span className="text-navy-500">IVA ({invoice.iva_percent}%)</span>
+                <span className="text-navy-900">{fmtMoney(invoice.iva_amount)}</span>
+              </div>
+            )}
             {Number(invoice.irpf_percent) > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-navy-500">IRPF ({invoice.irpf_percent}%)</span>
@@ -179,7 +217,11 @@ export default function ReceivedInvoiceDetailPage() {
         <Card>
           <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-4">Datos de la factura</h3>
           <div className="space-y-2">
+            {invoice.invoice_series && <InfoRow label="Serie">{invoice.invoice_series}</InfoRow>}
             <InfoRow label="Fecha emisión">{fmtDate(invoice.issue_date)}</InfoRow>
+            {invoice.operation_date && (
+              <InfoRow label="Fecha de la operación">{fmtDate(invoice.operation_date)}</InfoRow>
+            )}
             <InfoRow label="Fecha recepción">{fmtDate(invoice.reception_date)}</InfoRow>
             <InfoRow label="Vencimiento">
               <span className={isOverdue ? "text-red-600 font-medium" : ""}>
@@ -187,6 +229,12 @@ export default function ReceivedInvoiceDetailPage() {
               </span>
             </InfoRow>
             <InfoRow label="Forma de pago">{paymentMethodLabels[invoice.payment_method || ""] || invoice.payment_method || "—"}</InfoRow>
+            {invoice.supplier_address && (
+              <InfoRow label="Domicilio del proveedor">{invoice.supplier_address}</InfoRow>
+            )}
+            {invoice.description && (
+              <InfoRow label="Descripción de la operación">{invoice.description}</InfoRow>
+            )}
             {invoice.notes && <InfoRow label="Notas">{invoice.notes}</InfoRow>}
           </div>
         </Card>

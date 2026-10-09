@@ -35,7 +35,7 @@ interface OrderLine {
 interface Supplier { id: string; name: string; phone: string; email: string; }
 interface ProjectMin { id: string; name: string; }
 interface OrderMin { id: string; title: string; order_number: string; }
-interface InvoiceMin { id: string; invoice_number: string; total_amount: number; }
+interface InvoiceMin { id: string; invoice_number: string; total: number; }
 
 /* ═══════════════ Labels ═══════════════ */
 
@@ -107,7 +107,7 @@ export default function DeliveryNoteDetailPage() {
       setOrderLines((olRes.data as OrderLine[]) || []);
     }
     if (dn.invoice_id) {
-      const { data } = await supabase.from("invoices").select("id, invoice_number, total_amount").eq("id", dn.invoice_id).single();
+      const { data } = await supabase.from("received_invoices").select("id, invoice_number, total").eq("id", dn.invoice_id).single();
       if (data) setInvoice(data as InvoiceMin);
     }
     setLoading(false);
@@ -309,7 +309,7 @@ export default function DeliveryNoteDetailPage() {
         <Card>
           <p className="text-xs text-navy-500 dark:text-zinc-400 mb-2">Factura vinculada</p>
           {invoice ? (
-            <p className="text-sm font-medium text-navy-900 dark:text-white">{invoice.invoice_number} ({eur(invoice.total_amount)})</p>
+            <p className="text-sm font-medium text-navy-900 dark:text-white">{invoice.invoice_number} ({eur(invoice.total)})</p>
           ) : <p className="text-sm text-navy-500 dark:text-zinc-400">Sin factura</p>}
         </Card>
       </div>

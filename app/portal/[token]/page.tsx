@@ -124,7 +124,12 @@ const milestoneStatusMap: Record<string, { label: string; color: string }> = {
   completed: { label: "Completado", color: "bg-green-900/30 text-green-300" },
   cancelled: { label: "Cancelado", color: "bg-red-900/30 text-red-300" },
 };
+// El snapshot conserva payment_status como clave JSON y proyecta el status
+// de received_invoices; no se consulta ninguna tabla desde el portal.
 const invoiceStatusMap: Record<string, { label: string; color: string }> = {
+  approved: { label: "Aprobada", color: "bg-blue-900/30 text-blue-300" },
+  partial: { label: "Pago parcial", color: "bg-orange-900/30 text-orange-300" },
+  rejected: { label: "Rechazada", color: "bg-red-900/30 text-red-300" },
   pending: { label: "Pendiente", color: "bg-yellow-900/30 text-yellow-300" },
   paid: { label: "Pagada", color: "bg-green-900/30 text-green-300" },
   overdue: { label: "Vencida", color: "bg-red-900/30 text-red-300" },

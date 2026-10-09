@@ -65,6 +65,7 @@ function FacturacionHub() {
   const received = useReceivedInvoices(
     supplierFilter,
     useCallback(() => setTab("recibidas"), []),
+    searchParams.get("project") || "",
   );
 
   const counts: Record<TabKey, number | undefined> = {
@@ -138,10 +139,15 @@ function FacturacionHub() {
   );
 }
 
+function FacturacionContext() {
+  const searchParams = useSearchParams();
+  return <FacturacionHub key={searchParams.get("project") || ""} />;
+}
+
 export default function FacturacionPage() {
   return (
     <Suspense fallback={<Loading />}>
-      <FacturacionHub />
+      <FacturacionContext />
     </Suspense>
   );
 }

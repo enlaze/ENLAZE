@@ -35,15 +35,28 @@ export interface ReceivedInvoice {
   user_id: string;
   supplier_id: string | null;
   project_id: string | null;
+  client_id: string | null;
+  category: string;
   category_id: string | null;
   invoice_number: string;
+  /** Serie de la factura del proveedor; el correlativo va en invoice_number. */
+  invoice_series: string | null;
   supplier_name: string;
   supplier_nif: string | null;
+  /** Domicilio fiscal del expedidor, obligatorio en la factura completa. */
+  supplier_address: string | null;
   issue_date: string;
+  /** Fecha de la operación cuando difiere de la de expedición. */
+  operation_date: string | null;
   reception_date: string;
   due_date: string | null;
+  /** Descripción de la operación facturada. Nota interna aparte, en notes. */
+  description: string | null;
+  /** Desglose por tipos de IVA; null cuando hay un tipo único. */
+  vat_breakdown: unknown;
   subtotal: number;
-  iva_percent: number;
+  /** Null cuando la factura trae varios tipos: el detalle va en vat_breakdown. */
+  iva_percent: number | null;
   iva_amount: number;
   irpf_percent: number;
   irpf_amount: number;
@@ -199,25 +212,73 @@ export async function updateSupplier(supabase: SupabaseClient, id: string, updat
 
 /* ═══════════════ Received Invoices ═══════════════ */
 
+/** Joined names are read-only and never part of a writable invoice payload. */
+export interface ReceivedInvoiceRow extends ReceivedInvoice {
+  suppliers: { name: string } | null;
+  projects: { name: string } | null;
+  clients: { name: string } | null;
+}
+
+export interface ReceivedInvoiceFilters {
+  status?: string;
+  supplier_id?: string;
+  project_id?: string;
+  client_id?: string;
+  category?: string;
+  issue_date_from?: string;
+  issue_date_to?: string;
+  search?: string;
+}
+
 export async function getReceivedInvoices(
   supabase: SupabaseClient,
-  opts?: { status?: string; supplier_id?: string; search?: string; limit?: number; offset?: number }
+  opts?: ReceivedInvoiceFilters & { limit?: number; offset?: number }
 ) {
   let query = supabase
     .from("received_invoices")
-    .select("*, suppliers(name)", { count: "exact" })
-    .order("issue_date", { ascending: false });
+    .select("*, suppliers(name), projects(name), clients(name)", { count: "exact" })
+    .is("deleted_at", null)
+    .order("issue_date", { ascending: false })
+    .order("id", { ascending: true });
 
   if (opts?.status && opts.status !== "all") query = query.eq("status", opts.status);
   if (opts?.supplier_id) query = query.eq("supplier_id", opts.supplier_id);
+  if (opts?.project_id) query = query.eq("project_id", opts.project_id);
+  if (opts?.client_id) query = query.eq("client_id", opts.client_id);
+  if (opts?.category) query = query.eq("category", opts.category);
+  if (opts?.issue_date_from) query = query.gte("issue_date", opts.issue_date_from);
+  if (opts?.issue_date_to) query = query.lte("issue_date", opts.issue_date_to);
   if (opts?.search) {
     query = query.or(`invoice_number.ilike.%${opts.search}%,supplier_name.ilike.%${opts.search}%`);
   }
-  if (opts?.limit) query = query.limit(opts.limit);
-  if (opts?.offset) query = query.range(opts.offset, opts.offset + (opts.limit || 20) - 1);
+  if (opts?.offset !== undefined) {
+    query = query.range(opts.offset, opts.offset + (opts.limit || 50) - 1);
+  } else if (opts?.limit) {
+    query = query.limit(opts.limit);
+  }
 
   const { data, count, error } = await query;
-  return { data: (data || []) as ReceivedInvoice[], count: count || 0, error };
+  return { data: (data || []) as ReceivedInvoiceRow[], count: count || 0, error };
+}
+
+/** Full filtered set for fiscal totals/exports, beyond the UI and API page limits. */
+export async function getAllReceivedInvoices(
+  supabase: SupabaseClient,
+  filters?: ReceivedInvoiceFilters,
+) {
+  const invoices: ReceivedInvoiceRow[] = [];
+  const pageSize = 500;
+  while (true) {
+    const result = await getReceivedInvoices(supabase, {
+      ...filters, limit: pageSize, offset: invoices.length,
+    });
+    // Never export an incomplete set when a subsequent page failed.
+    if (result.error) return { data: [] as ReceivedInvoiceRow[], error: result.error };
+    invoices.push(...result.data);
+    if (invoices.length >= result.count || result.data.length === 0) {
+      return { data: invoices, error: null };
+    }
+  }
 }
 
 export interface SupplierInvoiceTotals {
@@ -319,6 +380,24 @@ export async function createReceivedInvoice(supabase: SupabaseClient, invoice: P
   }
 
   return { data: data as ReceivedInvoice | null, error };
+}
+
+/**
+ * Manda una factura recibida a la papelera.
+ *
+ * No se borra: `move_to_trash` marca `deleted_at` y la política restrictiva
+ * `received_invoices_hide_trashed` la saca de todas las consultas de la app, así
+ * que los totales por proveedor —que se suman al leer— se ajustan solos y
+ * `restore_trash_item` la devuelve entera desde /dashboard/trash.
+ *
+ * Devuelve false si la factura no es del usuario o ya estaba en la papelera.
+ */
+export async function trashReceivedInvoice(supabase: SupabaseClient, id: string) {
+  const { data, error } = await supabase.rpc("move_to_trash", {
+    p_entity_type: "received_invoice",
+    p_entity_id: id,
+  });
+  return { moved: data === true, error };
 }
 
 export async function updateReceivedInvoice(supabase: SupabaseClient, id: string, updates: Partial<ReceivedInvoice>) {

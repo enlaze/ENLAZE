@@ -110,9 +110,12 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const file = formData.get("file") as File;
     const userId = user.id; // Use authenticated user, ignore client-sent userId
-    const clientId = formData.get("clientId") as string;
-    const projectId = formData.get("projectId") as string;
-    const extractOnly = formData.get("mode") === "extract";
+    if (formData.get("mode") !== "extract") {
+      return NextResponse.json(
+        { error: "Modo no admitido. Usa mode=extract y registra la factura revisada en Facturación → Recibidas." },
+        { status: 400 }
+      );
+    }
 
     if (!file) {
       return NextResponse.json({ error: "Archivo requerido" }, { status: 400 });
@@ -196,14 +199,11 @@ Responde SOLO con el JSON, sin texto adicional:
       return NextResponse.json({ error: "No se pudo parsear la respuesta de Claude", raw: responseText }, { status: 422 });
     }
 
-    // Drafts for received_invoices must live in retained, private storage.
-    // The legacy invoices table remains in the deletable invoices bucket.
+    // All OCR drafts belong to received_invoices and use retained, private storage.
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const objectName = `${Date.now()}-${randomUUID()}-${sanitizedFileName}`;
-    const fileName = extractOnly
-      ? `${userId}/drafts/${objectName}`
-      : `${userId}/${objectName}`;
-    const storageBucket = extractOnly ? RETAINED_INVOICE_BUCKET : "invoices";
+    const fileName = `${userId}/drafts/${objectName}`;
+    const storageBucket = RETAINED_INVOICE_BUCKET;
 
     let uploadLeaseId: string;
     try {
@@ -235,121 +235,15 @@ Responde SOLO con el JSON, sin texto adicional:
       await endAccountWriteLease(supabaseService, uploadLeaseId);
     }
 
-    let imageUrl = "";
-    if (uploadError) {
+    if (uploadError || !uploadData) {
       console.error("Storage upload error:", uploadError);
-      if (extractOnly) {
-        return NextResponse.json(
-          { error: "No se pudo conservar el documento original de la factura." },
-          { status: 500 }
-        );
-      }
+      return NextResponse.json(
+        { error: "No se pudo conservar el documento original de la factura." },
+        { status: 500 }
+      );
     }
-    if (!uploadError && uploadData) {
-      if (extractOnly) {
-        imageUrl = retainedInvoiceStorageUrl(uploadData.path);
-      } else {
-        const { data: urlData } = supabaseService.storage
-          .from(storageBucket)
-          .getPublicUrl(fileName);
-        imageUrl = urlData.publicUrl;
-      }
-    }
+    const imageUrl = retainedInvoiceStorageUrl(uploadData.path);
 
-    if (extractOnly) {
-      const durationMs = Date.now() - startTime;
-      logAiRun(supabase, {
-        run_type: "ocr_invoice",
-        model: OCR_MODEL,
-        prompt_version: "v1.0",
-        input_hash: await hashText(file.name + file.size),
-        output_hash: await hashText(responseText),
-        tokens_in: message.usage?.input_tokens,
-        tokens_out: message.usage?.output_tokens,
-        duration_ms: durationMs,
-        entity_type: "received_invoice_draft",
-      });
-
-      return NextResponse.json({
-        success: true,
-        ocr_data: invoiceData,
-        image_url: imageUrl,
-        message: "Datos extraídos. Revisa la factura antes de guardarla.",
-      });
-    }
-
-    // Calcular trimestre fiscal
-    const invoiceDate = invoiceData.invoice_date ? new Date(invoiceData.invoice_date) : new Date();
-    const month = invoiceDate.getMonth() + 1;
-    const quarter = month <= 3 ? "Q1" : month <= 6 ? "Q2" : month <= 9 ? "Q3" : "Q4";
-    const fiscalYear = invoiceDate.getFullYear();
-
-    // Guardar en Supabase
-    const { data: invoice, error: insertError } = await supabase
-      .from("invoices")
-      .insert({
-        user_id: userId,
-        client_id: clientId || null,
-        project_id: projectId || null,
-        supplier_name: invoiceData.supplier_name || "",
-        supplier_nif: invoiceData.supplier_nif || "",
-        supplier_address: invoiceData.supplier_address || "",
-        invoice_number: invoiceData.invoice_number || "",
-        invoice_date: invoiceData.invoice_date || null,
-        due_date: invoiceData.due_date || null,
-        base_amount: invoiceData.base_amount || 0,
-        iva_percentage: invoiceData.iva_percentage || 21,
-        iva_amount: invoiceData.iva_amount || 0,
-        irpf_percentage: invoiceData.irpf_percentage || 0,
-        irpf_amount: invoiceData.irpf_amount || 0,
-        total_amount: invoiceData.total_amount || 0,
-        category: invoiceData.category || "general",
-        payment_method: invoiceData.payment_method || "",
-        image_url: imageUrl,
-        ocr_raw_data: invoiceData,
-        ocr_confidence: invoiceData.confidence || 0,
-        notes: invoiceData.notes || "",
-        quarter,
-        fiscal_year: fiscalYear,
-      })
-      .select()
-      .single();
-
-    if (insertError) {
-      console.error("Insert invoice error:", insertError);
-      return NextResponse.json({
-        error: "Error guardando factura",
-        details: insertError.message,
-        code: insertError.code || "",
-        hint: insertError.hint || ""
-      }, { status: 500 });
-    }
-
-    // Guardar líneas de factura
-    if (invoiceData.items && Array.isArray(invoiceData.items) && invoice) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const items = invoiceData.items.map((item: any, idx: number) => ({
-        invoice_id: invoice.id,
-        description: item.description || "",
-        quantity: item.quantity || 1,
-        unit_price: item.unit_price || 0,
-        iva_percentage: item.iva_percentage || 21,
-        subtotal: item.subtotal || 0,
-        sort_order: idx,
-      }));
-      const { error: itemsError } = await supabase.from("invoice_items").insert(items);
-      if (itemsError) {
-        console.error("Insert invoice items error:", itemsError);
-        return NextResponse.json({
-          error: "Error guardando líneas de factura",
-          details: itemsError.message,
-          code: itemsError.code || "",
-          hint: itemsError.hint || ""
-        }, { status: 500 });
-      }
-    }
-
-    // Fire-and-forget: log AI run for compliance
     const durationMs = Date.now() - startTime;
     logAiRun(supabase, {
       run_type: "ocr_invoice",
@@ -360,15 +254,14 @@ Responde SOLO con el JSON, sin texto adicional:
       tokens_in: message.usage?.input_tokens,
       tokens_out: message.usage?.output_tokens,
       duration_ms: durationMs,
-      entity_type: "invoice",
-      entity_id: invoice?.id,
+      entity_type: "received_invoice_draft",
     });
 
     return NextResponse.json({
       success: true,
-      invoice,
       ocr_data: invoiceData,
-      message: "Factura procesada correctamente",
+      image_url: imageUrl,
+      message: "Datos extraídos. Revisa la factura antes de guardarla.",
     });
   } catch (err: unknown) {
     console.error("OCR Error:", err);
