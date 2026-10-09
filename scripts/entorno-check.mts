@@ -14,8 +14,8 @@
  * Esta comprobación convierte ese pie de banco silencioso en un fallo de
  * compilación, que es ruidoso y llega antes de que nadie toque nada.
  *
- * LAS TRES REGLAS
- * ---------------
+ * LAS CUATRO REGLAS
+ * ----------------
  *  1. Un despliegue que NO es de producción no puede apuntar al proyecto de
  *     producción.
  *  2. Un despliegue de producción tiene que apuntar al proyecto de producción.
@@ -24,6 +24,11 @@
  *  3. La URL y la clave de servicio tienen que ser del MISMO proyecto. Una
  *     mezcla (URL de pruebas con clave de producción, o al revés) es lo peor de
  *     los dos mundos y no la detecta ninguna de las dos reglas anteriores.
+ *  4. Fuera de producción, Stripe no puede ir en modo real. Es la única de las
+ *     demás credenciales que se distingue sin conocer su valor, porque el modo
+ *     va en el prefijo (`sk_live_` frente a `sk_test_`). De RESEND_API_KEY no
+ *     se puede decir lo mismo: no hay forma de saber si es de pruebas, así que
+ *     ahí solo queda acotarla a mano en Vercel.
  *
  * FUERA DE VERCEL NO OPINA
  * ------------------------
@@ -42,6 +47,8 @@ export type Entorno = {
   vercelEnv: string | undefined;
   supabaseUrl: string | undefined;
   serviceRoleKey: string | undefined;
+  /** `STRIPE_SECRET_KEY`: `sk_live_…` cobra de verdad; `sk_test_…` no. */
+  stripeSecretKey: string | undefined;
 };
 
 /** El `ref` del proyecto a partir de su URL (https://<ref>.supabase.co). */
@@ -103,6 +110,16 @@ export function comprobar(e: Entorno): string[] {
     );
   }
 
+  // 4. Stripe en modo real fuera de producción: cobraría de verdad.
+  //    Es la única de las otras credenciales que se puede distinguir sin
+  //    conocer su valor, porque Stripe marca el modo en el prefijo.
+  if (!esProduccion && e.stripeSecretKey?.startsWith("sk_live_")) {
+    problemas.push(
+      `Este despliegue es "${e.vercelEnv}" y lleva una clave de Stripe en modo real (sk_live_): cobraría de verdad.`,
+      "Usa sk_test_… en Preview, o déjala sin definir.",
+    );
+  }
+
   // 3. URL y clave de servicio, del mismo proyecto.
   const refClave = refDeClave(e.serviceRoleKey);
   if (refClave && refClave !== refUrl) {
@@ -131,6 +148,7 @@ function main() {
     vercelEnv: process.env.VERCEL_ENV,
     supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
     serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    stripeSecretKey: process.env.STRIPE_SECRET_KEY,
   };
 
   const problemas = comprobar(entorno);
