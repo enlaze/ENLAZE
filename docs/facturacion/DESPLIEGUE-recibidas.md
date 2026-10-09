@@ -16,12 +16,34 @@ pendientes, y solo dos son de este trabajo:
 | `20261009120000_unify_received_invoices` | esta rama | En orden |
 | `20261010120000_received_invoice_legal_fields` | esta rama | En orden |
 
-La primera detendrá `supabase db push` igual que habría hecho la unificación
-antes de renumerarla: el CLI no acepta un fichero anterior al último registro.
-Hay que decidir qué hacer con ella —renumerarla a una fecha posterior, como se
-hizo aquí, o pasarla con `--include-all`— y **esa decisión no es de este
-trabajo**, porque la migración es de otra serie. Lo que sí conviene es no
-descubrirlo en medio del despliegue.
+La primera detendrá `supabase db push`: el CLI no acepta un fichero anterior al
+último registro. Tiene salida fácil, y **renumerarla no es la buena**:
+
+- **`supabase db push --include-all`** es la vía. Aplica también lo anterior al
+  último registro, y una vez aplicada queda en el historial, así que no vuelve a
+  quejarse en despliegues futuros.
+- **Renumerarla sería un error.** Esa serie (E6 lote 1) ancla su prueba
+  (`__tests__/authenticated-unused-privileges.integration.test.mjs`), su bloque
+  de comprobaciones (`docs/fase2/CHECKS.sql`) y su compensación
+  (`docs/fase2/ROLLBACK.sql`) a la cadena `20261005160000`. Cambiarle el número
+  rompe los tres sitios.
+- **Por `psql` el problema no existe**: `psql -f` ejecuta el fichero sin mirar
+  el orden. Solo hay que registrar la versión después, o `migraciones:check`
+  la dará por pendiente para siempre:
+
+  ```sql
+  insert into supabase_migrations.schema_migrations (version, name)
+  values ('20261005160000', 'authenticated_drop_unused_privileges')
+  on conflict (version) do nothing;
+  ```
+
+El `migraciones:check` del repositorio, por su parte, **no mira el orden**: solo
+compara conjuntos —pendientes, ausentes y duplicadas—, así que una versión
+antigua aplicada tarde no le molesta.
+
+Ojo: esa migración tiene su propio bloque de comprobación en
+`docs/fase2/CHECKS.sql` (busca «E6 lote 1»), que conviene pasar al aplicarla.
+No es de este trabajo, pero cae en el mismo despliegue.
 
 Comprobación del estado real antes de empezar:
 
@@ -48,15 +70,15 @@ Primero la base, después el código. Al revés, el código nuevo pediría colum
 que no existen.
 
 1. **Fusionar el PR** en `main` y dejar que el despliegue del código empiece.
-2. **Aplicar las cuatro migraciones** en orden de versión, resuelto ya el
-   problema de orden de `20261005160000`.
+2. **Aplicar las cuatro migraciones** en orden de versión, con `--include-all`
+   por lo de `20261005160000`.
 3. **Comprobar** con las consultas de abajo.
 4. Si algo va mal, `ROLLBACK-recibidas.sql`, nivel 1 primero.
 
-Con el CLI, una vez resuelto el orden:
+Con el CLI:
 
 ```bash
-supabase db push --linked
+supabase db push --linked --include-all
 ```
 
 O una a una por `psql`, que es como se probaron en el entorno de pruebas
