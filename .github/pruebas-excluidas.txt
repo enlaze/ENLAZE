@@ -1,0 +1,24 @@
+# Suites que el workflow de pruebas unitarias NO ejecuta.
+#
+# Una línea por fichero, con la ruta tal cual. Las líneas que empiezan por # y
+# las vacías se ignoran.
+#
+# Esto NO es una lista de permitidas al revés: por defecto se ejecuta TODO lo
+# que esté en __tests__/*.test.mjs y no sea *.integration.* ni *.browser*. Una
+# prueba nueva entra sola, sin tocar nada. Para quedar fuera hay que escribirla
+# aquí y decir por qué, que es la fricción que se busca.
+#
+# Las de integración y navegador ya quedan fuera por el nombre: necesitan una
+# base viva o un navegador, y cada una tiene su propio workflow.
+
+# 16 fallos heredados, medidos el 9 de octubre de 2026. Son deuda previa y
+# ajena: rutas de migraciones que se archivaron en migrations_historico y
+# pruebas que buscan lógica en pantallas ya retiradas. La suite tiene 59
+# comprobaciones que SÍ pasan y que, mientras esté aquí, no vigila nadie.
+# Para sacarla de esta lista hay que arreglar esos 16.
+__tests__/p1-review.test.mjs
+
+# 1 fallo heredado: «catalogue search adds supplier synonyms without weakening
+# exact validation». Las otras 6 de la suite pasan. Es del buscador del catálogo
+# de precios, ajeno a lo que motivó este workflow.
+__tests__/price-catalog-search.test.mjs

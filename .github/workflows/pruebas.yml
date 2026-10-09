@@ -1,0 +1,82 @@
+name: Pruebas unitarias
+
+# POR QUÉ EXISTE
+# --------------
+# Los workflows que había se disparan por RUTAS concretas: el de procedencia de
+# precios solo corre si cambia su migración o `lib/price-resolver-v2.ts`, el de
+# tokens del portal solo si cambia la página del portal, y así los ocho. Eso
+# deja fuera cualquier prueba que no esté en una de esas listas: el 9 de octubre
+# de 2026 había 61 suites unitarias y 556 comprobaciones que no ejecutaba nadie
+# en ningún PR.
+#
+# Este workflow no lleva filtro de rutas a propósito. Corre siempre, porque una
+# prueba que solo se ejecuta cuando alguien se acuerda de tocar el fichero
+# correcto no protege de nada.
+#
+# QUÉ EJECUTA
+# -----------
+# Todo `__tests__/*.test.mjs` menos lo que necesita una base viva o un navegador
+# (*.integration.*, *.browser*, cada una con su propio workflow) y menos lo que
+# liste `.github/pruebas-excluidas.txt`, que explica el motivo de cada
+# exclusión. El valor por defecto es INCLUIR: una prueba nueva entra sola.
+#
+# `--import tsx` no es opcional: muchas suites importan ficheros .ts y, sin él,
+# Node no resuelve los imports sin extensión y la tanda no arranca.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pruebas-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Ejecutar las pruebas unitarias
+        run: |
+          set -o pipefail
+          grep -vE '^[[:space:]]*(#|$)' .github/pruebas-excluidas.txt > /tmp/excluidas.txt || true
+          SUITES=$(
+            ls __tests__/*.test.mjs \
+              | grep -vE '\.integration\.|\.browser' \
+              | { grep -vxF -f /tmp/excluidas.txt || true; }
+          )
+          # Sin esta guarda, `node --test` sin argumentos buscaría por su cuenta
+          # y acabaría ejecutando también las de integración.
+          if [ -z "$SUITES" ]; then
+            echo "No hay ninguna suite que ejecutar: la lista de exclusiones se ha comido todo." >&2
+            exit 1
+          fi
+          echo "Suites: $(echo "$SUITES" | wc -l) · excluidas: $(wc -l < /tmp/excluidas.txt)"
+          # $SUITES sin comillas a propósito: son las rutas, una por línea y sin
+          # espacios. Así el paso funciona igual en bash 3 y en bash 5.
+          node --import tsx --test $SUITES 2>&1 | tee resultado.txt
+
+      - name: Resumen
+        if: always()
+        run: |
+          {
+            echo '### Pruebas unitarias'
+            echo '```'
+            grep -E '^(ℹ (tests|pass|fail|skipped|todo)|✖ )' resultado.txt 2>/dev/null \
+              || cat resultado.txt 2>/dev/null \
+              || echo 'Sin salida: el paso anterior no llegó a ejecutarse.'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
