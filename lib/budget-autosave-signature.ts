@@ -44,6 +44,15 @@ export const BUDGET_AUTOSAVE_EDITABLE_KEYS = [
 export type BudgetAutosaveEditableKey = typeof BUDGET_AUTOSAVE_EDITABLE_KEYS[number];
 type BudgetAutosaveSource = Record<BudgetAutosaveEditableKey, unknown>;
 
+// A later lookup may refresh evidence without changing the line or its price.
+// Evidence is persisted with the next real edit, never a reason to autosave.
+const PRICE_EVIDENCE_KEYS = new Set([
+  "price_source_type", "price_confidence", "price_checked_at",
+  "resolved_unit_price", "resolved_source_type", "resolved_confidence", "resolved_checked_at",
+  "price_source", "confidence_score", "price_source_detail",
+  "sourceType", "confidenceScore", "priceCheckedAt",
+]);
+
 /** Stable fingerprint of only the state that may legitimately start a save. */
 export function buildAutosaveSignature<T extends BudgetAutosaveSource>(state: T): string {
   const editable = Object.fromEntries(
@@ -51,7 +60,7 @@ export function buildAutosaveSignature<T extends BudgetAutosaveSource>(state: T)
   );
 
   try {
-    return JSON.stringify(editable);
+    return JSON.stringify(editable, (key, value) => PRICE_EVIDENCE_KEYS.has(key) ? undefined : value);
   } catch {
     // Never fall back to an always-changing value: that would restart the loop.
     return "__unserializable__";

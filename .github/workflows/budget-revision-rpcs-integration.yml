@@ -8,6 +8,9 @@ on:
       - "supabase/migrations/*budgets_lock_version.sql"
       - "supabase/migrations/*portal_tokens_owner_only.sql"
       - "supabase/migrations/*replace_budget_items*.sql"
+      - "supabase/migrations/*budget_items_price_provenance_writers.sql"
+      - "__tests__/g3-price-provenance-writers.integration.test.mjs"
+      - "scripts/g3-l1b-generate.mjs"
       - "__tests__/budget-revision-rpcs*.mjs"
       - "__tests__/budget-revision-writer.test.mjs"
       - "__tests__/budget-provider-autosave.browser.test.mjs"
@@ -130,6 +133,8 @@ jobs:
         run: npm run test:budget-revision-rpcs-integration
       - name: Full Next wizard on disposable PostgreSQL and PostgREST
         run: npm run test:budget-wizard-full-page-browser
+      - name: G3 price provenance SQL and economic equivalence on disposable PostgreSQL
+        run: node --test __tests__/g3-price-provenance-writers.integration.test.mjs
       - name: Disposable server logs
         if: always()
         run: |

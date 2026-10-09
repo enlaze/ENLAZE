@@ -1,11 +1,9 @@
 /**
- * GET  /api/pb/concepts       — List normalized concepts
- * POST /api/pb/concepts       — Create a new concept
+ * GET  /api/pb/concepts       — List canonical concepts
  */
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { requireWriteAccess } from "@/lib/subscription";
 
 async function getSupabaseAndUser() {
   const cookieStore = await cookies();
@@ -22,21 +20,15 @@ async function getSupabaseAndUser() {
   );
 
   const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return { supabase, user: null, company_id: null };
+  if (error || !user) return { supabase, user: null };
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", user.id)
-    .single();
-
-  return { supabase, user, company_id: profile?.company_id ?? null };
+  return { supabase, user };
 }
 
 // ─── GET ──────────────────────────────────────────────────────────────────────
 
 export async function GET(request: Request) {
-  const { supabase, user, company_id } = await getSupabaseAndUser();
+  const { supabase, user } = await getSupabaseAndUser();
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
   const url = new URL(request.url);
@@ -48,17 +40,16 @@ export async function GET(request: Request) {
   const offset = (page - 1) * limit;
 
   let query = supabase
-    .from("pb_normalized_concepts")
-    .select("*", { count: "exact" })
-    .or(`company_id.is.null,company_id.eq.${company_id}`);
+    .from("canonical_concepts")
+    .select("*", { count: "exact" });
 
-  if (search) query = query.ilike("canonical_name", `%${search}%`);
-  if (category) query = query.eq("category", category);
-  if (status) query = query.eq("review_status", status);
+  if (search) query = query.ilike("display_name_es", `%${search}%`);
+  if (category) query = query.eq("family", category);
+  if (status) query = query.eq("status", status);
 
   query = query
-    .order("category", { ascending: true })
-    .order("canonical_name", { ascending: true })
+    .order("family", { ascending: true })
+    .order("display_name_es", { ascending: true })
     .range(offset, offset + limit - 1);
 
   const { data, error, count } = await query;
@@ -77,71 +68,4 @@ export async function GET(request: Request) {
       pages: Math.ceil((count ?? 0) / limit),
     },
   });
-}
-
-// ─── POST ─────────────────────────────────────────────────────────────────────
-
-export async function POST(request: Request) {
-  const { supabase, user, company_id } = await getSupabaseAndUser();
-  if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-
-  // Muro de pago: la cuenta en solo lectura no crea ni modifica.
-  const blocked = await requireWriteAccess(user.id);
-  if (blocked) return blocked;
-  if (!company_id) return NextResponse.json({ error: "Usuario sin empresa asociada" }, { status: 403 });
-
-  try {
-    const body = await request.json();
-
-    if (!body.canonical_name || !body.category) {
-      return NextResponse.json(
-        { error: "canonical_name y category son obligatorios" },
-        { status: 400 }
-      );
-    }
-
-    const concept = {
-      company_id,
-      canonical_name: body.canonical_name,
-      description: body.description ?? "",
-      category: body.category,
-      subcategory: body.subcategory ?? "",
-      base_unit: body.base_unit ?? "ud",
-      synonyms: body.synonyms ?? [],
-      specifications: body.specifications ?? {},
-      review_status: "draft" as const,
-    };
-
-    // Check for duplicates within same company scope
-    const { data: existing } = await supabase
-      .from("pb_normalized_concepts")
-      .select("id, canonical_name")
-      .or(`company_id.is.null,company_id.eq.${company_id}`)
-      .ilike("canonical_name", concept.canonical_name)
-      .limit(1);
-
-    if (existing && existing.length > 0) {
-      return NextResponse.json(
-        {
-          error: "Ya existe un concepto con ese nombre",
-          existing: existing[0],
-        },
-        { status: 409 }
-      );
-    }
-
-    const { data, error } = await supabase
-      .from("pb_normalized_concepts")
-      .insert(concept)
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ ok: true, data }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: "Cuerpo de solicitud inválido" }, { status: 400 });
-  }
 }

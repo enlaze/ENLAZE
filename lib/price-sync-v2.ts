@@ -13,7 +13,7 @@
  *      observation is older than the configured TTL.
  *
  * All operations use Supabase client passed by the caller. The engine
- * tracks everything in pb_sync_runs + pb_sync_run_details.
+ * tracks everything in pb_sync_runs.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
