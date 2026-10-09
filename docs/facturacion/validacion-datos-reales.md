@@ -173,14 +173,57 @@ where n.nspname = 'public' and t.relname = any($1) and c.contype in ('p','u','c'
        or c.confrelid::regclass::text = 'auth.users');
 ```
 
+## Comprobación en navegador
+
+Hecha sobre un segundo proyecto Supabase de la organización, `enlaze-pruebas-recibidas`
+(`mpyrpftdbyfmligbmaft`, eu-west-3, 0 €/mes), con la app corriendo en local
+contra él. Producción no se tocó.
+
+El entorno se montó con un `pg_dump --schema-only` del esquema `public` de
+producción (93 tablas, 51 funciones, 327 políticas, 164 índices, 93 triggers y
+269 permisos) más los tres esquemas internos —`billing_internal`,
+`budget_internal`, `portal_token_internal`— que el volcado de `public` no
+arrastra aunque sus triggers dependan de ellos. Los únicos errores de carga
+fueron `public` ya existente, los siete triggers de plan que se crean antes que
+su esquema, y doce `ALTER DEFAULT PRIVILEGES` que piden superusuario. Los siete
+triggers se repusieron después; `public` quedó con los 93 de producción.
+
+Dos cosas que había que preparar y que se habrían visto en el primer arranque:
+`plan_catalog` tiene que estar sembrado o `billing_internal.start_trial()`
+aborta el registro de cualquier usuario nuevo, y los dos triggers de
+`auth.users` (perfil y prueba gratuita) no viajan en un volcado de `public`.
+
+Las dos migraciones se aplicaron con los ficheros tal cual, por `psql -1`, que
+es como las envolverá `supabase db push`. El traslado de datos se ejecutó con el
+`INSERT ... SELECT` exacto de la migración, no con una versión resumida.
+
+| Qué | Resultado |
+|---|---|
+| Las 9 en el hub, con su columna de cliente | 8 en el periodo anual 2026 y 1 en 2025, que es la heredada con fecha; el desplegable de año ofrece 2025 porque lo deduce de la factura más antigua |
+| El embebido `clients(name)` por PostgREST | La columna CLIENTE muestra «Cliente 1» en la factura trasladada |
+| Filtro por cliente | Cliente 2 deja la lista vacía; Cliente 1 devuelve la suya |
+| El filtro de obra se ajusta al cliente | Con Cliente 1 elegido, solo ofrece sus cuatro obras |
+| Filtro por trimestre | 2025 · 1T vacío; 2025 · 4T devuelve la del 28/11 |
+| Aviso de datos incompletos | «Datos incompletos (1)» en la trasladada —solo le faltaba la descripción, porque el domicilio lo había recuperado la migración— y (6) en la que no traía número |
+| Editar | El formulario abre como «Corregir factura recibida» con el domicilio ya puesto; se guardaron serie, fecha de operación y descripción por la RPC de 23 parámetros, y el aviso desapareció de la fila |
+| Papelera | Confirmación con el número y el proveedor; la factura sale de la lista (8 → 7) y aparece en /dashboard/trash marcada como conservación fiscal |
+| Restaurar | Vuelve al hub (7 → 8), `deleted_at` y `deleted_by` a null |
+| CSV | 19 columnas: las 13 de siempre en su sitio y las 6 legales al final, con la de «Datos que faltan» diciendo qué falta en cada factura |
+| PDF fiscal del periodo | 8 facturas, base 6.781,10, IVA 1.424,03, IRPF 10,00, total 8.195,13 |
+| Contabilidad | Los mismos importes, y la heredada ya aparece en el listado, que antes no se veía |
+| Ficha de la factura | Serie, fecha de la operación, domicilio y descripción visibles; sin aviso, porque ya está completa |
+
+El hub, el PDF y Contabilidad dan el mismo total al céntimo, que era el cruce
+que faltaba.
+
+Dos errores ajenos a esto aparecen en cualquier arranque de este entorno y no
+tocan las facturas: `/api/prices/n8n-sync` devuelve 500 en bucle porque le falta
+la clave de servicio, y `/api/billing/status` devuelve 503 por no haber
+credenciales de Stripe.
+
 ## Qué sigue pendiente
 
-Solo la comprobación en navegador, que este banco no puede dar: que el hub
-liste las 9 con su cliente, que el filtro por trimestre y el CSV cuadren con
-Contabilidad y el PDF, y que editar y mandar a la papelera se comporten contra
-una base real a través de PostgREST.
-
-Y el orden de siempre: primero `20261009120000`, luego `20261010120000`, después
+Nada de la comprobación en sí. Queda el despliegue, con el orden de siempre: primero `20261009120000`, luego `20261010120000`, después
 el código. La segunda recrea `update_received_invoice_and_reconcile` con más
 parámetros, así que entre migrar y desplegar el código el panel anterior no
 puede corregir facturas.
