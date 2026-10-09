@@ -66,14 +66,28 @@ parámetros y el panel anterior vuelve a funcionar sin perder nada.
 
 ## Orden
 
-Primero la base, después el código. Al revés, el código nuevo pediría columnas
-que no existen.
+Primero la base, después el código. Y eso significa **antes de fusionar el PR**,
+porque fusionar dispara el despliegue.
 
-1. **Fusionar el PR** en `main` y dejar que el despliegue del código empiece.
-2. **Aplicar las cuatro migraciones** en orden de versión, con `--include-all`
+1. **Aplicar las cuatro migraciones** en orden de versión, con `--include-all`
    por lo de `20261005160000`.
-3. **Comprobar** con las consultas de abajo.
+2. **Comprobar** con las consultas de abajo.
+3. **Fusionar el PR** en `main` y dejar que se despliegue el código.
 4. Si algo va mal, `ROLLBACK-recibidas.sql`, nivel 1 primero.
+
+El orden importa y no es simétrico:
+
+- **Migraciones primero** (correcto): el código anterior sigue funcionando en
+  todo salvo un botón, el de corregir una factura cuando el OCR dejó su
+  documento pendiente, porque llama a la firma de 15 parámetros que
+  `20261010120000` sustituye. Es la ventana descrita arriba, y el nivel 1 de la
+  vuelta atrás la cierra en un minuto.
+- **Código primero** (mal): el código nuevo pide `clients(name)` —que necesita
+  la clave ajena que añade la migración— y columnas que aún no existen. Se cae
+  la pestaña de Recibidas entera, no un botón.
+
+Si el despliegue de `main` es automático, fusionar y migrar no se pueden hacer
+«a la vez»: hay que migrar antes y fusionar después.
 
 Con el CLI:
 
