@@ -1,7 +1,12 @@
 name: Migraciones repo vs base
 
-# Compara supabase/migrations con las migraciones registradas en producción y
+# Compara supabase/migrations con las migraciones registradas en cada proyecto y
 # falla si no coinciden, nombrando cuáles faltan en cada lado.
+#
+# Son DOS proyectos: producción y el de las previsualizaciones. El segundo se
+# desincroniza en cuanto se aplica una migración a producción y se olvida
+# aplicarla allí, y una base de pruebas que no reproduce el esquema real no
+# sirve para probar nada. Por eso se vigilan los dos con el mismo cron.
 #
 # El disparo programado es el que importa: una migración aplicada a mano desde
 # el panel o con `db push` desde otra máquina no cambia el repo, así que ningún
@@ -29,8 +34,19 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    strategy:
+      # Sin fail-fast: si uno de los dos se desincroniza, interesa ver el estado
+      # del otro igualmente, no quedarse a medias.
+      fail-fast: false
+      matrix:
+        proyecto:
+          - nombre: produccion
+            ref: dsgnymebkxxkslyeotee
+          - nombre: preview
+            ref: wowzjvlyklooqafgzuqk
+    name: ${{ matrix.proyecto.nombre }}
     env:
-      SUPABASE_PROJECT_REF: dsgnymebkxxkslyeotee
+      SUPABASE_PROJECT_REF: ${{ matrix.proyecto.ref }}
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
     steps:
       - uses: actions/checkout@v6
@@ -47,7 +63,7 @@ jobs:
         if: always()
         run: |
           {
-            echo '### Migraciones repo vs base'
+            echo '### Migraciones repo vs base · ${{ matrix.proyecto.nombre }} (${{ matrix.proyecto.ref }})'
             echo '```'
             cat resultado.txt 2>/dev/null || echo 'Sin salida: el paso anterior no llegó a ejecutarse.'
             echo '```'
