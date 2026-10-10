@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase-server";
 import { getServiceRoleClient } from "@/lib/supabase-service-role";
 import { getStripe } from "@/lib/stripe";
 import { stripePriceId } from "@/lib/stripe-prices";
+import { checkoutSessionParams } from "@/lib/billing-sessions";
 import { BILLING_INTERVALS, PAID_PLAN_IDS, type BillingInterval, type PaidPlanId } from "@/lib/plans";
 
 /**
@@ -70,17 +71,9 @@ export async function POST(req: NextRequest) {
   }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || req.nextUrl.origin;
-  const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    customer: customerId,
-    client_reference_id: user.id,
-    line_items: [{ price: priceId, quantity: 1 }],
-    subscription_data: { metadata: { user_id: user.id, plan, interval } },
-    metadata: { user_id: user.id, plan, interval },
-    integration_identifier: "enlaze-suscripciones-qmxvtrla",
-    success_url: `${siteUrl}/dashboard/settings/plan?billing=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${siteUrl}/dashboard/settings/plan?billing=cancel`,
-  });
+  const session = await stripe.checkout.sessions.create(checkoutSessionParams({
+    customerId, userId: user.id, priceId, plan, interval, siteUrl,
+  }));
 
   return NextResponse.json({ url: session.url });
 }

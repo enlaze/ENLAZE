@@ -92,6 +92,9 @@ async function checkStripe() {
         const want = priceCents(plan, interval);
         if (price.unit_amount !== want) problems.push(`${envVar}: Stripe cobra ${price.unit_amount} céntimos, lib/plans.ts dice ${want}`);
         if (price.currency !== "eur") problems.push(`${envVar}: moneda ${price.currency}, se esperaba eur`);
+        if (price.tax_behavior !== "exclusive") {
+          problems.push(`${envVar}: tax_behavior ${price.tax_behavior}, se esperaba exclusive (precios sin IVA)`);
+        }
         if (price.recurring?.interval !== interval || (price.recurring?.interval_count ?? 1) !== 1) {
           problems.push(`${envVar}: periodicidad ${price.recurring?.interval_count}×${price.recurring?.interval}, se esperaba 1×${interval}`);
         }
