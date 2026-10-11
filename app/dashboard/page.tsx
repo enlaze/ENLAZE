@@ -290,9 +290,9 @@ export default function DashboardHome() {
       const invoicesWithoutHash = allInv.filter((inv: Record<string, unknown>) => !inv.verifactu_hash).length;
       checks.push({
         area: "fiscal",
-        label: "Fiscal / Verifactu",
+        label: "Fiscal",
         status: invoicesWithoutHash === 0 ? "green" : invoicesWithoutHash <= 3 ? "yellow" : "red",
-        detail: invoicesWithoutHash === 0 ? "Todas las facturas con hash" : `${invoicesWithoutHash} factura(s) sin hash Verifactu`,
+        detail: invoicesWithoutHash === 0 ? "Todas las facturas con hash" : `${invoicesWithoutHash} factura(s) sin hash`,
       });
 
       // AI

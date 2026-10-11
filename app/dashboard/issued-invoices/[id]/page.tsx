@@ -613,10 +613,10 @@ export default function IssuedInvoiceDetailPage() {
         </div>
       </div>
 
-      {/* Verifactu info */}
+      {/* Hash encadenado */}
       {invoice.verifactu_registered && (
         <div className="bg-white dark:bg-zinc-900 rounded-xl p-5 mb-6 border border-emerald-500/20 shadow-sm dark:shadow-none">
-          <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-3">Verifactu</h3>
+          <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-3">Hash de la factura</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <div>
               <p className="text-xs text-navy-500 dark:text-zinc-400 mb-1">Hash SHA-256</p>
@@ -625,10 +625,6 @@ export default function IssuedInvoiceDetailPage() {
             <div>
               <p className="text-xs text-navy-500 dark:text-zinc-400 mb-1">Hash anterior</p>
               <p className="text-xs text-navy-500 dark:text-zinc-500 font-mono break-all bg-navy-50 dark:bg-zinc-800 rounded p-2">{invoice.verifactu_prev_hash || "0"}</p>
-            </div>
-            <div className="md:col-span-2">
-              <p className="text-xs text-navy-500 dark:text-zinc-400 mb-1">URL verificación QR</p>
-              <p className="text-xs text-navy-700 dark:text-zinc-300 font-mono break-all bg-navy-50 dark:bg-zinc-800 rounded p-2">{invoice.verifactu_qr_data || "—"}</p>
             </div>
           </div>
         </div>

@@ -17,7 +17,7 @@ export type FiscalEventType =
 const eventLabels: Record<FiscalEventType, string> = {
   created: "Factura creada",
   issued: "Factura emitida",
-  hash_generated: "Hash Verifactu generado",
+  hash_generated: "Hash generado",
   xml_generated: "XML Facturae generado",
   sent: "Enviada al cliente",
   paid: "Cobrada",

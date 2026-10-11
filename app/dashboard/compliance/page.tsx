@@ -135,7 +135,7 @@ export default function ComplianceDashboardPage() {
         status: allHaveHash && drafts === 0 ? "green" : drafts > 0 ? "yellow" : inv.length === 0 ? "yellow" : "red",
         detail: inv.length === 0
           ? "Sin facturas emitidas todavía."
-          : `${inv.length} facturas. ${allHaveHash ? "Todas con hash Verifactu." : "Faltan hashes."} ${drafts > 0 ? `${drafts} borradores pendientes.` : ""}`,
+          : `${inv.length} facturas. ${allHaveHash ? "Todas con hash." : "Faltan hashes."} ${drafts > 0 ? `${drafts} borradores pendientes.` : ""}`,
       },
       {
         area: "ai", label: "Inteligencia Artificial", href: "/dashboard/compliance/ai",
