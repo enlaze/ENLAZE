@@ -39,6 +39,32 @@ const PUBLIC_API_ROUTES = [
   "/api/prices/weekly-report/send",  // Sistema (Bearer WEBHOOK_SECRET/AGENT_API_KEY dentro)
 ];
 
+// Rutas de /api/agent que llama n8n (n8n-workflow-comercio-local-v6.3.json).
+// Ruta exacta, una por una: nada de prefijos. Cada una exige su propio
+// `Bearer <AGENT_API_KEY>` (requireBearer / verifyAgentRequest) o sesión
+// (verifyAgentOrBrowserRequest) antes de hacer nada.
+// Solo se saltan el proxy si traen cabecera Authorization Bearer: el
+// dashboard las llama con cookie y sigue pasando por aquí como siempre.
+const N8N_AGENT_ROUTES = new Set([
+  "/api/agent/users",
+  "/api/agent/config",
+  "/api/agent/news",
+  "/api/agent/ingest",
+  "/api/agent/calendar/summary",
+  "/api/agent/gmail/summary",
+  "/api/agent/market/summary",
+  "/api/agent/reputation/summary",
+  "/api/agent/sheets/summary",
+]);
+
+function isN8nAgentCall(request: NextRequest): boolean {
+  const authorization = request.headers.get("authorization") || "";
+  return (
+    N8N_AGENT_ROUTES.has(request.nextUrl.pathname) &&
+    authorization.toLowerCase().startsWith("bearer ")
+  );
+}
+
 function isPublicRoute(pathname: string): boolean {
   // Check exact matches and prefix matches for public routes
   for (const route of PUBLIC_ROUTES) {
@@ -76,6 +102,11 @@ export async function proxy(request: NextRequest) {
 
   // Skip auth for public API routes
   if (isPublicApiRoute(pathname)) {
+    return response;
+  }
+
+  // n8n: la ruta comprueba la clave Bearer ella misma
+  if (isN8nAgentCall(request)) {
     return response;
   }
 
