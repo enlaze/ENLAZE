@@ -52,8 +52,8 @@ export default function ImportPricesPanel({ onImported }: { onImported?: () => v
       setResult(data);
       toast.success(`Importados ${data.imported} productos de ${data.total}`);
       onImported?.();
-    } catch (err: any) {
-      toast.error(err.message || "Error al importar");
+    } catch (err: unknown) {
+      toast.error((err as Error).message || "Error al importar");
     } finally {
       setUploading(false);
     }

@@ -167,8 +167,8 @@ export default function AddProviderPricePanel({ onAdded, sector = "construccion"
       setProvPhone("");
       setLoadedProviders(false);
       onAdded?.();
-    } catch (err: any) {
-      toast.error(err.message || "Error al guardar proveedor");
+    } catch (err: unknown) {
+      toast.error((err as Error).message || "Error al guardar proveedor");
     } finally {
       setSaving(false);
     }
@@ -224,8 +224,8 @@ export default function AddProviderPricePanel({ onAdded, sector = "construccion"
       setPrice("");
       setBrand("");
       onAdded?.();
-    } catch (err: any) {
-      toast.error(err.message || "Error al guardar producto");
+    } catch (err: unknown) {
+      toast.error((err as Error).message || "Error al guardar producto");
     } finally {
       setSaving(false);
     }

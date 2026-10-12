@@ -166,9 +166,9 @@ export async function POST(request: Request) {
       default:
         return NextResponse.json({ error: "Accion no reconocida: " + action }, { status: 400 });
     }
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("Webhook error:", e);
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 }
 

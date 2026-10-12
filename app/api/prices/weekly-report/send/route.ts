@@ -9,6 +9,20 @@ export const maxDuration = 300;
 // POST /api/prices/weekly-report/send
 // Called by cron (every Monday) or manually to generate and email weekly reports to all users with alerts.
 // System route: it emails every user, so it needs the shared secret, not just any logged-in session.
+interface ObservationProduct {
+  commercial_name?: string | null;
+  pb_providers?: { name?: string | null } | null;
+}
+
+interface PriceChange {
+  product_name: string;
+  provider: string;
+  old_price: number;
+  new_price: number;
+  change_pct: number;
+  direction: "up" | "down";
+}
+
 export async function POST(request: Request) {
   const denied = requireBearer(request, "WEBHOOK_SECRET", "AGENT_API_KEY");
   if (denied) return denied;
@@ -59,7 +73,7 @@ export async function POST(request: Request) {
     const productChanges: Record<string, { name: string; provider: string; prices: number[] }> = {};
     for (const obs of observations) {
       const pid = obs.product_id;
-      const product = obs.pb_products as any;
+      const product = obs.pb_products as ObservationProduct | null;
       if (!productChanges[pid]) {
         productChanges[pid] = {
           name: product?.commercial_name || "Desconocido",
@@ -70,7 +84,7 @@ export async function POST(request: Request) {
       productChanges[pid].prices.push(Number(obs.price_excl_vat) || 0);
     }
 
-    const changes: any[] = [];
+    const changes: PriceChange[] = [];
     let totalChangePct = 0;
     let changedCount = 0;
 
@@ -241,8 +255,8 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ sent, totalChanges: changes.length });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[weekly-report/send] Error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }

@@ -6,6 +6,7 @@ import {
   calculateBudgetFinancials,
   useBudgetGenerate,
   type BudgetState,
+  type Material,
 } from "../BudgetGenerateProvider";
 import { Card } from "@/components/ui/card";
 import type { PDFBudget } from "@/lib/pdf-generator";
@@ -156,7 +157,7 @@ export function ProvidersStep() {
   }, [analyzeWithAI, isRefreshingPrices, materials]);
 
   /** Badge props for source/provider status. Provider match/missing flags take priority when present. */
-  const getBadgeProps = (sourceType?: string, isRealData?: boolean, material?: any) => {
+  const getBadgeProps = (sourceType?: string, isRealData?: boolean, material?: Material) => {
     if (isServiceMaterial(material || {})) {
       return material?.isRealData
         ? { label: "OFERTA", className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800" }
@@ -191,8 +192,8 @@ export function ProvidersStep() {
   };
 
   // Provider coverage stats for UI banner
-  const providerMatchCount = materials.filter(m => (m as any).provider_adjustment?.applied === true).length;
-  const providerMissingCount = materials.filter(m => (m as any).missing_in_selected_provider === true).length;
+  const providerMatchCount = materials.filter(m => m.provider_adjustment?.applied === true).length;
+  const providerMissingCount = materials.filter(m => m.missing_in_selected_provider === true).length;
   const hasProviderEnrichment = providerMatchCount > 0 || providerMissingCount > 0;
   const includedMaterials = materials.filter((material) => material.included);
   const includedProducts = includedMaterials.filter(isCommercialProductMaterial);
@@ -381,7 +382,7 @@ export function ProvidersStep() {
             <Store className="h-8 w-8 text-brand-green mb-2 mx-auto" />
             <h4 className="text-sm font-bold text-navy-900 dark:text-white">Sin proveedores disponibles</h4>
             <p className="text-xs text-navy-500 dark:text-zinc-400 mt-1 max-w-xs mx-auto">
-              Los proveedores se generan automáticamente con el análisis IA. Vuelve al paso anterior y usa "Generar con IA".
+              Los proveedores se generan automáticamente con el análisis IA. Vuelve al paso anterior y usa &quot;Generar con IA&quot;.
             </p>
           </div>
         )}
@@ -467,7 +468,7 @@ export function ProvidersStep() {
               <Package className="h-8 w-8 text-brand-green mb-2 mx-auto" />
               <h4 className="text-sm font-bold text-navy-900 dark:text-white">Sin materiales disponibles</h4>
               <p className="text-xs text-navy-500 dark:text-zinc-400 mt-1 max-w-xs mx-auto">
-                Los materiales se generan automáticamente con la IA o desde tu catálogo de precios. Vuelve al paso anterior y usa "Generar con IA" para obtener una lista completa.
+                Los materiales se generan automáticamente con la IA o desde tu catálogo de precios. Vuelve al paso anterior y usa &quot;Generar con IA&quot; para obtener una lista completa.
               </p>
             </div>
           ) : (
@@ -519,7 +520,7 @@ export function ProvidersStep() {
                               <p className="text-sm font-medium text-navy-900 dark:text-white">{m.name}</p>
                               <span
                                 className={`${getBadgeProps(m.sourceType, m.isRealData, m).className} border text-[9px] px-1 rounded-sm font-semibold ${m.sourceType === "manual_locked" ? "" : "uppercase tracking-wider"}`}
-                                title={(m as any).provider_fallback_reason || "Fuente de datos"}
+                                title={m.provider_fallback_reason || "Fuente de datos"}
                               >
                                 {getBadgeProps(m.sourceType, m.isRealData, m).label}
                               </span>
@@ -748,6 +749,10 @@ export function ProvidersStep() {
           <button
             onClick={() => {
               if (state.isUndervalued) return;
+              // require síncrono a propósito: printPDF abre la ventana con
+              // window.open y un import() asíncrono la sacaría del gesto del
+              // usuario, con lo que el navegador podría bloquearla.
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
               const pdfLib = require("@/lib/pdf-generator");
               const budgetMeta = buildBudgetMeta(state);
 
@@ -757,7 +762,7 @@ export function ProvidersStep() {
               } else {
                 // Legacy flat-table fallback
                 const items = buildLegacyPDFItems(state, "client");
-                const subtotal = items.reduce((s: number, i: any) => s + i.subtotal, 0);
+                const subtotal = items.reduce((s: number, i) => s + i.subtotal, 0);
                 budgetMeta.subtotal = subtotal;
                 budgetMeta.iva_amount = subtotal * (state.ivaPercent / 100);
                 budgetMeta.total = subtotal * (1 + state.ivaPercent / 100);
@@ -775,6 +780,10 @@ export function ProvidersStep() {
           </button>
           <button
             onClick={() => {
+              // require síncrono a propósito: printPDF abre la ventana con
+              // window.open y un import() asíncrono la sacaría del gesto del
+              // usuario, con lo que el navegador podría bloquearla.
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
               const pdfLib = require("@/lib/pdf-generator");
               const budgetMeta = buildBudgetMeta(state);
 
@@ -784,7 +793,7 @@ export function ProvidersStep() {
               } else {
                 // Legacy flat-table fallback
                 const items = buildLegacyPDFItems(state, "internal");
-                const subtotal = items.reduce((s: number, i: any) => s + i.subtotal, 0);
+                const subtotal = items.reduce((s: number, i) => s + i.subtotal, 0);
                 budgetMeta.subtotal = subtotal;
                 budgetMeta.iva_amount = subtotal * (state.ivaPercent / 100);
                 budgetMeta.total = subtotal * (1 + state.ivaPercent / 100);

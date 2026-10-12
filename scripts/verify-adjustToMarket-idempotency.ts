@@ -268,7 +268,7 @@ console.log("\n─── CHECK 5: safe-area guard ──────────
   const items = buildItems();
   const materials = buildScopeMaterials(baseScope);
 
-  const cases: Array<[string, any]> = [
+  const cases: Array<[string, number | null | undefined]> = [
     ["0", 0],
     ["undefined", undefined],
     ["null", null],
@@ -277,7 +277,9 @@ console.log("\n─── CHECK 5: safe-area guard ──────────
   ];
   let safeAreaFailures = 0;
   for (const [label, badArea] of cases) {
-    const scope = { ...baseScope, superficie_m2: badArea };
+    // Valores inválidos a propósito (null, NaN...): se fuerza el tipo para
+    // comprobar que adjustToMarket se defiende de datos mal formados.
+    const scope = { ...baseScope, superficie_m2: badArea } as BudgetScope;
     const r = adjustToMarket(scope, items, materials, serviceType, marginMultiplier);
     if (r.adjusted !== false) {
       fail(`Bad area "${label}": adjusted should be false, got ${r.adjusted}`);

@@ -54,7 +54,7 @@ export async function verifyAgentOrBrowserRequest(
   //    (sin la variable definida nunca coincide: se exige sesión de navegador)
   if (bearerMatches(req, "AGENT_API_KEY")) {
     console.log("[Auth] Mode: Agent API Key matched");
-    let userId = req.nextUrl.searchParams.get("user_id");
+    const userId = req.nextUrl.searchParams.get("user_id");
     if (!userId) {
       return NextResponse.json(
         { error: "user_id query parameter is required" },

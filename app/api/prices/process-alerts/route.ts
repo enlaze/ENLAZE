@@ -16,6 +16,36 @@ export const maxDuration = 300;
 
 // This endpoint is called after price sync (from webhook or cron)
 // It checks all active alerts against current prices and creates notifications
+interface AlertNotification {
+  user_id: string;
+  type: string;
+  title: string;
+  body: string;
+  severity: string;
+  entity_type: string;
+  entity_id: string;
+  action_url: string;
+}
+
+interface AlertNotificationRecord {
+  alert_id: string;
+  user_id: string;
+  product_id: string;
+  product_name: string | null;
+  provider_name: string | null;
+  old_price: number;
+  new_price: number;
+  change_pct: number;
+  direction: "up" | "down";
+}
+
+interface AlertUpdate {
+  id: string;
+  last_price: number;
+  last_notified_at: string;
+  updated_at: string;
+}
+
 export async function POST(request: Request) {
   // System route: it reads and notifies every user's alerts, so it needs the
   // shared secret, not just any logged-in session.
@@ -56,7 +86,7 @@ export async function POST(request: Request) {
       .map((a) => a.product_id)
       .filter(Boolean);
 
-    let currentPrices: Record<string, number> = {};
+    const currentPrices: Record<string, number> = {};
     if (productIds.length > 0) {
       const { data: products } = await supabase
         .from("pb_products")
@@ -70,9 +100,9 @@ export async function POST(request: Request) {
 
     // 3. Check each alert
     let triggered = 0;
-    const notifications: any[] = [];
-    const alertUpdates: any[] = [];
-    const alertNotifRecords: any[] = [];
+    const notifications: AlertNotification[] = [];
+    const alertUpdates: AlertUpdate[] = [];
+    const alertNotifRecords: AlertNotificationRecord[] = [];
 
     for (const alert of alerts) {
       if (!alert.product_id || !currentPrices[alert.product_id]) continue;
@@ -202,9 +232,9 @@ export async function POST(request: Request) {
       processed: alerts.length,
       triggered,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[process-alerts] Error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }
 

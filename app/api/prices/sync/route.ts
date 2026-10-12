@@ -59,8 +59,8 @@ export async function POST(request: Request) {
       message: `Precios sincronizados: ${results.added} nuevos, ${results.updated} actualizados, ${results.skipped} omitidos.`,
       results
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[ManualSync API] Error:", error);
-    return NextResponse.json({ error: error.message || "Error interno del servidor" }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Error interno del servidor" }, { status: 500 });
   }
 }

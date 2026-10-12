@@ -307,10 +307,10 @@ export default function BudgetDetailPage() {
       const html = await res.text();
       printPDF(html, pdfWindow);
       toast.success(`${mode === "client" ? "PDF del cliente" : "PDF interno"} preparado. Selecciona ‘Guardar como PDF’ en el diálogo de impresión.`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       pdfWindow.close();
       console.error("Error downloading PDF:", err);
-      toast.error(err.message || "Error al preparar el PDF");
+      toast.error((err as Error).message || "Error al preparar el PDF");
     } finally {
       setExportingPDF(null);
     }

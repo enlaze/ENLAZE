@@ -12,7 +12,16 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generados, no código fuente: salida compilada de pruebas antiguas y
+    // worktrees de agentes (copias del repo entero).
+    ".test-out/**",
+    ".claude/**",
   ]),
+  {
+    // Scripts de Node en CommonJS: require es su forma normal de importar.
+    files: ["scripts/**/*.js"],
+    rules: { "@typescript-eslint/no-require-imports": "off" },
+  },
 ]);
 
 export default eslintConfig;

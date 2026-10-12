@@ -2,7 +2,7 @@
 
 import React from "react";
 import { RefreshCw, Construction, Database } from "lucide-react";
-import { useBudgetGenerate } from "../BudgetGenerateProvider";
+import { useBudgetGenerate, type Partida } from "../BudgetGenerateProvider";
 import { Card } from "@/components/ui/card";
 
 export function ItemsStep() {
@@ -194,7 +194,7 @@ export function ItemsStep() {
                     <td className="p-4">
                       <select 
                         value={p.status}
-                        onChange={(e) => updatePartida(p.id, { status: e.target.value as any })}
+                        onChange={(e) => updatePartida(p.id, { status: e.target.value as Partida["status"] })}
                         className={`text-xs font-medium bg-transparent border-none p-0 focus:ring-0 cursor-pointer ${
                           p.status === 'opcional' ? 'text-amber-500' : 
                           p.status === 'estimada' ? 'text-blue-500' : 

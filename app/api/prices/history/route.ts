@@ -60,8 +60,8 @@ export async function GET(request: Request) {
       history: data || [],
       days,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[price-history] Error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }

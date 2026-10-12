@@ -44,8 +44,8 @@ export async function GET() {
       alerts: alertsRes.data || [],
       notifications: notifsRes.data || [],
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }
 
@@ -96,8 +96,8 @@ export async function POST(request: Request) {
 
     if (error) throw error;
     return NextResponse.json({ alert: data });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }
 
@@ -120,8 +120,8 @@ export async function DELETE(request: Request) {
 
     if (error) throw error;
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }
 
@@ -153,7 +153,7 @@ export async function PATCH(request: Request) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }

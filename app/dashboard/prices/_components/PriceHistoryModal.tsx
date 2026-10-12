@@ -19,7 +19,10 @@ export default function PriceHistoryModal({ productId, productName, onClose }: P
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(90);
-  const [product, setProduct] = useState<any>(null);
+  const [product, setProduct] = useState<{
+    brand?: string | null;
+    pb_providers?: { name?: string | null } | null;
+  } | null>(null);
 
   useEffect(() => {
     loadHistory();

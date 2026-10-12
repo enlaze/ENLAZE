@@ -29,6 +29,14 @@ function budgetIdFromLocation() {
  * budget_items. When that read fails we report it instead of hydrating an empty
  * set, and the writer then refuses to empty the budget.
  */
+interface DraftRow {
+  id: string;
+  title: string | null;
+  updated_at: string;
+  wizard_state: Record<string, unknown> | null;
+  lock_version: number | string | null;
+}
+
 async function hydratePartidas(
   supabase: ReturnType<typeof createClient>,
   budgetId: string,
@@ -115,7 +123,7 @@ function ExistingBudgetLoader() {
 
 function DraftRecoveryManager() {
   const { loadDraft, saveDraft, state } = useBudgetGenerate();
-  const [drafts, setDrafts] = useState<any[]>([]);
+  const [drafts, setDrafts] = useState<DraftRow[]>([]);
   const [showModal, setShowModal] = useState(false);
   const supabase = createClient();
 
