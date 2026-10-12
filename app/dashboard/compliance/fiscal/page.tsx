@@ -20,9 +20,7 @@ interface FiscalSummary {
   totalCancelled: number;
   totalAmount: number;
   totalPaidAmount: number;
-  verifactuEnabled: number;
   withXml: number;
-  withHash: number;
   softwareVersion: string;
 }
 
@@ -45,7 +43,7 @@ export default function FiscalCompliancePage() {
   const [summary, setSummary] = useState<FiscalSummary>({
     totalInvoices: 0, totalIssued: 0, totalDraft: 0, totalPaid: 0,
     totalCancelled: 0, totalAmount: 0, totalPaidAmount: 0,
-    verifactuEnabled: 0, withXml: 0, withHash: 0, softwareVersion: "—",
+    withXml: 0, softwareVersion: "—",
   });
   const [recentEvents, setRecentEvents] = useState<RecentEvent[]>([]);
 
@@ -55,7 +53,7 @@ export default function FiscalCompliancePage() {
 
     const { data: invoices } = await supabase
       .from("issued_invoices")
-      .select("id, invoice_number, status, total, verifactu_registered, verifactu_hash, facturae_xml, payment_status")
+      .select("id, invoice_number, status, total, facturae_xml, payment_status")
       .eq("user_id", user.id);
 
     const inv = invoices || [];
@@ -67,9 +65,7 @@ export default function FiscalCompliancePage() {
     const totalAmount = inv.reduce((s, i) => s + Number(i.total || 0), 0);
     const totalPaidAmount = inv.filter((i) => i.status === "paid" || i.payment_status === "paid")
       .reduce((s, i) => s + Number(i.total || 0), 0);
-    const verifactuEnabled = inv.filter((i) => i.verifactu_registered).length;
     const withXml = inv.filter((i) => i.facturae_xml).length;
-    const withHash = inv.filter((i) => i.verifactu_hash).length;
 
     const { data: sv } = await supabase
       .from("software_versions")
@@ -81,7 +77,7 @@ export default function FiscalCompliancePage() {
     setSummary({
       totalInvoices, totalIssued, totalDraft, totalPaid, totalCancelled,
       totalAmount, totalPaidAmount,
-      verifactuEnabled, withXml, withHash,
+      withXml,
       softwareVersion: sv?.version || "—",
     });
 
@@ -91,6 +87,7 @@ export default function FiscalCompliancePage() {
         .from("fiscal_events")
         .select("id, event_type, created_at, invoice_id")
         .in("invoice_id", invoiceIds)
+        .neq("event_type", "hash_generated")
         .order("created_at", { ascending: false })
         .limit(20);
 
@@ -112,22 +109,10 @@ export default function FiscalCompliancePage() {
 
   const checks = [
     {
-      label: "Facturas con hash Verifactu",
-      current: summary.withHash,
-      total: summary.totalInvoices,
-      ok: summary.withHash === summary.totalInvoices && summary.totalInvoices > 0,
-    },
-    {
       label: "Facturas con XML Facturae",
       current: summary.withXml,
       total: summary.totalInvoices,
       ok: summary.withXml >= summary.totalIssued,
-    },
-    {
-      label: "Facturas emitidas registradas Verifactu",
-      current: summary.verifactuEnabled,
-      total: summary.totalInvoices,
-      ok: summary.verifactuEnabled === summary.totalInvoices && summary.totalInvoices > 0,
     },
     {
       label: "Borradores pendientes de emitir",
@@ -141,8 +126,8 @@ export default function FiscalCompliancePage() {
     <div className="max-w-5xl mx-auto">
       <BackButton fallbackHref="/dashboard/compliance" label="Volver a cumplimiento" />
       <PageHeader
-        title="Cumplimiento fiscal"
-        description="Trazabilidad fiscal, Verifactu y Facturae."
+        title="Facturas emitidas: Facturae y eventos"
+        description="Facturas con XML Facturae y eventos de cada factura."
         actions={
           <div className="text-right">
             <span className="text-xs text-navy-400 dark:text-zinc-500">Software version</span>
@@ -162,7 +147,7 @@ export default function FiscalCompliancePage() {
       {/* Compliance Checks */}
       <Card className="mb-6">
         <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-4">
-          Controles de cumplimiento
+          Estado de las facturas
         </h3>
         <div className="space-y-2">
           {checks.map((check, idx) => (
@@ -190,20 +175,10 @@ export default function FiscalCompliancePage() {
         </div>
       </Card>
 
-      {/* Verifactu & Facturae summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="rounded-2xl border border-navy-100 bg-white p-5 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
-          <p className="text-3xl font-bold text-brand-green">{summary.withHash}</p>
-          <p className="text-xs text-navy-500 dark:text-zinc-400 mt-1">Con hash SHA-256</p>
-        </div>
-        <div className="rounded-2xl border border-navy-100 bg-white p-5 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
-          <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">{summary.withXml}</p>
-          <p className="text-xs text-navy-500 dark:text-zinc-400 mt-1">Con XML Facturae 3.2.2</p>
-        </div>
-        <div className="rounded-2xl border border-navy-100 bg-white p-5 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
-          <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">{summary.verifactuEnabled}</p>
-          <p className="text-xs text-navy-500 dark:text-zinc-400 mt-1">Registradas Verifactu</p>
-        </div>
+      {/* Facturae summary */}
+      <div className="rounded-2xl border border-navy-100 bg-white p-5 text-center shadow-sm mb-6 dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
+        <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">{summary.withXml}</p>
+        <p className="text-xs text-navy-500 dark:text-zinc-400 mt-1">Con XML Facturae 3.2.2</p>
       </div>
 
       {/* Recent Fiscal Events */}

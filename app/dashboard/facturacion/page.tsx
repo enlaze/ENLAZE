@@ -82,7 +82,7 @@ function FacturacionHub() {
         titleAdornment={
           <InfoFlipCard
             label="Información sobre Facturación"
-            what="Todas tus facturas en un solo sitio: las que emites a clientes (con Verifactu y Facturae) y las que recibes de proveedores, que puedes dar de alta con una foto."
+            what="Todas tus facturas en un solo sitio: las que emites a clientes (con Facturae) y las que recibes de proveedores, que puedes dar de alta con una foto."
             howTo="Para saber de un vistazo qué has facturado, qué te han pagado y qué llevas esperando demasiado. Lo vencido sale en rojo: son las llamadas de mañana."
           />
         }

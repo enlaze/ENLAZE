@@ -17,7 +17,7 @@ export type FiscalEventType =
 const eventLabels: Record<FiscalEventType, string> = {
   created: "Factura creada",
   issued: "Factura emitida",
-  hash_generated: "Hash Verifactu generado",
+  hash_generated: "Hash generado",
   xml_generated: "XML Facturae generado",
   sent: "Enviada al cliente",
   paid: "Cobrada",
@@ -81,6 +81,8 @@ export async function getFiscalTimeline(
       .from("fiscal_events")
       .select("id, event_type, event_data, created_at, software_version_id")
       .eq("invoice_id", invoice_id)
+      // El hash no se enseña: se leería como "cumples Verifactu", y no se cumple.
+      .neq("event_type", "hash_generated")
       .order("created_at", { ascending: true });
 
     return (data || []).map((ev) => ({

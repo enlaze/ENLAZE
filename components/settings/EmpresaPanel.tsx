@@ -806,19 +806,6 @@ export default function EmpresaPanel({
 
             <ToggleRow
               boxed
-              title="Verifactu"
-              badge="OBLIGATORIO 2026"
-              description="Genera el hash SHA-256 encadenado y el QR verificable en cada factura emitida, y conserva el registro por ti."
-            >
-              <Switch
-                checked={form.verifactu_enabled}
-                onChange={(v) => patch({ verifactu_enabled: v })}
-                label="Activar Verifactu"
-              />
-            </ToggleRow>
-
-            <ToggleRow
-              boxed
               title="Facturación electrónica B2B"
               description="Emite en formato Facturae firmado para clientes que lo exigen (administraciones y grandes cuentas)."
             >

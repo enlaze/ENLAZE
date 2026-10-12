@@ -230,22 +230,6 @@ export default function EmitidasTab({ state }: { state: IssuedInvoicesState }) {
       },
     },
     {
-      key: "verifactu",
-      header: "VF",
-      align: "center",
-      defaultHidden: true,
-      hidden: "hidden xl:table-cell",
-      exportValue: (inv) => (inv.verifactu_registered ? "Sí" : "No"),
-      render: (inv) =>
-        inv.verifactu_registered ? (
-          <span className="text-xs font-semibold text-success-ink" title="Hash Verifactu registrado">
-            Sí
-          </span>
-        ) : (
-          <span className="text-xs text-navy-400 dark:text-zinc-500">No</span>
-        ),
-    },
-    {
       key: "actions",
       header: "Acc.",
       align: "right",
@@ -308,7 +292,7 @@ export default function EmitidasTab({ state }: { state: IssuedInvoicesState }) {
           </>
         }
       >
-        Facturación a clientes con Verifactu y Facturae
+        Facturación a clientes con Facturae
       </TabToolbar>
 
       {/* Aviso de vencidas + entrada al recordatorio de cobro */}
@@ -390,7 +374,7 @@ export default function EmitidasTab({ state }: { state: IssuedInvoicesState }) {
       {invoices.length === 0 ? (
         <EmptyState
           title="Aún no has emitido facturas"
-          description="Crea tu primera factura emitida para empezar a facturar a tus clientes con Verifactu y Facturae."
+          description="Crea tu primera factura emitida para empezar a facturar a tus clientes con Facturae."
           action={
             <button onClick={() => setShowForm(true)} className={factBtnPrimary}>
               + Nueva factura

@@ -350,7 +350,7 @@ function HeroMotion() {
           </p>
 
           <p className="mt-4 text-center text-[13px] text-navy-500 transition-colors">
-            Sin tarjeta · Listo en 2 minutos · Verifactu incluido · Soporte en español
+            Sin tarjeta · Listo en 2 minutos · Soporte en español
           </p>
         </AnimatedBlock>
       </motion.div>

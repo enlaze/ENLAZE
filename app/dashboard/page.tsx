@@ -286,15 +286,6 @@ export default function DashboardHome() {
         detail: hasTerms ? "Términos y privacidad aceptados" : "Falta aceptar documentos legales",
       });
 
-      // Fiscal
-      const invoicesWithoutHash = allInv.filter((inv: Record<string, unknown>) => !inv.verifactu_hash).length;
-      checks.push({
-        area: "fiscal",
-        label: "Fiscal / Verifactu",
-        status: invoicesWithoutHash === 0 ? "green" : invoicesWithoutHash <= 3 ? "yellow" : "red",
-        detail: invoicesWithoutHash === 0 ? "Todas las facturas con hash" : `${invoicesWithoutHash} factura(s) sin hash Verifactu`,
-      });
-
       // AI
       const unreviewedAi = allAi.filter(r => !r.human_reviewed).length;
       checks.push({

@@ -613,27 +613,6 @@ export default function IssuedInvoiceDetailPage() {
         </div>
       </div>
 
-      {/* Verifactu info */}
-      {invoice.verifactu_registered && (
-        <div className="bg-white dark:bg-zinc-900 rounded-xl p-5 mb-6 border border-emerald-500/20 shadow-sm dark:shadow-none">
-          <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-3">Verifactu</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-xs text-navy-500 dark:text-zinc-400 mb-1">Hash SHA-256</p>
-              <p className="text-xs text-navy-700 dark:text-zinc-300 font-mono break-all bg-navy-50 dark:bg-zinc-800 rounded p-2">{invoice.verifactu_hash || "—"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-navy-500 dark:text-zinc-400 mb-1">Hash anterior</p>
-              <p className="text-xs text-navy-500 dark:text-zinc-500 font-mono break-all bg-navy-50 dark:bg-zinc-800 rounded p-2">{invoice.verifactu_prev_hash || "0"}</p>
-            </div>
-            <div className="md:col-span-2">
-              <p className="text-xs text-navy-500 dark:text-zinc-400 mb-1">URL verificación QR</p>
-              <p className="text-xs text-navy-700 dark:text-zinc-300 font-mono break-all bg-navy-50 dark:bg-zinc-800 rounded p-2">{invoice.verifactu_qr_data || "—"}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Fiscal Traceability Timeline */}
       {fiscalTimeline.length > 0 && (
         <div className="bg-white dark:bg-zinc-900 border border-navy-100 dark:border-zinc-800 shadow-sm dark:shadow-none rounded-xl p-5 mb-6">
@@ -657,11 +636,6 @@ export default function IssuedInvoiceDetailPage() {
                         hour: "2-digit", minute: "2-digit",
                       })}
                     </p>
-                    {ev.event_data && Object.keys(ev.event_data).length > 0 && ev.event_type === "hash_generated" && (
-                      <p className="text-xs text-navy-500 dark:text-zinc-500 font-mono mt-0.5 truncate max-w-md">
-                        {(ev.event_data as Record<string, string>).hash?.substring(0, 32)}...
-                      </p>
-                    )}
                   </div>
                 </div>
               );
