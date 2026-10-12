@@ -37,9 +37,7 @@ import {
   SaveBar,
   SelectInput,
   SplitSection,
-  Switch,
   TextInput,
-  ToggleRow,
 } from "@/components/settings/ui";
 
 const LOGO_BUCKET = "company-branding";
@@ -111,7 +109,7 @@ const EMPTY_FORM: EmpresaForm = {
   default_irpf_percent: 0,
   invoice_series: "F",
   invoice_next_number: 1,
-  verifactu_enabled: true,
+  verifactu_enabled: false,
   facturae_enabled: false,
   cnae: "",
   logo_url: "",
@@ -222,7 +220,7 @@ export default function EmpresaPanel({
       default_irpf_percent: fiscal?.default_irpf_percent ?? 0,
       invoice_series: fiscal?.invoice_series || "F",
       invoice_next_number: fiscal?.invoice_next_number ?? 1,
-      verifactu_enabled: fiscal?.verifactu_enabled ?? true,
+      verifactu_enabled: fiscal?.verifactu_enabled ?? false,
       facturae_enabled: fiscal?.facturae_enabled ?? false,
       cnae: fiscal?.cnae || "",
       logo_url: fiscal?.logo_url || profile?.logo_url || "",
@@ -804,17 +802,6 @@ export default function EmpresaPanel({
               </span>
             </Field>
 
-            <ToggleRow
-              boxed
-              title="Facturación electrónica B2B"
-              description="Emite en formato Facturae firmado para clientes que lo exigen (administraciones y grandes cuentas)."
-            >
-              <Switch
-                checked={form.facturae_enabled}
-                onChange={(v) => patch({ facturae_enabled: v })}
-                label="Activar facturación electrónica B2B"
-              />
-            </ToggleRow>
           </FieldGrid>
         </SplitSection>
 

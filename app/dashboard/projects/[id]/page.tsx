@@ -695,7 +695,8 @@ export default function ProjectDetailPage() {
       status: "draft",
       verifactu_hash: hash, verifactu_prev_hash: prevHash,
       verifactu_qr_data: `https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQR?nif=${fiscal.nif}&numserie=${invoice_number}&fecha=${issueDate}&importe=${total.toFixed(2)}`,
-      verifactu_registered: fiscal.verifactu_enabled,
+      // No se envía nada a la AEAT: la factura no está registrada en Verifactu.
+      verifactu_registered: false,
     }).select("id").single();
 
     // Bloqueo del plan: el aviso con «Ver planes» ya sale solo (BillingProvider).
