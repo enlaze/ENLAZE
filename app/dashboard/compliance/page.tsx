@@ -91,7 +91,6 @@ export default function ComplianceDashboardPage() {
 
     const [
       { data: legalAcceptances },
-      { data: invoices },
       { data: aiRuns },
       { data: incidents },
       { data: subprocessors },
@@ -99,7 +98,6 @@ export default function ComplianceDashboardPage() {
       { data: activityLog },
     ] = await Promise.all([
       supabase.from("legal_acceptances").select("document_type").eq("user_id", user.id),
-      supabase.from("issued_invoices").select("id, verifactu_hash, facturae_xml, status").eq("user_id", user.id),
       supabase.from("ai_runs").select("id, human_reviewed").eq("user_id", user.id),
       supabase.from("security_incidents").select("id, resolved_at").eq("reported_by", user.id),
       supabase.from("subprocessors").select("id, dpa_signed").eq("is_active", true),
@@ -110,9 +108,6 @@ export default function ComplianceDashboardPage() {
     const acceptedDocs = new Set((legalAcceptances || []).map(a => a.document_type));
     const hasTerms = acceptedDocs.has("terms");
     const hasPrivacy = acceptedDocs.has("privacy");
-    const inv = invoices || [];
-    const allHaveHash = inv.length > 0 && inv.every(i => i.verifactu_hash);
-    const drafts = inv.filter(i => i.status === "draft").length;
     const runs = aiRuns || [];
     const unreviewedAi = runs.filter(r => !r.human_reviewed).length;
     const openIncidents = (incidents || []).filter(i => !i.resolved_at).length;
@@ -128,14 +123,6 @@ export default function ComplianceDashboardPage() {
         detail: hasTerms && hasPrivacy
           ? `Términos y privacidad aceptados. ${hasActivities ? "Registro Art.30 activo." : "Falta registro Art.30."} ${allDpaSigned ? "DPAs firmados." : "DPAs pendientes."}`
           : "Faltan aceptaciones legales obligatorias.",
-      },
-      {
-        area: "fiscal", label: "Fiscal y Facturación", href: "/dashboard/compliance/fiscal",
-        icon: "receipt",
-        status: allHaveHash && drafts === 0 ? "green" : drafts > 0 ? "yellow" : inv.length === 0 ? "yellow" : "red",
-        detail: inv.length === 0
-          ? "Sin facturas emitidas todavía."
-          : `${inv.length} facturas. ${allHaveHash ? "Todas con hash." : "Faltan hashes."} ${drafts > 0 ? `${drafts} borradores pendientes.` : ""}`,
       },
       {
         area: "ai", label: "Inteligencia Artificial", href: "/dashboard/compliance/ai",

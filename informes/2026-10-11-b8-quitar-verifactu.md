@@ -46,3 +46,19 @@ He buscado en la base, en modo lectura, en `plan_catalog` y `sector_config` (tex
 3. Facturación › Emitidas: textos de cabecera y estado vacío, y que en el selector de columnas no esté "VF".
 4. Una factura emitida: el bloque "Hash de la factura" sin la URL de la AEAT.
 5. Cumplimiento › Fiscal: 3 controles (antes 4) y 2 tarjetas (antes 3).
+
+## Respuesta de Daniil (2026-10-12) y lo hecho
+
+Punto 2: **se quita el hash y el semáforo fiscal** de todo lo que ve el usuario, porque se lee como "cumples Verifactu". Hecho:
+
+| Dónde | Ahora |
+|---|---|
+| Panel, tarjeta "Cumplimiento" | fuera la fila "Fiscal" (el semáforo verde/amarillo/rojo por facturas con hash) |
+| Cumplimiento (hub) | fuera la fila "Fiscal y Facturación"; ya no suma al estado general. La página `/dashboard/compliance/fiscal` sigue existiendo pero ya no se enlaza desde aquí |
+| Cumplimiento › Fiscal | fuera el control "Facturas con hash" y la tarjeta "Con hash SHA-256"; "Controles de cumplimiento" pasa a "Estado de las facturas" y el título a "Facturas emitidas: Facturae y eventos" |
+| Ficha de factura emitida | fuera el bloque "Hash de la factura" |
+| Línea de tiempo de la factura y eventos recientes | el evento "Hash generado" ya no se lista (filtro en la consulta) |
+
+Sigue sin tocarse el cálculo y el guardado del hash en la base.
+
+Punto 1: migración aprobada; se aplica al fusionar.
