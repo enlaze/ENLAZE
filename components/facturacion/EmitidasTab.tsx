@@ -103,7 +103,8 @@ export default function EmitidasTab({ state }: { state: IssuedInvoicesState }) {
       verifactu_hash: hash,
       verifactu_prev_hash: prevHash,
       verifactu_qr_data: qrData,
-      verifactu_registered: fiscal.verifactu_enabled,
+      // No se envía nada a la AEAT: la factura no está registrada en Verifactu.
+      verifactu_registered: false,
       notes: form.notes,
     });
 
