@@ -278,8 +278,9 @@ test("editar carga la factura en el mismo formulario y sale del modo al cerrar",
   // Una factura en la papelera se restaura antes; aquí solo se corrige lo vivo.
   assert.match(hook, /let invoiceId = editingId \|\| pendingInvoiceId;/);
   // Abrir un alta nueva o cancelar tiene que salir del modo corrección, o la
-  // siguiente factura sobreescribiría la que se estaba editando.
-  assert.equal((hook.match(/setEditingId\(""\)/g) || []).length, 4);
+  // siguiente factura sobreescribiría la que se estaba editando. El quinto es
+  // el alta que se abre con el proveedor puesto desde su ficha (b7).
+  assert.equal((hook.match(/setEditingId\(""\)/g) || []).length, 5);
   assert.match(form, /editingId\s*\?\s*"Guardar cambios"/);
   assert.match(tab, /aria-label=\{`Editar factura \$\{inv\.invoice_number\}`\}/);
 });
