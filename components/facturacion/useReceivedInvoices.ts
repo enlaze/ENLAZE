@@ -70,6 +70,8 @@ export function useReceivedInvoices(
   /** Se llama tras registrar una factura (el hub lo usa para volver a la lista). */
   onRegistered?: () => void,
   initialProjectId = "",
+  /** Proveedor con el que abrir el alta nada más cargar (enlace de su ficha). */
+  openNewForSupplier = "",
 ) {
   const [supabase] = useState(() => createClient());
   const toast = useToast();
@@ -106,6 +108,11 @@ export function useReceivedInvoices(
   const [pendingInvoiceId, setPendingInvoiceId] = useState("");
   /** Se pone a true tras un escaneo para que el hub salte a "Recibidas". */
   const [justScanned, setJustScanned] = useState(false);
+  /** El alta con proveedor puesto se abre una sola vez por carga del hub. */
+  const openedForSupplier = useRef(false);
+  /* El valor con el que se montó: el hub quita "nueva" de la URL al abrir el
+     alta y eso no debe volver a cargar las listas de opciones. */
+  const openNewForSupplierAtMount = useRef(openNewForSupplier);
 
   const filters = useMemo(() => ({
     status: statusFilter,
@@ -162,6 +169,24 @@ export function useReceivedInvoices(
       const project = projectsResult.data?.find((p) => p.id === initialProjectId);
       setForm((f) => f.project_id === initialProjectId && !f.client_id
         ? { ...f, client_id: project?.client_id || "" } : f);
+      const openFor = openNewForSupplierAtMount.current;
+      const supplier = openFor
+        ? suppliersResult.data?.find((s) => s.id === openFor)
+        : undefined;
+      if (supplier && !openedForSupplier.current) {
+        openedForSupplier.current = true;
+        setEditingId("");
+        setForm({
+          ...emptyForm,
+          issue_date: new Date().toISOString().split("T")[0],
+          project_id: project?.id || "",
+          client_id: project?.client_id || "",
+          supplier_id: supplier.id,
+          supplier_name: supplier.name,
+          supplier_nif: supplier.nif || "",
+        });
+        setShowForm(true);
+      }
       const earliest = earliestResult.data?.[0]?.issue_date;
       if (earliest) setFirstYear(Math.min(Number(earliest.slice(0, 4)), new Date().getFullYear()));
       if (clientsResult.error || projectsResult.error || suppliersResult.error) {

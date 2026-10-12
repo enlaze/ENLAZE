@@ -82,9 +82,9 @@ export async function GET(req: NextRequest) {
     // Suppliers
     supabase
       .from("suppliers")
-      .select("id, name, nif, email, phone, trade_name, status")
+      .select("id, name, nif, email, phone, specialty, status")
       .eq("user_id", userId)
-      .or(`name.ilike.${query},nif.ilike.${query},trade_name.ilike.${query},email.ilike.${query}`)
+      .or(`name.ilike.${query},nif.ilike.${query},specialty.ilike.${query},email.ilike.${query}`)
       .limit(5),
 
     // Received Invoices
@@ -178,7 +178,7 @@ export async function GET(req: NextRequest) {
         id: s.id,
         type: "supplier",
         title: s.name,
-        subtitle: [s.nif, s.trade_name, s.email, s.status].filter(Boolean).join(" · "),
+        subtitle: [s.nif, s.specialty, s.email, s.status].filter(Boolean).join(" · "),
         icon: "🔧",
         href: `/dashboard/suppliers/${s.id}`,
         relevance: (s.name || "").toLowerCase().startsWith(q.toLowerCase()) ? 10 : 5,

@@ -4,26 +4,32 @@ import { logActivity } from "@/lib/activity-log";
 
 /* ═══════════════ Types ═══════════════ */
 
+/** Columnas reales de public.suppliers (comprobadas el 2026-10-12). */
+export const SUPPLIER_COLUMNS = [
+  "id", "user_id", "name", "nif", "email", "phone", "address",
+  "contact_person", "trade", "specialty", "type", "hourly_rate", "rating",
+  "notes", "status", "created_at", "updated_at",
+] as const;
+
 export interface Supplier {
   id: string;
   user_id: string;
   name: string;
-  trade_name: string | null;
   nif: string | null;
   email: string | null;
   phone: string | null;
   address: string | null;
-  city: string | null;
-  postal_code: string | null;
-  province: string | null;
-  country: string;
   contact_person: string | null;
-  payment_method: string;
-  payment_terms_days: number;
-  iban: string | null;
+  /** Oficio, guardado como clave (p. ej. "material_de_construccion"). */
+  trade: string | null;
+  specialty: string | null;
+  /** "proveedor" o "subcontrata". */
+  type: string;
+  hourly_rate: number | null;
+  /** De 0 a 5; 0 es "sin valorar". */
+  rating: number | null;
   notes: string | null;
-  category_id: string | null;
-  status: "active" | "inactive" | "blocked";
+  status: "active" | "inactive";
   /* Ojo: `suppliers` NO guarda total_invoiced/total_paid. Los totales se
      derivan de received_invoices con getSupplierInvoiceTotals(). */
   created_at: string;
@@ -108,7 +114,6 @@ export interface ExpenseSummary {
 export const supplierStatusLabels: Record<string, { label: string; color: string }> = {
   active: { label: "Activo", color: "bg-green-900/30 text-green-300" },
   inactive: { label: "Inactivo", color: "bg-gray-700 text-gray-400" },
-  blocked: { label: "Bloqueado", color: "bg-red-900/30 text-red-300" },
 };
 
 export const receivedInvoiceStatusLabels: Record<string, { label: string; color: string }> = {
@@ -145,7 +150,7 @@ export async function getSuppliers(
     query = query.eq("status", opts.status);
   }
   if (opts?.search) {
-    query = query.or(`name.ilike.%${opts.search}%,nif.ilike.%${opts.search}%,trade_name.ilike.%${opts.search}%`);
+    query = query.or(`name.ilike.%${opts.search}%,nif.ilike.%${opts.search}%,trade.ilike.%${opts.search}%,specialty.ilike.%${opts.search}%`);
   }
   if (opts?.limit) query = query.limit(opts.limit);
   if (opts?.offset) query = query.range(opts.offset, opts.offset + (opts.limit || 20) - 1);

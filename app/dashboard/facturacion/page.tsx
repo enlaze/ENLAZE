@@ -18,7 +18,7 @@
  * esta pantalla sale de los tokens que ya usa el resto del dashboard.
  */
 
-import { Suspense, useCallback, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import PageHeader from "@/components/ui/page-header";
 import InfoFlipCard from "@/components/ui/InfoFlipCard";
@@ -62,11 +62,22 @@ function FacturacionHub() {
   );
 
   const issued = useIssuedInvoices();
+  // La ficha del proveedor enlaza con &nueva=1 para abrir el alta con él puesto.
+  const openNew = searchParams.get("nueva") === "1";
   const received = useReceivedInvoices(
     supplierFilter,
     useCallback(() => setTab("recibidas"), []),
     searchParams.get("project") || "",
+    openNew ? supplierFilter : "",
   );
+
+  // Una vez abierto, fuera "nueva" de la URL: recargar no debe abrirlo otra vez.
+  useEffect(() => {
+    if (!openNew || !received.showForm) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("nueva");
+    router.replace(`/dashboard/facturacion?${params.toString()}`, { scroll: false });
+  }, [openNew, received.showForm, router, searchParams]);
 
   const counts: Record<TabKey, number | undefined> = {
     emitidas: issued.loading ? undefined : issued.invoices.length,

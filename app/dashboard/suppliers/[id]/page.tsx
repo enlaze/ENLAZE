@@ -17,7 +17,6 @@ import {
   getSupplierInvoiceTotals,
   supplierStatusLabels,
   receivedInvoiceStatusLabels,
-  paymentMethodLabels,
 } from "@/lib/suppliers";
 
 export default function SupplierDetailPage() {
@@ -69,6 +68,15 @@ export default function SupplierDetailPage() {
     ? Math.round((totals.total_paid / totals.total_invoiced) * 100)
     : 0;
 
+  const typeLabel = supplier.type === "subcontrata" ? "Subcontrata" : "Proveedor";
+  /* El oficio se guarda como clave ("material_de_construccion"); el listado lo
+     traduce con la configuración del sector. Aquí basta con hacerlo legible. */
+  const tradeLabel = supplier.trade
+    ? supplier.trade.charAt(0).toUpperCase() + supplier.trade.slice(1).replace(/_/g, " ")
+    : "";
+  const hourlyRate = Number(supplier.hourly_rate || 0);
+  const rating = Math.max(0, Math.min(5, Number(supplier.rating || 0)));
+
   const statusBadge = supplierStatusLabels[supplier.status] || { label: supplier.status, color: "bg-zinc-800 text-zinc-400 dark:bg-zinc-900 dark:text-zinc-400" };
 
   return (
@@ -80,10 +88,12 @@ export default function SupplierDetailPage() {
           { label: supplier.name },
         ]}
         title={supplier.name}
-        description={[supplier.nif, supplier.city].filter(Boolean).join(" · ") || "Proveedor"}
+        description={[supplier.nif, typeLabel].filter(Boolean).join(" · ")}
         actions={
           <div className="flex gap-2">
-            <Link href={`/dashboard/suppliers/invoices/new?supplier=${id}`}>
+            {/* Abre Recibidas filtrada por este proveedor y con el alta ya
+                abierta y el proveedor puesto. */}
+            <Link href={`/dashboard/facturacion?tab=recibidas&supplier=${encodeURIComponent(id)}&nueva=1`}>
               <Button>+ Nueva factura recibida</Button>
             </Link>
           </div>
@@ -123,27 +133,29 @@ export default function SupplierDetailPage() {
           <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-4">Datos generales</h3>
           <div className="space-y-3">
             <InfoRow label="Estado">
-              <Badge variant={supplier.status === "active" ? "green" : supplier.status === "blocked" ? "red" : "gray"}>
+              <Badge variant={supplier.status === "active" ? "green" : "gray"}>
                 {statusBadge.label}
               </Badge>
             </InfoRow>
-            {supplier.trade_name && <InfoRow label="Nombre comercial">{supplier.trade_name}</InfoRow>}
             {supplier.nif && <InfoRow label="NIF / CIF">{supplier.nif}</InfoRow>}
             {supplier.contact_person && <InfoRow label="Persona de contacto">{supplier.contact_person}</InfoRow>}
             {supplier.email && <InfoRow label="Email">{supplier.email}</InfoRow>}
             {supplier.phone && <InfoRow label="Teléfono">{supplier.phone}</InfoRow>}
+            {supplier.address && <InfoRow label="Dirección">{supplier.address}</InfoRow>}
           </div>
         </Card>
         <Card>
-          <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-4">Condiciones de pago</h3>
+          <h3 className="text-sm font-semibold text-brand-green uppercase tracking-wider mb-4">Oficio y tarifa</h3>
           <div className="space-y-3">
-            <InfoRow label="Forma de pago">{paymentMethodLabels[supplier.payment_method] || supplier.payment_method}</InfoRow>
-            <InfoRow label="Plazo">{supplier.payment_terms_days} días</InfoRow>
-            {supplier.iban && <InfoRow label="IBAN">{supplier.iban}</InfoRow>}
-            {supplier.address && <InfoRow label="Dirección">{supplier.address}</InfoRow>}
-            {(supplier.city || supplier.postal_code || supplier.province) && (
-              <InfoRow label="Localidad">
-                {[supplier.postal_code, supplier.city, supplier.province].filter(Boolean).join(", ")}
+            <InfoRow label="Tipo">{typeLabel}</InfoRow>
+            {tradeLabel && <InfoRow label="Oficio">{tradeLabel}</InfoRow>}
+            {supplier.specialty && <InfoRow label="Especialidad">{supplier.specialty}</InfoRow>}
+            {hourlyRate > 0 && <InfoRow label="Tarifa por hora">{fmtMoney(hourlyRate)}</InfoRow>}
+            {rating > 0 && (
+              <InfoRow label="Valoración">
+                <span className="text-amber-500" aria-label={`${rating} de 5`}>
+                  {"★".repeat(rating)}{"☆".repeat(5 - rating)}
+                </span>
               </InfoRow>
             )}
           </div>
