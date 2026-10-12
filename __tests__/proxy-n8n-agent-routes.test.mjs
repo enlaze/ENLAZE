@@ -2,10 +2,8 @@
 // por una, y solo si trae Authorization Bearer (la ruta comprueba la clave).
 // Todo lo demás de /api/agent sigue exigiendo sesión en el proxy.
 //
-// OJO (2026-10-11): estas pruebas llaman a proxy() directamente. En el
-// servidor real, Next ignora hoy el 401 del proxy en /api/* porque esa
-// respuesta copia la cabecera x-middleware-next de NextResponse.next() y la
-// petición sigue hasta la ruta. Ver informes/2026-10-11-b9-proxy-n8n.md.
+// Desde b12 (2026-10-12) el 401 del proxy bloquea de verdad: ver
+// __tests__/proxy-api-callers.test.mjs, que prueba todos los llamantes.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
@@ -33,8 +31,6 @@ function req(path, headers = {}) {
   return new NextRequest(new URL(path, "https://enlaze.test"), { headers });
 }
 
-// Ojo: el 401 del proxy copia las cabeceras de la respuesta, x-middleware-next
-// incluida; por eso se mira también el estado.
 const passedThrough = (res) =>
   res.status === 200 && res.headers.get("x-middleware-next") === "1";
 

@@ -107,7 +107,7 @@ test("system routes that email every user require the shared secret", () => {
     const clientAt = post.indexOf("getServiceRoleClient()");
     assert.ok(bearerAt >= 0 && clientAt > bearerAt, file);
   }
-  const proxy = readFileSync("proxy.ts", "utf8");
+  const proxy = readFileSync("lib/proxy-routes.ts", "utf8"); // listas del proxy (b12)
   assert.match(proxy, /"\/api\/prices\/process-alerts",/);
   assert.match(proxy, /"\/api\/prices\/weekly-report\/send",/);
   const construction = readFileSync("app/api/webhooks/construccion/route.ts", "utf8");

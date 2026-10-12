@@ -54,6 +54,7 @@
     "plans:check": "node --env-file-if-exists=.env.local --import tsx scripts/plans-sync.ts --check",
     "migraciones:check": "node --env-file-if-exists=.env.local --import tsx scripts/migraciones-check.mts",
     "test:proxy-n8n": "node --import tsx --test __tests__/proxy-n8n-agent-routes.test.mjs",
+    "test:proxy": "node --import tsx --test __tests__/proxy-api-callers.test.mjs",
     "test:migraciones-check": "node --import tsx --test __tests__/migraciones-check.test.mjs",
     "test:billing": "node --import tsx --test __tests__/billing-plans.test.mjs __tests__/billing-webhook.test.mjs",
     "test:billing-integration": "node --env-file-if-exists=.env.local --import tsx --test --test-concurrency=1 __tests__/billing.integration.test.mjs",
