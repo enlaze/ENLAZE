@@ -25,6 +25,16 @@ Cada sesión: **"Coge el siguiente bloque de TAREAS_AUTONOMAS.md y trabájalo en
 
 ---
 
+## Estado de la cola (2026-10-12)
+
+- **En `main`** (fusionados por Daniil en sesión): b1, b2, b3, b4, b5, b6 y b8. Migración de b8 aplicada (`20261012100029`, `verifactu_certified = false`).
+- **Rama abierta, esperando a Daniil:** `auto/b9-proxy-n8n`. **No fusionar todavía.** Ver su informe y la nota del proxy más abajo.
+- **Ramas `auto/*` sin fusionar: 1** (b9). Hay margen para la regla 3.
+- **Siguiente bloque:** b7-supplier.
+- Las pruebas unitarias están en verde en `main`: 608 pasan, 0 fallan y 2 `todo` (se lanzan todos los `__tests__/*.test.mjs` salvo `.integration.` y `.browser.`). `lint` tiene 23 errores, todos de `react-hooks` (ver "Esperando decisión").
+
+---
+
 ## Cola de bloques (en orden)
 
 ### b1-mi-precio — El precio que pone el usuario manda
@@ -67,6 +77,29 @@ Cada sesión: **"Coge el siguiente bloque de TAREAS_AUTONOMAS.md y trabájalo en
 
 - La interfaz declara campos que no existen en la tabla (`city`, `postal_code`, `province`, `trade_name`, `iban`, `category_id`…) y salen vacíos en la ficha del proveedor.
 - Contrasta con el esquema real (solo lectura) y alinea tipos y pantalla. Si quitar un campo cambia lo que ve el cliente, apúntalo como pregunta.
+
+### b8-quitar-verifactu — HECHO (en main el 2026-10-12)
+
+Fuera las promesas de Verifactu, el hash y el semáforo fiscal de todo lo que ve el usuario. `/dashboard/compliance/fiscal` queda sin enlace desde el hub, con el visto bueno de Daniil.
+
+### b9-proxy-n8n — RAMA ABIERTA, no fusionar
+
+`proxy.ts` deja pasar a n8n en sus 9 rutas exactas de `/api/agent`, y solo si llevan Bearer. **Ojo:** el 401 del proxy en `/api/*` copia las cabeceras de `NextResponse.next()` (incluida `x-middleware-next: 1`) y Next lo ignora, así que hoy cada ruta de `/api` solo está protegida por su propia comprobación. Arreglarlo cambia el comportamiento de toda la API: decide Daniil.
+
+### b10-facturae-sin-firma — Quitar "Facturae firmado"
+
+- Ajustes › Empresa (`components/settings/EmpresaPanel.tsx`) dice "Emite en formato Facturae **firmado**", pero el XML se genera sin firma (lo vio b6). Quitar "firmado" y cualquier otro texto que prometa firma, con el mismo criterio que b8: se quita, no se cambia por otra promesa.
+- Busca en app, components y lib "firma", "firmado" y "XAdES" aplicados a Facturae. Ojo: la firma de presupuestos (`SignaturePanel`, OTP) es otra cosa y no se toca.
+
+---
+
+## Esperando decisión de Daniil (no los coge Code)
+
+- **b4:** (1) migración del bucket `received-invoice-documents` con policy de lectura para su dueño; (2) migración idempotente que declare las 5 columnas de `agent_connections`; (3) los 23 errores de `react-hooks`: un bloque pantalla a pantalla o bajarlos a aviso.
+- **b5:** ¿abrir bloques para `xlsx` (sin arreglo en npm: SheetJS 0.20.x o `exceljs`) y `sharp` 0.35? Los dos tratan ficheros que sube el usuario.
+- **b6:** construir Verifactu en casa o integrar un proveedor; y con el asesor, la modalidad, las facturas ya marcadas y la declaración responsable.
+- **b8:** `verifactu_enabled` sigue a `true` por defecto, así que las facturas nuevas salen con `verifactu_registered = true` sin que se vea. Cambiarlo sería otra migración.
+- **b9:** fusionar o no, y arreglar o no el 401 del proxy en `/api/*`.
 
 ---
 
