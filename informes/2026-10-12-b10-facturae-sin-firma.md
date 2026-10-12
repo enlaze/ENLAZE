@@ -9,7 +9,7 @@ Rama `auto/b10-facturae-sin-firma`, sacada de `origin/main` (d2382bf). No toca m
 | Ajustes › Empresa, "Facturación electrónica B2B" | "Emite en formato Facturae **firmado** para clientes que lo exigen (administraciones y grandes cuentas)." | "Emite en formato Facturae para clientes que lo exigen." |
 | Alta de factura (Facturación › Emitidas y desde un proyecto) | `verifactu_registered = fiscal.verifactu_enabled`, que es `true` para todos | `verifactu_registered = false` siempre: no se envía nada a la AEAT |
 | Ajustes › Empresa, valor inicial de `verifactu_enabled` | `true` (y `?? true` si no hay ajustes guardados) | `false` |
-| Base | valor por defecto `true` | migración `20261012130000_fiscal_settings_verifactu_disabled_by_default.sql`, **PENDIENTE DE APROBAR** |
+| Base | valor por defecto `true` | migración `20261012113120_fiscal_settings_verifactu_disabled_by_default.sql`, aplicada el 2026-10-12 |
 
 He quitado también "(administraciones y grandes cuentas)": para enviar a la Administración por FACe la Facturae tiene que ir firmada, así que esa frase seguía prometiendo la firma. Lo he comprobado en el generador (`issued-invoices/[id]/page.tsx`): el XML no lleva ningún bloque de firma.
 
@@ -44,7 +44,7 @@ He buscado "firma", "firmado", "XAdES" y "Facturae" en app, components y lib: no
 ## Respuestas de Daniil (2026-10-12) y lo hecho
 
 1. **Interruptor "Facturación electrónica B2B": quitado** de Ajustes › Empresa. `facturae_enabled` se sigue guardando con el valor que ya tenía cada usuario, como se hizo con `verifactu_enabled` en b8. El botón "Descargar Facturae XML" sigue saliendo siempre.
-2. **Las 10 facturas: UPDATE aprobado.** Antes lo he comprobado: los 2 usuarios son cuentas internas (`subscriptions.is_internal = true`; 8 y 2 facturas). Va en `20261012140000_issued_invoices_not_verifactu_registered.sql`. Solo toca `verifactu_registered`.
+2. **Las 10 facturas: UPDATE aprobado.** Antes lo he comprobado: los 2 usuarios son cuentas internas (`subscriptions.is_internal = true`; 8 y 2 facturas). Va en `20261012113121_issued_invoices_not_verifactu_registered.sql`, aplicada el 2026-10-12: quedan 0 de 10 facturas marcadas. Solo toca `verifactu_registered`.
 3. **`/firmar`:** "Firma electrónica verificada por Enlaze · Cumple con eIDAS Art. 25" pasa a "Firma con código de verificación enviado al cliente por email". No se afirma ninguna norma.
 
 Pruebas: `verifactu-not-registered.test.mjs` añade dos casos (interruptor y texto de `/firmar`); 6/6.

@@ -1,4 +1,4 @@
--- auto/b10-facturae-sin-firma. Aprobada por Daniil el 2026-10-12.
+-- auto/b10-facturae-sin-firma. Aprobada por Daniil y aplicada el 2026-10-12 (versión 20261012113121).
 --
 -- Las facturas emitidas salían con verifactu_registered = true porque copiaban
 -- fiscal_settings.verifactu_enabled, pero Enlaze no envía nada a la AEAT: el
