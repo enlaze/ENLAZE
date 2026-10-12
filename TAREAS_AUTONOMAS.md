@@ -12,7 +12,7 @@ Cada sesión: **"Coge el siguiente bloque de TAREAS_AUTONOMAS.md y trabájalo en
 3. **Como mucho 3 ramas `auto/*` sin fusionar a la vez.** Si ya hay 3, no empieces otro bloque: avisa y para.
 4. **Base de datos: SOLO LECTURA.** Solo hay una base y es la de producción. Prohibido aplicar migraciones, insertar, modificar o borrar datos. Si un bloque necesita una migración, escríbela como fichero en la rama y anótala en el informe como **pendiente de aprobar**.
 5. **Pruebas que escriben en la base real: no se lanzan.** Déjalas listadas en el informe con el comando exacto para que las lance Daniil. Las pruebas unitarias, `tsc`, `lint` y `build` sí.
-6. **Nada hacia fuera:** ni emails, ni WhatsApp, ni Stripe (tampoco modo prueba), ni Vercel, ni n8n, ni GitHub más allá de subir la rama.
+6. **Nada hacia fuera:** ni emails, ni WhatsApp, ni Stripe, ni Vercel, ni n8n, ni GitHub más allá de subir la rama. **Única excepción:** la lectura de precios de Stripe en modo prueba que hace `plans:check` dentro de `npm run build`; está permitida porque solo lee.
 7. **Secretos:** no leas, imprimas ni copies valores de `.env.local` ni de ningún fichero con claves.
 8. **Decisiones de producto, no las inventes.** Si algo pide decidir (textos que ve el cliente, quitar una función, precios), apunta la pregunta en el informe y sigue con lo que no dependa de ella.
 9. **Comprobar antes de afirmar.** `tsc`, `lint` sin errores nuevos, las pruebas relacionadas y `npm run build`. Lo que no hayas podido comprobar, dilo tal cual. Nada de "funciona en producción" si lo has probado en local.
@@ -92,6 +92,14 @@ Fuera las promesas de Verifactu, el hash y el semáforo fiscal de todo lo que ve
 - Busca en app, components y lib "firma", "firmado" y "XAdES" aplicados a Facturae. Ojo: la firma de presupuestos (`SignaturePanel`, OTP) es otra cosa y no se toca.
 - **Decidido por Daniil (2026-10-12):** `verifactu_enabled` deja de estar a `true` por defecto, y una factura nueva no se marca como `verifactu_registered = true` si no se ha enviado de verdad a la AEAT. Escribe la migración (nuevo valor por defecto a `false`) como fichero **pendiente de aprobar**. Las facturas ya marcadas no se tocan: apunta en el informe cuántas son.
 
+### b12-proxy-de-verdad — Que el proxy proteja `/api` de verdad
+
+- Decidido por Daniil (2026-10-12): se arregla. Hoy el 401 del proxy en `/api/*` no bloquea nada (copia `x-middleware-next: 1` y Next lo ignora); cada ruta solo está protegida por su propia comprobación.
+- **Antes de tocar nada**, inventario de TODAS las rutas de `/api` con quién las llama: el dashboard con sesión, n8n con Bearer, Stripe (webhook), el cron de Vercel, la página pública de firma, el portal del cliente… Cualquier ruta que hoy funcione sin sesión y deba seguir funcionando tiene que acabar en la lista pública o en la excepción por Bearer de b9. Ojo especial con `/api/cron/*`.
+- Parte de `auto/b9-proxy-n8n` (fusiona o rebasa esa rama en la tuya) para que b9 entre junto con el arreglo.
+- Pruebas: una por cada tipo de llamante (sesión, Bearer válido, Bearer falso, sin nada, webhook de Stripe, cron) y la lista de rutas públicas fijada en una prueba para que nadie la amplíe sin darse cuenta.
+- En el informe, la tabla del inventario y qué comprobar en la preview de Vercel antes de fusionar.
+
 ### b11-presupuesto-incoherente — Datos que no cuadran en un presupuesto
 
 - En `PRE-2026-53806` ("Reforma Cocina", cuenta de Daniil) se ve **Partidas (0)** con **Subtotal 333,00 €**, y el estado dice **Aceptado** mientras la línea de tiempo dice **Rechazado 18 abr**.
@@ -109,7 +117,7 @@ Fuera las promesas de Verifactu, el hash y el semáforo fiscal de todo lo que ve
 - **b5:** ¿abrir bloques para `xlsx` (sin arreglo en npm: SheetJS 0.20.x o `exceljs`) y `sharp` 0.35? Los dos tratan ficheros que sube el usuario.
 - **b6:** construir Verifactu en casa o integrar un proveedor; y con el asesor, la modalidad, las facturas ya marcadas y la declaración responsable.
 - ~~**b8:** `verifactu_enabled` sigue a `true` por defecto.~~ Decidido: va en b10.
-- **b9:** fusionar o no, y arreglar o no el 401 del proxy en `/api/*`.
+- ~~**b9:** fusionar o no, y arreglar el proxy.~~ Decidido: se arregla en b12, que absorbe b9.
 
 ---
 
