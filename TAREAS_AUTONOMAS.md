@@ -90,6 +90,16 @@ Fuera las promesas de Verifactu, el hash y el semáforo fiscal de todo lo que ve
 
 - Ajustes › Empresa (`components/settings/EmpresaPanel.tsx`) dice "Emite en formato Facturae **firmado**", pero el XML se genera sin firma (lo vio b6). Quitar "firmado" y cualquier otro texto que prometa firma, con el mismo criterio que b8: se quita, no se cambia por otra promesa.
 - Busca en app, components y lib "firma", "firmado" y "XAdES" aplicados a Facturae. Ojo: la firma de presupuestos (`SignaturePanel`, OTP) es otra cosa y no se toca.
+- **Decidido por Daniil (2026-10-12):** `verifactu_enabled` deja de estar a `true` por defecto, y una factura nueva no se marca como `verifactu_registered = true` si no se ha enviado de verdad a la AEAT. Escribe la migración (nuevo valor por defecto a `false`) como fichero **pendiente de aprobar**. Las facturas ya marcadas no se tocan: apunta en el informe cuántas son.
+
+### b11-presupuesto-incoherente — Datos que no cuadran en un presupuesto
+
+- En `PRE-2026-53806` ("Reforma Cocina", cuenta de Daniil) se ve **Partidas (0)** con **Subtotal 333,00 €**, y el estado dice **Aceptado** mientras la línea de tiempo dice **Rechazado 18 abr**.
+- Averigua (solo lectura) si es un fallo del programa o solo datos de prueba antiguos:
+    - ¿De dónde sale el subtotal si no hay partidas? ¿Se guarda aparte y puede quedar desfasado?
+    - ¿La línea de tiempo y el estado leen de sitios distintos? ¿Cambiar el estado a mano actualiza los dos?
+    - ¿Hay más presupuestos con el mismo síntoma? Cuántos.
+- Si es un fallo del programa, arréglalo para que no vuelva a pasar con presupuestos nuevos (prueba incluida). **No corrijas datos existentes:** si hace falta, deja el script o la migración como pendiente de aprobar.
 
 ---
 
@@ -98,7 +108,7 @@ Fuera las promesas de Verifactu, el hash y el semáforo fiscal de todo lo que ve
 - **b4:** (1) migración del bucket `received-invoice-documents` con policy de lectura para su dueño; (2) migración idempotente que declare las 5 columnas de `agent_connections`; (3) los 23 errores de `react-hooks`: un bloque pantalla a pantalla o bajarlos a aviso.
 - **b5:** ¿abrir bloques para `xlsx` (sin arreglo en npm: SheetJS 0.20.x o `exceljs`) y `sharp` 0.35? Los dos tratan ficheros que sube el usuario.
 - **b6:** construir Verifactu en casa o integrar un proveedor; y con el asesor, la modalidad, las facturas ya marcadas y la declaración responsable.
-- **b8:** `verifactu_enabled` sigue a `true` por defecto, así que las facturas nuevas salen con `verifactu_registered = true` sin que se vea. Cambiarlo sería otra migración.
+- ~~**b8:** `verifactu_enabled` sigue a `true` por defecto.~~ Decidido: va en b10.
 - **b9:** fusionar o no, y arreglar o no el 401 del proxy en `/api/*`.
 
 ---
