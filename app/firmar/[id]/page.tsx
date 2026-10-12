@@ -300,7 +300,7 @@ export default function PublicSignPage() {
 
         {/* Footer */}
         <p className="text-center text-[10px] text-navy-400 mt-8">
-          Firma electrónica verificada por Enlaze · Cumple con eIDAS Art. 25
+          Firma con código de verificación enviado al cliente por email
         </p>
       </div>
     </div>

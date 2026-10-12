@@ -37,9 +37,7 @@ import {
   SaveBar,
   SelectInput,
   SplitSection,
-  Switch,
   TextInput,
-  ToggleRow,
 } from "@/components/settings/ui";
 
 const LOGO_BUCKET = "company-branding";
@@ -804,17 +802,6 @@ export default function EmpresaPanel({
               </span>
             </Field>
 
-            <ToggleRow
-              boxed
-              title="Facturación electrónica B2B"
-              description="Emite en formato Facturae para clientes que lo exigen."
-            >
-              <Switch
-                checked={form.facturae_enabled}
-                onChange={(v) => patch({ facturae_enabled: v })}
-                label="Activar facturación electrónica B2B"
-              />
-            </ToggleRow>
           </FieldGrid>
         </SplitSection>
 

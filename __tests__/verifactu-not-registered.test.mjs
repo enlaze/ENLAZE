@@ -50,3 +50,15 @@ test("ningún texto promete Facturae firmado", () => {
   const promises = code.filter(({ src }) => /Facturae[^"`\n]{0,40}firmad|firmad[^"`\n]{0,40}Facturae|XAdES/i.test(src));
   assert.deepEqual(promises.map(({ file }) => file), []);
 });
+
+test("Ajustes no ofrece un interruptor de Facturae que no hace nada", () => {
+  const src = readFileSync("components/settings/EmpresaPanel.tsx", "utf8");
+  assert.doesNotMatch(src, /Facturación electrónica B2B/);
+  assert.doesNotMatch(src, /patch\(\{ facturae_enabled/);
+});
+
+test("la firma de presupuestos describe lo que hace, sin afirmar que cumple una norma", () => {
+  const src = readFileSync("app/firmar/[id]/page.tsx", "utf8");
+  assert.doesNotMatch(src, /eIDAS|Cumple con/i);
+  assert.match(src, /Firma con código de verificación enviado al cliente por email/);
+});

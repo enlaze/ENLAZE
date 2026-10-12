@@ -40,3 +40,13 @@ He buscado "firma", "firmado", "XAdES" y "Facturae" en app, components y lib: no
 
 1. Ajustes › Empresa: el texto de "Facturación electrónica B2B" sin "firmado" ni "administraciones".
 2. Crea una factura de prueba y mira en Supabase que sale con `verifactu_registered = false`.
+
+## Respuestas de Daniil (2026-10-12) y lo hecho
+
+1. **Interruptor "Facturación electrónica B2B": quitado** de Ajustes › Empresa. `facturae_enabled` se sigue guardando con el valor que ya tenía cada usuario, como se hizo con `verifactu_enabled` en b8. El botón "Descargar Facturae XML" sigue saliendo siempre.
+2. **Las 10 facturas: UPDATE aprobado.** Antes lo he comprobado: los 2 usuarios son cuentas internas (`subscriptions.is_internal = true`; 8 y 2 facturas). Va en `20261012140000_issued_invoices_not_verifactu_registered.sql`. Solo toca `verifactu_registered`.
+3. **`/firmar`:** "Firma electrónica verificada por Enlaze · Cumple con eIDAS Art. 25" pasa a "Firma con código de verificación enviado al cliente por email". No se afirma ninguna norma.
+
+Pruebas: `verifactu-not-registered.test.mjs` añade dos casos (interruptor y texto de `/firmar`); 6/6.
+
+**Fuera de este bloque, por si te interesa:** `/security` dice "Cumplimiento total del Reglamento (UE) 2016/679" (RGPD). Es otra afirmación de cumplimiento con el mismo problema que eIDAS. No la he tocado.
