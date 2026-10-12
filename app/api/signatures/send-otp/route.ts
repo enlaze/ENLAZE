@@ -6,8 +6,6 @@ import { escapeHtml } from "@/lib/sanitize";
 import { hashSignatureToken } from "@/lib/signature-token";
 import crypto from "crypto";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 function generateOTP(): string {
   // Use crypto for secure random generation
   const bytes = crypto.randomBytes(3);
@@ -25,6 +23,15 @@ export async function POST(request: Request) {
         { status: 429 }
       );
     }
+
+    const resendKey = process.env.RESEND_API_KEY;
+    if (!resendKey) {
+      return NextResponse.json(
+        { error: "El servicio de correo no está disponible en este momento." },
+        { status: 503 }
+      );
+    }
+    const resend = new Resend(resendKey);
 
     const supabase = getServiceRoleClient();
     if (!supabase) {
