@@ -1555,3 +1555,54 @@ alter default privileges in schema public
 notify pgrst, 'reload schema';
 commit;
 -- END ROLLBACK_E6_L1
+
+-- BEGIN ROLLBACK_BILLING_GRACE
+-- Compensa 20261012170000. Revertir primero el código del webhook/estado/UI.
+-- Pierde fechas de gracia: los impagos vuelven a solo lectura inmediatamente.
+-- Ejecutar el bloque en una transacción del cliente, sin BEGIN/COMMIT de nivel superior.
+-- El cliente debe fijar enlaze.allow_billing_grace_rollback='remove_payment_grace'
+-- en esa misma transacción tras revisar la pérdida. No ejecutar automáticamente.
+do $guard$
+begin
+  if current_setting('enlaze.allow_billing_grace_rollback',true) is distinct from 'remove_payment_grace' then
+    raise exception 'Rollback de gracia requiere acknowledgement remove_payment_grace';
+  end if;
+  if not (exists (select 1 from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='billing_internal' and p.proname='access_level' and p.proargtypes='2950'::oidvector
+      and md5(p.prosrc)='9d554e53f076ba9ee3c541e2f66d2bd6' and p.prosecdef and p.provolatile='s'
+      and p.proconfig=array['search_path=""']::text[]
+      and not has_function_privilege('anon',p.oid,'execute')
+      and not has_function_privilege('authenticated',p.oid,'execute'))) or not (exists (select 1 from pg_catalog.pg_trigger t join pg_catalog.pg_proc p on p.oid=t.tgfoid
+    join pg_catalog.pg_namespace n on n.oid=p.pronamespace
+    where t.tgrelid=to_regclass('public.subscriptions') and t.tgname='trg_preserve_past_due_grace'
+      and not t.tgisinternal and t.tgenabled='O' and t.tgtype=19 and t.tgqual is null
+      and array(select unnest(t.tgattr))=array[
+        (select attnum from pg_catalog.pg_attribute where attrelid=t.tgrelid and attname='status'),
+        (select attnum from pg_catalog.pg_attribute where attrelid=t.tgrelid and attname='past_due_grace_ends_at')]
+      and n.nspname='billing_internal' and p.proname='preserve_past_due_grace' and p.pronargs=0
+      and md5(p.prosrc)='738bf0f99a9a48ff7d4ef4eebb760989' and not p.prosecdef and p.provolatile='v'
+      and p.proconfig=array['search_path=""']::text[]
+      and not has_function_privilege('anon',p.oid,'execute')
+      and not has_function_privilege('authenticated',p.oid,'execute'))) then
+    raise exception 'Rollback de gracia incompatible: revisar cambios posteriores';
+  end if;
+end $guard$;
+
+create or replace function billing_internal.access_level(p_user uuid)
+returns text
+language sql stable security definer set search_path = ''
+as $$
+  select case
+    when s.status = 'active' then 'full'
+    when s.status = 'trialing' and s.trial_ends_at > now() then 'full'
+    else 'read_only'   -- prueba caducada, impago, cancelado o sin fila
+  end
+  from (select 1) as one
+  left join public.subscriptions s on s.user_id = p_user;
+$$;
+
+drop trigger trg_preserve_past_due_grace on public.subscriptions;
+drop function billing_internal.preserve_past_due_grace();
+alter table public.subscriptions drop column past_due_grace_ends_at;
+notify pgrst, 'reload schema';
+-- END ROLLBACK_BILLING_GRACE

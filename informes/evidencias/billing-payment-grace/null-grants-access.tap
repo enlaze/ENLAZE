@@ -1,0 +1,104 @@
+TAP version 13
+# BENCH: postgres (PostgreSQL) 17.11 (Homebrew); PostgREST 16.4; production billing migration; loopback only
+# Subtest: billing grace / real PostgreSQL 17 + real server access
+    # Subtest: migration gates: no backfill, no permission drift, fail closed
+    ok 1 - migration gates: no backfill, no permission drift, fail closed # SKIP
+      ---
+      duration_ms: 0.402875
+      type: 'test'
+      ...
+    # Subtest: first failure opens exactly five days; five retries never move the deadline
+    ok 2 - first failure opens exactly five days; five retries never move the deadline
+      ---
+      duration_ms: 36.466542
+      type: 'test'
+      ...
+    # Subtest: duplicate delivery cannot reapply the failure after recovery
+    ok 3 - duplicate delivery cannot reapply the failure after recovery
+      ---
+      duration_ms: 3.8315
+      type: 'test'
+      ...
+    # Subtest: boundary: full minus 1ms, read_only at equality and plus 1ms
+    ok 4 - boundary: full minus 1ms, read_only at equality and plus 1ms
+      ---
+      duration_ms: 10.028167
+      type: 'test'
+      ...
+    # Subtest: active recovery clears deadline and restores full access
+    ok 5 - active recovery clears deadline and restores full access
+      ---
+      duration_ms: 6.05325
+      type: 'test'
+      ...
+    # Subtest: later second failure opens a NEW five-day grace
+    ok 6 - later second failure opens a NEW five-day grace
+      ---
+      duration_ms: 3.942625
+      type: 'test'
+      ...
+    # Subtest: legacy past_due with NULL has no grace and remains read_only
+    not ok 7 - legacy past_due with NULL has no grace and remains read_only
+      ---
+      duration_ms: 2.222667
+      type: 'test'
+      location: '/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/billing-payment-grace/__tests__/billing-grace.integration.test.mjs:201:11'
+      failureType: 'testCodeFailure'
+      error: |-
+        SQL access
+        + actual - expected
+        
+        + 'full'
+        - 'read_only'
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'read_only'
+      actual: 'full'
+      operator: 'strictEqual'
+      stack: |-
+        access (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/billing-payment-grace/__tests__/billing-grace.integration.test.mjs:117:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+        async TestContext.<anonymous> (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/billing-payment-grace/__tests__/billing-grace.integration.test.mjs:203:5)
+        async Test.run (node:internal/test_runner/test:1208:7)
+        async TestContext.<anonymous> (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/billing-payment-grace/__tests__/billing-grace.integration.test.mjs:201:3)
+        async Test.run (node:internal/test_runner/test:1208:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)
+      ...
+    # Subtest: deleted subscription cuts immediately even inside grace
+    ok 8 - deleted subscription cuts immediately even inside grace
+      ---
+      duration_ms: 6.592667
+      type: 'test'
+      ...
+    # Subtest: concurrent subscription writes keep one initial deadline
+    ok 9 - concurrent subscription writes keep one initial deadline
+      ---
+      duration_ms: 16.517292
+      type: 'test'
+      ...
+    # Subtest: rollback requires acknowledgement and restores old access and schema
+    ok 10 - rollback requires acknowledgement and restores old access and schema # SKIP
+      ---
+      duration_ms: 0.076
+      type: 'test'
+      ...
+    1..10
+not ok 1 - billing grace / real PostgreSQL 17 + real server access
+  ---
+  duration_ms: 913.237667
+  type: 'test'
+  location: '/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/billing-payment-grace/__tests__/billing-grace.integration.test.mjs:52:1'
+  failureType: 'subtestsFailed'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..1
+# tests 11
+# suites 0
+# pass 7
+# fail 2
+# cancelled 0
+# skipped 2
+# todo 0
+# duration_ms 1107.02875

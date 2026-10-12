@@ -18,6 +18,7 @@ export interface BillingStatus {
   interval: BillingInterval | null;
   access_level: "full" | "read_only";
   trial_ends_at: string | null;
+  past_due_grace_ends_at: string | null;
   current_period_end: string | null;
   cancel_at_period_end: boolean;
   has_stripe_customer: boolean;
@@ -34,6 +35,11 @@ export function trialDaysLeft(s: Pick<BillingStatus, "trial_ends_at">, now = Dat
 
 export function isInTrial(s: BillingStatus): boolean {
   return s.status === "trialing" && s.access_level === "full";
+}
+
+/** La decisión de acceso viene del servidor, como en la prueba gratuita. */
+export function isInPaymentGrace(s: BillingStatus): boolean {
+  return s.status === "past_due" && s.access_level === "full" && s.past_due_grace_ends_at != null;
 }
 
 /** «25 de octubre de 2026». */

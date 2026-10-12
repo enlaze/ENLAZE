@@ -1,7 +1,7 @@
 /**
  * Webhook de Stripe: firma y deduplicación, sin red ni base de datos (almacén
  * en memoria). La deduplicación contra la tabla real stripe_events se prueba
- * en billing.integration.test.mjs.
+ * en billing-grace.integration.test.mjs, contra PostgreSQL 17 desechable.
  */
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -92,7 +92,7 @@ test("sin cabecera de firma → 400", async () => {
 test("evento repetido → se procesa UNA sola vez", async () => {
   const store = memoryStore();
   const body = paymentFailedEvent();
-  const first = await handleStripeWebhook(body, sign(body), { stripe, secret: SECRET, store });
+  const first = await handleStripeWebhook(body, sign(body), { stripe, secret: SECRET, store, now: () => Date.parse("2030-10-12T01:00:00Z") });
   const second = await handleStripeWebhook(body, sign(body), { stripe, secret: SECRET, store });
   assert.equal(first.status, 200);
   assert.equal(first.body.outcome, "applied");
@@ -101,7 +101,7 @@ test("evento repetido → se procesa UNA sola vez", async () => {
   assert.equal(store.updates.length, 1);
   assert.deepEqual(store.updates[0], {
     target: { subscriptionId: "sub_test_1", customerId: "cus_test_1" },
-    patch: { status: "past_due" },
+    patch: { status: "past_due", past_due_grace_ends_at: "2030-10-17T01:00:00.000Z" },
   });
 });
 

@@ -2,7 +2,7 @@
 
 /**
  * Las piezas visibles del plan dentro del dashboard:
- *  - PlanBanner: el aviso discreto de arriba (solo en prueba o en solo lectura).
+ *  - PlanBanner: el aviso de prueba, impago en gracia o solo lectura.
  *  - PlanBlockNotice: el bloqueo explicado dentro de un formulario.
  *  - LockedFeature: lo que se ve en una sección que no entra en el plan.
  * Todo el texto de planes y funciones sale de lib/plans.ts.
@@ -12,8 +12,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { PLANS_HREF, useBilling } from "@/components/billing/BillingProvider";
-import { blockMessage, readOnlyCause, readOnlyNextStep, type BillingBlockInfo } from "@/lib/billing-messages";
-import { daysLeftText, isInTrial, trialDaysLeft } from "@/lib/billing-status";
+import { blockMessage, paymentGraceMessage, readOnlyCause, readOnlyNextStep, type BillingBlockInfo } from "@/lib/billing-messages";
+import { daysLeftText, isInPaymentGrace, isInTrial, trialDaysLeft } from "@/lib/billing-status";
 import { FEATURE_LABELS, PLAN_LABELS, cheapestPlanWith, planHasFeature, type Feature } from "@/lib/plans";
 
 const BTN =
@@ -63,6 +63,8 @@ export function PlanBanner() {
     );
   }
 
+  if (isInPaymentGrace(status)) return <PaymentGraceNotice deadline={status.past_due_grace_ends_at!} />;
+
   if (status.access_level === "read_only") {
     return (
       <div
@@ -84,6 +86,19 @@ export function PlanBanner() {
   }
 
   return null;
+}
+
+/** El primer impago avisa con la fecha de corte sin bloquear el trabajo. */
+export function PaymentGraceNotice({ deadline }: { deadline: string }) {
+  return (
+    <div role="status" className="mx-6 mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-warning/30 bg-warning/[0.08] px-4 py-3 text-[13.5px] md:mx-12">
+      <span className="flex flex-1 items-start gap-2.5 text-warning-ink">
+        <InfoIcon />
+        <span className="text-navy-800 dark:text-zinc-200">{paymentGraceMessage(deadline)}</span>
+      </span>
+      <Link href={PLANS_HREF} className={BTN}>Revisar pago</Link>
+    </div>
+  );
 }
 
 /** El bloqueo, explicado dentro del propio formulario, con enlace a los planes. */
