@@ -91,9 +91,9 @@ export default function SupplierDetailPage() {
         description={[supplier.nif, typeLabel].filter(Boolean).join(" · ")}
         actions={
           <div className="flex gap-2">
-            {/* Ya no hay página "new": se va a Recibidas filtrada por este
-                proveedor, donde está el botón de nueva factura. */}
-            <Link href={`/dashboard/facturacion?tab=recibidas&supplier=${encodeURIComponent(id)}`}>
+            {/* Abre Recibidas filtrada por este proveedor y con el alta ya
+                abierta y el proveedor puesto. */}
+            <Link href={`/dashboard/facturacion?tab=recibidas&supplier=${encodeURIComponent(id)}&nueva=1`}>
               <Button>+ Nueva factura recibida</Button>
             </Link>
           </div>
