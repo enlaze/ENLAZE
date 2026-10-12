@@ -61,4 +61,6 @@ Punto 2: **se quita el hash y el semáforo fiscal** de todo lo que ve el usuario
 
 Sigue sin tocarse el cálculo y el guardado del hash en la base.
 
-Punto 1: migración aprobada; se aplica al fusionar.
+Punto 1: migración aprobada y **aplicada el 2026-10-12**. El MCP la registró como `20261012100029` y el fichero se ha renombrado a esa versión. Comprobado en la base: `verifactu_certified = false` en la única fila (v1.0.0) y el changelog queda en "Versión inicial de ENLAZE con compliance core, Facturae 3.2.2, multi-sector.".
+
+Corrección: arriba digo que `software_versions` "se puede leer sin iniciar sesión". Hoy ya no: con la clave anónima responde `permission denied for table software_versions`.

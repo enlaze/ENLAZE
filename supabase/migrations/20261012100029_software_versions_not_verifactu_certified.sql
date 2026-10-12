@@ -1,9 +1,9 @@
--- PENDIENTE DE APROBAR (auto/b8-quitar-verifactu). No aplicada.
+-- auto/b8-quitar-verifactu. Aprobada y aplicada el 2026-10-12 (versión
+-- registrada 20261012100029; el fichero se llamaba 20261011120000).
 --
 -- software_versions.verifactu_certified = true es falso: no hay envío a la
 -- AEAT, ni QR, ni inalterabilidad, ni declaración responsable (ver informe de
--- auto/b6-verifactu-auditoria). La tabla tiene lectura pública, así que el
--- flag y el changelog son una promesa visible desde fuera de la app.
+-- auto/b6-verifactu-auditoria). El flag y el changelog se leen como promesa.
 --
 -- Idempotente: se puede lanzar más de una vez.
 
