@@ -1,0 +1,16 @@
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: G3 TRANSPORT: Pintura plástica blanca mate interior 15 L source must reach budget_items
+    at file:///private/tmp/enlaze-wizard-provenance-mutant-VGqI5b/__tests__/budget-wizard-full-page.browser.integration.test.mjs:409:12
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: null,
+  expected: null,
+  operator: 'notStrictEqual',
+  diff: 'simple'
+}
+
+Node.js v25.8.2
