@@ -41,3 +41,5 @@ El proceso de build tiene `RESEND_API_KEY` y `ANTHROPIC_API_KEY` **ausentes**, s
 **Automatización:** se añade `service-clients-without-keys.yml`, que instala el lockfile, ejecuta las mutaciones y el build sin claves en PRs que afecten estos archivos o por ejecución manual. No utiliza secretos. La apertura y fusión del PR forman parte del encargo de continuación.
 
 **Repetir:** `npm run test:service-clients`, `npm run test:service-client-mutations`, `npm run test:build-without-service-keys`. Salidas completas en `informes/evidencias/lazy-service-clients/`: baseline, seis mutantes y build. Las variables falsas del test positivo de constructores solo existen en su proceso de prueba; nunca se envían a un servicio ni se configuran en Preview.
+
+**CI del PR:** el build sin claves y Preview pasan. El E2E previo del asistente rechazaba por CORS la cabecera de reintento `x-retry-count` de Supabase. Se permite esa cabecera únicamente en su gateway local de pruebas, manteniendo las mismas aserciones y destinos; no se cambia CORS de la aplicación.
