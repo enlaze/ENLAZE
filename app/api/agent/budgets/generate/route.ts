@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAgentRequest, isErrorResponse } from "../../_lib/auth";
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
+import { getAnthropic } from "@/lib/service-clients";
 import { reserveUsage } from "@/lib/subscription";
 import { getSectorConfig } from "@/lib/agent-prompts";
 import { normalizeSector } from "@/lib/sector-config";
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 function stripCodeFences(text: string) {
   let cleaned = text.trim();
@@ -49,6 +49,8 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+
+    const anthropic = getAnthropic();
 
     // Muro de pago: cada llamada cuenta como una generación con IA (mismo tope
     // que los presupuestos del plan). Es nuestro mayor coste variable.

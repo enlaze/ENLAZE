@@ -1,4 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
+import { getAnthropic } from "@/lib/service-clients";
 import { createClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
 import { reserveUsage } from "@/lib/subscription";
@@ -6,10 +7,6 @@ import { getSectorConfig } from "@/lib/agent-prompts";
 import { normalizeSector } from "@/lib/sector-config";
 import { logAiRun, hashText } from "@/lib/ai-logger";
 import { rateLimitSensitive } from "@/lib/rate-limit";
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
 
 function stripCodeFences(text: string) {
   let cleaned = text.trim();
@@ -31,7 +28,7 @@ function extractLikelyJson(text: string) {
   return cleaned;
 }
 
-async function repairBudgetJson(rawText: string) {
+async function repairBudgetJson(rawText: string, anthropic: Anthropic) {
   const repairMessage = await anthropic.messages.create({
     model: "claude-sonnet-4-20250514",
     max_tokens: 4096,
@@ -81,6 +78,8 @@ export async function POST(request: Request) {
     if (!description) {
       return NextResponse.json({ error: "Descripcion requerida" }, { status: 400 });
     }
+
+    const anthropic = getAnthropic();
 
     // Muro de pago: cada llamada cuenta como una generación con IA (mismo tope
     // que los presupuestos del plan). Es nuestro mayor coste variable.
@@ -247,7 +246,7 @@ export async function POST(request: Request) {
       console.error("Raw budget response length:", responseText.length);
       console.error("Anthropic stop reason:", message.stop_reason);
 
-      const repaired = await repairBudgetJson(responseText);
+      const repaired = await repairBudgetJson(responseText, anthropic);
       result = JSON.parse(repaired);
     }
 
