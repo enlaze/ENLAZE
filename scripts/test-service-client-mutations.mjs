@@ -11,6 +11,7 @@ const targets = [
   ["budget-generate", "app/api/agent/budgets/generate/route.ts", "anthropic"],
   ["market-analysis", "app/api/agent/market/analysis/route.ts", "anthropic"],
   ["invoice-ocr", "app/api/invoices/ocr/route.ts", "anthropic"],
+  ["generate-budget", "app/api/generate-budget/route.ts", "anthropic"],
 ];
 const run = mutation => spawnSync(process.execPath,
   ["--test", "--test-reporter=tap", "__tests__/service-clients-import.test.mjs"],
@@ -20,7 +21,7 @@ await mkdir(logs, { recursive: true });
 const baseline = run();
 await writeFile(new URL("baseline.tap", logs), baseline.stdout + baseline.stderr);
 assert.equal(baseline.status, 0, baseline.stdout + baseline.stderr);
-const summary = ["BASELINE 6/6 PASS: five imports with keys deleted + real lazy/memoized getters"];
+const summary = ["BASELINE 7/7 PASS: six imports with keys deleted + real lazy/memoized getters"];
 console.log(summary[0]);
 try {
   for (const [name, path, sdk] of targets) {
@@ -47,7 +48,7 @@ try {
     summary.push(`KILLED ${name}: eager ${sdk} at module scope detected in ${path}`);
     console.log(summary.at(-1));
   }
-  summary.push("5/5 mutants killed; real source unchanged; no email or AI requests.");
+  summary.push("6/6 mutants killed; real source unchanged; no email or AI requests.");
   console.log(summary.at(-1));
 } finally {
   await rm(out, { recursive: true, force: true });

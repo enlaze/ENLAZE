@@ -2,33 +2,33 @@ TAP version 13
 # Subtest: service clients: lib/notification-service.ts
 ok 1 - service clients: lib/notification-service.ts
   ---
-  duration_ms: 833.129292
+  duration_ms: 587.844666
   type: 'test'
   ...
 # Subtest: service clients: app/api/signatures/send-otp/route.ts
 ok 2 - service clients: app/api/signatures/send-otp/route.ts
   ---
-  duration_ms: 387.262958
+  duration_ms: 299.632708
   type: 'test'
   ...
 # Subtest: service clients: app/api/agent/budgets/generate/route.ts
 ok 3 - service clients: app/api/agent/budgets/generate/route.ts
   ---
-  duration_ms: 329.34125
+  duration_ms: 316.387666
   type: 'test'
   ...
 # Subtest: service clients: app/api/agent/market/analysis/route.ts
 ok 4 - service clients: app/api/agent/market/analysis/route.ts
   ---
-  duration_ms: 304.01275
+  duration_ms: 316.709375
   type: 'test'
   ...
 # Subtest: service clients: app/api/invoices/ocr/route.ts
 not ok 5 - service clients: app/api/invoices/ocr/route.ts
   ---
-  duration_ms: 410.509
+  duration_ms: 394.986958
   type: 'test'
-  location: '/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/__tests__/service-clients-import.test.mjs:16:3'
+  location: '/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/__tests__/service-clients-import.test.mjs:17:3'
   failureType: 'testCodeFailure'
   error: |-
     
@@ -66,7 +66,7 @@ not ok 5 - service clients: app/api/invoices/ocr/route.ts
   operator: 'strictEqual'
   stack: |-
     <anonymous> (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/__tests__/support/service-clients-import-probe.mjs:58:10) {
-    TestContext.<anonymous> (file:///Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/__tests__/service-clients-import.test.mjs:27:12)
+    TestContext.<anonymous> (file:///Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/__tests__/service-clients-import.test.mjs:28:12)
     Test.runInAsyncScope (node:async_hooks:226:14)
     Test.run (node:internal/test_runner/test:1201:25)
     Test.processPendingSubtests (node:internal/test_runner/test:831:18)
@@ -74,18 +74,24 @@ not ok 5 - service clients: app/api/invoices/ocr/route.ts
     Test.run (node:internal/test_runner/test:1258:12)
     async Test.processPendingSubtests (node:internal/test_runner/test:831:7)
   ...
-# Subtest: service clients: getters
-ok 6 - service clients: getters
+# Subtest: service clients: app/api/generate-budget/route.ts
+ok 6 - service clients: app/api/generate-budget/route.ts
   ---
-  duration_ms: 300.7175
+  duration_ms: 286.974334
   type: 'test'
   ...
-1..6
-# tests 6
+# Subtest: service clients: getters
+ok 7 - service clients: getters
+  ---
+  duration_ms: 232.469084
+  type: 'test'
+  ...
+1..7
+# tests 7
 # suites 0
-# pass 5
+# pass 6
 # fail 1
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 2687.992542
+# duration_ms 2561.002541

@@ -11,6 +11,7 @@ const MODULES = [
   "app/api/agent/budgets/generate/route.ts",
   "app/api/agent/market/analysis/route.ts",
   "app/api/invoices/ocr/route.ts",
+  "app/api/generate-budget/route.ts",
 ];
 for (const target of [...MODULES, "getters"]) {
   test(`service clients: ${target}`, () => {

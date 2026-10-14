@@ -10,6 +10,7 @@ on:
       - "app/api/agent/budgets/generate/route.ts"
       - "app/api/agent/market/analysis/route.ts"
       - "app/api/invoices/ocr/route.ts"
+      - "app/api/generate-budget/route.ts"
       - "__tests__/service-clients-import.test.mjs"
       - "__tests__/support/service-clients-import-probe.mjs"
       - "__tests__/support/build-*"
@@ -35,7 +36,7 @@ jobs:
           cache: npm
       - name: Install locked dependencies without installation scripts
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Import each module without credentials and reject all five eager mutations
+      - name: Import each module without credentials and reject all six eager mutations
         run: npm run test:service-client-mutations
       - name: Full build without email or AI credentials, with local read-only plan fixture
         run: npm run test:build-without-service-keys

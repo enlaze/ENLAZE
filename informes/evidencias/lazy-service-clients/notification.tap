@@ -2,9 +2,9 @@ TAP version 13
 # Subtest: service clients: lib/notification-service.ts
 not ok 1 - service clients: lib/notification-service.ts
   ---
-  duration_ms: 711.74375
+  duration_ms: 667.4505
   type: 'test'
-  location: '/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/__tests__/service-clients-import.test.mjs:16:3'
+  location: '/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/__tests__/service-clients-import.test.mjs:17:3'
   failureType: 'testCodeFailure'
   error: |-
     
@@ -45,7 +45,7 @@ not ok 1 - service clients: lib/notification-service.ts
   operator: 'strictEqual'
   stack: |-
     async <anonymous> (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/__tests__/support/service-clients-import-probe.mjs:57:3) {
-    TestContext.<anonymous> (file:///Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/__tests__/service-clients-import.test.mjs:27:12)
+    TestContext.<anonymous> (file:///Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/__tests__/service-clients-import.test.mjs:28:12)
     Test.runInAsyncScope (node:async_hooks:226:14)
     Test.run (node:internal/test_runner/test:1201:25)
     Test.start (node:internal/test_runner/test:1096:17)
@@ -54,39 +54,45 @@ not ok 1 - service clients: lib/notification-service.ts
 # Subtest: service clients: app/api/signatures/send-otp/route.ts
 ok 2 - service clients: app/api/signatures/send-otp/route.ts
   ---
-  duration_ms: 317.638375
+  duration_ms: 327.220125
   type: 'test'
   ...
 # Subtest: service clients: app/api/agent/budgets/generate/route.ts
 ok 3 - service clients: app/api/agent/budgets/generate/route.ts
   ---
-  duration_ms: 298.7655
+  duration_ms: 339.467958
   type: 'test'
   ...
 # Subtest: service clients: app/api/agent/market/analysis/route.ts
 ok 4 - service clients: app/api/agent/market/analysis/route.ts
   ---
-  duration_ms: 320.29475
+  duration_ms: 316.425125
   type: 'test'
   ...
 # Subtest: service clients: app/api/invoices/ocr/route.ts
 ok 5 - service clients: app/api/invoices/ocr/route.ts
   ---
-  duration_ms: 349.4055
+  duration_ms: 374.799875
+  type: 'test'
+  ...
+# Subtest: service clients: app/api/generate-budget/route.ts
+ok 6 - service clients: app/api/generate-budget/route.ts
+  ---
+  duration_ms: 340.829875
   type: 'test'
   ...
 # Subtest: service clients: getters
-ok 6 - service clients: getters
+ok 7 - service clients: getters
   ---
-  duration_ms: 248.672959
+  duration_ms: 254.384708
   type: 'test'
   ...
-1..6
-# tests 6
+1..7
+# tests 7
 # suites 0
-# pass 5
+# pass 6
 # fail 1
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 2377.322292
+# duration_ms 2747.587542

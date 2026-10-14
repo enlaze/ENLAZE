@@ -14,23 +14,22 @@
 > next build
 
 ▲ Next.js 16.3.8 (Turbopack)
-✓ Running next.config.ts took 2.1s
+✓ Running next.config.ts took 1122ms
 - Experiments (use with caution):
   · clientTraceMetadata
 
   Creating an optimized production build ...
-✓ Compiled successfully in 14.1s
+✓ Compiled successfully in 4.6s
   Running next.config.js provided runAfterProductionCompile ...
-✓ Completed runAfterProductionCompile in 593ms
+✓ Completed runAfterProductionCompile in 327ms
   Running TypeScript ...
-  Finished TypeScript in 13.7s ...
+  Finished TypeScript in 5.1s ...
   Collecting page data using 9 workers ...
   Generating static pages using 9 workers (0/134) ...
   Generating static pages using 9 workers (33/134) 
   Generating static pages using 9 workers (66/134) 
   Generating static pages using 9 workers (100/134) 
-objc[80701]: Class GNotificationCenterDelegate is implemented in both /Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/node_modules/@img/sharp-libvips-darwin-arm64/lib/libvips-cpp.8.17.3.dylib (0x13bdc5978) and /Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/node_modules/next/node_modules/@img/sharp-libvips-darwin-arm64/lib/libvips-cpp.8.18.7.dylib (0x13d115a50). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
-✓ Generating static pages using 9 workers (134/134) in 1907ms
+✓ Generating static pages using 9 workers (134/134) in 1735ms
   Finalizing page optimization ...
 
 Route (app)
