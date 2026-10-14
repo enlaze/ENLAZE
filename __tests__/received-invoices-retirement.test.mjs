@@ -12,7 +12,16 @@ const cache = path.join(root, "node_modules/.cache");
 mkdirSync(cache, { recursive: true });
 const dir = mkdtempSync(path.join(cache, "received-invoices-ocr-"));
 test.after(() => { rmSync(dir, { recursive: true, force: true }); delete globalThis.__receivedOcrTest; });
+// The OCR transport tests model a configured AI service, with a synthetic key
+// and mocked SDK calls. Imports without credentials have their own regression.
+const previousApiKey = process.env.ANTHROPIC_API_KEY;
+process.env.ANTHROPIC_API_KEY = "synthetic_ocr_transport_only";
+test.after(() => {
+  if (previousApiKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+  else process.env.ANTHROPIC_API_KEY = previousApiKey;
+});
 const stubs = {
+  "server-only": `export {};`,
   "@anthropic-ai/sdk": `export default class Anthropic { static NotFoundError = class extends Error {}; messages = { create: async () => { globalThis.__receivedOcrTest.ai++; return { content: [{type: 'text', text: '{"invoice_number":"OCR-1","total_amount":121}'}], usage: {} }; } }; }`,
   "@supabase/supabase-js": `export const createClient = () => ({ storage: { from(bucket) { globalThis.__receivedOcrTest.buckets.push(bucket); return { upload: async (path) => ({ data: { path }, error: null }) }; } } });`,
   "@/lib/supabase-service-role": `export const getServiceRoleClient = () => ({ storage: { from(bucket) { globalThis.__receivedOcrTest.buckets.push(bucket); return { upload: async (path) => ({ data: { path }, error: null }) }; } } }); export const serviceRoleUnavailable = () => new Response(null, { status: 500 });`,
@@ -48,6 +57,19 @@ test("OCR rechaza modo heredado o desconocido antes de gastar cuota, subir o ext
     assert.match((await response.json()).error, /mode=extract/);
   }
   assert.deepEqual(globalThis.__receivedOcrTest, { ai: 0, quota: 0, buckets: [] });
+});
+
+test("OCR sin clave falla antes de gastar cuota, subir o extraer", async () => {
+  globalThis.__receivedOcrTest = { ai: 0, quota: 0, buckets: [] };
+  delete process.env.ANTHROPIC_API_KEY;
+  try {
+    const response = await POST(request("extract"));
+    assert.equal(response.status, 500);
+    assert.match((await response.json()).error, /ANTHROPIC_API_KEY no está configurada/);
+    assert.deepEqual(globalThis.__receivedOcrTest, { ai: 0, quota: 0, buckets: [] });
+  } finally {
+    process.env.ANTHROPIC_API_KEY = "synthetic_ocr_transport_only";
+  }
 });
 
 test("OCR extract devuelve un borrador privado revisable y no inserta facturas ni líneas", async () => {
