@@ -4,7 +4,7 @@
  * Respects user notification preferences stored in Supabase
  */
 
-import { Resend } from "resend";
+import { getResend } from "./service-clients";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { logError } from "./error-handler";
 import * as clientCreatedTemplate from "./email-templates/client-created";
@@ -16,7 +16,6 @@ import * as supplierAddedTemplate from "./email-templates/supplier-added";
 import * as projectCreatedTemplate from "./email-templates/project-created";
 import * as orderCreatedTemplate from "./email-templates/order-created";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "noreply@enlaze.es";
 
 /**
@@ -132,14 +131,7 @@ async function sendEmail(
   html: string
 ): Promise<NotificationResult> {
   try {
-    if (!process.env.RESEND_API_KEY) {
-      return {
-        success: false,
-        error: "RESEND_API_KEY no está configurado",
-      };
-    }
-
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResend().emails.send({
       from: RESEND_FROM_EMAIL,
       to,
       subject,

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { getAnthropic } from "@/lib/service-clients";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getServiceRoleClient, serviceRoleUnavailable } from "@/lib/supabase-service-role";
 import { createClient } from "@/lib/supabase-server";
@@ -20,7 +21,6 @@ import { requireWriteAccess, reserveUsage } from "@/lib/subscription";
 // lease TTL below (180s) must stay comfortably above this.
 export const maxDuration = 60;
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const OCR_MODEL =
   process.env.ANTHROPIC_OCR_MODEL?.trim() || "claude-sonnet-4-6";
 
@@ -130,6 +130,8 @@ export async function POST(request: Request) {
 
     // Muro de pago: cada escaneo con IA gasta cupo de "escaneos_ocr" (facturas
     // de proveedor), no de "facturas" (emitidas).
+    const anthropic = getAnthropic();
+
     const quota = await reserveUsage(user.id, "escaneos_ocr", 1, { source: "api:invoices/ocr" });
     if (quota) return quota;
 
