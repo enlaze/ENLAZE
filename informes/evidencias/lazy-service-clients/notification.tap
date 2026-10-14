@@ -1,0 +1,92 @@
+TAP version 13
+# Subtest: service clients: lib/notification-service.ts
+not ok 1 - service clients: lib/notification-service.ts
+  ---
+  duration_ms: 711.74375
+  type: 'test'
+  location: '/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/__tests__/service-clients-import.test.mjs:16:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    
+    node:internal/modules/run_main:107
+        triggerUncaughtException(
+        ^
+    
+    AssertionError [ERR_ASSERTION]: Got unwanted rejection: module import must not require runtime credentials
+    Actual message: "Missing API key. Pass it to the constructor `new Resend("re_123")`"
+        at async <anonymous> (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/__tests__/support/service-clients-import-probe.mjs:57:3) {
+      generatedMessage: false,
+      code: 'ERR_ASSERTION',
+      actual: Error: Missing API key. Pass it to the constructor `new Resend("re_123")`
+          at new Resend (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/node_modules/resend/dist/index.mjs:1306:25)
+          at Object.construct (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/__tests__/support/service-clients-import-probe.mjs:18:20)
+          at EagerResend (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/.test-out/service-client-mutants/notification/lib/notification-service.ts:2:21)
+          at Object.<anonymous> (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/.test-out/service-client-mutants/notification/lib/notification-service.ts:526:23)
+          at Module._compile (node:internal/modules/cjs/loader:1829:14)
+          at Object.transformer (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/node_modules/tsx/dist/register-BcxQ17Jo.cjs:9:3339)
+          at Module.load (node:internal/modules/cjs/loader:1552:32)
+          at Module._load (node:internal/modules/cjs/loader:1354:12)
+          at Object.cjsMockModuleLoad (node:internal/test_runner/mock/mock:852:12)
+          at wrapModuleLoad (node:internal/modules/cjs/loader:255:19),
+      expected: undefined,
+      operator: 'doesNotReject',
+      diff: 'simple'
+    }
+    
+    Node.js v25.8.2
+    
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    async <anonymous> (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/__tests__/support/service-clients-import-probe.mjs:57:3) {
+    TestContext.<anonymous> (file:///Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/__tests__/service-clients-import.test.mjs:27:12)
+    Test.runInAsyncScope (node:async_hooks:226:14)
+    Test.run (node:internal/test_runner/test:1201:25)
+    Test.start (node:internal/test_runner/test:1096:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17)
+  ...
+# Subtest: service clients: app/api/signatures/send-otp/route.ts
+ok 2 - service clients: app/api/signatures/send-otp/route.ts
+  ---
+  duration_ms: 317.638375
+  type: 'test'
+  ...
+# Subtest: service clients: app/api/agent/budgets/generate/route.ts
+ok 3 - service clients: app/api/agent/budgets/generate/route.ts
+  ---
+  duration_ms: 298.7655
+  type: 'test'
+  ...
+# Subtest: service clients: app/api/agent/market/analysis/route.ts
+ok 4 - service clients: app/api/agent/market/analysis/route.ts
+  ---
+  duration_ms: 320.29475
+  type: 'test'
+  ...
+# Subtest: service clients: app/api/invoices/ocr/route.ts
+ok 5 - service clients: app/api/invoices/ocr/route.ts
+  ---
+  duration_ms: 349.4055
+  type: 'test'
+  ...
+# Subtest: service clients: getters
+ok 6 - service clients: getters
+  ---
+  duration_ms: 248.672959
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 5
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2377.322292

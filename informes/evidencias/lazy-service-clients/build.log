@@ -1,0 +1,193 @@
+
+> enlaze@0.1.0 prebuild
+> npm run plans:check
+
+
+> enlaze@0.1.0 plans:check
+> node --env-file-if-exists=.env.local --import tsx scripts/plans-sync.ts --check
+
+.env.local not found. Continuing without it.
+✓ plan_catalog coincide con lib/plans.ts (4 planes)
+⚠ STRIPE_SECRET_KEY no definida: no se comprueban los precios de Stripe (el cobro no funcionará).
+
+> enlaze@0.1.0 build
+> next build
+
+▲ Next.js 16.3.8 (Turbopack)
+✓ Running next.config.ts took 2.1s
+- Experiments (use with caution):
+  · clientTraceMetadata
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 14.1s
+  Running next.config.js provided runAfterProductionCompile ...
+✓ Completed runAfterProductionCompile in 593ms
+  Running TypeScript ...
+  Finished TypeScript in 13.7s ...
+  Collecting page data using 9 workers ...
+  Generating static pages using 9 workers (0/134) ...
+  Generating static pages using 9 workers (33/134) 
+  Generating static pages using 9 workers (66/134) 
+  Generating static pages using 9 workers (100/134) 
+objc[80701]: Class GNotificationCenterDelegate is implemented in both /Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/node_modules/@img/sharp-libvips-darwin-arm64/lib/libvips-cpp.8.17.3.dylib (0x13bdc5978) and /Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/node_modules/next/node_modules/@img/sharp-libvips-darwin-arm64/lib/libvips-cpp.8.18.7.dylib (0x13d115a50). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+✓ Generating static pages using 9 workers (134/134) in 1907ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /api/account/delete
+├ ƒ /api/agent/budget-analysis
+├ ƒ /api/agent/budgets/generate
+├ ƒ /api/agent/calendar/action/create-event
+├ ƒ /api/agent/calendar/summary
+├ ƒ /api/agent/config
+├ ƒ /api/agent/daily-briefing
+├ ƒ /api/agent/gmail/action/create-draft
+├ ƒ /api/agent/gmail/summary
+├ ƒ /api/agent/ingest
+├ ƒ /api/agent/market/analysis
+├ ƒ /api/agent/market/prices
+├ ƒ /api/agent/market/summary
+├ ƒ /api/agent/news
+├ ƒ /api/agent/reputation/summary
+├ ƒ /api/agent/sheets/action/append-row
+├ ƒ /api/agent/sheets/list
+├ ƒ /api/agent/sheets/summary
+├ ƒ /api/agent/users
+├ ƒ /api/auth/google
+├ ƒ /api/auth/google/callback
+├ ƒ /api/billing/checkout
+├ ƒ /api/billing/portal
+├ ƒ /api/billing/status
+├ ƒ /api/billing/webhook
+├ ƒ /api/budgets/analyze
+├ ƒ /api/budgets/compare-providers
+├ ƒ /api/budgets/pdf
+├ ƒ /api/budgets/snapshots
+├ ƒ /api/budgets/snapshots/[id]
+├ ƒ /api/budgets/snapshots/[id]/diff
+├ ƒ /api/calendar/events
+├ ƒ /api/contabilidad/download
+├ ƒ /api/contabilidad/pdf
+├ ƒ /api/cron/dispatch-scheduled
+├ ƒ /api/email/send-bulk
+├ ƒ /api/generate-budget
+├ ƒ /api/integrations/whatsapp
+├ ƒ /api/internal/anon-privileges-check
+├ ƒ /api/invoices/ocr
+├ ƒ /api/notifications/preferences
+├ ƒ /api/notifications/send
+├ ƒ /api/pb/concepts
+├ ƒ /api/pb/import/analyze
+├ ƒ /api/pb/import/process
+├ ƒ /api/pb/import/source
+├ ƒ /api/pb/ingest
+├ ƒ /api/pb/search
+├ ƒ /api/pb/sync/run
+├ ƒ /api/pb/sync/status
+├ ƒ /api/pb/webhook
+├ ƒ /api/platform-assistant
+├ ƒ /api/prices/alerts
+├ ƒ /api/prices/compare
+├ ƒ /api/prices/history
+├ ƒ /api/prices/import
+├ ƒ /api/prices/n8n-sync
+├ ƒ /api/prices/process-alerts
+├ ƒ /api/prices/resolve
+├ ƒ /api/prices/sync
+├ ƒ /api/prices/weekly-report
+├ ƒ /api/prices/weekly-report/send
+├ ƒ /api/scheduled-messages
+├ ƒ /api/scheduled-messages/[id]
+├ ƒ /api/search
+├ ƒ /api/send-email
+├ ƒ /api/signatures/create
+├ ƒ /api/signatures/public
+├ ƒ /api/signatures/rotate-token
+├ ƒ /api/signatures/send-otp
+├ ƒ /api/signatures/verify-otp
+├ ƒ /api/technical-prices/import
+├ ƒ /api/webhook
+├ ƒ /api/webhooks/comercio-local
+├ ƒ /api/webhooks/construccion
+├ ƒ /api/whatsapp/send
+├ ƒ /api/whatsapp/send-bulk
+├ ○ /apple-icon.png
+├ ƒ /auth/callback
+├ ○ /contabilidad-print
+├ ○ /dashboard
+├ ○ /dashboard/agent
+├ ○ /dashboard/audit-log
+├ ○ /dashboard/budgets
+├ ƒ /dashboard/budgets/[id]
+├ ƒ /dashboard/budgets/[id]/edit
+├ ○ /dashboard/budgets/generate
+├ ○ /dashboard/budgets/new
+├ ○ /dashboard/calendar
+├ ○ /dashboard/clientes
+├ ƒ /dashboard/clientes/[id]
+├ ○ /dashboard/compliance
+├ ○ /dashboard/compliance/ai
+├ ○ /dashboard/compliance/fiscal
+├ ○ /dashboard/compliance/incidents
+├ ○ /dashboard/compliance/privacy
+├ ○ /dashboard/compliance/security
+├ ○ /dashboard/contabilidad
+├ ○ /dashboard/delivery-notes
+├ ƒ /dashboard/delivery-notes/[id]
+├ ƒ /dashboard/dev/agent-inspector
+├ ○ /dashboard/emails
+├ ○ /dashboard/facturacion
+├ ƒ /dashboard/facturas
+├ ○ /dashboard/issued-invoices
+├ ƒ /dashboard/issued-invoices/[id]
+├ ○ /dashboard/margins
+├ ○ /dashboard/messages
+├ ○ /dashboard/notifications
+├ ○ /dashboard/orders
+├ ƒ /dashboard/orders/[id]
+├ ○ /dashboard/payments
+├ ○ /dashboard/prices
+├ ○ /dashboard/prices/import
+├ ○ /dashboard/projects
+├ ƒ /dashboard/projects/[id]
+├ ○ /dashboard/settings
+├ ○ /dashboard/settings/cuenta
+├ ○ /dashboard/settings/fiscal
+├ ○ /dashboard/settings/integrations
+├ ○ /dashboard/settings/notifications
+├ ○ /dashboard/settings/personalizacion
+├ ○ /dashboard/settings/plan
+├ ○ /dashboard/settings/sector
+├ ○ /dashboard/suppliers
+├ ƒ /dashboard/suppliers/[id]
+├ ƒ /dashboard/suppliers/invoices
+├ ƒ /dashboard/suppliers/invoices/[id]
+├ ○ /dashboard/trash
+├ ƒ /firmar/[id]
+├ ○ /forgot-password
+├ ○ /icon.png
+├ ○ /legal/aviso-legal
+├ ○ /legal/cookies
+├ ○ /legal/dpa
+├ ○ /legal/privacy
+├ ○ /legal/subprocessors
+├ ○ /legal/terms
+├ ○ /login
+├ ○ /onboarding
+├ ○ /opengraph-image
+├ ƒ /portal/[token]
+├ ○ /pricing
+├ ○ /register
+├ ○ /reset-password
+├ ○ /robots.txt
+├ ○ /security
+└ ○ /sitemap.xml
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

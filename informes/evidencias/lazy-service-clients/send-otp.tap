@@ -1,0 +1,94 @@
+TAP version 13
+# Subtest: service clients: lib/notification-service.ts
+ok 1 - service clients: lib/notification-service.ts
+  ---
+  duration_ms: 590.648209
+  type: 'test'
+  ...
+# Subtest: service clients: app/api/signatures/send-otp/route.ts
+not ok 2 - service clients: app/api/signatures/send-otp/route.ts
+  ---
+  duration_ms: 370.451917
+  type: 'test'
+  location: '/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/__tests__/service-clients-import.test.mjs:16:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    
+    node:internal/modules/run_main:107
+        triggerUncaughtException(
+        ^
+    
+    AssertionError [ERR_ASSERTION]: Got unwanted rejection: module import must not require runtime credentials
+    Actual message: "Missing API key. Pass it to the constructor `new Resend("re_123")`"
+        at async <anonymous> (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/__tests__/support/service-clients-import-probe.mjs:57:3) {
+      generatedMessage: false,
+      code: 'ERR_ASSERTION',
+      actual: Error: Missing API key. Pass it to the constructor `new Resend("re_123")`
+          at new Resend (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/node_modules/resend/dist/index.mjs:1306:25)
+          at Object.construct (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/__tests__/support/service-clients-import-probe.mjs:18:20)
+          at crypto (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/.test-out/service-client-mutants/send-otp/app/api/signatures/send-otp/route.ts:2:21)
+          at Object.<anonymous> (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/.test-out/service-client-mutants/send-otp/app/api/signatures/send-otp/route.ts:18:23)
+          at Module._compile (node:internal/modules/cjs/loader:1829:14)
+          at Object.transformer (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/node_modules/tsx/dist/register-BcxQ17Jo.cjs:9:3339)
+          at Module.load (node:internal/modules/cjs/loader:1552:32)
+          at Module._load (node:internal/modules/cjs/loader:1354:12)
+          at Object.cjsMockModuleLoad (node:internal/test_runner/mock/mock:852:12)
+          at wrapModuleLoad (node:internal/modules/cjs/loader:255:19),
+      expected: undefined,
+      operator: 'doesNotReject',
+      diff: 'simple'
+    }
+    
+    Node.js v25.8.2
+    
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    async <anonymous> (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/__tests__/support/service-clients-import-probe.mjs:57:3) {
+    TestContext.<anonymous> (file:///Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/lazy-service-clients/__tests__/service-clients-import.test.mjs:27:12)
+    Test.runInAsyncScope (node:async_hooks:226:14)
+    Test.run (node:internal/test_runner/test:1201:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+    Test.postRun (node:internal/test_runner/test:1330:19)
+    Test.run (node:internal/test_runner/test:1258:12)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)
+  ...
+# Subtest: service clients: app/api/agent/budgets/generate/route.ts
+ok 3 - service clients: app/api/agent/budgets/generate/route.ts
+  ---
+  duration_ms: 335.713666
+  type: 'test'
+  ...
+# Subtest: service clients: app/api/agent/market/analysis/route.ts
+ok 4 - service clients: app/api/agent/market/analysis/route.ts
+  ---
+  duration_ms: 334.99675
+  type: 'test'
+  ...
+# Subtest: service clients: app/api/invoices/ocr/route.ts
+ok 5 - service clients: app/api/invoices/ocr/route.ts
+  ---
+  duration_ms: 359.630042
+  type: 'test'
+  ...
+# Subtest: service clients: getters
+ok 6 - service clients: getters
+  ---
+  duration_ms: 254.028958
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 5
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2367.9455

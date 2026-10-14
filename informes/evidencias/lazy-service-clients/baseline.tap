@@ -1,0 +1,46 @@
+TAP version 13
+# Subtest: service clients: lib/notification-service.ts
+ok 1 - service clients: lib/notification-service.ts
+  ---
+  duration_ms: 1461.746833
+  type: 'test'
+  ...
+# Subtest: service clients: app/api/signatures/send-otp/route.ts
+ok 2 - service clients: app/api/signatures/send-otp/route.ts
+  ---
+  duration_ms: 296.913541
+  type: 'test'
+  ...
+# Subtest: service clients: app/api/agent/budgets/generate/route.ts
+ok 3 - service clients: app/api/agent/budgets/generate/route.ts
+  ---
+  duration_ms: 304.816291
+  type: 'test'
+  ...
+# Subtest: service clients: app/api/agent/market/analysis/route.ts
+ok 4 - service clients: app/api/agent/market/analysis/route.ts
+  ---
+  duration_ms: 294.801584
+  type: 'test'
+  ...
+# Subtest: service clients: app/api/invoices/ocr/route.ts
+ok 5 - service clients: app/api/invoices/ocr/route.ts
+  ---
+  duration_ms: 1084.181875
+  type: 'test'
+  ...
+# Subtest: service clients: getters
+ok 6 - service clients: getters
+  ---
+  duration_ms: 226.976875
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3804.121666
