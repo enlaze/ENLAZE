@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
-import { Resend } from "resend";
+import { getResend } from "@/lib/service-clients";
 import { getServiceRoleClient } from "@/lib/supabase-service-role";
 import { rateLimitAuth } from "@/lib/rate-limit";
 import { escapeHtml } from "@/lib/sanitize";
 import { hashSignatureToken } from "@/lib/signature-token";
 import crypto from "crypto";
-
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 function generateOTP(): string {
   // Use crypto for secure random generation
@@ -41,6 +39,8 @@ export async function POST(request: Request) {
     if (!token) {
       return NextResponse.json({ error: "Falta token" }, { status: 400 });
     }
+
+    const resend = getResend();
 
     // Verify signature exists — the random token, not the signature id, is
     // what authorizes this lookup. The email a browser could send is never
@@ -130,6 +130,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, expires_at: expiresAt.toISOString() });
   } catch (err) {
+    console.error("[signatures/send-otp] Error:", err instanceof Error ? err.message : "Error interno");
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Error interno" },
       { status: 500 }

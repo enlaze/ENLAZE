@@ -58,6 +58,9 @@
     "test:billing-integration": "node --env-file-if-exists=.env.local --import tsx --test --test-concurrency=1 __tests__/billing.integration.test.mjs",
     "test:price-bank-rls": "node --env-file-if-exists=.env.local --test --test-concurrency=1 __tests__/price-bank-rls.integration.test.mjs",
     "test:p1-races": "node --env-file-if-exists=.env.local --test --test-concurrency=1 __tests__/p1-races.integration.test.mjs",
+    "test:service-clients": "node --test __tests__/service-clients-import.test.mjs",
+    "test:service-client-mutations": "node scripts/test-service-client-mutations.mjs",
+    "test:build-without-service-keys": "node --import tsx scripts/test-build-without-service-keys.mts",
     "test:budget-wizard-provenance-local": "node scripts/test-budget-wizard-provenance-local.mjs"
   },
   "dependencies": {

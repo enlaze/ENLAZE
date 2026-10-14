@@ -65,7 +65,7 @@ function reply(response, status, body, headers = {}) {
   response.writeHead(status, {
     "content-type": "application/json", "access-control-allow-origin": appOrigin,
     "access-control-allow-methods": "GET,POST,PATCH,PUT,DELETE,OPTIONS",
-    "access-control-allow-headers": "authorization,apikey,content-type,x-client-info,x-supabase-api-version,prefer,accept-profile,content-profile",
+    "access-control-allow-headers": "authorization,apikey,content-type,x-client-info,x-supabase-api-version,prefer,accept-profile,content-profile,x-retry-count",
     ...headers,
   });
   response.end(JSON.stringify(body));
