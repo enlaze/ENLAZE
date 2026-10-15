@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { useSector } from "@/lib/sector-context";
 import AcceptanceTimeline from "@/components/AcceptanceTimeline";
 import { printPDF } from "@/lib/pdf-generator";
+import { AI_ESTIMATE_LABEL, type BudgetPriceEvidence } from "@/lib/budget-price-provenance";
 import { logActivity } from "@/lib/activity-log";
 import { notify } from "@/lib/notifications";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -23,7 +24,7 @@ import {
   isBudgetRevisionConflict,
 } from "@/lib/budget-revision-writer";
 
-interface BudgetItem {
+interface BudgetItem extends BudgetPriceEvidence {
   id: string;
   concept: string;
   description: string;
@@ -523,6 +524,9 @@ export default function BudgetDetailPage() {
                     <p className="text-sm font-medium text-navy-900 dark:text-white">{item.concept}</p>
                     {item.description && (
                       <p className="mt-0.5 text-xs text-navy-500 dark:text-zinc-500">{item.description}</p>
+                    )}
+                    {item.price_source_type === "ai_estimate" && (
+                      <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">{AI_ESTIMATE_LABEL}</p>
                     )}
                   </td>
                   <td className="px-5 py-3 text-center">

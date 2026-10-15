@@ -6,6 +6,7 @@ import {
   type BudgetScope,
 } from "./budget-engine";
 import { TECHNICAL_ENGINE_SUMMARY } from "./ai-usage-policy";
+import { estimatedPriceEvidence } from "./budget-price-provenance";
 
 interface DeterministicAnalysisInput {
   sector?: string;
@@ -27,6 +28,7 @@ export function buildDeterministicBudgetAnalysis({
   const materials = buildScopeMaterials(scope);
   const marketRange = getMarketRange(scope, serviceType);
   const timeline = estimateRealisticTimeline(scope, items);
+  const checkedAt = new Date().toISOString();
   const providerStats = new Map<string, { count: number; total: number }>();
 
   for (const material of materials) {
@@ -61,6 +63,7 @@ export function buildDeterministicBudgetAnalysis({
       conservation_strategy: scope.conservation_strategy || "balanced",
     },
     suggested_items: items.map((item) => ({
+      ...estimatedPriceEvidence(checkedAt),
       concept: item.concept,
       description: item.description,
       quantity: item.quantity,
@@ -72,6 +75,7 @@ export function buildDeterministicBudgetAnalysis({
       estimated_hours: item.estimated_hours,
     })),
     suggested_materials: materials.map((material) => ({
+      ...estimatedPriceEvidence(checkedAt),
       concept: material.name,
       quantity: material.quantity,
       unit: material.unit,
