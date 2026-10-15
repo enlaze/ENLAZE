@@ -7,7 +7,7 @@ import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { Client } from "pg";
 import puppeteer from "puppeteer";
-import { config, guard, setup } from "./lib/budget-revision-rpcs-bench.mjs";
+import { config, guard, read, setup } from "./lib/budget-revision-rpcs-bench.mjs";
 
 const root = new URL("../", import.meta.url);
 const restOrigin = "http://127.0.0.1:53002";
@@ -36,6 +36,19 @@ function token(role, sub) {
 }
 const accessToken = token("authenticated", owner);
 const anonToken = token("anon");
+const serviceToken = token("service_role");
+// Only the external model is deterministic; application routes and budget
+// writers run unchanged against real PostgREST/PostgreSQL.
+const proposal = {
+  summary: "Pintura de 40 m2", confidence_score: 90,
+  suggested_items: Array.from({ length: 7 }, (_, i) => ({
+    concept: `Pintura pared G3 ${i}`, description: "Preparación y acabado",
+    quantity: 40, unit: "m2", unit_cost: 9 + i,
+    category: "mano_obra", chapter: "pintura", estimated_hours: 4,
+  })),
+  suggested_materials: [],
+};
+let modelCalls = 0;
 const user = {
   id: owner, aud: "authenticated", role: "authenticated", email: "wizard-e2e@example.invalid",
   app_metadata: { provider: "email", providers: ["email"] }, user_metadata: {},
@@ -146,6 +159,11 @@ async function openWizard(budgetId, expectedTitle = "Base E2E", { step = null, r
 
 try {
   await setup(db);
+  // Historical G3 schema/writers on the guarded disposable cluster only.
+  // Do NOT apply 20261015090000_budget_items_ai_estimate_comment.sql.
+  await db.query(read("supabase/migrations/20261008120000_budget_items_price_provenance.sql"));
+  await db.query(read("supabase/migrations/20261008130000_budget_items_price_provenance_writers.sql"));
+  await db.query(read("__tests__/support/budget-wizard-ai-fixtures.sql"));
   await db.query("insert into auth.users values($1)", [owner]);
   await db.query("notify pgrst, 'reload schema'");
 
@@ -158,6 +176,17 @@ try {
         reply(response, 401, { error: "invalid synthetic session" }); return;
       }
       reply(response, 200, user); return;
+    }
+    if (url.pathname === "/v1/messages" && request.method === "POST") {
+      const chunks = [];
+      for await (const chunk of request) chunks.push(chunk);
+      const input = JSON.parse(Buffer.concat(chunks).toString());
+      assert.equal(input.model, "claude-sonnet-4-6");
+      modelCalls++;
+      reply(response, 200, { id: "msg_disposable_g3", type: "message", role: "assistant",
+        model: input.model, content: [{ type: "text", text: JSON.stringify(proposal) }],
+        stop_reason: "end_turn", stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } });
+      return;
     }
     if (!url.pathname.startsWith("/rest/v1/")) {
       reply(response, 404, { error: "gateway route denied" }); return;
@@ -222,6 +251,8 @@ try {
     env: {
       PATH: env.PATH, HOME: env.HOME, NODE_ENV: "development", NEXT_TELEMETRY_DISABLED: "1",
       NEXT_PUBLIC_SUPABASE_URL: gatewayOrigin, NEXT_PUBLIC_SUPABASE_ANON_KEY: anonToken,
+      SUPABASE_SERVICE_ROLE_KEY: serviceToken,
+      ANTHROPIC_API_KEY: "synthetic-disposable-model-only", ANTHROPIC_BASE_URL: gatewayOrigin,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -337,6 +368,60 @@ try {
     "Antiguo E2E revisado");
   assert.deepEqual(legacyTab.pageErrors, []);
   assert.deepEqual(legacyEdit.pageErrors, []);
+
+  // ---- G3 A: UI → real analysis route → real RPC → budget_items ----
+  const aiSeed = await fetch(`${restOrigin}/rpc/create_budget_with_items`, {
+    method: "POST",
+    headers: { "content-type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ p_budget_data: { title: "Pintura G3", budget_number: "WIZARD-G3" }, p_items: [] }),
+  });
+  assert.equal(aiSeed.status, 200, await aiSeed.clone().text());
+  const { budget_id: aiId } = await aiSeed.json();
+  await db.query("update public.budgets set wizard_state=$2 where id=$1", [aiId, JSON.stringify({
+    title: "Pintura G3", sector: "construccion", serviceType: "reforma",
+    description: "Pintura de paredes y techos", currentStep: 1,
+    sectorData: { superficie_m2: 40, num_banos: 0, incluye_cocina: false,
+      incluye_ventanas: false, incluye_climatizacion: false, actuaciones: ["pintura"],
+      calidad: "media", ubicacion: "Madrid", estancias: [] },
+  })]);
+  const ai = await openWizard(aiId, "Pintura G3", { step: 1, ready: "Volver a calcular" });
+  const startedAt = Date.now();
+  const analysisResponse = ai.page.waitForResponse(response =>
+    new URL(response.url()).pathname === "/api/agent/budget-analysis", { timeout: 90000 });
+  await ai.page.evaluate(() => {
+    const button = [...document.querySelectorAll("button")].find(node => node.textContent?.includes("Volver a calcular"));
+    if (!button || button.disabled) throw Error("Recalculation button unavailable");
+    button.click();
+  });
+  const analysis = await analysisResponse;
+  assert.equal(analysis.status(), 200, await analysis.text());
+  const result = await analysis.json();
+  assert.equal(result.data_sources.using_ai_fallback, false, JSON.stringify(result.data_sources));
+  assert.equal(modelCalls, 1, "the real route must consume the local model response");
+  await waitFor(async () => (await visibleText(ai.page)).includes("Pintura pared G3 6") &&
+    (await visibleText(ai.page)).includes("Volver a calcular"), "completed AI recalculation");
+  // Wait for content, never for provenance: mutation must fail the SQL
+  // assertion with NULL rows, not time out or pass on an empty set.
+  const savedLines = async () => (await db.query(`select concept, category,
+    price_source_type, price_confidence, price_checked_at
+    from public.budget_items where budget_id=$1 order by sort_order`, [aiId])).rows;
+  await waitFor(async () => (await savedLines()).filter(row => row.concept.startsWith("Pintura pared G3 ")).length === 7,
+    "AI lines persisted by browser autosave", 20000);
+  const lines = await savedLines();
+  assert.equal(lines.length, 15, "seven model lines and eight construction materials must persist");
+  const missing = lines.filter(row => row.price_source_type === null).map(row => row.concept);
+  assert.deepEqual(missing, [], `NULL en partidas NUEVAS de budget_items: ${missing.join(", ")}`);
+  const aiLines = lines.filter(row => row.concept.startsWith("Pintura pared G3 "));
+  assert.equal(aiLines.length, 7, "all seven model prices must reach PostgreSQL");
+  for (const line of aiLines) {
+    assert.equal(line.price_source_type, "ai_estimate", line.concept);
+    assert.equal(Number(line.price_confidence), 0.20, line.concept);
+    assert.ok(line.price_checked_at instanceof Date && line.price_checked_at.getTime() >= startedAt &&
+      line.price_checked_at.getTime() <= Date.now(), `${line.concept}: current persisted timestamp`);
+  }
+  assert.ok((await visibleText(ai.page)).includes("Estimación IA · sin fuente técnica"));
+  assert.deepEqual(ai.pageErrors, []);
+  console.log(`PASS G3 PostgreSQL 17: ${lines.length} líneas nuevas en budget_items, 0 NULL; 7 ai_estimate con confianza 0.20 y fecha actual`);
 
   assert.deepEqual(first.pageErrors, []);
   assert.deepEqual(second.pageErrors, []);
