@@ -26,6 +26,10 @@ export interface BriefingAction {
   moment?: string;
   /** Prioridad → badge. alta=rojo, media=ámbar, baja=azul, undefined=sin badge. */
   priority?: BriefingPriority;
+  /** Dónde está preparado lo que hay que hacer (hechos de la cuenta). */
+  href?: string;
+  /** Texto del enlace, p. ej. «Ver el recordatorio». */
+  hrefLabel?: string;
 }
 
 export interface DailyBriefingCardProps {
@@ -67,6 +71,7 @@ const LIGHT_VARS: Record<string, string> = {
   "--row": "var(--color-navy-50)",
   "--pill": "var(--color-navy-50)",
   "--accent": "var(--color-brand-green)",
+  "--accent-ink": "var(--color-brand-green-ink)",
   "--accent-dark": "var(--color-brand-green-dark)",
   "--accent-light": "var(--color-brand-green-light)",
   "--accent-soft": "color-mix(in srgb, var(--color-brand-green) 12%, transparent)",
@@ -88,6 +93,7 @@ const DARK_VARS: Record<string, string> = {
   "--row": "rgba(255,255,255,.02)",
   "--pill": "rgba(255,255,255,.05)",
   "--accent": "var(--color-brand-green-light)",
+  "--accent-ink": "var(--color-brand-green-light)",
   "--accent-dark": "var(--color-brand-green-light)",
   "--accent-light": "var(--color-brand-green)",
   "--accent-soft": "color-mix(in srgb, var(--color-brand-green-light) 14%, transparent)",
@@ -413,6 +419,24 @@ export default function DailyBriefingCard({
                         <p style={{ margin: 0, fontSize: "14px", lineHeight: 1.55, color: "var(--body)" }}>
                           {a.reason}
                         </p>
+                      )}
+                      {a.href && (
+                        <a
+                          href={a.href}
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                          style={{
+                            display: "inline-block",
+                            marginTop: "6px",
+                            fontSize: "13.5px",
+                            fontWeight: 600,
+                            color: "var(--accent-ink)",
+                            textDecoration: "underline",
+                            textUnderlineOffset: "3px",
+                          }}
+                        >
+                          {a.hrefLabel || "Abrir"}
+                        </a>
                       )}
                     </div>
 
