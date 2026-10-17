@@ -20,6 +20,16 @@ import DailyBriefingCard, {
   type BriefingAction,
   type BriefingPriority,
 } from "@/components/dashboard/DailyBriefingCard";
+import {
+  buildBusinessFacts,
+  madridToday,
+  type BusinessFacts,
+  type BudgetFactRow,
+  type IssuedInvoiceFactRow,
+  type PriceNotificationFactRow,
+  type ReceivedInvoiceFactRow,
+} from "@/lib/agent/business-facts";
+import { mergeBriefing, type AgentBriefingPart } from "@/lib/agent/briefing-merge";
 
 /* ─── Types ─────────────────────────────────────────────────────────── */
 
@@ -157,6 +167,8 @@ interface AgentDataValue {
   loading: boolean;
   hasSession: boolean;
   summary: DailySummary | null;
+  /** Hechos de la propia cuenta en Enlaze (facturas, presupuestos, precios). */
+  businessFacts: BusinessFacts | null;
   connections: LiveConnections;
   news: AgentNews[];
   signals: AgentSignal[];
@@ -218,6 +230,7 @@ export function AgentDataProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [hasSession, setHasSession] = useState(false);
   const [summary, setSummary] = useState<DailySummary | null>(null);
+  const [businessFacts, setBusinessFacts] = useState<BusinessFacts | null>(null);
   const [connections, setConnections] = useState<LiveConnections>(NO_CONNECTIONS);
   const [news, setNews] = useState<AgentNews[]>([]);
   const [signals, setSignals] = useState<AgentSignal[]>([]);
@@ -324,6 +337,52 @@ export function AgentDataProvider({ children }: { children: React.ReactNode }) {
       setCampaigns((campaignsRes.data || []) as AgentCampaign[]);
       setLeads((leadsRes.data || []) as AgentLead[]);
       setTasks((tasksRes.data || []) as AgentTask[]);
+
+      // Hechos de la propia cuenta para el resumen: qué cobrar, a quién
+      // contestar, qué presupuesto mandar y qué precios han subido. Si alguna
+      // consulta falla, esa parte sale vacía y el resto del resumen sigue.
+      const [issuedRes, budgetsRes, priceRes, receivedRes] = await Promise.all([
+        supabase
+          .from("issued_invoices")
+          .select("id, invoice_number, client_name, total, amount_paid, due_date, status, payment_status")
+          .eq("user_id", user.id)
+          .is("deleted_at", null)
+          .not("due_date", "is", null)
+          .neq("payment_status", "paid")
+          .limit(200),
+        supabase
+          .from("budgets")
+          .select("id, title, client_name, total, status, sent_at, updated_at, valid_until")
+          .eq("user_id", user.id)
+          .is("deleted_at", null)
+          .in("status", ["enviado", "sent", "pendiente", "pending"])
+          .limit(200),
+        supabase
+          .from("price_alert_notifications")
+          .select("id, product_name, provider_name, old_price, new_price, change_pct, direction, is_read, created_at")
+          .eq("user_id", user.id)
+          .eq("is_read", false)
+          .order("created_at", { ascending: false })
+          .limit(50),
+        supabase
+          .from("received_invoices")
+          .select("id, supplier_name, total, amount_paid, due_date, status, payment_status")
+          .eq("user_id", user.id)
+          .is("deleted_at", null)
+          .not("due_date", "is", null)
+          .neq("payment_status", "paid")
+          .limit(200),
+      ]);
+      if (cancelled) return;
+      setBusinessFacts(
+        buildBusinessFacts({
+          today: madridToday(),
+          issuedInvoices: (issuedRes.data || []) as IssuedInvoiceFactRow[],
+          budgets: (budgetsRes.data || []) as BudgetFactRow[],
+          priceNotifications: (priceRes.data || []) as PriceNotificationFactRow[],
+          receivedInvoices: (receivedRes.data || []) as ReceivedInvoiceFactRow[],
+        }),
+      );
       setLoading(false);
     }
     load();
@@ -385,6 +444,7 @@ export function AgentDataProvider({ children }: { children: React.ReactNode }) {
       loading,
       hasSession,
       summary,
+      businessFacts,
       connections,
       news,
       signals,
@@ -401,6 +461,7 @@ export function AgentDataProvider({ children }: { children: React.ReactNode }) {
       loading,
       hasSession,
       summary,
+      businessFacts,
       connections,
       news,
       signals,
@@ -545,12 +606,43 @@ const IMPACT_TO_PRIORITY: Record<string, BriefingPriority | undefined> = {
 };
 
 export function AgentBriefingHero() {
-  const { loading, summary, connections } = useAgentData();
+  const { loading, summary, businessFacts, connections } = useAgentData();
 
   if (loading) return <BriefingSkeleton />;
 
-  if (!summary) return <BriefingFallback />;
+  const agent = summary ? agentBriefingPart(summary, connections) : null;
+  const merged = mergeBriefing(agent, businessFacts, madridToday());
+  if (!merged) return <BriefingFallback />;
 
+  const allConnectedLive =
+    connections.gmail && connections.calendar && connections.sheets && connections.reputation;
+
+  return (
+    <section>
+      {allConnectedLive && merged.summaryId === summary?.id && (
+        <div className="mb-3 rounded-lg border border-brand-green/30 bg-brand-green/10 px-3 py-2 text-[12.5px] text-brand-green dark:border-brand-green/30 dark:bg-brand-green/15 dark:text-brand-green-light">
+          ✓ Tienes Gmail, Calendar, Sheets y reputación conectados. Si el
+          resumen menciona conectar integraciones es de ayer — se actualizará
+          mañana.
+        </div>
+      )}
+
+      <DailyBriefingCard
+        summaryId={merged.summaryId}
+        date={fmtDate(merged.date)}
+        headline={merged.headline}
+        narrative={merged.narrative}
+        actions={merged.actions}
+        opportunities={merged.opportunities}
+        watch_outs={merged.watchOuts}
+        aiWritten={merged.aiWritten}
+      />
+    </section>
+  );
+}
+
+/** Lo que aporta el resumen del agente, ya saneado y filtrado como siempre. */
+function agentBriefingPart(summary: DailySummary, connections: LiveConnections): AgentBriefingPart {
   const ai = summary.raw_payload?.daily_summary?.ai_briefing;
   const aiOk = !!ai && !ai.error;
 
@@ -564,9 +656,6 @@ export function AgentBriefingHero() {
     : ai?.source === "mechanical_fallback"
       ? ai
       : null;
-
-  const allConnectedLive =
-    connections.gmail && connections.calendar && connections.sheets && connections.reputation;
 
   // Strip leftover anglicisms / score talk from stale Claude output, plus
   // sentences that lie about the user's connection state.
@@ -612,28 +701,16 @@ export function AgentBriefingHero() {
           title: sanitizeProse(action),
         }));
 
-  return (
-    <section>
-      {allConnectedLive && (
-        <div className="mb-3 rounded-lg border border-brand-green/30 bg-brand-green/10 px-3 py-2 text-[12.5px] text-brand-green dark:border-brand-green/30 dark:bg-brand-green/15 dark:text-brand-green-light">
-          ✓ Tienes Gmail, Calendar, Sheets y reputación conectados. Si el
-          resumen menciona conectar integraciones es de ayer — se actualizará
-          mañana.
-        </div>
-      )}
-
-      <DailyBriefingCard
-        summaryId={summary.id}
-        date={fmtDate(summary.execution_date)}
-        headline={displayHeadline}
-        narrative={displayNarrative}
-        actions={cardActions}
-        opportunities={filteredOpportunities}
-        watch_outs={filteredWatchOuts}
-        aiWritten={aiOk}
-      />
-    </section>
-  );
+  return {
+    id: summary.id,
+    executionDate: String(summary.execution_date).slice(0, 10),
+    headline: displayHeadline,
+    narrative: displayNarrative,
+    actions: cardActions,
+    opportunities: filteredOpportunities,
+    watchOuts: filteredWatchOuts,
+    aiWritten: aiOk,
+  };
 }
 
 function BriefingSkeleton() {

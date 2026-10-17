@@ -16,7 +16,7 @@
  * Verifactu ni los filtros cambian.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import EmptyState from "@/components/ui/empty-state";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -50,6 +50,23 @@ export default function EmitidasTab({ state }: { state: IssuedInvoicesState }) {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [reminderFor, setReminderFor] = useState<IssuedInvoice | null>(null);
+
+  // El resumen del día enlaza aquí con ?reclamar=<id>: abre el recordatorio de
+  // esa factura una sola vez y quita el parámetro para que no se repita.
+  const reminderFromUrl = useRef(false);
+  useEffect(() => {
+    if (reminderFromUrl.current || invoices.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("reclamar");
+    if (!id) return;
+    reminderFromUrl.current = true;
+    const target = invoices.find((inv) => inv.id === id);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (target && isOverdueInvoice(target)) setReminderFor(target);
+    params.delete("reclamar");
+    const query = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+  }, [invoices]);
   const [form, setForm] = useState({
     client_id: "", project_id: "", issue_date: new Date().toISOString().split("T")[0],
     due_date: "", notes: "",
@@ -277,7 +294,11 @@ export default function EmitidasTab({ state }: { state: IssuedInvoicesState }) {
     },
   ];
 
-  const overdue = invoices.filter(isOverdueInvoice);
+  // De la más antigua a la más reciente: el botón «Reclamar la más antigua»
+  // abre la primera. Antes seguía el orden de la tabla y abría la más nueva.
+  const overdue = invoices
+    .filter(isOverdueInvoice)
+    .sort((a, b) => (a.due_date ?? "").localeCompare(b.due_date ?? ""));
 
   return (
     <div className="space-y-6">
