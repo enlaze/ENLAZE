@@ -28,13 +28,15 @@ describe("budget wizard uses the atomic E2 revision contract", () => {
     assert.match(provider, /if \(!lockVersion\) throw new Error/);
   });
 
-  test("partidas and materials share one ordered payload with normalized units", () => {
+  test("only non-optional partidas are saved as items, with normalized units", () => {
     const start = provider.indexOf("const revisionItems = () => {");
     const end = provider.indexOf("const revisionPayload = (", start);
     assert.ok(start >= 0 && end > start);
     const block = provider.slice(start, end);
-    assert.equal((block.match(/normalizeBudgetItemUnit\(/g) || []).length, 2);
-    assert.match(block, /return \[\.\.\.partidas, \.\.\.materials\]/);
+    assert.equal((block.match(/normalizeBudgetItemUnit\(/g) || []).length, 1);
+    assert.match(block, /return state\.partidas\.filter\(p => p\.status !== "opcional"\)\.map\(/);
+    // La cesta de materiales no suma al subtotal: no se guarda como partidas.
+    assert.doesNotMatch(block, /state\.materials|Material sugerido/);
     assert.doesNotMatch(block, /budget_id:|sort_order:/);
   });
 
