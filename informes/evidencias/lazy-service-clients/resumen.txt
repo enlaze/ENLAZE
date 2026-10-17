@@ -1,0 +1,8 @@
+BASELINE 7/7 PASS: six imports with keys deleted + real lazy/memoized getters
+KILLED notification: eager resend at module scope detected in lib/notification-service.ts
+KILLED send-otp: eager resend at module scope detected in app/api/signatures/send-otp/route.ts
+KILLED budget-generate: eager anthropic at module scope detected in app/api/agent/budgets/generate/route.ts
+KILLED market-analysis: eager anthropic at module scope detected in app/api/agent/market/analysis/route.ts
+KILLED invoice-ocr: eager anthropic at module scope detected in app/api/invoices/ocr/route.ts
+KILLED generate-budget: eager anthropic at module scope detected in app/api/generate-budget/route.ts
+6/6 mutants killed; real source unchanged; no email or AI requests.

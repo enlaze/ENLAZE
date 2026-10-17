@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAgentRequest, isErrorResponse } from "../../_lib/auth";
 import { normalizeSector } from "@/lib/sector-config";
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
+import { getAnthropic } from "@/lib/service-clients";
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 /**
  * GET /api/agent/market/analysis?user_id=xxx
@@ -20,6 +20,8 @@ export async function GET(req: NextRequest) {
     const auth = verifyAgentRequest(req);
     if (isErrorResponse(auth)) return auth;
     const { supabase, userId } = auth;
+
+    const anthropic = getAnthropic();
 
     // Gather all context
     const { data: profile } = await supabase
