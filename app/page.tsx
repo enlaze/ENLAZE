@@ -91,9 +91,9 @@ function Shot({
 function Hero() {
   return (
     <section className="relative overflow-hidden">
-      <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 pb-20 pt-12 sm:px-6 md:pt-20 lg:grid-cols-[1fr_1.05fr] lg:gap-14 lg:pb-28">
+      <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 pb-20 pt-12 sm:px-6 md:pt-20 lg:grid-cols-[1.15fr_1fr] lg:gap-14 lg:pb-28">
         <div>
-          <h1 className={`${H} text-[2.6rem] font-semibold leading-[1.02] tracking-[-0.03em] text-navy-900 sm:text-[3.4rem] lg:text-[4rem]`}>
+          <h1 className={`${H} text-[2.5rem] font-semibold leading-[1.03] tracking-[-0.03em] text-navy-900 sm:text-[3.3rem] lg:text-[3.6rem]`}>
             Ocúpate de tu oficio. Del papeleo nos ocupamos nosotros.
           </h1>
           <p className="mt-6 max-w-[34rem] text-[17px] leading-[1.6] text-navy-600 sm:text-[18px]">
@@ -117,9 +117,9 @@ function Hero() {
           <AnimatedBlock y={28} duration={900}>
             <Shot
               src="/landing/resumen.png"
-              alt="Resumen del día en Enlaze: cobrar dos facturas vencidas que suman 1.870 euros, llamar a una clienta por un presupuesto sin respuesta y revisar un material que ha subido de precio."
-              width={1822}
-              height={1796}
+              alt="Resumen del día en Enlaze: reclamar dos facturas vencidas que suman 1.870 euros, con el recordatorio preparado, y mandar un presupuesto de cocina terminado."
+              width={1826}
+              height={1322}
               priority
               sizes="(min-width: 1024px) 560px, 100vw"
             />
@@ -228,7 +228,7 @@ const PROOFS: Proof[] = [
     note: "Hoy el envío lo das tú. El reenvío automático está en camino.",
     shot: {
       src: "/landing/reclamar.png",
-      alt: "Email de recordatorio preparado por Enlaze para una factura de 630 euros vencida hace 5 días.",
+      alt: "Email de recordatorio preparado por Enlaze para una factura de 1.240 euros vencida hace 12 días.",
       width: 1024,
       height: 1368,
     },
