@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "Enlaze — CRM para empresas de servicios";
+export const alt = "Enlaze — Ocúpate de tu oficio. Del papeleo nos ocupamos nosotros.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -67,7 +67,7 @@ export default async function Image() {
             lineHeight: 1.3,
           }}
         >
-          Cierra más clientes
+          Ocúpate de tu oficio.
         </div>
         <div
           style={{
@@ -79,7 +79,7 @@ export default async function Image() {
             lineHeight: 1.3,
           }}
         >
-          sin trabajar más horas
+          Del papeleo nos ocupamos nosotros.
         </div>
 
         {/* Subtitle */}
@@ -92,7 +92,7 @@ export default async function Image() {
             maxWidth: "600px",
           }}
         >
-          CRM con IA para empresas de servicios
+          El asistente con IA para autónomos y pymes
         </div>
       </div>
     ),

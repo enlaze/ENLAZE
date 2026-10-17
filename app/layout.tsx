@@ -23,7 +23,7 @@ const organizationJsonLd = {
   url: siteUrl,
   logo: `${siteUrl}/icon.png`,
   description:
-    "CRM y operaciones para empresas de servicios: clientes, presupuestos, facturas, proyectos y cobros en un solo lugar.",
+    "Asistente con IA que hace el trabajo de oficina de autónomos y pymes: cobros, presupuestos y facturas.",
   sameAs: [],
   contactPoint: [
     {
@@ -51,17 +51,17 @@ const websiteJsonLd = {
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Enlaze — Cierra más clientes sin trabajar más horas",
+    default: "Enlaze — Ocúpate de tu oficio. Del papeleo nos ocupamos nosotros.",
     template: "%s | Enlaze",
   },
   description:
-    "ENLAZE centraliza clientes, presupuestos, seguimiento y operaciones en un solo lugar para empresas de servicios que quieren responder más rápido, vender mejor y tener más control del negocio.",
+    "Enlaze es el asistente con IA que hace el trabajo de oficina de autónomos y pymes: cada mañana te dice qué cobrar, a quién contestar y qué presupuesto mandar, y te lo deja preparado.",
   keywords: [
-    "CRM servicios",
-    "gestión clientes",
-    "presupuestos online",
-    "software empresas servicios",
-    "automatización ventas",
+    "asistente para autónomos",
+    "trabajo de oficina",
+    "presupuestos",
+    "recordatorios de cobro",
+    "facturas de proveedor",
     "enlaze",
   ],
   authors: [{ name: "Enlaze" }],
@@ -71,24 +71,15 @@ export const metadata: Metadata = {
     locale: "es_ES",
     url: siteUrl,
     siteName: "Enlaze",
-    title: "Enlaze — Cierra más clientes sin trabajar más horas",
+    title: "Enlaze — Ocúpate de tu oficio. Del papeleo nos ocupamos nosotros.",
     description:
-      "Centraliza clientes, presupuestos, seguimiento y operaciones en un solo lugar. Responde más rápido, vende mejor y ten más control del negocio.",
-    images: [
-      {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "Enlaze — CRM para empresas de servicios",
-      },
-    ],
+      "Enlaze es el asistente con IA que hace el trabajo de oficina de autónomos y pymes: cada mañana te dice qué cobrar, a quién contestar y qué presupuesto mandar, y te lo deja preparado.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Enlaze — Cierra más clientes sin trabajar más horas",
+    title: "Enlaze — Ocúpate de tu oficio. Del papeleo nos ocupamos nosotros.",
     description:
-      "Centraliza clientes, presupuestos, seguimiento y operaciones en un solo lugar.",
-    images: ["/og-image.png"],
+      "Cada mañana te dice qué cobrar, a quién contestar y qué presupuesto mandar, y te lo deja preparado.",
   },
   robots: {
     index: true,
