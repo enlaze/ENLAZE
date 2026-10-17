@@ -6,7 +6,7 @@ Rama `auto/b11-presupuesto-incoherente`, sacada de `origin/main` (10788b1). No t
 
 - **"Aceptado" con la línea de tiempo en "Rechazado"** son datos antiguos que dejó un fallo del programa en abril. Ese fallo ya no existe en la base. La página sí seguía enseñándolo mal, y eso es lo que he arreglado.
 - **"Partidas (0)" con "Subtotal 333 €"** también son datos de abril. Hoy la base no deja finalizar un presupuesto con importe y sin partidas.
-- **Hay otro descuadre que sigue pasando hoy**: los presupuestos del asistente guardan la cesta de materiales como partidas, y el subtotal no la incluye. **No lo he tocado** porque es una decisión de producto (pregunta 1).
+- **Hay otro descuadre que pasaba hasta hoy**: los presupuestos del asistente guardaban la cesta de materiales como partidas, y el subtotal no la incluye. **Arreglado el 17-10** con la opción a) que aprobó Daniil (ver «Seguimiento 17-10»).
 
 ## 1. Estado "Aceptado", línea de tiempo "Rechazado"
 
@@ -90,3 +90,14 @@ Resultado: en la ficha, "Partidas (n)" enseña los materiales como líneas con p
 
 1. Abre PRE-2026-53806: la línea de tiempo tiene que decir "Aceptado", como el estado.
 2. Abre PRE-2026-18088 y compara "Partidas" con "Subtotal": verás las 9 líneas "Material sugerido" de más. Es el punto 1.
+
+
+## Seguimiento 17-10 (respuesta de Daniil: opción a, fusionar)
+
+- **La cesta deja de guardarse como partidas.** `revisionItems()` en `BudgetGenerateProvider.tsx` solo manda las partidas no opcionales. La cesta sigue en `wizard_state`, de donde la recarga el asistente. La ficha, el PDF y el subtotal cuadran.
+- **PDF interno:** el coste se buscaba en la cesta para cualquier línea de categoría «material», también partidas normales. Ahora solo para las filas antiguas «Material sugerido».
+- **Pruebas:** las 3 que exigían cesta y partidas juntas (`budget-generate-writer-flow`, `budget-items-sort-order-writers-only`, `budget-finalization`) ahora exigen lo contrario; 3 casos nuevos en `budget-status-coherence`.
+- **Un sexto presupuesto afectado:** PRE-2026-75742, del 14-10 (cuenta interna, 8 filas). Total: 6 presupuestos y 208 filas.
+- **Script de limpieza pendiente de aprobar:** `supabase/pendientes/20261017_b11_limpieza_presupuestos_internos.sql`. Fuera de `migrations/`, así que nada lo aplica solo. Borra las 208 filas «Material sugerido» y el `rejected_at` sobrante de PRE-2026-53806, en una transacción que aborta si algún presupuesto no es de cuenta interna. **No lo he lanzado.** Los 4 presupuestos sin partidas no los toca: ¿borrarlos o dejarlos?
+- **Comprobado:** batería completa 628 pasan, 0 fallan, 2 `todo`; `tsc --noEmit` sin errores; `eslint` en los dos ficheros, 0 errores (6 avisos antiguos); `npm run build` correcto. No lo he visto en el navegador.
+- **Revisar:** crea un presupuesto con el asistente, guarda y abre la ficha: «Partidas» tiene que sumar el subtotal, sin líneas «Material sugerido».

@@ -57,3 +57,26 @@ test("un presupuesto contractual con importe necesita partidas", () => {
     .map((f) => readFileSync(join(dir, f), "utf8")).join("\n");
   assert.match(sql, /b\.total > 0 and jsonb_array_length\(p_items\) = 0 then\s*raise exception 'A contractual budget with positive total requires items'/);
 });
+
+/* b11, decisión de Daniil (2026-10-17): la cesta de materiales deja de
+   guardarse como partidas. Ya está dentro del coste de las partidas y no suma
+   al subtotal; guardada como líneas, «Partidas» sumaba más que el subtotal. */
+
+const wizard = readFileSync("app/dashboard/budgets/generate/_components/BudgetGenerateProvider.tsx", "utf8");
+const pdfRoute = readFileSync("app/api/budgets/pdf/route.ts", "utf8");
+
+test("el asistente guarda como partidas solo las partidas, no la cesta", () => {
+  const start = wizard.indexOf("const revisionItems = () => {");
+  const block = wizard.slice(start, wizard.indexOf("const revisionPayload = (", start));
+  assert.ok(start >= 0);
+  assert.doesNotMatch(block, /state\.materials|Material sugerido|category: "material"/);
+});
+
+test("la cesta sigue guardada en wizard_state para que el asistente la recargue", () => {
+  assert.match(wizard, /wizard_state: \{\s*\.\.\.state,/);
+});
+
+test("el PDF solo busca el coste en la cesta para las filas antiguas «Material sugerido»", () => {
+  assert.match(pdfRoute, /item\.description === "Material sugerido" && Array\.isArray\(state\.materials\)/);
+  assert.doesNotMatch(pdfRoute, /item\.category === "material" && Array\.isArray\(state\.materials\)/);
+});
