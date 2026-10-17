@@ -25,13 +25,13 @@ Cada sesión: **"Coge el siguiente bloque de TAREAS_AUTONOMAS.md y trabájalo en
 
 ---
 
-## Estado de la cola (2026-10-12)
+## Estado de la cola (2026-10-17)
 
-- **En `main`** (fusionados por Daniil en sesión): b1, b2, b3, b4, b5, b6 y b8. Migración de b8 aplicada (`20261012100029`, `verifactu_certified = false`).
-- **Rama abierta, esperando a Daniil:** `auto/b9-proxy-n8n`. **No fusionar todavía.** Ver su informe y la nota del proxy más abajo.
-- **Ramas `auto/*` sin fusionar: 1** (b9). Hay margen para la regla 3.
-- **Siguiente bloque:** b7-supplier.
-- Las pruebas unitarias están en verde en `main`: 608 pasan, 0 fallan y 2 `todo` (se lanzan todos los `__tests__/*.test.mjs` salvo `.integration.` y `.browser.`). `lint` tiene 23 errores, todos de `react-hooks` (ver "Esperando decisión").
+- **En `main`:** b1-b8, b10 y **b11** (fusionada el 17-10 con permiso de Daniil). Script de limpieza de b11 **pendiente de aprobar** en `supabase/pendientes/`.
+- **Congeladas hasta después del 26 de octubre (orden de Daniil): `auto/b12-proxy-de-verdad` y `auto/b9-proxy-n8n`.** No se tocan, no se rebasan, no se fusionan.
+- **En curso:** `auto/b13-landing` (preview para el miércoles 22; **no fusionar**, la revisa Daniil).
+- Ramas `auto/*` sin fusionar: 3 (b9, b12, b13) → regla 3: no se empieza otro bloque.
+- Pruebas unitarias en `main` (17-10): 636 pasan, 0 fallan, 2 `todo`.
 
 ---
 
@@ -108,6 +108,17 @@ Fuera las promesas de Verifactu, el hash y el semáforo fiscal de todo lo que ve
     - ¿La línea de tiempo y el estado leen de sitios distintos? ¿Cambiar el estado a mano actualiza los dos?
     - ¿Hay más presupuestos con el mismo síntoma? Cuántos.
 - Si es un fallo del programa, arréglalo para que no vuelva a pasar con presupuestos nuevos (prueba incluida). **No corrijas datos existentes:** si hace falta, deja el script o la migración como pendiente de aprobar.
+
+---
+
+### b13-landing — Landing nueva para la Maratón UMH (26 de octubre)
+
+- Posicionamiento: Enlaze **no** es un programa de facturas; es un asistente con IA que hace el trabajo de oficina de autónomos y pymes. Lo nuevo primero; las funciones son la prueba.
+- Titular «Ocúpate de tu oficio. Del papeleo nos ocupamos nosotros.» y el subtítulo que dio Daniil.
+- Secciones: resumen diario (protagonista), presupuestos con tus precios, escanear facturas con el móvil, avisos de subida de precios de proveedores, recordatorios de cobro, precios de `lib/plans.ts` («+ IVA», prueba de 5 días sin tarjeta) y llamada final.
+- Prohibido: Verifactu, «certificado», «firmado», «cumple», cualquier norma, «varios usuarios». Sin emojis, sin fotos de personas ni stock; capturas reales de la app con una cuenta de demo de datos inventados.
+- Reutilizar `components/landing`. Oscura, colores de Enlaze, de tú.
+- Preview de Vercel el miércoles 22 con capturas móvil/escritorio, claro/oscuro. **No fusionar.** En el informe, los pasos para conectar `enlaze.es` (DNS en Hostinger) y lo que cambia después; eso lo hace Daniil.
 
 ---
 
