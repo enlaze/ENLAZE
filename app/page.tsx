@@ -93,7 +93,9 @@ function Hero() {
   return (
     <section id="portada" className="relative overflow-hidden">
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 pb-20 pt-12 sm:px-6 md:pt-20 lg:grid-cols-[1.15fr_1fr] lg:gap-14 lg:pb-28">
-        <div>
+        <div className="relative">
+          {/* Halo del color del fondo: los hilos se desvanecen detrás del texto y no cruzan las letras. */}
+          <div aria-hidden="true" className="pointer-events-none absolute -inset-x-10 -inset-y-8 -z-10 rounded-[48px] bg-landing-paper blur-2xl" />
           <h1 className={`${H} text-[2.5rem] font-semibold leading-[1.03] tracking-[-0.03em] text-navy-900 sm:text-[3.3rem] lg:text-[3.6rem]`}>
             Ocúpate de tu oficio. Del papeleo nos ocupamos nosotros.
           </h1>
