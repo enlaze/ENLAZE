@@ -195,6 +195,8 @@ try {
         !["content-length", "content-encoding", "transfer-encoding", "connection"].includes(name)));
       const body = Buffer.from(await upstream.arrayBuffer());
       requests.push({ method: request.method, path: target.pathname, status: upstream.status,
+        authRole: request.headers.authorization === `Bearer ${accessToken}` ? "authenticated"
+          : request.headers.authorization === `Bearer ${anonToken}` ? "anon" : "other",
         error: upstream.ok ? undefined : body.toString().slice(0, 300),
         payload: WRITE_RPCS.has(target.pathname) && chunks.length ? JSON.parse(Buffer.concat(chunks)) : undefined });
       response.writeHead(upstream.status, { ...headers, "access-control-allow-origin": appOrigin });
@@ -224,6 +226,10 @@ try {
       unit: "ud", category: "otros", unit_price: 1000, subtotal_cost: 1000,
       unit_price_client: 1300, subtotal_client: 1300, status: "incluida" }],
   })]);
+  const canRead = await fetch(`${restOrigin}/budgets?id=eq.${budgetId}&select=id`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  assert.equal(canRead.status, 200, `fixture authenticated read: ${await canRead.text()}`);
   const snapshot = async () => (await db.query("select title, lock_version from public.budgets where id=$1", [budgetId])).rows[0];
   const baseline = await snapshot();
   assert.equal(baseline.lock_version, 1);
@@ -404,7 +410,7 @@ try {
       call.payload.p_budget_id === generatedId && call.payload.p_items.length > 0)
     && (await generatedRows()).length > 0, "generated provenance saved through real RPC", 20000);
   const persisted = await generatedRows();
-  assert.ok(persisted.length > 1, "check every generated line, not an empty result or one lucky row");
+  assert.equal(persisted.length, 5, "all five budget lines persist; the material basket is not double-counted");
   for (const item of persisted) {
     assert.notEqual(item.price_source_type, null, `G3 TRANSPORT: ${item.concept} source must reach budget_items`);
     assert.notEqual(item.price_confidence, null, `G3 TRANSPORT: ${item.concept} confidence must reach budget_items`);
@@ -419,7 +425,18 @@ try {
   const savedPayload = writeCalls().slice(generatedWriteStart).find(call => call.path === "/rpc/save_budget" && call.status === 200 &&
     call.payload.p_budget_id === generatedId && call.payload.p_items.length === persisted.length).payload;
   assert.equal(savedPayload.p_items.length, persisted.length);
+  // Since B11, the eight basket materials live in wizard_state, not budget_items.
+  const basket = (await db.query("select wizard_state->'materials' as materials from public.budgets where id=$1", [generatedId])).rows[0].materials;
+  assert.equal(basket.length, 8, "all basket materials must remain in the saved wizard");
+  for (const material of basket) {
+    const quote = quotes.find(quote => quote.materialName === material.name);
+    assert.ok(quote, `${material.name}: real resolver quote required`);
+    assert.equal(material.price_source_type, quote.sourceType, `G3 TRANSPORT: ${material.name} source must reach wizard_state`);
+    assert.equal(material.price_confidence, quote.confidenceScore);
+    assert.equal(new Date(material.price_checked_at).toISOString(), new Date(quote.capturedAt).toISOString());
+  }
   console.log(`PASS G3 GENERATED: ${persisted.length} budget_items preserve source, confidence and timestamp from real resolver API`);
+  console.log("PASS G3 BASKET: 8 materials preserve resolver evidence in wizard_state without duplicate budget_items");
 
   // Edit the cost in the REAL ItemsStep input, then explicitly save again.
   // No provider hooks, direct SQL edit or handcrafted provenance payload.

@@ -19,7 +19,7 @@ assert.deepEqual(Object.keys(process.env).filter(key => /^(PG|PGRST_|E2_|RUN_REV
 assert.deepEqual(['STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET','VERCEL_TOKEN','ANTHROPIC_API_KEY','SERP_API_KEY']
   .filter(key => process.env[key] !== undefined), [], 'Refuse integration credentials');
 assert.ok(existsSync(join(pgBin,'initdb')) && existsSync(restBin), 'Install PG17/PostgREST locally; this runner downloads nothing');
-const childEnv = Object.fromEntries(['PATH','HOME','TMPDIR','LANG','LC_ALL'].filter(key => process.env[key] !== undefined).map(key => [key,process.env[key]]));
+const childEnv = Object.fromEntries(['PATH','HOME','TMPDIR','LANG','LC_ALL','PUPPETEER_EXECUTABLE_PATH'].filter(key => process.env[key] !== undefined).map(key => [key,process.env[key]]));
 const version = (await exec(join(pgBin,'postgres'), ['--version'], {env:childEnv})).stdout.trim();
 assert.match(version, /PostgreSQL\) 17\./);
 const directory = await mkdtemp('/private/tmp/enlaze-wizard-provenance-');
@@ -86,7 +86,8 @@ try {
     for(const [name,items] of [['no-provenance-transport',['p','m']],['no-partida-provenance',['p']],['no-material-provenance',['m']]]){
       let changed=original;
       for(const item of items){
-        const anchor=`      ...evidenceForSave(${item}, ${item}.unit_price),\n`;
+        const anchor=item==='p' ? `      ...evidenceForSave(p, p.unit_price),\n`
+          : `              ...resolvedPriceEvidence(\n                resolved.selectedPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt,\n              ),\n`;
         assert.equal(changed.split(anchor).length,2,`unique mutation anchor ${item}`);
         changed=changed.replace(anchor,'');
       }
@@ -94,7 +95,7 @@ try {
       const result=await run(mutantDir,name);
       assert.equal(result.code,1,`${name} must fail an assertion, not boot/crash`);
       assert.match(result.output,/AssertionError/);
-      assert.match(result.output,/G3 TRANSPORT: .* source must reach budget_items/);
+      assert.match(result.output,/G3 TRANSPORT: .* source must reach (budget_items|wizard_state)/);
       summary.push(`KILLED ${name}: real generated budget_items lost provenance`);
       console.log(summary.at(-1));
     }
