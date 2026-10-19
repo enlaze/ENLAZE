@@ -40,9 +40,9 @@ test("más visible en la portada y muy tenue en el resto", () => {
   assert.ok(Math.abs(backgroundOpacity(5000, 800) - OPACITY.rest) < 1e-9);
 });
 
-test("montado en un <main> aislado, con halo del color del fondo detrás del texto de la portada", () => {
+test("montado en un <main> aislado y sin halo que apague los hilos en la portada", () => {
   assert.match(page, /isolate min-h-screen/);
   assert.match(page, /<LandingBackground \/>/);
   assert.match(page, /<section id="portada"/);
-  assert.match(page, /absolute [^"]*-z-10 [^"]*bg-landing-paper blur-2xl/);
+  assert.doesNotMatch(page, /blur-2xl/);
 });

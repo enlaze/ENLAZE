@@ -11,7 +11,7 @@ const GREEN = "#00c896";
 const MINT = "#66dec0";
 
 /** Opacidad del fondo con la portada a la vista y en el resto de la página. */
-export const OPACITY = { hero: 0.3, rest: 0.07 } as const;
+export const OPACITY = { hero: 0.4, rest: 0.07 } as const;
 
 /** Opacidad según cuánto se ha bajado: de `hero` a `rest` mientras sale la portada. */
 export function backgroundOpacity(scrollY: number, heroHeight: number) {
