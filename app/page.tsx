@@ -6,6 +6,7 @@ import AccountDeletedNotice from "@/components/AccountDeletedNotice";
 import AnimatedBlock from "@/components/landing/AnimatedBlock";
 import Section from "@/components/landing/Section";
 import LandingNav from "@/components/landing/LandingNav";
+import LandingBackground from "@/components/landing/LandingBackground";
 import {
   ANNUAL_DISCOUNT,
   PAID_PLAN_IDS,
@@ -90,7 +91,7 @@ function Shot({
 
 function Hero() {
   return (
-    <section className="relative overflow-hidden">
+    <section id="portada" className="relative overflow-hidden">
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 pb-20 pt-12 sm:px-6 md:pt-20 lg:grid-cols-[1.15fr_1fr] lg:gap-14 lg:pb-28">
         <div>
           <h1 className={`${H} text-[2.5rem] font-semibold leading-[1.03] tracking-[-0.03em] text-navy-900 sm:text-[3.3rem] lg:text-[3.6rem]`}>
@@ -406,7 +407,8 @@ function Footer() {
 
 export default function Home() {
   return (
-    <main className={`${display.variable} min-h-screen bg-landing-paper text-navy-900 antialiased`}>
+    <main className={`${display.variable} isolate min-h-screen bg-landing-paper text-navy-900 antialiased`}>
+      <LandingBackground />
       <AccountDeletedNotice />
       <LandingNav />
       <Hero />
