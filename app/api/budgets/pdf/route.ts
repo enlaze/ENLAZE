@@ -25,7 +25,9 @@ function normalizedConcept(value: unknown) {
 function findInternalCost(item: Record<string, unknown>, wizardState: unknown) {
   if (!wizardState || typeof wizardState !== "object") return Number(item.subtotal) || 0;
   const state = wizardState as { partidas?: unknown; materials?: unknown };
-  const candidates = item.category === "material" && Array.isArray(state.materials)
+  // Solo las filas antiguas de la cesta («Material sugerido») se buscan en los
+  // materiales; el asistente ya no las guarda como partidas.
+  const candidates = item.description === "Material sugerido" && Array.isArray(state.materials)
     ? state.materials
     : Array.isArray(state.partidas)
       ? state.partidas

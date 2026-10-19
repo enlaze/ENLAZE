@@ -20,10 +20,9 @@ describe("sort_order follows the payload order in the E2 transaction", () => {
     assert.match(migration, /row_number\(\) over\(order by i\.sort_order, i\.id\) - 1/);
   });
 
-  test("wizard filters optional rows before concatenating included materials", () => {
-    assert.match(wizard, /state\.partidas\.filter\(p => p\.status !== "opcional"\)/);
-    assert.match(wizard, /state\.materials\.filter\(m => m\.included\)/);
-    assert.match(wizard, /return \[\.\.\.partidas, \.\.\.materials\]/);
+  test("wizard sends the non-optional partidas in order, without the basket", () => {
+    assert.match(wizard, /return state\.partidas\.filter\(p => p\.status !== "opcional"\)\.map\(/);
+    assert.doesNotMatch(wizard, /return \[\.\.\.partidas, \.\.\.materials\]/);
     assert.match(wizard, /saveBudgetRevision\([\s\S]*?revisionPayload\(draftId, clientSnapshot\),\s*items,/);
     assert.match(wizard, /finalizeBudgetRevision\([\s\S]*?revisionPayload\(budgetId\),\s*revisionItems\(\)/);
   });
@@ -42,12 +41,8 @@ describe("sort_order follows the payload order in the E2 transaction", () => {
       { concept: "X", status: "opcional" },
       { concept: "B", status: "incluida" },
     ];
-    const material = [{ name: "M", included: true }, { name: "N", included: false }];
-    const output = [
-      ...input.filter((item) => item.status !== "opcional").map((item) => item.concept),
-      ...material.filter((item) => item.included).map((item) => item.name),
-    ];
-    assert.deepEqual(output, ["A", "B", "M"]);
+    const output = input.filter((item) => item.status !== "opcional").map((item) => item.concept);
+    assert.deepEqual(output, ["A", "B"]);
     assert.deepEqual([].map((_, index) => index), []);
   });
 });
