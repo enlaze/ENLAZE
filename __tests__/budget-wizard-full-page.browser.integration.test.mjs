@@ -117,6 +117,7 @@ async function openWizard(budgetId, expectedTitle = "Base E2E", { step = null, r
     name: "sb-127-auth-token",
     value: `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}`,
     url: appOrigin,
+    path: "/",
     httpOnly: false,
   });
   const stepQuery = step === null ? "" : `&step=${step}`;
@@ -163,13 +164,16 @@ try {
     const url = new URL(request.url, gatewayOrigin);
     if (request.method === "OPTIONS") { reply(response, 200, {}); return; }
     if (url.pathname === "/auth/v1/user") {
-      requests.push({ method: request.method, path: url.pathname });
+      requests.push({ method: request.method, path: url.pathname,
+        status: request.headers.authorization === `Bearer ${accessToken}` ? 200 : 401,
+        client: request.headers["x-client-info"] });
       if (request.headers.authorization !== `Bearer ${accessToken}`) {
         reply(response, 401, { error: "invalid synthetic session" }); return;
       }
       reply(response, 200, user); return;
     }
     if (!url.pathname.startsWith("/rest/v1/")) {
+      requests.push({ method: request.method, path: url.pathname, status: 404 });
       reply(response, 404, { error: "gateway route denied" }); return;
     }
     // All database traffic is forwarded to the already-guarded local PostgREST.
