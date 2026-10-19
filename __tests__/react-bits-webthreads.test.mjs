@@ -43,6 +43,7 @@ test("más visible en la portada y muy tenue en el resto", () => {
 test("montado en un <main> aislado y sin halo que apague los hilos en la portada", () => {
   assert.match(page, /isolate min-h-screen/);
   assert.match(page, /<LandingBackground \/>/);
-  assert.match(page, /<section id="portada"/);
+  // La portada (ChaosHero) lleva el id que usa el fondo para saber cuándo atenuarse.
+  assert.match(readFileSync("components/landing/ChaosHero.tsx", "utf8"), /<section ref=\{heroRef\} id="portada"/);
   assert.doesNotMatch(page, /blur-2xl/);
 });

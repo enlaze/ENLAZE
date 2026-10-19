@@ -1,12 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Bricolage_Grotesque } from "next/font/google";
+import { Caveat, Plus_Jakarta_Sans } from "next/font/google";
 import Logo from "@/components/Logo";
 import AccountDeletedNotice from "@/components/AccountDeletedNotice";
-import AnimatedBlock from "@/components/landing/AnimatedBlock";
 import Section from "@/components/landing/Section";
 import LandingNav from "@/components/landing/LandingNav";
 import LandingBackground from "@/components/landing/LandingBackground";
+import ChaosHero from "@/components/landing/ChaosHero";
 import {
   ANNUAL_DISCOUNT,
   PAID_PLAN_IDS,
@@ -38,11 +38,20 @@ import {
  *    «varios usuarios». La prueba `landing-b13-claims` lo vigila.
  */
 
-const display = Bricolage_Grotesque({
+// Titulares de la landing (diseño de la portada, 19-10).
+const display = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  weight: ["500", "600", "700"],
+  weight: ["500", "600", "700", "800"],
   display: "swap",
   variable: "--font-landing-display",
+});
+
+// Letra a mano del post-it y del importe rodeado en la portada.
+const hand = Caveat({
+  subsets: ["latin"],
+  weight: ["700"],
+  display: "swap",
+  variable: "--font-landing-hand",
 });
 
 const H = "font-[family-name:var(--font-landing-display)]";
@@ -84,53 +93,6 @@ function Shot({
     >
       <Image src={src} alt={alt} width={width} height={height} priority={priority} sizes={sizes} className="h-auto w-full" />
     </div>
-  );
-}
-
-/* ── Hero ─────────────────────────────────────────────────────────────── */
-
-function Hero() {
-  return (
-    <section id="portada" className="relative overflow-hidden">
-      <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 pb-20 pt-12 sm:px-6 md:pt-20 lg:grid-cols-[1.15fr_1fr] lg:gap-14 lg:pb-28">
-        <div>
-          <h1 className={`${H} text-[2.5rem] font-semibold leading-[1.03] tracking-[-0.03em] text-navy-900 sm:text-[3.3rem] lg:text-[3.6rem]`}>
-            Ocúpate de tu oficio. Del papeleo nos ocupamos nosotros.
-          </h1>
-          <p className="mt-6 max-w-[34rem] text-[17px] leading-[1.6] text-navy-600 sm:text-[18px]">
-            Enlaze es el asistente con IA que hace el trabajo de oficina de autónomos y pymes: cada
-            mañana te dice qué cobrar, a quién contestar y qué presupuesto mandar, y te lo deja
-            preparado.
-          </p>
-          <div className="mt-9 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-5">
-            <PrimaryCta />
-            <a href="#cada-manana" className="py-2 text-[15px] font-medium text-navy-700 underline decoration-[#C5D1DC] underline-offset-4 hover:decoration-navy-700">
-              Mira cómo es una mañana
-            </a>
-          </div>
-          <p className="mt-5 text-[14px] text-navy-500">
-            {TRIAL_DAYS} días gratis con todo incluido. No te pedimos tarjeta.
-          </p>
-        </div>
-
-        <figure className="relative">
-          {/* Una sola animación en toda la página: la llegada del resumen. */}
-          <AnimatedBlock y={28} duration={900}>
-            <Shot
-              src="/landing/resumen.png"
-              alt="Resumen del día en Enlaze: reclamar dos facturas vencidas que suman 1.870 euros, con el recordatorio preparado, y mandar un presupuesto de cocina terminado."
-              width={1826}
-              height={1322}
-              priority
-              sizes="(min-width: 1024px) 560px, 100vw"
-            />
-          </AnimatedBlock>
-          <figcaption className="mt-3 text-[13px] leading-relaxed text-navy-500">
-            El resumen de hoy de Reformas Alcor, una cuenta de demostración con datos inventados.
-          </figcaption>
-        </figure>
-      </div>
-    </section>
   );
 }
 
@@ -407,11 +369,11 @@ function Footer() {
 
 export default function Home() {
   return (
-    <main className={`${display.variable} isolate min-h-screen bg-landing-paper text-navy-900 antialiased`}>
+    <main className={`${display.variable} ${hand.variable} isolate min-h-screen bg-landing-paper text-navy-900 antialiased`}>
       <LandingBackground />
       <AccountDeletedNotice />
       <LandingNav />
-      <Hero />
+      <ChaosHero trialDays={TRIAL_DAYS} />
       <EachMorning />
       <Proofs />
       <Pricing />

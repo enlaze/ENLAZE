@@ -51,7 +51,7 @@ const websiteJsonLd = {
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Enlaze — Ocúpate de tu oficio. Del papeleo nos ocupamos nosotros.",
+    default: "Enlaze — Tú haces el trabajo. Enlaze hace el papeleo.",
     template: "%s | Enlaze",
   },
   description:
@@ -71,13 +71,13 @@ export const metadata: Metadata = {
     locale: "es_ES",
     url: siteUrl,
     siteName: "Enlaze",
-    title: "Enlaze — Ocúpate de tu oficio. Del papeleo nos ocupamos nosotros.",
+    title: "Enlaze — Tú haces el trabajo. Enlaze hace el papeleo.",
     description:
       "Enlaze es el asistente con IA que hace el trabajo de oficina de autónomos y pymes: cada mañana te dice qué cobrar, a quién contestar y qué presupuesto mandar, y te lo deja preparado.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Enlaze — Ocúpate de tu oficio. Del papeleo nos ocupamos nosotros.",
+    title: "Enlaze — Tú haces el trabajo. Enlaze hace el papeleo.",
     description:
       "Cada mañana te dice qué cobrar, a quién contestar y qué presupuesto mandar, y te lo deja preparado.",
   },

@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "Enlaze — Ocúpate de tu oficio. Del papeleo nos ocupamos nosotros.";
+export const alt = "Enlaze — Tú haces el trabajo. Enlaze hace el papeleo.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -67,7 +67,7 @@ export default async function Image() {
             lineHeight: 1.3,
           }}
         >
-          Ocúpate de tu oficio.
+          Tú haces el trabajo.
         </div>
         <div
           style={{
@@ -79,7 +79,7 @@ export default async function Image() {
             lineHeight: 1.3,
           }}
         >
-          Del papeleo nos ocupamos nosotros.
+          Enlaze hace el papeleo.
         </div>
 
         {/* Subtitle */}

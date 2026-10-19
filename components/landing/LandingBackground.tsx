@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import { useMediaQuery } from "./useMediaQuery";
 
 // WebGL solo en el navegador y fuera del primer paquete de la página.
 const WebThreads = dynamic(() => import("@/components/react-bits/WebThreads"), { ssr: false });
@@ -36,11 +37,7 @@ export function threadSettings(mobile: boolean) {
  */
 export default function LandingBackground({ heroId = "portada" }: { heroId?: string }) {
   const layerRef = useRef<HTMLDivElement>(null);
-  const [mobile, setMobile] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    setMobile(window.matchMedia("(max-width: 767px)").matches);
-  }, []);
+  const mobile = useMediaQuery("(max-width: 767px)");
 
   useEffect(() => {
     if (mobile === null) return;
