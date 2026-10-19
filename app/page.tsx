@@ -152,7 +152,7 @@ const MORNING = [
 
 function EachMorning() {
   return (
-    <Section id="cada-manana" padding="py-20 md:py-28" className="border-y border-[#E1E7ED] bg-white" innerClassName="px-4 sm:px-6">
+    <Section id="cada-manana" padding="py-20 md:py-28" innerClassName="px-4 sm:px-6">
       <div className="max-w-2xl">
         <h2 className={`${H} text-[2rem] font-semibold leading-[1.1] tracking-[-0.02em] text-navy-900 sm:text-[2.6rem]`}>
           Abres Enlaze y ya sabes qué hacer hoy.
@@ -296,7 +296,7 @@ const PLAN_PITCH: Record<PaidPlanId, string> = {
 function Pricing() {
   const discount = Math.round(ANNUAL_DISCOUNT * 100);
   return (
-    <Section id="precios" padding="py-20 md:py-28" className="border-y border-[#E1E7ED] bg-white" innerClassName="px-4 sm:px-6">
+    <Section id="precios" padding="py-20 md:py-28" innerClassName="px-4 sm:px-6">
       <div className="max-w-2xl">
         <h2 className={`${H} text-[2rem] font-semibold leading-[1.1] tracking-[-0.02em] text-navy-900 sm:text-[2.6rem]`}>
           Precios claros, sin permanencia.
@@ -315,7 +315,7 @@ function Pricing() {
             <div
               key={plan}
               className={`flex flex-col rounded-2xl border p-6 sm:p-7 ${
-                featured ? "border-navy-900 bg-navy-900 text-white" : "border-[#DCE3EA] bg-[#F6F8F7] text-navy-900"
+                featured ? "border-navy-900 bg-navy-900 text-white" : "border-[#DCE3EA] bg-white text-navy-900"
               }`}
             >
               <p className={`${H} text-[1.35rem] font-semibold`}>{PLAN_LABELS[plan]}</p>
@@ -339,7 +339,7 @@ function Pricing() {
                 className={`mt-8 rounded-xl px-5 py-3 text-center text-[15px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${
                   featured
                     ? "bg-brand-green text-navy-950 hover:bg-brand-green-light focus-visible:outline-white"
-                    : "border border-navy-900 text-navy-900 hover:bg-white focus-visible:outline-navy-900"
+                    : "border border-navy-900 text-navy-900 hover:bg-navy-50 focus-visible:outline-navy-900"
                 }`}
               >
                 {TRIAL}
@@ -406,7 +406,7 @@ function Footer() {
 
 export default function Home() {
   return (
-    <main className={`${display.variable} min-h-screen bg-[#F6F8F7] text-navy-900 antialiased`}>
+    <main className={`${display.variable} min-h-screen bg-landing-paper text-navy-900 antialiased`}>
       <AccountDeletedNotice />
       <LandingNav />
       <Hero />

@@ -55,3 +55,16 @@ test("cada captura existe y no hay fotos de stock", () => {
 test("la página avisa de que las capturas son de una cuenta de demostración", () => {
   assert.match(page, /cuenta de demostración con datos inventados/);
 });
+
+test("un único fondo para toda la landing, definido como token", () => {
+  const css = readFileSync("app/globals.css", "utf8");
+  const section = readFileSync("components/landing/Section.tsx", "utf8");
+  assert.match(css, /--color-landing-paper: #[0-9a-f]{6};/i);
+  assert.match(page, /<main className=\{`[^`]*\bbg-landing-paper\b/);
+  // Ni colores sueltos del fondo ni franjas: las secciones heredan el de <main>.
+  for (const src of [page, nav, section]) assert.doesNotMatch(src, /#F6F8F7/i);
+  assert.doesNotMatch(section, /bg-/);
+  for (const m of page.matchAll(/<(?:Section|section|footer)\b[^>]*>/g)) {
+    assert.doesNotMatch(m[0], /\bbg-|border-y\b/, m[0]);
+  }
+});

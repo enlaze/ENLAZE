@@ -22,6 +22,10 @@
   --color-navy-900: #0a1929;
   --color-navy-950: #060f1a;
 
+  /* Fondo único de la landing: todas sus secciones lo comparten, sin franjas.
+     Las tarjetas y capturas del producto van en blanco puro encima. */
+  --color-landing-paper: #f6f8f7;
+
   /* Brand */
   --color-brand-green: #00c896;
   --color-brand-green-dark: #00a67a;

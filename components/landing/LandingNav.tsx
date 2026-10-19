@@ -16,7 +16,7 @@ export default function LandingNav() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[#E1E7ED] bg-[#F6F8F7]/90 backdrop-blur-md">
+    <header className="sticky top-0 z-50 border-b border-[#E1E7ED] bg-landing-paper/90 backdrop-blur-md">
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3.5 sm:px-6">
         <Logo href="/" size={32} wordmarkClassName="text-navy-900 text-[17px]" />
 
@@ -52,7 +52,7 @@ export default function LandingNav() {
       </nav>
 
       {open && (
-        <div id="menu-landing" className="flex flex-col gap-1 border-t border-[#E1E7ED] bg-[#F6F8F7] px-4 pb-5 pt-2 md:hidden">
+        <div id="menu-landing" className="flex flex-col gap-1 border-t border-[#E1E7ED] bg-landing-paper px-4 pb-5 pt-2 md:hidden">
           {LINKS.map((l) => (
             <a key={l.href} href={l.href} onClick={() => setOpen(false)} className="py-2.5 text-[15px] text-navy-700">
               {l.label}
