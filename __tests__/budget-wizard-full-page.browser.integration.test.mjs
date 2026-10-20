@@ -278,14 +278,16 @@ try {
     "--no-sandbox", "--disable-setuid-sandbox", "--disable-background-networking",
     "--disable-extensions", "--disable-sync", "--no-first-run",
   ] });
-  // Seed the browser context once. Page.setCookie first deletes the shared
-  // cookie before replacing it; other tabs must never observe that gap.
-  await browser.defaultBrowserContext().setCookie({
-    name: "sb-127-auth-token",
-    value: `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}`,
-    domain: "127.0.0.1", path: "/", httpOnly: false, secure: false,
-    sameSite: "Lax", expires: session.expires_at,
-  });
+  // Bootstrap the synthetic session through the browser's own cookie API.
+  // All wizard tabs then share it; no per-page cookie reset or auth headers.
+  const authPage = await browser.newPage();
+  await authPage.setRequestInterception(true);
+  authPage.on("request", request => new URL(request.url()).origin === appOrigin ? request.continue() : request.abort());
+  await authPage.goto(appOrigin, { waitUntil: "domcontentloaded" });
+  await authPage.evaluate(value => {
+    document.cookie = `sb-127-auth-token=${value}; Path=/; Max-Age=3600; SameSite=Lax`;
+  }, `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}`);
+  await authPage.close();
   const writesBeforeOpen = writeCalls().length;
   const first = await openWizard(budgetId);
   await new Promise((resolve) => setTimeout(resolve, 1800));
