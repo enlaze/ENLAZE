@@ -113,21 +113,6 @@ async function openWizard(budgetId, expectedTitle = "Base E2E", { step = null, r
   await page.setBypassCSP(true);
   const pageErrors = [];
   const networkErrors = [];
-  await page.evaluateOnNewDocument(() => {
-    const cookie = Object.getOwnPropertyDescriptor(Document.prototype, "cookie");
-    window.__sessionTrace = [];
-    Object.defineProperty(document, "cookie", {
-      get() {
-        const value = cookie.get.call(document);
-        window.__sessionTrace.push({ operation: "read", names: value.split(";").map(item => item.trim().split("=")[0]), at: Date.now() });
-        return value;
-      },
-      set(value) {
-        window.__sessionTrace.push({ operation: "write", name: value.split("=")[0], removing: /max-age=0/i.test(value), at: Date.now() });
-        cookie.set.call(document, value);
-      },
-    });
-  });
   page.on("pageerror", (error) => pageErrors.push(error.message));
   page.on("console", (message) => {
     if (message.type() === "error") networkErrors.push(message.text().slice(0, 300));
@@ -141,13 +126,9 @@ async function openWizard(budgetId, expectedTitle = "Base E2E", { step = null, r
     if ([appOrigin, gatewayOrigin, "data:"].includes(origin)) request.continue();
     else request.abort();
   });
-  await page.setCookie({
-    name: "sb-127-auth-token",
-    value: `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}`,
-    url: appOrigin,
-    path: "/",
-    httpOnly: false,
-  });
+  const authCookie = (await browser.defaultBrowserContext().cookies())
+    .find(cookie => cookie.name === "sb-127-auth-token");
+  assert.ok(authCookie, "the shared synthetic auth session must exist before navigation");
   const stepQuery = step === null ? "" : `&step=${step}`;
   const response = await page.goto(`${appOrigin}/dashboard/budgets/generate?budgetId=${budgetId}${stepQuery}`, {
     waitUntil: "domcontentloaded", timeout: 90000,
@@ -173,11 +154,9 @@ async function openWizard(budgetId, expectedTitle = "Base E2E", { step = null, r
   } catch (error) {
     const actualTitle = await page.$eval('input[placeholder="Ej: Reforma baño completo"]', (node) => node.value);
     const visibleText = await page.evaluate(() => document.body?.innerText?.slice(0, 900) ?? "");
-    const sessionTrace = await page.evaluate(() => [...window.__sessionTrace.slice(0, 12), ...window.__sessionTrace.filter(item => item.operation === "write"), ...window.__sessionTrace.slice(-3)]);
-    const cookieMetadata = (await page.cookies()).map(({ name, path, httpOnly, secure, expires, value }) => ({ name, path, httpOnly, secure, expires, length: value.length }));
     throw Error(`Wizard hydration failed. expected=${expectedTitle} actual=${JSON.stringify(actualTitle)} ` +
       `URL=${page.url()} text=${JSON.stringify(visibleText)} requests=${JSON.stringify(requests.slice(-30))} ` +
-      `sessionTrace=${JSON.stringify(sessionTrace)} cookieMetadata=${JSON.stringify(cookieMetadata)} pageErrors=${JSON.stringify(pageErrors)} networkErrors=${JSON.stringify(networkErrors.slice(-10))}`, { cause: error });
+      `pageErrors=${JSON.stringify(pageErrors)} networkErrors=${JSON.stringify(networkErrors.slice(-10))}`, { cause: error });
   }
   assert.deepEqual(pageErrors, [], "page must not throw during hydration");
   return { page, pageErrors };
@@ -299,6 +278,14 @@ try {
     "--no-sandbox", "--disable-setuid-sandbox", "--disable-background-networking",
     "--disable-extensions", "--disable-sync", "--no-first-run",
   ] });
+  // Seed the browser context once. Page.setCookie first deletes the shared
+  // cookie before replacing it; other tabs must never observe that gap.
+  await browser.defaultBrowserContext().setCookie({
+    name: "sb-127-auth-token",
+    value: `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}`,
+    domain: "127.0.0.1", path: "/", httpOnly: false, secure: false,
+    sameSite: "Lax", expires: session.expires_at,
+  });
   const writesBeforeOpen = writeCalls().length;
   const first = await openWizard(budgetId);
   await new Promise((resolve) => setTimeout(resolve, 1800));

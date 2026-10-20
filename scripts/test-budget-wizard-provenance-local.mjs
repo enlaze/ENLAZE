@@ -96,7 +96,7 @@ try {
       assert.equal(result.code,1,`${name} must fail an assertion, not boot/crash`);
       assert.match(result.output,/AssertionError/);
       assert.match(result.output,/G3 TRANSPORT: .* source must reach (budget_items|wizard_state)/);
-      summary.push(`KILLED ${name}: real generated budget_items lost provenance`);
+      summary.push(`KILLED ${name}: real persisted prices lost provenance`);
       console.log(summary.at(-1));
     }
     assert.equal(await readFile(join(root,providerPath),'utf8'),original,'checked-out provider unchanged');

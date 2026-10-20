@@ -1,5 +1,5 @@
 BASELINE PASS: generated provenance + real manual edit + existing wizard regressions
-KILLED no-provenance-transport: real generated budget_items lost provenance
-KILLED no-partida-provenance: real generated budget_items lost provenance
-KILLED no-material-provenance: real generated budget_items lost provenance
+KILLED no-provenance-transport: real persisted prices lost provenance
+KILLED no-partida-provenance: real persisted prices lost provenance
+KILLED no-material-provenance: real persisted prices lost provenance
 3/3 mutants killed; provider unchanged; disposable services removed on exit.
