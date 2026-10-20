@@ -1,0 +1,43 @@
+TAP version 13
+# PASS G3 SUMMARY RESOLVED: 0 de 5 líneas; 0% del importe
+# PASS G3 GENERATED: 5 budget_items preserve source, confidence and timestamp from real resolver API
+# PASS G3 BASKET: 8 materials preserve resolver evidence in wizard_state without duplicate budget_items
+# PASS G3 USER_EDITED: actual price input -> real save_budget -> user_edited / 0.95 / edit timestamp
+# node:internal/modules/run_main:107
+#     triggerUncaughtException(
+#     ^
+# AssertionError [ERR_ASSERTION]: A BIS: Pintura pared G3 0 must stay ai_estimate after resolver miss, not estimated
+# + actual - expected
+# + 'estimated'
+# - 'ai_estimate'
+#     at file:///private/tmp/enlaze-wizard-provenance-mutant-qoPqhS/__tests__/budget-wizard-full-page.browser.integration.test.mjs:570:12
+#     at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {
+#   generatedMessage: false,
+#   code: 'ERR_ASSERTION',
+#   actual: 'estimated',
+#   expected: 'ai_estimate',
+#   operator: 'strictEqual',
+#   diff: 'simple'
+# }
+# Node.js v25.8.2
+# Subtest: __tests__/budget-wizard-full-page.browser.integration.test.mjs
+not ok 1 - __tests__/budget-wizard-full-page.browser.integration.test.mjs
+  ---
+  duration_ms: 43367.186292
+  type: 'test'
+  location: '/private/tmp/enlaze-wizard-provenance-mutant-qoPqhS/__tests__/budget-wizard-full-page.browser.integration.test.mjs:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 43371.781375

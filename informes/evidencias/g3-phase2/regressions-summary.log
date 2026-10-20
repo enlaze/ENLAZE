@@ -1,0 +1,14 @@
+not ok 57 - retained invoice bucket is created private by a migration in the repo # TODO falta la migración del bucket received-invoice-documents (pendiente de decidir)
+not ok 77 - agent_connections is aligned with idempotent ADD COLUMN IF NOT EXISTS # TODO falta en el repo la migración que declara estas columnas (pendiente de aprobar)
+  duration_ms: 0.22425
+  type: 'test'
+  ...
+1..102
+# tests 107
+# suites 2
+# pass 105
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 2
+# duration_ms 530.272916

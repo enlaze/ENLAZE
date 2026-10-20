@@ -34,6 +34,10 @@ on:
       - "__tests__/support/budget-wizard-*"
       - "scripts/test-budget-wizard-provenance-local.mjs"
       - "lib/budget-price-provenance.ts"
+      - "components/budgets/PriceProvenanceSummary.tsx"
+      - "__tests__/budget-price-provenance.test.mjs"
+      - "__tests__/budget-price-summary.test.mjs"
+      - "__tests__/budget-ai-provenance.e2e.test.mjs"
       - "lib/price-resolver*.ts"
       - "app/api/prices/resolve/route.ts"
       - "__tests__/fixtures/budget-economic-golden-vectors.json"
@@ -88,6 +92,8 @@ jobs:
         run: |
           npm run test:budget-revision-writer
           node --import tsx --test \
+            __tests__/budget-price-provenance.test.mjs \
+            __tests__/budget-price-summary.test.mjs \
             __tests__/budget-ai-pdf-completion.test.mjs \
             __tests__/budget-duplicate-writer-safety.test.mjs \
             __tests__/budget-finalization.test.mjs \
@@ -104,6 +110,8 @@ jobs:
         run: ./node_modules/.bin/puppeteer browsers install "chrome@$PUPPETEER_CHROME_VERSION"
       - name: React hydration and autosave debounce on loopback only
         run: npm run test:budget-provider-autosave-browser
+      - name: AI resolver adoption and client PDF provenance isolation
+        run: node --import tsx --test __tests__/budget-ai-provenance.e2e.test.mjs
       - name: Manual budget form refuses to save from a stale tab
         run: npm run test:budget-form-conflict-browser
       - name: Dedicated PostgreSQL 17 cluster, no production secrets
