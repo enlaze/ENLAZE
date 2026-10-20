@@ -8,8 +8,8 @@ Comprueba las cinco filas nuevas de `budget_items` y los ocho materiales de `wiz
 
 El runner `npm run test:budget-wizard-provenance-local` inicia y elimina su propio PostgreSQL 17/PostgREST. La ejecución del 19 de octubre pasó el baseline y mató tres mutaciones: pérdida de procedencia en partidas, materiales o ambos. Las partidas se comprueban en SQL; los materiales se comprueban en el JSON persistido. Salidas completas en `informes/evidencias/budget-wizard-provenance/`.
 
-Pila local: PostgreSQL 17.11, PostgREST 16.4, Next 16.3.8 (lockfile) y Chrome 155.0.8059.39 (misma versión de CI). CI usa PostgreSQL 17 y PostgREST 12.2.3. El banco rechaza credenciales de producción, archivos de entorno y conexiones externas. Las migraciones de preparación se ejecutan exclusivamente en la base desechable.
+Pila local: PostgreSQL 17.11, PostgREST 16.4, Next 16.3.8 (lockfile) y Chrome 151.0.7922.47 (fijado también en CI). CI usa PostgreSQL 17 y PostgREST 12.2.3. El banco rechaza credenciales de producción, archivos de entorno y conexiones externas. Las migraciones de preparación se ejecutan exclusivamente en la base desechable.
 
 Solo cambia pruebas, fixtures, runner, filtros de CI e informes. No se ejecuta `npm run build` local: su prebuild consulta Stripe.
 
-La sesión sintética se prepara mediante `setSession` del SDK real de Supabase en una página de fixture local. GoTrue es el único servicio de autenticación simulado; el SDK codifica y persiste su cookie. Las variantes que fabricaban la cookie dieron fallos intermitentes con Chrome 155. No se inyectan cabeceras de autorización en las peticiones de aplicación ni se relajan permisos.
+Se conserva la fixture mínima de JWT/cookie sintéticos. El navegador de este banco queda fijado en Chrome 151.0.7922.47 para ejecución reproducible. Con Chrome 155 aparecieron pérdidas intermitentes de la sesión del banco antes de las aserciones; esa combinación no se considera validada. No se relajan permisos ni aserciones sobre SQL. La migración y la aplicación de producción no cambian por esta fijación del entorno de pruebas.
