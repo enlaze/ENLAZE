@@ -1,11 +1,30 @@
 /** Price evidence belongs to the price actually saved, not just the last quote. */
 const USER_EDITED_CONFIDENCE = 0.95;
+export const AI_ESTIMATE_CONFIDENCE = 0.20;
+export const AI_ESTIMATE_LABEL = "Estimación IA · sin fuente técnica";
+
+/** Deterministic safety fallback: no model and no verified price source. */
+export function estimatedPriceEvidence(checkedAt: string): PersistedPriceEvidence {
+  return { price_source_type: "estimated", price_confidence: 0.05, price_checked_at: checkedAt };
+}
+
+/** Capture the generated amount only after automatic geographic/market adjustments. */
+export function generatedPriceBaseline<T extends BudgetPriceEvidence>(item: T, price: number): T {
+  if (item.resolved_unit_price != null || !item.price_source_type) return item;
+  return {
+    ...item,
+    resolved_unit_price: price,
+    resolved_source_type: item.price_source_type,
+    resolved_confidence: item.price_confidence,
+    resolved_checked_at: item.price_checked_at,
+  };
+}
 
 export interface BudgetPriceEvidence {
   price_source_type?: string | null;
   price_confidence?: number | null;
   price_checked_at?: string | null;
-  /** The adopted resolver price, before a person edits the line. */
+  /** The adopted or generated price, before a person edits the line. */
   resolved_unit_price?: number | null;
   resolved_source_type?: string | null;
   resolved_confidence?: number | null;
@@ -40,7 +59,7 @@ export function evidenceAfterPriceEdit<T extends BudgetPriceEvidence>(
   newPrice: number,
   editedAt: string,
 ): T {
-  if (item.resolved_unit_price == null) return item;
+  if (item.resolved_unit_price == null && !item.price_source_type) return item;
   if (newPrice === item.resolved_unit_price) {
     return {
       ...item,

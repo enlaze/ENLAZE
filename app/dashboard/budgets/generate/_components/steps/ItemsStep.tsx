@@ -4,6 +4,7 @@ import React from "react";
 import { RefreshCw, Construction, Database } from "lucide-react";
 import { useBudgetGenerate, type Partida } from "../BudgetGenerateProvider";
 import { Card } from "@/components/ui/card";
+import { AI_ESTIMATE_LABEL } from "@/lib/budget-price-provenance";
 
 export function ItemsStep() {
   const { state, addPartida, updatePartida, removePartida, analyzeWithAI } = useBudgetGenerate();
@@ -168,7 +169,15 @@ export function ItemsStep() {
                             Zona ×{p.geographic_factor.toFixed(2)}
                           </span>
                         )}
-                        {p.price_source === "manual_locked" && (
+                        {p.price_source_type === "ai_estimate" && (
+                          <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded px-2 py-1">
+                            {AI_ESTIMATE_LABEL}
+                          </span>
+                        )}
+                        {p.price_source_type === "user_edited" && (
+                          <span className="text-[10px] font-semibold text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 rounded px-2 py-1">Precio editado por ti</span>
+                        )}
+                        {p.price_source === "manual_locked" && p.price_source_type !== "user_edited" && (
                           <span
                             className="text-[10px] font-semibold text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 rounded px-2 py-1"
                             title={p.price_source_detail ? `Precio fijado por ti: ${p.price_source_detail}` : "Precio fijado por ti en Precios"}
@@ -181,7 +190,7 @@ export function ItemsStep() {
                             {p.manual_price_notice}
                           </span>
                         )}
-                        {p.price_source && !["base_nacional", "geographic_adjustment", "manual_locked"].includes(p.price_source) && (
+                        {p.price_source && !["ai_estimate", "user_edited"].includes(p.price_source_type || "") && !["base_nacional", "geographic_adjustment", "manual_locked"].includes(p.price_source) && (
                           <span
                             className="text-[10px] font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 rounded px-2 py-1"
                             title={p.price_source_detail || "Precio contrastado"}

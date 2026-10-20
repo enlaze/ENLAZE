@@ -70,6 +70,8 @@ import { buildAutosaveSignature } from "@/lib/budget-autosave-signature";
 import {
   evidenceAfterPriceEdit,
   evidenceForSave,
+  estimatedPriceEvidence,
+  generatedPriceBaseline,
   resolvedPriceEvidence,
   type BudgetPriceEvidence,
 } from "@/lib/budget-price-provenance";
@@ -1087,6 +1089,7 @@ export function BudgetGenerateProvider({
     }));
     const engineMaterials = buildScopeMaterials(scope);
     const materials: EngineMaterial[] = state.materials.map((material, index) => ({
+      ...evidenceForSave(material, material.unit_price),
       id: material.id,
       name: material.name,
       specification: material.specification || material.name,
@@ -1998,6 +2001,8 @@ export function BudgetGenerateProvider({
       }
       const multiplier = marginMultiplier(state.marginPercent);
 
+      const generatedAt = new Date().toISOString();
+
       // Map suggested_items to Partidas
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- elementos de `data`
       const newPartidas: Partida[] = (data.suggested_items || []).map((item: any, idx: number) => {
@@ -2005,6 +2010,7 @@ export function BudgetGenerateProvider({
         const qty = item.quantity || 1;
         return {
           id: `ai-p-${idx}`,
+          ...evidenceForSave(item),
           concept: item.concept || item.title || "Partida",
           description: item.description || "",
           quantity: qty,
@@ -2046,6 +2052,7 @@ export function BudgetGenerateProvider({
 
         return {
           id: `ai-m-${idx}`,
+          ...evidenceForSave(item),
           name: item.concept || item.title || "Material",
           quantity: qty,
           unit: item.unit || "ud",
@@ -2133,6 +2140,9 @@ export function BudgetGenerateProvider({
 
         // Convert back to Partida format
         finalPartidas = adjustResult.items.map(ep => ({
+          ...(newPartidas.some(p => p.id === ep.id)
+            ? evidenceForSave(ep)
+            : estimatedPriceEvidence(generatedAt)),
           id: ep.id,
           concept: ep.concept,
           description: ep.description,
@@ -2152,6 +2162,7 @@ export function BudgetGenerateProvider({
 
         // Convert engine materials to Material format
         finalMaterials = adjustResult.materials.map(em => ({
+          ...estimatedPriceEvidence(generatedAt),
           id: em.id,
           name: em.name,
           specification: em.specification,
@@ -2178,6 +2189,7 @@ export function BudgetGenerateProvider({
         const fallbackScope: BudgetScope = engineScope;
         const built = buildDeterministicBudgetItems(fallbackScope, multiplier);
         finalPartidas = built.map(ep => ({
+          ...estimatedPriceEvidence(generatedAt),
           id: ep.id, concept: ep.concept, description: ep.description,
           quantity: ep.quantity, unit: ep.unit, category: ep.category,
           chapter: ep.chapter,
@@ -2187,6 +2199,7 @@ export function BudgetGenerateProvider({
           estimated_hours: ep.estimated_hours,
         }));
         finalMaterials = buildScopeMaterials(fallbackScope).map(em => ({
+          ...estimatedPriceEvidence(generatedAt),
           id: em.id, name: em.name, quantity: em.quantity, unit: em.unit,
           specification: em.specification, procurementKind: em.procurementKind,
           unit_price: em.unit_price, subtotal: em.subtotal, included: em.included,
@@ -2199,6 +2212,7 @@ export function BudgetGenerateProvider({
       if (finalMaterials.length === 0 && state.sector === "construccion") {
         const matScope: BudgetScope = engineScope;
         finalMaterials = buildScopeMaterials(matScope).map(em => ({
+          ...estimatedPriceEvidence(generatedAt),
           id: em.id, name: em.name, quantity: em.quantity, unit: em.unit,
           specification: em.specification, procurementKind: em.procurementKind,
           unit_price: em.unit_price, subtotal: em.subtotal, included: em.included,
@@ -2474,6 +2488,8 @@ export function BudgetGenerateProvider({
         } as Material;
       });
       isUndervalued = finalMarketAdjustment.isUndervalued;
+      finalPartidas = finalPartidas.map(p => generatedPriceBaseline(p, p.unit_price));
+      finalMaterials = finalMaterials.map(m => generatedPriceBaseline(m, m.unit_price));
       marketAdjustMessage = finalMarketAdjustment.message;
       if (finalMarketAdjustment.message) priceWarnings.push(finalMarketAdjustment.message);
       if (finalMarketAdjustment.adjusted) pricingConfidence = Math.min(pricingConfidence, 75);
@@ -2573,6 +2589,7 @@ export function BudgetGenerateProvider({
           status: (p.status || "incluida") as "incluida" | "estimada" | "opcional",
         }));
         const viewMaterials: EngineMaterial[] = finalMaterials.map(m => ({
+          ...evidenceForSave(m, m.unit_price),
           id: m.id,
           name: m.name,
           specification: m.specification || m.name,
