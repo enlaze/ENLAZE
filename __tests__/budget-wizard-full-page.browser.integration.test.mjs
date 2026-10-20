@@ -1,12 +1,17 @@
 // The real Next page, browser auth, PostgREST and PostgreSQL all run on loopback.
 // This is intentionally separate from the provider-only browser regression.
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { prepareWizardProvenance, seedWizardPriceSources, provenanceScope, provenanceClient } from "./support/budget-wizard-provenance.mjs";
 import { createHmac } from "node:crypto";
 import { existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { Client } from "pg";
 import puppeteer from "puppeteer";
+import { build } from "esbuild";
+import { assertNoProductionEnvironment } from "./lib/disposable-target-guard.mjs";
 import { config, guard, setup } from "./lib/budget-revision-rpcs-bench.mjs";
 
 const root = new URL("../", import.meta.url);
@@ -15,10 +20,14 @@ const gatewayOrigin = "http://127.0.0.1:53003";
 const appOrigin = "http://127.0.0.1:53004";
 const owner = "11111111-1111-4111-8111-111111111111";
 const env = process.env;
+const resolverSources = new Set([...await readFile(new URL("lib/price-resolver-v2.ts", root), "utf8")
+  .then(text => text.matchAll(/source_type:\s*"([^"]+)"/g))].map(match => match[1]));
+assert.ok(resolverSources.size >= 11, "read the actual resolver levels");
 
 // Refuse even to launch Next if this is not the same marked disposable cluster
 // used by the SQL/HTTP integration suite. A checkout with env files could
 // silently override synthetic public variables, so reject it too.
+assertNoProductionEnvironment(env);
 assert.equal(env.RUN_REVISION_RPCS_INTEGRATION_TESTS, "1");
 assert.equal(env.E2_REST_URL, restOrigin);
 assert.ok(typeof env.E2_JWT_SECRET === "string" && env.E2_JWT_SECRET.length >= 32);
@@ -31,21 +40,40 @@ await guard(db);
 
 const part = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
 function token(role, sub) {
-  const value = `${part({ alg: "HS256", typ: "JWT" })}.${part({ role, sub, exp: Math.floor(Date.now() / 1000) + 3600 })}`;
+  const value = `${part({ alg: "HS256", typ: "JWT" })}.${part({ role, sub, aud: role, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 3600 })}`;
   return `${value}.${createHmac("sha256", env.E2_JWT_SECRET).update(value).digest("base64url")}`;
 }
 const accessToken = token("authenticated", owner);
 const anonToken = token("anon");
+// Only the external model is deterministic; application routes and budget
+// writers run unchanged against real PostgREST/PostgreSQL.
+const proposal = {
+  summary: "Pintura de 40 m2", confidence_score: 90,
+  suggested_items: Array.from({ length: 7 }, (_, i) => ({
+    concept: `Pintura pared G3 ${i}`, description: "Preparación y acabado",
+    quantity: 40, unit: "m2", unit_cost: 9 + i,
+    category: "mano_obra", chapter: "pintura", estimated_hours: 4,
+  })),
+  suggested_materials: [],
+};
+let modelCalls = 0;
+let modelEnabled = false;
 const user = {
   id: owner, aud: "authenticated", role: "authenticated", email: "wizard-e2e@example.invalid",
   app_metadata: { provider: "email", providers: ["email"] }, user_metadata: {},
-  created_at: "2026-01-01T00:00:00Z", confirmed_at: "2026-01-01T00:00:00Z",
+  created_at: "2026-01-01T00:00:00Z", email_confirmed_at: "2026-01-01T00:00:00Z", confirmed_at: "2026-01-01T00:00:00Z",
 };
-const session = {
-  access_token: accessToken, refresh_token: "disposable-refresh-never-used",
-  token_type: "bearer", expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600,
-  user,
-};
+// Auth is an external-service fixture. Let the actual browser SDK encode and
+// persist its own session rather than manufacturing Supabase cookie contents.
+const authBootstrap = await build({
+  stdin: { contents: `
+    import { createBrowserClient } from "@supabase/ssr";
+    const client = createBrowserClient(${JSON.stringify(gatewayOrigin)}, ${JSON.stringify(anonToken)});
+    client.auth.setSession({ access_token: ${JSON.stringify(accessToken)}, refresh_token: "disposable-refresh-only" })
+      .then(({ error }) => { window.fixtureAuth = error ? error.message : "ready"; });
+  `, resolveDir: fileURLToPath(root), sourcefile: "wizard-auth-fixture.js" },
+  bundle: true, write: false, platform: "browser", format: "iife",
+});
 
 let gateway;
 let next;
@@ -105,12 +133,9 @@ async function openWizard(budgetId, expectedTitle = "Base E2E", { step = null, r
     if ([appOrigin, gatewayOrigin, "data:"].includes(origin)) request.continue();
     else request.abort();
   });
-  await page.setCookie({
-    name: "sb-127-auth-token",
-    value: `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}`,
-    url: appOrigin,
-    httpOnly: false,
-  });
+  const authCookie = (await browser.defaultBrowserContext().cookies())
+    .find(cookie => cookie.name === "sb-127-auth-token");
+  assert.ok(authCookie, "the shared synthetic auth session must exist before navigation");
   const stepQuery = step === null ? "" : `&step=${step}`;
   const response = await page.goto(`${appOrigin}/dashboard/budgets/generate?budgetId=${budgetId}${stepQuery}`, {
     waitUntil: "domcontentloaded", timeout: 90000,
@@ -146,20 +171,41 @@ async function openWizard(budgetId, expectedTitle = "Base E2E", { step = null, r
 
 try {
   await setup(db);
+  await prepareWizardProvenance(db);
   await db.query("insert into auth.users values($1)", [owner]);
+  await seedWizardPriceSources(db, owner);
   await db.query("notify pgrst, 'reload schema'");
 
   gateway = createServer(async (request, response) => {
     const url = new URL(request.url, gatewayOrigin);
     if (request.method === "OPTIONS") { reply(response, 200, {}); return; }
+    if (url.pathname === "/fixture/auth-bootstrap") {
+      response.writeHead(200, { "content-type": "text/html" });
+      response.end(`<!doctype html><html><body><script>${authBootstrap.outputFiles[0].text}</script></body></html>`);
+      return;
+    }
     if (url.pathname === "/auth/v1/user") {
-      requests.push({ method: request.method, path: url.pathname });
+      requests.push({ method: request.method, path: url.pathname,
+        status: request.headers.authorization === `Bearer ${accessToken}` ? 200 : 401,
+        client: request.headers["x-client-info"] });
       if (request.headers.authorization !== `Bearer ${accessToken}`) {
         reply(response, 401, { error: "invalid synthetic session" }); return;
       }
       reply(response, 200, user); return;
     }
+    if (url.pathname === "/v1/messages" && request.method === "POST") {
+      const chunks = [];
+      for await (const chunk of request) chunks.push(chunk);
+      const input = JSON.parse(Buffer.concat(chunks).toString());
+      assert.equal(input.model, "claude-sonnet-4-6");
+      if (modelEnabled) modelCalls++;
+      reply(response, 200, { id: "msg_disposable_g3", type: "message", role: "assistant",
+        model: input.model, content: [{ type: "text", text: modelEnabled ? JSON.stringify(proposal) : "Model disabled for resolver fixture" }],
+        stop_reason: "end_turn", stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } });
+      return;
+    }
     if (!url.pathname.startsWith("/rest/v1/")) {
+      requests.push({ method: request.method, path: url.pathname, status: 404 });
       reply(response, 404, { error: "gateway route denied" }); return;
     }
     // All database traffic is forwarded to the already-guarded local PostgREST.
@@ -178,13 +224,17 @@ try {
         headers: Object.fromEntries(Object.entries(request.headers).filter(([name]) =>
           !["host", "connection", "content-length", "origin", "referer"].includes(name))),
         body: chunks.length ? Buffer.concat(chunks) : undefined,
+        redirect: "error",
         signal: AbortSignal.timeout(15000),
       });
       const headers = Object.fromEntries([...upstream.headers].filter(([name]) =>
         !["content-length", "content-encoding", "transfer-encoding", "connection"].includes(name)));
       const body = Buffer.from(await upstream.arrayBuffer());
       requests.push({ method: request.method, path: target.pathname, status: upstream.status,
-        error: upstream.ok ? undefined : body.toString().slice(0, 300) });
+        authRole: request.headers.authorization === `Bearer ${accessToken}` ? "authenticated"
+          : request.headers.authorization === `Bearer ${anonToken}` ? "anon" : "other",
+        error: upstream.ok ? undefined : body.toString().slice(0, 300),
+        payload: WRITE_RPCS.has(target.pathname) && chunks.length ? JSON.parse(Buffer.concat(chunks)) : undefined });
       response.writeHead(upstream.status, { ...headers, "access-control-allow-origin": appOrigin });
       response.end(body);
     } catch (error) {
@@ -212,6 +262,10 @@ try {
       unit: "ud", category: "otros", unit_price: 1000, subtotal_cost: 1000,
       unit_price_client: 1300, subtotal_client: 1300, status: "incluida" }],
   })]);
+  const canRead = await fetch(`${restOrigin}/budgets?id=eq.${budgetId}&select=id`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  assert.equal(canRead.status, 200, `fixture authenticated read: ${await canRead.text()}`);
   const snapshot = async () => (await db.query("select title, lock_version from public.budgets where id=$1", [budgetId])).rows[0];
   const baseline = await snapshot();
   assert.equal(baseline.lock_version, 1);
@@ -222,6 +276,10 @@ try {
     env: {
       PATH: env.PATH, HOME: env.HOME, NODE_ENV: "development", NEXT_TELEMETRY_DISABLED: "1",
       NEXT_PUBLIC_SUPABASE_URL: gatewayOrigin, NEXT_PUBLIC_SUPABASE_ANON_KEY: anonToken,
+      SUPABASE_SERVICE_ROLE_KEY: token("service_role"),
+      ANTHROPIC_API_KEY: "synthetic-disposable-model-only", ANTHROPIC_BASE_URL: gatewayOrigin,
+      NODE_OPTIONS: `--require=${fileURLToPath(new URL("__tests__/support/budget-wizard-network.cjs", root))}`,
+      NEXT_FONT_GOOGLE_MOCKED_RESPONSES: fileURLToPath(new URL("__tests__/support/budget-wizard-fonts.cjs", root)),
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -232,6 +290,14 @@ try {
     "--no-sandbox", "--disable-setuid-sandbox", "--disable-background-networking",
     "--disable-extensions", "--disable-sync", "--no-first-run",
   ] });
+  const authPage = await browser.newPage();
+  pages.push(authPage);
+  await authPage.setRequestInterception(true);
+  authPage.on("request", request => [gatewayOrigin, "data:"].includes(new URL(request.url()).origin) ? request.continue() : request.abort());
+  await authPage.goto(`${gatewayOrigin}/fixture/auth-bootstrap`, { waitUntil: "domcontentloaded" });
+  await authPage.waitForFunction(() => Boolean(window.fixtureAuth));
+  assert.equal(await authPage.evaluate(() => window.fixtureAuth), "ready", "real browser SDK session bootstrap");
+  await authPage.close();
   const writesBeforeOpen = writeCalls().length;
   const first = await openWizard(budgetId);
   await new Promise((resolve) => setTimeout(resolve, 1800));
@@ -337,6 +403,182 @@ try {
     "Antiguo E2E revisado");
   assert.deepEqual(legacyTab.pageErrors, []);
   assert.deepEqual(legacyEdit.pageErrors, []);
+
+  // ---- G3: resolver -> real API -> wizard state -> payload -> real RPC ----
+  // Seed an EMPTY draft header, never price evidence or wizard partidas.
+  const generatedTitle = "Procedencia E2E";
+  const empty = await fetch(`${restOrigin}/rpc/create_budget_with_items`, {
+    method: "POST", headers: { "content-type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ p_budget_data: {
+      title: generatedTitle, budget_number: "WIZARD-E2E-PROVENANCE", client_id: provenanceClient,
+      wizard_state: { title: generatedTitle, clientId: provenanceClient, sector: "construccion",
+        description: "Pintura de salón", sectorData: provenanceScope },
+    }, p_items: [] }),
+  });
+  assert.equal(empty.status, 200, await empty.clone().text());
+  const { budget_id: generatedId } = await empty.json();
+  const generatedRows = async () => (await db.query(`select concept, unit_price_cost,
+    price_source_type, price_confidence, price_checked_at from public.budget_items
+    where budget_id=$1 order by sort_order`, [generatedId])).rows;
+  assert.deepEqual(await generatedRows(), [], "no provenance-bearing lines may be seeded");
+  const generated = await openWizard(generatedId, generatedTitle);
+  const apiResponses = [];
+  generated.page.on("response", async response => {
+    const path = new URL(response.url()).pathname;
+    if (["/api/prices/resolve", "/api/agent/budget-analysis"].includes(path)) {
+      apiResponses.push({ path, status: response.status(), body: await response.json() });
+    }
+  });
+  const clickButton = async text => generated.page.evaluate(text => {
+    const button = [...document.querySelectorAll("button")].find(node => node.textContent?.trim() === text);
+    if (!button || button.disabled) throw Error(`Button unavailable: ${text}`);
+    button.click();
+  }, text);
+  await clickButton("Siguiente paso");
+  await waitFor(async () => (await generated.page.$$("tbody tr")).length > 0 &&
+    (await visibleText(generated.page)).includes("Partidas"), "generated wizard lines", 90000);
+  await waitFor(() => apiResponses.some(response => response.path === "/api/prices/resolve"), "real price API response");
+  assert.ok(apiResponses.some(response => response.path === "/api/agent/budget-analysis" && response.status === 200),
+    `real analysis API must succeed: ${JSON.stringify(apiResponses.map(({path,status})=>({path,status})))}`);
+  const priceResponses = apiResponses.filter(response => response.path === "/api/prices/resolve");
+  for (const response of priceResponses) {
+    assert.equal(response.status, 200);
+    assert.equal(response.body.ok, true);
+  }
+  const quotes = priceResponses.flatMap(response => response.body.resolved);
+  assert.ok(quotes.length > 0, "the resolver must have quoted actual wizard lines");
+  const generatedWriteStart = writeCalls().length;
+  await waitFor(async () => !(await generated.page.evaluate(() => [...document.querySelectorAll("button")]
+    .find(node => node.textContent?.trim() === "Guardar borrador")?.disabled)), "save enabled");
+  await clickButton("Guardar borrador");
+  await waitFor(async () => writeCalls().slice(generatedWriteStart).some(call => call.path === "/rpc/save_budget" && call.status === 200 &&
+      call.payload.p_budget_id === generatedId && call.payload.p_items.length > 0)
+    && (await generatedRows()).length > 0, "generated provenance saved through real RPC", 20000);
+  const persisted = await generatedRows();
+  assert.equal(persisted.length, 5, "all five budget lines persist; the material basket is not double-counted");
+  for (const item of persisted) {
+    assert.notEqual(item.price_source_type, null, `G3 TRANSPORT: ${item.concept} source must reach budget_items`);
+    assert.notEqual(item.price_confidence, null, `G3 TRANSPORT: ${item.concept} confidence must reach budget_items`);
+    assert.notEqual(item.price_checked_at, null, `G3 TRANSPORT: ${item.concept} timestamp must reach budget_items`);
+    assert.ok(resolverSources.has(item.price_source_type), `${item.concept}: unknown resolver source ${item.price_source_type}`);
+    const quote = quotes.find(quote => quote.materialName === item.concept);
+    assert.ok(quote, `${item.concept} must correspond to a response from the real resolver API`);
+    assert.equal(item.price_source_type, quote.sourceType);
+    assert.equal(Number(item.price_confidence), Number(quote.confidenceScore.toFixed(2)));
+    assert.equal(item.price_checked_at.toISOString(), new Date(quote.capturedAt).toISOString());
+  }
+  const savedPayload = writeCalls().slice(generatedWriteStart).find(call => call.path === "/rpc/save_budget" && call.status === 200 &&
+    call.payload.p_budget_id === generatedId && call.payload.p_items.length === persisted.length).payload;
+  assert.equal(savedPayload.p_items.length, persisted.length);
+  // Since B11, the eight basket materials live in wizard_state, not budget_items.
+  const basket = (await db.query("select wizard_state->'materials' as materials from public.budgets where id=$1", [generatedId])).rows[0].materials;
+  assert.equal(basket.length, 8, "all basket materials must remain in the saved wizard");
+  for (const material of basket) {
+    const quote = quotes.find(quote => quote.materialName === material.name);
+    assert.ok(quote, `${material.name}: real resolver quote required`);
+    assert.equal(material.price_source_type, quote.sourceType, `G3 TRANSPORT: ${material.name} source must reach wizard_state`);
+    assert.equal(material.price_confidence, quote.confidenceScore);
+    assert.equal(new Date(material.price_checked_at).toISOString(), new Date(quote.capturedAt).toISOString());
+  }
+  console.log(`PASS G3 GENERATED: ${persisted.length} budget_items preserve source, confidence and timestamp from real resolver API`);
+  console.log("PASS G3 BASKET: 8 materials preserve resolver evidence in wizard_state without duplicate budget_items");
+
+  // Edit the cost in the REAL ItemsStep input, then explicitly save again.
+  // No provider hooks, direct SQL edit or handcrafted provenance payload.
+  const manualStart = Date.now();
+  const edited = await generated.page.evaluate(() => {
+    const tr = document.querySelector("tbody tr");
+    const concept = tr?.querySelector('input[type="text"]')?.value;
+    const input = tr?.querySelectorAll('input[type="number"]');
+    const price = input?.[input.length - 1];
+    if (!concept || !price) throw Error("Editable generated price unavailable");
+    return { concept, previous: Number(price.value) };
+  });
+  const newPrice = Math.ceil(edited.previous) + 17;
+  const priceInput = await generated.page.$('tbody tr:first-child td:nth-child(5) input[type="number"]');
+  assert.ok(priceInput, "edit the unit cost, not quantity or displayed client price");
+  // Puppeteer's fill clears the existing number and types into the visible
+  // input, which runs ItemsStep.onChange and the real provider update handler.
+  await generated.page.locator('tbody tr:first-child td:nth-child(5) input[type="number"]').fill(String(newPrice));
+  await priceInput.press("Tab");
+  assert.equal(Number(await priceInput.evaluate(node => node.value)), newPrice, "the real cost input must contain the edited amount");
+  const manualWriteStart = writeCalls().length;
+  await waitFor(async () => !(await generated.page.evaluate(() => [...document.querySelectorAll("button")]
+    .find(node => node.textContent?.trim() === "Guardar borrador")?.disabled)), "manual save enabled");
+  await clickButton("Guardar borrador");
+  await waitFor(async () => writeCalls().slice(manualWriteStart).some(call => call.path === "/rpc/save_budget" && call.status === 200)
+    && (await generatedRows()).some(row => row.concept === edited.concept && Number(row.unit_price_cost) === newPrice),
+    "manually edited price saved", 20000);
+  const afterManual = await generatedRows();
+  const manualRow = afterManual.find(row => row.concept === edited.concept);
+  assert.equal(manualRow.price_source_type, "user_edited", "manual edit must replace resolver provenance");
+  assert.equal(Number(manualRow.price_confidence), 0.95);
+  assert.ok(manualRow.price_checked_at instanceof Date);
+  assert.ok(manualRow.price_checked_at.getTime() >= manualStart && manualRow.price_checked_at.getTime() <= Date.now());
+  for (const original of persisted.filter(row => row.concept !== edited.concept)) {
+    const current = afterManual.find(row => row.concept === original.concept);
+    assert.deepEqual(current, original, "editing one price must preserve other lines and their provenance");
+  }
+  assert.deepEqual(generated.pageErrors, []);
+  console.log("PASS G3 USER_EDITED: actual price input -> real save_budget -> user_edited / 0.95 / edit timestamp");
+
+  // ---- G3 A: UI → real analysis route → real RPC → budget_items ----
+  modelEnabled = true;
+  await db.query("delete from public.price_items");
+  await db.query(await readFile(new URL("__tests__/support/budget-wizard-ai-fixtures.sql", root), "utf8"));
+  await db.query("notify pgrst, 'reload schema'");
+  const aiSeed = await fetch(`${restOrigin}/rpc/create_budget_with_items`, {
+    method: "POST",
+    headers: { "content-type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ p_budget_data: { title: "Pintura G3", budget_number: "WIZARD-G3" }, p_items: [] }),
+  });
+  assert.equal(aiSeed.status, 200, await aiSeed.clone().text());
+  const { budget_id: aiId } = await aiSeed.json();
+  await db.query("update public.budgets set wizard_state=$2 where id=$1", [aiId, JSON.stringify({
+    title: "Pintura G3", sector: "construccion", serviceType: "reforma",
+    description: "Pintura de paredes y techos", currentStep: 1,
+    sectorData: { superficie_m2: 40, num_banos: 0, incluye_cocina: false,
+      incluye_ventanas: false, incluye_climatizacion: false, actuaciones: ["pintura"],
+      calidad: "media", ubicacion: "Madrid", estancias: [] },
+  })]);
+  const ai = await openWizard(aiId, "Pintura G3", { step: 1, ready: "Volver a calcular" });
+  const startedAt = Date.now();
+  const analysisResponse = ai.page.waitForResponse(response =>
+    new URL(response.url()).pathname === "/api/agent/budget-analysis", { timeout: 90000 });
+  await ai.page.evaluate(() => {
+    const button = [...document.querySelectorAll("button")].find(node => node.textContent?.includes("Volver a calcular"));
+    if (!button || button.disabled) throw Error("Recalculation button unavailable");
+    button.click();
+  });
+  const analysis = await analysisResponse;
+  assert.equal(analysis.status(), 200, await analysis.text());
+  const result = await analysis.json();
+  assert.equal(result.data_sources.using_ai_fallback, false, JSON.stringify(result.data_sources));
+  assert.equal(modelCalls, 1, "the real route must consume the local model response");
+  await waitFor(async () => (await visibleText(ai.page)).includes("Pintura pared G3 6") &&
+    (await visibleText(ai.page)).includes("Volver a calcular"), "completed AI recalculation");
+  // Wait for content, never for provenance: mutation must fail the SQL
+  // assertion with NULL rows, not time out or pass on an empty set.
+  const savedLines = async () => (await db.query(`select concept, category,
+    price_source_type, price_confidence, price_checked_at
+    from public.budget_items where budget_id=$1 order by sort_order`, [aiId])).rows;
+  await waitFor(async () => (await savedLines()).filter(row => row.concept.startsWith("Pintura pared G3 ")).length === 7,
+    "AI lines persisted by browser autosave", 20000);
+  const lines = await savedLines();
+  assert.equal(lines.length, 7, "all seven model lines must persist; the material basket lives in wizard_state");
+  const missing = lines.filter(row => row.price_source_type === null).map(row => row.concept);
+  assert.deepEqual(missing, [], `NULL en partidas NUEVAS de budget_items: ${missing.join(", ")}`);
+  const aiLines = lines.filter(row => row.concept.startsWith("Pintura pared G3 "));
+  assert.equal(aiLines.length, 7, "all seven model prices must reach PostgreSQL");
+  for (const line of aiLines) {
+    assert.equal(line.price_source_type, "ai_estimate", line.concept);
+    assert.equal(Number(line.price_confidence), 0.20, line.concept);
+    assert.ok(line.price_checked_at instanceof Date && line.price_checked_at.getTime() >= startedAt &&
+      line.price_checked_at.getTime() <= Date.now(), `${line.concept}: current persisted timestamp`);
+  }
+  assert.ok((await visibleText(ai.page)).includes("Estimación IA · sin fuente técnica"));
+  assert.deepEqual(ai.pageErrors, []);
+  console.log(`PASS G3 PostgreSQL 17: ${lines.length} líneas nuevas en budget_items, 0 NULL; 7 ai_estimate con confianza 0.20 y fecha actual`);
 
   assert.deepEqual(first.pageErrors, []);
   assert.deepEqual(second.pageErrors, []);

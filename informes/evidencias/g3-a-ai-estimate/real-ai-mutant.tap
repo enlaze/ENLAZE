@@ -1,0 +1,61 @@
+Runtime: v25.8.2
+postgres (PostgreSQL) 17.11 (Homebrew)
+PostgREST 16.4
+TAP version 13
+# PASS G3 GENERATED: 5 budget_items preserve source, confidence and timestamp from real resolver API
+# PASS G3 BASKET: 8 materials preserve resolver evidence in wizard_state without duplicate budget_items
+# PASS G3 USER_EDITED: actual price input -> real save_budget -> user_edited / 0.95 / edit timestamp
+# node:internal/modules/run_main:107
+#     triggerUncaughtException(
+#     ^
+# AssertionError [ERR_ASSERTION]: NULL en partidas NUEVAS de budget_items: Pintura pared G3 0, Pintura pared G3 1, Pintura pared G3 2, Pintura pared G3 3, Pintura pared G3 4, Pintura pared G3 5, Pintura pared G3 6
+# + actual - expected
+# + [
+# +   'Pintura pared G3 0',
+# +   'Pintura pared G3 1',
+# +   'Pintura pared G3 2',
+# +   'Pintura pared G3 3',
+# +   'Pintura pared G3 4',
+# +   'Pintura pared G3 5',
+# +   'Pintura pared G3 6'
+# + ]
+# - []
+#     at file:///Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-release/__tests__/budget-wizard-full-page.browser.integration.test.mjs:571:10
+#     at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {
+#   generatedMessage: false,
+#   code: 'ERR_ASSERTION',
+#   actual: [
+#     'Pintura pared G3 0',
+#     'Pintura pared G3 1',
+#     'Pintura pared G3 2',
+#     'Pintura pared G3 3',
+#     'Pintura pared G3 4',
+#     'Pintura pared G3 5',
+#     'Pintura pared G3 6'
+#   ],
+#   expected: [],
+#   operator: 'deepStrictEqual',
+#   diff: 'simple'
+# }
+# Node.js v25.8.2
+# Subtest: __tests__/budget-wizard-full-page.browser.integration.test.mjs
+not ok 1 - __tests__/budget-wizard-full-page.browser.integration.test.mjs
+  ---
+  duration_ms: 43041.885125
+  type: 'test'
+  location: '/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-release/__tests__/budget-wizard-full-page.browser.integration.test.mjs:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 43046.226125

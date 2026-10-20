@@ -4,6 +4,8 @@
  * No React, no Supabase, no side-effects. Fully idempotent.
  */
 
+import type { BudgetPriceEvidence } from "./budget-price-provenance";
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export interface BudgetScope {
@@ -118,7 +120,7 @@ export interface MarketAdjustmentMeta {
   adjusted_at: string;
 }
 
-export interface EnginePartida {
+export interface EnginePartida extends BudgetPriceEvidence {
   id: string;
   concept: string;
   description: string;
@@ -140,7 +142,7 @@ export interface EnginePartida {
   estimated_hours?: number;
 }
 
-export interface EngineMaterial {
+export interface EngineMaterial extends BudgetPriceEvidence {
   id: string;
   name: string;
   specification: string;
@@ -2279,6 +2281,8 @@ export interface InternalMaterialLine {
 }
 
 export interface InternalItemLine {
+  priceSourceType?: string | null;
+  priceConfidence?: number | null;
   concept: string;
   description: string;
   quantity: number;
@@ -2398,8 +2402,8 @@ export function buildInternalView(
         materialCost += item.cost_breakdown.material_cost;
         equipmentCost += item.cost_breakdown.equipment_cost;
         wasteCost += item.cost_breakdown.waste_cost;
-        sourceTypes.add(item.cost_breakdown.source);
-        confidenceSum += item.cost_breakdown.confidence_score;
+        sourceTypes.add(item.price_source_type ?? item.cost_breakdown.source);
+        confidenceSum += item.price_confidence != null ? item.price_confidence * 100 : item.cost_breakdown.confidence_score;
         confidenceCount++;
       } else {
         // Fallback: all cost is from subtotal_cost
@@ -2407,8 +2411,8 @@ export function buildInternalView(
         materialCost += item.subtotal_cost * 0.4;
         equipmentCost += item.subtotal_cost * 0.05;
         wasteCost += item.subtotal_cost * 0.05;
-        sourceTypes.add("engine_estimate");
-        confidenceSum += 50;
+        sourceTypes.add(item.price_source_type ?? "engine_estimate");
+        confidenceSum += item.price_confidence != null ? item.price_confidence * 100 : 50;
         confidenceCount++;
       }
     }
@@ -2435,13 +2439,15 @@ export function buildInternalView(
         unitPrice: resolved?.selectedPrice || mat.unit_price,
         subtotal: resolved ? resolved.selectedPrice * mat.quantity : mat.subtotal,
         qualityTier: resolved?.qualityTier || scope.calidad,
-        sourceType: resolved?.sourceType || mat.sourceType,
+        sourceType: mat.price_source_type ?? resolved?.sourceType ?? mat.sourceType,
         supplier: resolved?.selectedSupplier || mat.provider_id,
-        confidenceScore: resolved?.confidenceScore || (mat.isRealData ? 0.80 : 0.40),
+        confidenceScore: mat.price_confidence ?? resolved?.confidenceScore ?? (mat.isRealData ? 0.80 : 0.40),
       };
     });
 
     const itemLines: InternalItemLine[] = group.map((item) => ({
+      priceSourceType: item.price_source_type,
+      priceConfidence: item.price_confidence,
       concept: item.concept,
       description: item.description,
       quantity: item.quantity,

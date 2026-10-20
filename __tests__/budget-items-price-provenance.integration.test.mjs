@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { detectarControlTransaccion } from "./lib/sql-toplevel.mjs";
+import { assertCurrentPriceComment } from "./support/price-provenance-comment.mjs";
 
 const root = new URL("../", import.meta.url);
 const file = (path) => readFileSync(new URL(path, root), "utf8");
@@ -102,6 +103,9 @@ test("G3 lote 1a: procedencia de precios en budget_items", { timeout: 120000 }, 
   });
 
   await t.test("todos los source_type literales del resolutor constan en el comentario", async () => {
+    // Also check current application emitters against the pending comment,
+    // without applying that migration to this historical-schema test.
+    assertCurrentPriceComment();
     const emitted = new Set([...resolver.matchAll(/source_type:\s*"([^"]+)"/g)].map((match) => match[1]));
     assert.ok(emitted.size >= 11, "la prueba debe leer la escalera del resolutor");
     const result = await db.query(`select col_description('public.budget_items'::regclass,
