@@ -8,6 +8,8 @@ Comprueba las cinco filas nuevas de `budget_items` y los ocho materiales de `wiz
 
 El runner `npm run test:budget-wizard-provenance-local` inicia y elimina su propio PostgreSQL 17/PostgREST. La ejecución del 19 de octubre pasó el baseline y mató tres mutaciones: pérdida de procedencia en partidas, materiales o ambos. Las partidas se comprueban en SQL; los materiales se comprueban en el JSON persistido. Salidas completas en `informes/evidencias/budget-wizard-provenance/`.
 
-Pila local: PostgreSQL 17.11, PostgREST 16.4, Next 16.3.8 (lockfile) y Chrome. CI usa PostgreSQL 17 y PostgREST 12.2.3. El banco rechaza credenciales de producción, archivos de entorno y conexiones externas. Las migraciones de preparación se ejecutan exclusivamente en la base desechable.
+Pila local: PostgreSQL 17.11, PostgREST 16.4, Next 16.3.8 (lockfile) y Chrome 155.0.8059.39 (misma versión de CI). CI usa PostgreSQL 17 y PostgREST 12.2.3. El banco rechaza credenciales de producción, archivos de entorno y conexiones externas. Las migraciones de preparación se ejecutan exclusivamente en la base desechable.
 
 Solo cambia pruebas, fixtures, runner, filtros de CI e informes. No se ejecuta `npm run build` local: su prebuild consulta Stripe.
+
+La sesión sintética se siembra una sola vez mediante `document.cookie` en el navegador. Con Chrome 155 la cookie creada por CDP desaparecía durante la prueba; el E2E con la cookie nativa pasa y exige que la sesión siga presente antes de cada navegación. No se inyectan cabeceras de autorización en las peticiones de aplicación ni se relajan permisos.
