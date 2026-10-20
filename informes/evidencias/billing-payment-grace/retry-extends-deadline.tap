@@ -4,15 +4,15 @@ TAP version 13
     # Subtest: migration gates: no backfill, no permission drift, fail closed
     ok 1 - migration gates: no backfill, no permission drift, fail closed # SKIP
       ---
-      duration_ms: 0.433625
+      duration_ms: 0.360667
       type: 'test'
       ...
     # Subtest: first failure opens exactly five days; five retries never move the deadline
     not ok 2 - first failure opens exactly five days; five retries never move the deadline
       ---
-      duration_ms: 22.531166
+      duration_ms: 21.471083
       type: 'test'
-      location: '/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/billing-payment-grace/__tests__/billing-grace.integration.test.mjs:155:11'
+      location: '/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-grace-release/__tests__/billing-grace.integration.test.mjs:164:11'
       failureType: 'testCodeFailure'
       error: |-
         retry 1 must preserve the FIRST deadline
@@ -28,55 +28,55 @@ TAP version 13
       actual: '2030-10-17T02:00:00.000Z'
       operator: 'strictEqual'
       stack: |-
-        TestContext.<anonymous> (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/billing-payment-grace/__tests__/billing-grace.integration.test.mjs:163:14)
+        TestContext.<anonymous> (/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-grace-release/__tests__/billing-grace.integration.test.mjs:172:14)
         process.processTicksAndRejections (node:internal/process/task_queues:104:5)
         async Test.run (node:internal/test_runner/test:1208:7)
-        async TestContext.<anonymous> (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/billing-payment-grace/__tests__/billing-grace.integration.test.mjs:155:3)
+        async TestContext.<anonymous> (/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-grace-release/__tests__/billing-grace.integration.test.mjs:164:3)
         async Test.run (node:internal/test_runner/test:1208:7)
         async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)
       ...
     # Subtest: duplicate delivery cannot reapply the failure after recovery
     ok 3 - duplicate delivery cannot reapply the failure after recovery
       ---
-      duration_ms: 5.925041
+      duration_ms: 5.056208
       type: 'test'
       ...
     # Subtest: boundary: full minus 1ms, read_only at equality and plus 1ms
     ok 4 - boundary: full minus 1ms, read_only at equality and plus 1ms
       ---
-      duration_ms: 11.410709
+      duration_ms: 14.898625
       type: 'test'
       ...
     # Subtest: active recovery clears deadline and restores full access
     ok 5 - active recovery clears deadline and restores full access
       ---
-      duration_ms: 8.929292
+      duration_ms: 4.545458
       type: 'test'
       ...
     # Subtest: later second failure opens a NEW five-day grace
     ok 6 - later second failure opens a NEW five-day grace
       ---
-      duration_ms: 4.702042
+      duration_ms: 4.224458
       type: 'test'
       ...
     # Subtest: legacy past_due with NULL has no grace and remains read_only
     ok 7 - legacy past_due with NULL has no grace and remains read_only
       ---
-      duration_ms: 2.5915
+      duration_ms: 2.101167
       type: 'test'
       ...
     # Subtest: deleted subscription cuts immediately even inside grace
     ok 8 - deleted subscription cuts immediately even inside grace
       ---
-      duration_ms: 7.022792
+      duration_ms: 6.472292
       type: 'test'
       ...
     # Subtest: concurrent subscription writes keep one initial deadline
     not ok 9 - concurrent subscription writes keep one initial deadline
       ---
-      duration_ms: 28.216166
+      duration_ms: 17.841916
       type: 'test'
-      location: '/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/billing-payment-grace/__tests__/billing-grace.integration.test.mjs:213:11'
+      location: '/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-grace-release/__tests__/billing-grace.integration.test.mjs:222:11'
       failureType: 'testCodeFailure'
       error: |-
         the waiting update must recheck the committed first deadline
@@ -92,25 +92,25 @@ TAP version 13
       actual: '2030-10-18T01:00:00.000Z'
       operator: 'strictEqual'
       stack: |-
-        TestContext.<anonymous> (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/billing-payment-grace/__tests__/billing-grace.integration.test.mjs:232:14)
+        TestContext.<anonymous> (/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-grace-release/__tests__/billing-grace.integration.test.mjs:241:14)
         process.processTicksAndRejections (node:internal/process/task_queues:104:5)
         async Test.run (node:internal/test_runner/test:1208:7)
-        async TestContext.<anonymous> (/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/billing-payment-grace/__tests__/billing-grace.integration.test.mjs:213:3)
+        async TestContext.<anonymous> (/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-grace-release/__tests__/billing-grace.integration.test.mjs:222:3)
         async Test.run (node:internal/test_runner/test:1208:7)
         async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)
       ...
     # Subtest: rollback requires acknowledgement and restores old access and schema
     ok 10 - rollback requires acknowledgement and restores old access and schema # SKIP
       ---
-      duration_ms: 0.14225
+      duration_ms: 0.121334
       type: 'test'
       ...
     1..10
 not ok 1 - billing grace / real PostgreSQL 17 + real server access
   ---
-  duration_ms: 981.205209
+  duration_ms: 938.324708
   type: 'test'
-  location: '/Users/alvaromirallesgrande/Desktop/enlaze/.worktrees/billing-payment-grace/__tests__/billing-grace.integration.test.mjs:52:1'
+  location: '/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-grace-release/__tests__/billing-grace.integration.test.mjs:52:1'
   failureType: 'subtestsFailed'
   error: '2 subtests failed'
   code: 'ERR_TEST_FAILURE'
@@ -123,4 +123,4 @@ not ok 1 - billing grace / real PostgreSQL 17 + real server access
 # cancelled 0
 # skipped 2
 # todo 0
-# duration_ms 1171.32625
+# duration_ms 1170.754292

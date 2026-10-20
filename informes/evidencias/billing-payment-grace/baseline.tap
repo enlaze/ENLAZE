@@ -4,67 +4,67 @@ TAP version 13
     # Subtest: migration gates: no backfill, no permission drift, fail closed
     ok 1 - migration gates: no backfill, no permission drift, fail closed
       ---
-      duration_ms: 8.669083
+      duration_ms: 8.348583
       type: 'test'
       ...
     # Subtest: first failure opens exactly five days; five retries never move the deadline
     ok 2 - first failure opens exactly five days; five retries never move the deadline
       ---
-      duration_ms: 44.469625
+      duration_ms: 34.608167
       type: 'test'
       ...
     # Subtest: duplicate delivery cannot reapply the failure after recovery
     ok 3 - duplicate delivery cannot reapply the failure after recovery
       ---
-      duration_ms: 4.532
+      duration_ms: 3.213417
       type: 'test'
       ...
     # Subtest: boundary: full minus 1ms, read_only at equality and plus 1ms
     ok 4 - boundary: full minus 1ms, read_only at equality and plus 1ms
       ---
-      duration_ms: 9.790125
+      duration_ms: 11.532542
       type: 'test'
       ...
     # Subtest: active recovery clears deadline and restores full access
     ok 5 - active recovery clears deadline and restores full access
       ---
-      duration_ms: 5.585209
+      duration_ms: 4.031542
       type: 'test'
       ...
     # Subtest: later second failure opens a NEW five-day grace
     ok 6 - later second failure opens a NEW five-day grace
       ---
-      duration_ms: 3.754209
+      duration_ms: 3.740291
       type: 'test'
       ...
     # Subtest: legacy past_due with NULL has no grace and remains read_only
     ok 7 - legacy past_due with NULL has no grace and remains read_only
       ---
-      duration_ms: 2.089666
+      duration_ms: 2.197334
       type: 'test'
       ...
     # Subtest: deleted subscription cuts immediately even inside grace
     ok 8 - deleted subscription cuts immediately even inside grace
       ---
-      duration_ms: 5.748708
+      duration_ms: 5.91975
       type: 'test'
       ...
     # Subtest: concurrent subscription writes keep one initial deadline
     ok 9 - concurrent subscription writes keep one initial deadline
       ---
-      duration_ms: 17.608833
+      duration_ms: 17.391958
       type: 'test'
       ...
     # Subtest: rollback requires acknowledgement and restores old access and schema
     ok 10 - rollback requires acknowledgement and restores old access and schema
       ---
-      duration_ms: 4.222417
+      duration_ms: 4.309459
       type: 'test'
       ...
     1..10
 ok 1 - billing grace / real PostgreSQL 17 + real server access
   ---
-  duration_ms: 1064.658375
+  duration_ms: 962.396708
   type: 'test'
   ...
 1..1
@@ -75,4 +75,4 @@ ok 1 - billing grace / real PostgreSQL 17 + real server access
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 1375.797209
+# duration_ms 1209.89075

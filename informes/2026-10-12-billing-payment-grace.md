@@ -30,3 +30,11 @@ KILLED null-grants-access
 **Pendiente:** no se ejecutó `npm run build`: su prebuild conecta con base/Stripe, prohibidos aquí. La instalación local reutilizada contiene Next 16.2.1 frente a 16.3.8 en el lockfile; se leyeron sus guías y no se descargaron dependencias. Falta build con versiones exactas en entorno autorizado; no se afirma validación en producción.
 
 **Reproducir:** `npm run test:billing-grace`, `test:billing-grace-mutations`, `test:billing-grace-notice`, `test:billing`. Requiere PG17/PostgREST locales ya instalados; no carga `.env`, descarga dependencias ni acepta variables de un proyecto real. No ejecutar `test:billing-integration`, `plans:sync` ni migraciones contra la base real para este encargo.
+
+## Integración y gate de producción · 20 de octubre
+
+El PRECHECK inicial de producción abortó correctamente: el cuerpo de `access_level` tiene hash `b7e6d58a7ee948cde947fd2a712e91a5`, mientras la migración histórica local tiene `a73facb21af70ce1ad9ba56e0c175a5c`. La única diferencia es el comentario tras `else 'read_only'`; lógica, SECURITY DEFINER, search_path y ACL coinciden. El guard y el PRECHECK aceptan exclusivamente esos dos cuerpos conocidos. La prueba real verifica ambos y demuestra que una modificación de la condición de acceso sigue abortando el gate y la migración.
+
+Las regresiones de webhook se ejecutan con el esquema de gracia aplicado solamente en el banco desechable. El primer impago conserva estado past_due y plan, y ahora abre acceso temporal; los controles de límites, recuperación y NULL legacy siguen en la suite de gracia.
+
+Validación actual: gracia real 11/11, store real 8/8, planes/webhook 19/19, avisos 2/2; siete mutantes detectados. TypeScript y lint de archivos afectados pasan. No se ejecutó build local ni prebuild de Stripe. La aplicación de producción requiere PRECHECK fresco, snapshot sin datos personales, una sola migración en el plan y AUDIT inmediato antes de desplegar el webhook.
