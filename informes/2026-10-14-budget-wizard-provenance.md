@@ -12,4 +12,4 @@ Pila local: PostgreSQL 17.11, PostgREST 16.4, Next 16.3.8 (lockfile) y Chrome 15
 
 Solo cambia pruebas, fixtures, runner, filtros de CI e informes. No se ejecuta `npm run build` local: su prebuild consulta Stripe.
 
-La sesión sintética se siembra una sola vez mediante `document.cookie` en el navegador. Con Chrome 155 la cookie creada por CDP desaparecía durante la prueba; el E2E con la cookie nativa pasa y exige que la sesión siga presente antes de cada navegación. No se inyectan cabeceras de autorización en las peticiones de aplicación ni se relajan permisos.
+La sesión sintética se prepara mediante `setSession` del SDK real de Supabase en una página de fixture local. GoTrue es el único servicio de autenticación simulado; el SDK codifica y persiste su cookie. Las variantes que fabricaban la cookie dieron fallos intermitentes con Chrome 155. No se inyectan cabeceras de autorización en las peticiones de aplicación ni se relajan permisos.
