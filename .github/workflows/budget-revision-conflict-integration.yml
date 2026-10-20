@@ -87,7 +87,7 @@ env:
   # cuerpo de error— depende de la versión, y un `latest` convertiría este banco
   # en una prueba cuyo sujeto cambia solo.
   PT409_IMAGEN_DB: postgres:17
-  PT409_IMAGEN_REST: postgrest/postgrest:v12.2.3
+  PT409_IMAGEN_REST: postgrest/postgrest:v14.4
 
 jobs:
   banco-pt409:
