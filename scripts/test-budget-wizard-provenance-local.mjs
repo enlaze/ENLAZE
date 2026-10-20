@@ -44,7 +44,9 @@ async function run(cwd, name) {
   const timer=setTimeout(stopGroup,240000);
   const code=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',resolve);});
   clearTimeout(timer);
-  stopGroup();
+  // The E2E owns and closes Next in finally. Never signal a process group
+  // after its leader has exited: that identifier can already be reused.
+  if (code === null) stopGroup();
   await writeFile(join(reports,`${name}.log`),output);
   return {code,output};
 }
