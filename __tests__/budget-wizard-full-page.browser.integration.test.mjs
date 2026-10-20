@@ -69,7 +69,15 @@ const authBootstrap = await build({
   stdin: { contents: `
     import { createBrowserClient } from "@supabase/ssr";
     const client = createBrowserClient(${JSON.stringify(gatewayOrigin)}, ${JSON.stringify(anonToken)});
-    client.auth.setSession({ access_token: ${JSON.stringify(accessToken)}, refresh_token: "disposable-refresh-only" })
+    window.authCookieEvents = [];
+    cookieStore.addEventListener("change", event => window.authCookieEvents.push({
+      at: Date.now(), changed: event.changed.map(({name,expires}) => ({name,expires})),
+      deleted: event.deleted.map(({name,expires}) => ({name,expires})),
+    }));
+    const login = document.createElement("button");
+    login.textContent = "Authenticate disposable session";
+    document.body.append(login);
+    login.onclick = () => client.auth.setSession({ access_token: ${JSON.stringify(accessToken)}, refresh_token: "disposable-refresh-only" })
       .then(({ error }) => { window.fixtureAuth = error ? error.message : "ready"; });
   `, resolveDir: fileURLToPath(root), sourcefile: "wizard-auth-fixture.js" },
   bundle: true, write: false, platform: "browser", format: "iife",
@@ -161,9 +169,10 @@ async function openWizard(budgetId, expectedTitle = "Base E2E", { step = null, r
   } catch (error) {
     const actualTitle = await page.$eval('input[placeholder="Ej: Reforma baño completo"]', (node) => node.value);
     const visibleText = await page.evaluate(() => document.body?.innerText?.slice(0, 900) ?? "");
+    const authCookieEvents = await pages[0].evaluate(() => window.authCookieEvents);
     throw Error(`Wizard hydration failed. expected=${expectedTitle} actual=${JSON.stringify(actualTitle)} ` +
       `URL=${page.url()} text=${JSON.stringify(visibleText)} requests=${JSON.stringify(requests.slice(-30))} ` +
-      `pageErrors=${JSON.stringify(pageErrors)} networkErrors=${JSON.stringify(networkErrors.slice(-10))}`, { cause: error });
+      `authCookieEvents=${JSON.stringify(authCookieEvents)} pageErrors=${JSON.stringify(pageErrors)} networkErrors=${JSON.stringify(networkErrors.slice(-10))}`, { cause: error });
   }
   assert.deepEqual(pageErrors, [], "page must not throw during hydration");
   return { page, pageErrors };
@@ -295,9 +304,10 @@ try {
   await authPage.setRequestInterception(true);
   authPage.on("request", request => [gatewayOrigin, "data:"].includes(new URL(request.url()).origin) ? request.continue() : request.abort());
   await authPage.goto(`${gatewayOrigin}/fixture/auth-bootstrap`, { waitUntil: "domcontentloaded" });
+  await authPage.locator("button").click();
   await authPage.waitForFunction(() => Boolean(window.fixtureAuth));
   assert.equal(await authPage.evaluate(() => window.fixtureAuth), "ready", "real browser SDK session bootstrap");
-  await authPage.close();
+  // Keep the authenticated SDK page alive throughout the multi-tab scenario.
   const writesBeforeOpen = writeCalls().length;
   const first = await openWizard(budgetId);
   await new Promise((resolve) => setTimeout(resolve, 1800));
