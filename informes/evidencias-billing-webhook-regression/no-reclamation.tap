@@ -1,0 +1,113 @@
+TAP version 13
+# BENCH: postgres (PostgreSQL) 17.11 (Homebrew); PostgREST 16.4; production billing migration; loopback only
+# Subtest: billing webhook / real PostgreSQL 17 store
+    # Subtest: 1 duplicate: new once, duplicate later, no second database write
+    ok 1 - 1 duplicate: new once, duplicate later, no second database write
+      ---
+      duration_ms: 14.407
+      type: 'test'
+      ...
+    # Subtest: 2 stale: abandoned unprocessed row is reclaimed and refreshed
+    not ok 2 - 2 stale: abandoned unprocessed row is reclaimed and refreshed
+      ---
+      duration_ms: 3.912542
+      type: 'test'
+      location: '/private/tmp/enlaze-billing-webhook-regression/__tests__/billing-webhook-store.integration.test.mjs:94:11'
+      failureType: 'testCodeFailure'
+      error: |-
+        Expected values to be strictly equal:
+        + actual - expected
+        
+        + 'in_progress'
+        - 'new'
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'new'
+      actual: 'in_progress'
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (/private/tmp/enlaze-billing-webhook-regression/__tests__/billing-webhook-store.integration.test.mjs:98:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+        async Test.run (node:internal/test_runner/test:1208:7)
+        async TestContext.<anonymous> (/private/tmp/enlaze-billing-webhook-regression/__tests__/billing-webhook-store.integration.test.mjs:94:3)
+        async Test.run (node:internal/test_runner/test:1208:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)
+      ...
+    # Subtest: 2 recent: in_progress, 409 delivery, database untouched
+    ok 3 - 2 recent: in_progress, 409 delivery, database untouched
+      ---
+      duration_ms: 4.094625
+      type: 'test'
+      ...
+    # Subtest: 2 processed during read: reclamation cannot overwrite a completed event
+    ok 4 - 2 processed during read: reclamation cannot overwrite a completed event
+      ---
+      duration_ms: 3.254083
+      type: 'test'
+      ...
+    # Subtest: 3 concurrent: two stale readers, exactly one new claim and one SQL update
+    not ok 5 - 3 concurrent: two stale readers, exactly one new claim and one SQL update
+      ---
+      duration_ms: 4.32225
+      type: 'test'
+      location: '/private/tmp/enlaze-billing-webhook-regression/__tests__/billing-webhook-store.integration.test.mjs:140:11'
+      failureType: 'testCodeFailure'
+      error: |-
+        race 0: only one winner
+        + actual - expected
+        
+          [
+            'in_progress',
+        +   'in_progress'
+        -   'new'
+          ]
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        0: 'in_progress'
+        1: 'new'
+      actual:
+        0: 'in_progress'
+        1: 'in_progress'
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (/private/tmp/enlaze-billing-webhook-regression/__tests__/billing-webhook-store.integration.test.mjs:163:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+        async Test.run (node:internal/test_runner/test:1208:7)
+        async TestContext.<anonymous> (/private/tmp/enlaze-billing-webhook-regression/__tests__/billing-webhook-store.integration.test.mjs:140:3)
+        async Test.run (node:internal/test_runner/test:1208:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)
+      ...
+    # Subtest: 4 deleted: canceled subscription, retained plan, read-only access
+    ok 6 - 4 deleted: canceled subscription, retained plan, read-only access
+      ---
+      duration_ms: 3.4515
+      type: 'test'
+      ...
+    # Subtest: 4 payment_failed: immediate past_due and read-only, no cancellation or plan downgrade
+    ok 7 - 4 payment_failed: immediate past_due and read-only, no cancellation or plan downgrade
+      ---
+      duration_ms: 2.323666
+      type: 'test'
+      ...
+    1..7
+not ok 1 - billing webhook / real PostgreSQL 17 store
+  ---
+  duration_ms: 895.052166
+  type: 'test'
+  location: '/private/tmp/enlaze-billing-webhook-regression/__tests__/billing-webhook-store.integration.test.mjs:36:1'
+  failureType: 'subtestsFailed'
+  error: '2 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..1
+# tests 8
+# suites 0
+# pass 5
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1077.255166

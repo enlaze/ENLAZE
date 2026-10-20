@@ -1,7 +1,7 @@
 /**
  * Webhook de Stripe: firma y deduplicación, sin red ni base de datos (almacén
  * en memoria). La deduplicación contra la tabla real stripe_events se prueba
- * en billing.integration.test.mjs.
+ * en billing-webhook-store.integration.test.mjs sobre PostgreSQL 17 desechable.
  */
 import test from "node:test";
 import assert from "node:assert/strict";
