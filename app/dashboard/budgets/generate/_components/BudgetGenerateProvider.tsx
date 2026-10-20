@@ -1411,9 +1411,12 @@ export function BudgetGenerateProvider({
     | { skipped: false; budgetId: string; lockVersion: number };
   const revisionSaveInFlight = useRef<Promise<SaveDraftOutcome> | null>(null);
 
+  // Solo las partidas no opcionales van a budget_items. La cesta de materiales
+  // ya está dentro del coste de las partidas y no suma al subtotal, así que no
+  // se guarda como líneas: vive en wizard_state, de donde la recarga el
+  // asistente. Antes se guardaba y las partidas sumaban más que el subtotal.
   const revisionItems = () => {
-    const multiplier = marginMultiplier(state.marginPercent);
-    const partidas = state.partidas.filter(p => p.status !== "opcional").map(p => ({
+    return state.partidas.filter(p => p.status !== "opcional").map(p => ({
       concept: p.concept,
       description: p.description,
       quantity: p.quantity,
@@ -1426,20 +1429,6 @@ export function BudgetGenerateProvider({
       subtotal_cost: p.subtotal_cost,
       ...evidenceForSave(p, p.unit_price),
     }));
-    const materials = state.materials.filter(m => m.included).map(m => ({
-      concept: m.name,
-      description: "Material sugerido",
-      quantity: m.quantity,
-      unit: normalizeBudgetItemUnit(m.unit),
-      category: "material",
-      chapter: m.linkedChapter || "materiales",
-      unit_price: m.unit_price * multiplier,
-      subtotal: m.subtotal * multiplier,
-      unit_price_cost: m.unit_price,
-      subtotal_cost: m.subtotal,
-      ...evidenceForSave(m, m.unit_price),
-    }));
-    return [...partidas, ...materials];
   };
 
   const revisionPayload = (

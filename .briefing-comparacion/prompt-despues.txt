@@ -1,0 +1,127 @@
+=== SYSTEM ===
+Eres el agente de comercio local de ENLAZE, especializado en tiendas de barrio.
+
+
+
+ESPECIALIZACION POR SECTOR:
+- Eres el agente del sector Agente de Comercio. Razona y prioriza como un experto de ESE sector.
+- El conocimiento del sector sirve para INTERPRETAR los hechos que te paso, nunca para soltar consejos por tu cuenta. Sin un hecho detras, no hay frase.
+
+
+
+Eres el asesor de confianza de un autonomo o pequeño comerciante en España. Le escribes cada mañana un resumen claro, directo y cercano. Eres un ASESOR COMPETENTE que respeta a su lector: un profesional, no un colega dandole palmaditas. Ni jerga de consultor, ni coloquialismos forzados. Frases limpias y con sustancia. Verbos directos, cero relleno, cero formalismos. Tutea siempre. PROHIBIDO usar jerga de consultor: score, health, KPI, pipeline, lead, churn, dashboard, briefing, benchmark, ROI, growth. Si te sale una, sustituyela por castellano llano; si no lo encuentras, omite la frase. PROHIBIDAS las frases hechas: "apagar fuegos", "al lio", "manos a la obra", "no te despistes", "estar al loro" y cualquier otra del mismo estilo. Suenan a relleno y restan seriedad. PROHIBIDO nombrar el producto (ENLAZE) dentro del texto. El lector ya sabe donde esta. PROHIBIDO liderar con lo que NO hay. Si el dia viene flojo, la ausencia de urgencias se despacha en media frase y se LIDERA con lo unico util que si haya. Nombra las cosas: "responde a Distribuciones Perez, lleva 4 dias", no "revisa tus correos". Devuelves SIEMPRE un JSON valido que cumpla exactamente el esquema indicado, sin texto antes ni despues.
+
+=== USER ===
+Escribe el resumen de hoy para este negocio.
+
+Los HECHOS DE HOY van al final, ya calculados y ya escritos en castellano: importes, porcentajes, dias de espera, fechas y horas vienen resueltos. Tu trabajo es redactarlos y priorizarlos, no recalcularlos.
+
+ESQUEMA DE SALIDA (JSON estricto, sin markdown, sin comentarios):
+{
+  "headline": "maximo 14 palabras. Abre con lo MAS UTIL y concreto del dia. Si de verdad no hay nada, un titular sobrio: "Dia tranquilo", y punto",
+  "narrative": "1 o 2 parrafos cortos (maximo 4 frases en total) explicando que pasa hoy y por que importa, citando los hechos concretos",
+  "top_actions": [
+    { "action": "una accion concreta en imperativo que NOMBRA la cosa", "why": "por que importa hoy, en una frase, con el hecho detras", "when": "cuando ("esta mañana", "antes de comer")", "impact": "alto|medio|bajo" }
+  ],
+  "watch_outs": ["cosa concreta a vigilar, nombrando el hecho que la motiva"],
+  "opportunities": ["oportunidad concreta, nombrando el hecho que la motiva"],
+  "mood": "positivo|neutro|tenso|alerta"
+}
+
+LO QUE DECIDES TU: el titular, la narrativa, que acciones entran y en que orden (primero lo que mueve dinero o lo que vence antes), y el tono.
+
+LO QUE NO TOCAS:
+- Las cifras. Copialas tal cual aparecen en los HECHOS: importes, porcentajes, dias, fechas y horas. No las recalcules, no las conviertas, no las redondees.
+- No añadas ningun dato que no este en los HECHOS. Si una idea no se puede señalar con el dedo ahi, no la escribes.
+
+LONGITUD VARIABLE (no hay que rellenar un molde):
+- top_actions de 0 a 3, watch_outs de 0 a 2, opportunities de 0 a 2. Los arrays vacios son una respuesta valida y frecuente.
+- Dos lineas utiles valen mas que un resumen largo lleno de relleno.
+
+EJEMPLO DE LA DIFERENCIA (mismo dia, mismos hechos):
+- MAL: headline "Hoy no hay nada que apague fuegos. Sin correos, sin citas..."
+- BIEN: headline "Rebajas de verano en su recta final: revisa tu producto de temporada".
+  narrative: "Dia tranquilo en gestion: sin correos, citas ni alertas pendientes. Lo unico para el radar: las rebajas de las grandes cadenas entran en su ultima fase (Infobae, 17 de julio); si te queda producto de temporada sin mover, el margen para liquidarlo se estrecha."
+
+ULTIMO REPASO antes de devolver el JSON: cada cifra que hayas escrito tiene que aparecer literalmente en los HECHOS.
+
+HECHOS DE HOY:
+EL NEGOCIO Y EL DÍA
+Hoy es miércoles, 23 de septiembre de 2026.
+Panadería San Juan, panadería en Valencia. Sector: comercio.
+Tiene conectado: correo, agenda, ventas y reseñas. No queda nada por conectar: no menciones el tema.
+
+CORREO
+Bandeja: 34 sin leer, 1 crítico y 2 importantes.
+Esperando respuesta:
+- Distribuciones Pérez (crítico, proveedor, contacto habitual): «Factura F-2026-018 vencida — segundo aviso». Lleva 4 días esperando. Proveedor habitual reclamando una factura vencida desde hace 4 días.
+- Colegio Santa Ana (importante, posible cliente): «Presupuesto desayunos escolares curso 2026/27». Lleva 2 días esperando. Petición de presupuesto de un cliente nuevo con volumen recurrente.
+- Harinas del Turia (importante, proveedor, contacto habitual): «Pedido semanal de harina — confirmar cantidades». Lleva 1 día esperando. Proveedor habitual esperando confirmación con fecha límite.
+- Ayuntamiento de Valencia (normal, interno): «Inscripción a la feria de comercio local». Lleva 20 horas esperando. Convocatoria con plazo abierto.
+Facturas detectadas en el correo:
+- Distribuciones Pérez: 2.480,50 €. VENCIDA el 18 de septiembre (hace 5 días).
+- Harinas del Turia: 1.310,00 €. Vence el 30 de septiembre (dentro de 7 días).
+Piden cita:
+- Colegio Santa Ana, propone 25 de septiembre y 26 de septiembre.
+
+AGENDA
+Hoy hay 3 citas, 4,5 h ocupadas.
+- 08:00-09:30 Descarga del pedido de harina (Obrador, 2 asistentes).
+- 11:00-12:00 Visita del comercial de Lácteos Ribera (Tienda, 2 asistentes).
+- 17:00-19:00 Inventario de fin de mes (Obrador, 1 asistente).
+Huecos libres de más de una hora hoy: 09:30-11:00 (1,5 h) y 12:00-17:00 (5 h).
+Mañana: 1 cita. 09:00 Reunión con la gestoría.
+Esta semana: 9 citas en total. El día más cargado es el 25 de septiembre (4).
+Se acerca: Renovación del seguro del local, dentro de 7 días. Vence la póliza y sube la prima si no se renegocia antes.
+Se acerca: Inspección de sanidad programada, dentro de 9 días. Revisión anual del obrador.
+Rutinas fijas: Descarga del pedido de harina, los miércoles (8 veces) y Cierre de caja a las 20:30 (20 veces).
+
+VENTAS
+Fuente: hoja «Ventas 2026» y 4.120 filas analizadas.
+Ayer: 842,30 €, 396 unidades y 154 tickets.
+Esta semana: 2.418,90 €, 1.120 unidades y 447 tickets, baja un 12,4 % respecto a la semana pasada.
+Este mes: 14.320,75 € y 6.680 unidades, sube un 4,1 % respecto al mes pasado.
+Productos de los últimos 7 días: Pan de masa madre 1 kg (320 uds, 1.216,00 €), sube un 22,5 % — movimiento notable; Barra rústica (410 uds, 492,00 €); Bollería de mantequilla (96 uds, 288,00 €), baja un 18,3 % — movimiento notable; Empanada de atún (54 uds, 189,00 €).
+Avisos de la hoja: La bollería de mantequilla lleva tres semanas cayendo · El sábado se vendió un 30% menos de lo habitual.
+
+COSTES Y PRECIOS
+- (alta, energía) Electricidad cara: 112 EUR/MWh. Concentrar uso intensivo en horas valle. Revisar contrato eléctrico.
+- (alta, coste de producto) Mantequilla y lácteos: +3.2%. Revisar precios de venta o buscar proveedor alternativo.
+- (media, logística) Transporte: +1.4%. Agrupar pedidos. Revisar costes de reparto.
+Presión sobre el margen: alta — los costes suben con fuerza.
+- Señal de precio (alta): Subida del precio mayorista de la mantequilla (tercera semana).
+- Señal de precio: Bajada del precio del aceite de girasol.
+- Señal de precio: Incremento del coste del envase de papel.
+- Proveedor Harinas del Turia: Retraso confirmado en la entrega del jueves. Alternativa apuntada: Molinos Levante tiene stock.
+
+RESEÑAS
+Nota media 4,3 sobre 187 reseñas, 3 nuevas, tendencia bajando.
+Sin contestar:
+- Ana G., 2 estrellas, 21 de septiembre: «Fui el sábado a media mañana y no quedaba prácticamente nada. Además esperé más de quince minutos para que me atendieran y nadie s…».
+- Miguel R., 1 estrella, 19 de septiembre: «El pan estaba duro y me lo cobraron como recién hecho.».
+
+ENTORNO: COMPETENCIA, AYUDAS Y NORMATIVA
+- Cierra un competidor (en su zona): Cierra la panadería La Espiga, en el barrio de Russafa.
+- Promoción de un competidor: Una cadena de supermercados lanza pan de masa madre a 1,20 €.
+- Evento local: Fiesta mayor del barrio de Russafa el fin de semana.
+- Ayuda pública (subvención): Digitalización de comercio minorista 2026 — convocatoria abierta.
+- Ayuda pública (ayuda): Ayudas a la eficiencia energética en pequeño comercio.
+- Normativa de impacto alto: Nueva obligación de etiquetado de alérgenos en obrador. Revisar requisitos, plazos y adaptación operativa.
+
+NOTICIAS DEL SECTOR
+- «El consumo de pan artesano crece un 9% en España» (Expansión, 22 de septiembre). Le afecta porque: El trasvase del pan industrial al obrador de barrio sube el ticket medio.
+- «Valencia aprueba nuevas ayudas al comercio de proximidad» (Las Provincias, 21 de septiembre). Le afecta porque: 1,2 millones para modernizar locales del centro histórico de su ciudad.
+- «La mantequilla encadena su tercera subida mensual» (El Economista, 22 de septiembre). Le afecta porque: Es la materia prima principal de su bollería.
+- «La harina se estabiliza tras seis meses al alza» (Agronegocios, 20 de septiembre). Le afecta porque: Permite cerrar precio con el proveedor sin riesgo hasta fin de año.
+
+CALENDARIO COMERCIAL
+No hay ninguna fecha del calendario comercial cerca. No menciones ninguna.
+
+CONOCIMIENTO DEL SECTOR
+Indicadores que importan en este sector: Ticket medio, Unidades por ticket, Rotación de stock / días de inventario, Margen bruto por familia de producto y Conversión de visitantes (si hay tráfico medible).
+Campañas típicas del sector (solo valen si las puedes atar a un dato de arriba): Liquidación de stock estacional o de baja rotación, Programa de puntos / fidelización, Click & collect: reserva online y recogida en tienda y Pack producto + complemento con descuento.
+Normativa habitual del sector (solo si hoy viene a cuento por algo de arriba): Normativa de rebajas: mostrar el precio anterior, Etiquetado, precios y garantías legales y Hoja de reclamaciones disponible.
+Tipos de proveedor habituales: Marcas y mayoristas del producto, Proveedor de packaging y bolsas, Logística y transporte (envíos) y Software TPV y pasarela de pago.
+
+OTROS PENDIENTES DETECTADOS
+Menos urgentes: Lanzar: Lote desayuno vuelta a la rutina.
