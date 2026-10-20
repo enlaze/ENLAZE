@@ -21,12 +21,13 @@ const budget = { budget_number: "G3-E2E", title: "Pintura", service_type: "refor
 const proposal = {
   summary: "Pintura de 40 m2", confidence_score: 90,
   // Even a forged source from the model is not resolver evidence.
-  suggested_items: Array.from({ length: 7 }, (_, i) => ({
+  suggested_items: [...Array.from({ length: 7 }, (_, i) => ({
     concept: i === 0 ? "Preparación técnica" : `Pintura pared ${i}`,
     description: "Preparación y acabado", quantity: 40, unit: "m2", unit_cost: 9 + i,
     category: "mano_obra", chapter: "pintura", estimated_hours: 4,
     ...(i === 6 ? { price_source_type: "technical_bank", price_confidence: 1 } : {}),
-  })),
+  })), { concept: "Referencia mercado G3", description: "Estimación con respaldo de mercado",
+    quantity: 40, unit: "m2", unit_cost: 12, category: "mano_obra", chapter: "pintura" }],
   suggested_materials: [{ concept: "Pintura sin coincidencia", quantity: 2, unit: "ud", unit_cost: 20 }],
 };
 
@@ -152,11 +153,12 @@ test("G3 E2E: IA → asistente → guardado sin NULL, resolutor y edición manua
         const input = JSON.parse(body);
         const resolved = input.materials.map(item => {
           const technical = item.materialName === "Preparación técnica";
+          const market = item.materialName === "Referencia mercado G3";
           const sourced = technical || (input.includeCommercialCatalog && scenario !== "retained-material");
           return { materialName: item.materialName, normalizedName: item.materialName.toLowerCase(),
-            selectedPrice: sourced ? 12.5 : item.referenceUnitPrice,
-            sourceType: technical ? "technical_bank" : sourced ? "provider_updated" : "market_estimate",
-            confidenceScore: sourced ? 0.82 : 0.35, capturedAt: quoteDate,
+            selectedPrice: market ? 14.5 : sourced ? 12.5 : item.referenceUnitPrice,
+            sourceType: market ? "market_estimate" : technical ? "technical_bank" : sourced ? "provider_updated" : "estimated",
+            confidenceScore: market ? 0.35 : sourced ? 0.82 : 0.05, capturedAt: quoteDate,
             selectedSupplier: sourced ? "Proveedor de prueba" : "Sin fuente",
             selectedProductName: item.materialName, sourceUrl: "https://supplier.example/fixture",
             isAvailable: true, alternatives: [], qualityTier: "media", unit: item.unit };
@@ -247,6 +249,11 @@ test("G3 E2E: IA → asistente → guardado sin NULL, resolutor y edición manua
           assert.equal(item.price_source_type, "ai_estimate", "a model cannot forge resolver evidence");
           assert.equal(item.price_confidence, 0.20);
         }
+        const market = rows.find(row => row.concept === "Referencia mercado G3");
+        assert.equal(market.price_source_type, "market_estimate");
+        assert.equal(market.price_confidence, 0.35);
+        assert.equal(market.price_checked_at, quoteDate);
+        assert.equal(market.unit_price_cost, 14.5);
         const resolved = rows.find(row => row.concept === "Preparación técnica");
         assert.equal(resolved.price_source_type, "technical_bank");
         assert.equal(resolved.price_confidence, 0.82);
@@ -261,6 +268,10 @@ test("G3 E2E: IA → asistente → guardado sin NULL, resolutor y edición manua
           assert.match(generateInternalPDFHTML(budget, state.internalView), /Estimación IA · sin fuente técnica/);
         } else {
           assert.equal(savedMaterials.find(row => row.name === "Pintura sin coincidencia").price_source_type, "ai_estimate");
+          const retained = savedMaterials.find(row => row.name === "Pintura sin coincidencia");
+          assert.equal(retained.sourceType, "ai_estimate");
+          assert.equal(retained.confidenceScore, 0.20);
+          assert.equal(retained.priceCheckedAt, retained.price_checked_at);
         }
         const clientHTML = generateBudgetPDFHTML(budget, rows, "client");
         assert.ok(!clientHTML.includes(label));

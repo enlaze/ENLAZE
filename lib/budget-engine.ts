@@ -1010,7 +1010,9 @@ export function applyMaterialBasketToItems(
 
   const itemIndexesByChapter = new Map<string, number[]>();
   items.forEach((item, index) => {
-    if (authoritativeSources.has(String(item.price_source || ""))) return;
+    // Adopted market prices keep their amount, but a market material basket
+    // still isn't verified evidence (see basket.verified above).
+    if (authoritativeSources.has(String(item.price_source || "")) || item.price_source === "market_estimate") return;
     if (!item.cost_breakdown || item.cost_breakdown.material_cost <= 0) return;
     const indexes = itemIndexesByChapter.get(item.chapter) || [];
     indexes.push(index);
@@ -1318,7 +1320,7 @@ export function adjustToMarket(
     "user_catalog", "manual_locked", "private_tariff", "negotiated",
     "historical_approved", "preferred_supplier", "provider_updated",
     "n8n_market", "authorized_supplier", "web_search", "private_bc3",
-    "technical_bank",
+    "technical_bank", "market_estimate",
   ]);
   const isAuthoritative = (source?: string) => authoritativeSources.has(String(source || ""));
   const scalableItemsTotal = items

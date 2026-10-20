@@ -3,6 +3,7 @@
 import React from "react";
 import { Building2, BarChart3, Sparkles } from "lucide-react";
 import { useBudgetGenerate } from "./BudgetGenerateProvider";
+import { PriceProvenanceSummary } from "@/components/budgets/PriceProvenanceSummary";
 
 export function LiveSummaryPanel() {
   const { state, nextStep, saveDraft, analyzeWithAI, setMarginPercent } = useBudgetGenerate();
@@ -113,6 +114,11 @@ export function LiveSummaryPanel() {
   return (
     <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-navy-100 dark:border-zinc-800 shadow-sm p-6">
       <h3 className="text-lg font-bold text-navy-900 dark:text-white mb-4">Resumen en vivo</h3>
+      <PriceProvenanceSummary lines={state.partidas.map(partida => ({
+        price_source_type: partida.price_source_type,
+        subtotal: partida.subtotal_client,
+        status: partida.status,
+      }))} />
 
       {isConstruction && activeProvider && (() => {
         const matchedCount = materials?.filter(m => m.provider_adjustment?.applied === true).length || 0;

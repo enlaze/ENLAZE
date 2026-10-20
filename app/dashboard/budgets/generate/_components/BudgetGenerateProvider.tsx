@@ -69,6 +69,7 @@ import {
 import { buildAutosaveSignature } from "@/lib/budget-autosave-signature";
 import {
   evidenceAfterPriceEdit,
+  evidenceAfterResolverMiss,
   evidenceForSave,
   estimatedPriceEvidence,
   generatedPriceBaseline,
@@ -76,23 +77,13 @@ import {
   type BudgetPriceEvidence,
 } from "@/lib/budget-price-provenance";
 
-// The v2 price resolver (/api/prices/resolve, resolver_used: "v2") can
-// return several low-confidence "estimate" source types — market_estimate,
-// ai_estimate — in addition to v1's plain "estimated" literal. None of
-// them is an independently verified match, so every price-adoption gate in
-// this file must treat all of them the same, not just the one v1 literal.
-const ESTIMATE_SOURCE_TYPES = new Set(["estimated", "market_estimate", "ai_estimate"]);
-function isEstimateSourceType(sourceType: string | null | undefined): boolean {
-  return ESTIMATE_SOURCE_TYPES.has(String(sourceType || ""));
-}
-
 const AUTHORITATIVE_NON_COMMERCIAL_SOURCES = new Set([
   "user_catalog", "manual_locked", "private_tariff", "negotiated",
-  "historical_approved", "private_bc3", "technical_bank", "enlaze_base",
+  "historical_approved", "private_bc3", "technical_bank", "enlaze_base", "market_estimate",
 ]);
 
 function canAdoptResolvedPrice(resolved: ResolvedPrice | null | undefined): boolean {
-  if (!resolved || Number(resolved.selectedPrice) <= 0 || isEstimateSourceType(resolved.sourceType)) {
+  if (!resolved || Number(resolved.selectedPrice) <= 0 || resolved.sourceType === "estimated") {
     return false;
   }
   if (AUTHORITATIVE_NON_COMMERCIAL_SOURCES.has(String(resolved.sourceType))) {
@@ -441,6 +432,7 @@ async function verifyMaterialsAgainstTracker(
         sourceName: material.isRealData ? material.sourceName : "Oferta local pendiente",
       };
     }
+    if (material.price_source_type === "user_edited") return material;
     const resolved = resolvedByMaterialId.get(material.id);
     // Adoption of the resolved price is separate from the isRealData label:
     // manual_locked, technical_bank, private_bc3 and URL-less private_tariff
@@ -451,13 +443,15 @@ async function verifyMaterialsAgainstTracker(
     if (!resolved || !hasUsablePrice) {
       return {
         ...material,
+        ...(resolved?.sourceType === "estimated"
+          ? evidenceAfterResolverMiss(material, resolved.capturedAt) : {}),
         isRealData: false,
-        sourceType: "estimated",
+        sourceType: material.price_source_type || material.sourceType || "estimated",
         sourceName: "Estimación pendiente de coincidencia exacta",
         matchedProductName: resolved?.selectedProductName,
-        sourceUrl: resolved?.sourceUrl || undefined,
-        priceCheckedAt: resolved?.capturedAt || undefined,
-        confidenceScore: resolved?.confidenceScore ?? material.confidenceScore ?? 0.2,
+        sourceUrl: material.sourceUrl,
+        priceCheckedAt: material.price_checked_at ?? material.priceCheckedAt,
+        confidenceScore: material.price_confidence ?? material.confidenceScore ?? 0.05,
         isAvailable: resolved?.isAvailable,
         deliveryDays: resolved?.deliveryDays,
         priceAlternatives: resolved?.alternatives || [],
@@ -2292,6 +2286,7 @@ export function BudgetGenerateProvider({
                 sourceName: material.isRealData ? material.sourceName : "Oferta local pendiente",
               };
             }
+            if (material.price_source_type === "user_edited") return material;
             const resolved = resolvedByMaterialId.get(material.id);
             // Adoption of the resolved price is separate from the
             // isRealData label — see the equivalent gate above.
@@ -2299,13 +2294,15 @@ export function BudgetGenerateProvider({
             if (!resolved || !hasUsablePrice) {
               return {
                 ...material,
+                ...(resolved?.sourceType === "estimated"
+                  ? evidenceAfterResolverMiss(material, resolved.capturedAt) : {}),
                 isRealData: false,
-                sourceType: "estimated",
+                sourceType: material.price_source_type || material.sourceType || "estimated",
                 sourceName: "Estimación pendiente de coincidencia exacta",
                 matchedProductName: resolved?.selectedProductName,
-                sourceUrl: resolved?.sourceUrl || undefined,
-                priceCheckedAt: resolved?.capturedAt || undefined,
-                confidenceScore: resolved?.confidenceScore ?? material.confidenceScore ?? 0.2,
+                sourceUrl: material.sourceUrl,
+                priceCheckedAt: material.price_checked_at ?? material.priceCheckedAt,
+                confidenceScore: material.price_confidence ?? material.confidenceScore ?? 0.05,
                 isAvailable: resolved?.isAvailable,
                 deliveryDays: resolved?.deliveryDays,
                 priceAlternatives: resolved?.alternatives || [],
@@ -2393,12 +2390,13 @@ export function BudgetGenerateProvider({
 
         if (partidasPriceResult.ok) {
           finalPartidas = finalPartidas.map((partida, index) => {
+            if (partida.price_source_type === "user_edited") return partida;
             const resolved = partidasPriceResult.resolved[index];
             const isSupplyLine = partida.category === "material";
             const canUseResolved =
               resolved &&
               resolved.selectedPrice > 0 &&
-              !isEstimateSourceType(resolved.sourceType) &&
+              resolved.sourceType !== "estimated" &&
               (
                 AUTHORITATIVE_NON_COMMERCIAL_SOURCES.has(String(resolved.sourceType)) ||
                 (isSupplyLine && isTraceableCommercialPrice(resolved))
@@ -2406,7 +2404,9 @@ export function BudgetGenerateProvider({
 
             const manual_price_notice = resolved?.manualPriceNotice;
             if (!canUseResolved) {
-              return manual_price_notice ? { ...partida, manual_price_notice } : partida;
+              const evidence = resolved?.sourceType === "estimated"
+                ? evidenceAfterResolverMiss(partida, resolved.capturedAt) : {};
+              return { ...partida, ...evidence, ...(manual_price_notice ? { manual_price_notice } : {}) };
             }
             verifiedPartidaCount += 1;
             const unitPrice = Math.round(resolved.selectedPrice * 100) / 100;

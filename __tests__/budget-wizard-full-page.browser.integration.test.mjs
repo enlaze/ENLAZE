@@ -48,11 +48,12 @@ const anonToken = token("anon");
 // writers run unchanged against real PostgREST/PostgreSQL.
 const proposal = {
   summary: "Pintura de 40 m2", confidence_score: 90,
-  suggested_items: Array.from({ length: 7 }, (_, i) => ({
+  suggested_items: [...Array.from({ length: 7 }, (_, i) => ({
     concept: `Pintura pared G3 ${i}`, description: "Preparación y acabado",
     quantity: 40, unit: "m2", unit_cost: 9 + i,
     category: "mano_obra", chapter: "pintura", estimated_hours: 4,
-  })),
+  })), { concept: "Sellado técnico soporte G3", description: "Fuente técnica disponible",
+    quantity: 40, unit: "m2", unit_cost: 12, category: "mano_obra", chapter: "pintura" }],
   suggested_materials: [],
 };
 let modelCalls = 0;
@@ -464,6 +465,9 @@ try {
     assert.equal(material.price_confidence, quote.confidenceScore);
     assert.equal(new Date(material.price_checked_at).toISOString(), new Date(quote.capturedAt).toISOString());
   }
+  assert.match(await generated.page.$eval('[data-testid="price-provenance-summary"]', node => node.innerText),
+    /0 de 5 líneas sin fuente verificable — 0 % del importe/);
+  console.log("PASS G3 SUMMARY RESOLVED: 0 de 5 líneas; 0% del importe");
   console.log(`PASS G3 GENERATED: ${persisted.length} budget_items preserve source, confidence and timestamp from real resolver API`);
   console.log("PASS G3 BASKET: 8 materials preserve resolver evidence in wizard_state without duplicate budget_items");
 
@@ -510,6 +514,9 @@ try {
   modelEnabled = true;
   await db.query("delete from public.price_items");
   await db.query(await readFile(new URL("__tests__/support/budget-wizard-ai-fixtures.sql", root), "utf8"));
+  await db.query(`insert into public.technical_price_items
+    (name,item_code,unit,unit_price,confidence_score,source,region,is_active)
+    values('Sellado técnico soporte G3','E2E-TECH-G3','m2',12.5,0.78,'Banco técnico de prueba','espana',true)`);
   await db.query("notify pgrst, 'reload schema'");
   const aiSeed = await fetch(`${restOrigin}/rpc/create_budget_with_items`, {
     method: "POST",
@@ -526,6 +533,11 @@ try {
       calidad: "media", ubicacion: "Madrid", estancias: [] },
   })]);
   const ai = await openWizard(aiId, "Pintura G3", { step: 1, ready: "Volver a calcular" });
+  const aiResponses = [];
+  ai.page.on("response", async response => {
+    if (new URL(response.url()).pathname === "/api/prices/resolve")
+      aiResponses.push(await response.json());
+  });
   const startedAt = Date.now();
   const analysisResponse = ai.page.waitForResponse(response =>
     new URL(response.url()).pathname === "/api/agent/budget-analysis", { timeout: 90000 });
@@ -543,25 +555,60 @@ try {
     (await visibleText(ai.page)).includes("Volver a calcular"), "completed AI recalculation");
   // Wait for content, never for provenance: mutation must fail the SQL
   // assertion with NULL rows, not time out or pass on an empty set.
-  const savedLines = async () => (await db.query(`select concept, category,
+  const savedLines = async () => (await db.query(`select concept, category, subtotal, unit_price_cost,
     price_source_type, price_confidence, price_checked_at
     from public.budget_items where budget_id=$1 order by sort_order`, [aiId])).rows;
   await waitFor(async () => (await savedLines()).filter(row => row.concept.startsWith("Pintura pared G3 ")).length === 7,
     "AI lines persisted by browser autosave", 20000);
   const lines = await savedLines();
-  assert.equal(lines.length, 7, "all seven model lines must persist; the material basket lives in wizard_state");
+  assert.equal(lines.length, 8, "all eight model lines must persist; the material basket lives in wizard_state");
   const missing = lines.filter(row => row.price_source_type === null).map(row => row.concept);
   assert.deepEqual(missing, [], `NULL en partidas NUEVAS de budget_items: ${missing.join(", ")}`);
   const aiLines = lines.filter(row => row.concept.startsWith("Pintura pared G3 "));
   assert.equal(aiLines.length, 7, "all seven model prices must reach PostgreSQL");
   for (const line of aiLines) {
-    assert.equal(line.price_source_type, "ai_estimate", line.concept);
+    assert.equal(line.price_source_type, "ai_estimate", `A BIS: ${line.concept} must stay ai_estimate after resolver miss, not estimated`);
     assert.equal(Number(line.price_confidence), 0.20, line.concept);
     assert.ok(line.price_checked_at instanceof Date && line.price_checked_at.getTime() >= startedAt &&
       line.price_checked_at.getTime() <= Date.now(), `${line.concept}: current persisted timestamp`);
   }
+  const technicalLine = lines.find(line => line.concept === "Sellado técnico soporte G3");
+  assert.equal(result.suggested_items.find(line => line.concept === technicalLine.concept).price_source_type,
+    "ai_estimate", "the model initially proposed the technically resolved line too");
+  assert.equal(technicalLine.price_source_type, "technical_bank");
+  assert.equal(Number(technicalLine.price_confidence), 0.78);
+  assert.equal(Number(technicalLine.unit_price_cost), 12.5);
+  const aiQuotes = aiResponses.flatMap(response => response.resolved || []);
+  for (const line of aiLines) {
+    const miss = aiQuotes.find(quote => quote.materialName === line.concept);
+    assert.ok(miss, `${line.concept}: the real resolver must have run`);
+    assert.equal(miss.sourceType, "estimated", "exercise the absolute no-source fallback");
+    assert.equal(miss.selectedPrice, 0);
+  }
+  const total = lines.reduce((sum, line) => sum + Number(line.subtotal), 0);
+  const weak = aiLines.reduce((sum, line) => sum + Number(line.subtotal), 0);
+  const percentage = (Math.round(weak / total * 1000) / 10).toLocaleString("es-ES");
+  const expectedSummary = `7 de 8 líneas sin fuente verificable — ${percentage} % del importe`;
+  assert.ok((await ai.page.$eval('[data-testid="price-provenance-summary"]', node => node.innerText)).includes(expectedSummary));
+  console.log(`PASS G3 SUMMARY BEFORE SAVE: ${expectedSummary}`);
+  // No explicit save was needed for the summary. Now save and read the detail
+  // page, which loads its own budget_items through real PostgREST.
+  const writeStart = writeCalls().length;
+  await ai.page.evaluate(() => [...document.querySelectorAll("button")]
+    .find(node => node.textContent?.trim() === "Guardar borrador")?.click());
+  await waitFor(async () => writeCalls().slice(writeStart).some(call => call.path === "/rpc/save_budget" &&
+    call.status === 200 && call.payload.p_budget_id === aiId), "AI explicit save");
   assert.ok((await visibleText(ai.page)).includes("Estimación IA · sin fuente técnica"));
   assert.deepEqual(ai.pageErrors, []);
+  const detailResponse = await ai.page.goto(`${appOrigin}/dashboard/budgets/${aiId}`, {
+    waitUntil: "domcontentloaded", timeout: 90000,
+  });
+  assert.equal(detailResponse.status(), 200);
+  await ai.page.waitForSelector('[data-testid="price-provenance-summary"]', { timeout: 30000 });
+  assert.ok((await ai.page.$eval('[data-testid="price-provenance-summary"]', node => node.innerText)).includes(expectedSummary));
+  assert.deepEqual(ai.pageErrors, []);
+  console.log(`PASS G3 SUMMARY SAVED DETAIL: ${expectedSummary}`);
+  console.log("PASS A BIS: real resolver misses preserve 7 ai_estimate / 0.20; matched AI line adopts technical_bank / 0.78");
   console.log(`PASS G3 PostgreSQL 17: ${lines.length} líneas nuevas en budget_items, 0 NULL; 7 ai_estimate con confianza 0.20 y fecha actual`);
 
   assert.deepEqual(first.pageErrors, []);

@@ -3,6 +3,51 @@ const USER_EDITED_CONFIDENCE = 0.95;
 export const AI_ESTIMATE_CONFIDENCE = 0.20;
 export const AI_ESTIMATE_LABEL = "Estimación IA · sin fuente técnica";
 
+// One definition for provenance reporting. This is NOT an adoption policy:
+// market_estimate can improve an AI price while still lacking a verifiable source.
+const ESTIMATE_SOURCE_TYPES: ReadonlySet<string | null> = new Set([
+  "estimated", "market_estimate", "ai_estimate", null,
+]);
+export function isEstimateSourceType(sourceType: string | null | undefined): boolean {
+  return ESTIMATE_SOURCE_TYPES.has(sourceType || null);
+}
+
+export interface PriceProvenanceLine {
+  price_source_type?: string | null;
+  /** Sale amount before VAT, the same amount displayed and saved per line. */
+  subtotal: number;
+  status?: string;
+}
+
+export function summarizePriceProvenance(lines: readonly PriceProvenanceLine[]) {
+  let totalLines = 0, weakLines = 0, totalCents = 0, weakCents = 0;
+  for (const line of lines) {
+    if (line.status === "opcional") continue;
+    const cents = Number.isFinite(line.subtotal) ? Math.round(line.subtotal * 100) : 0;
+    totalLines += 1;
+    totalCents += cents;
+    if (isEstimateSourceType(line.price_source_type)) {
+      weakLines += 1;
+      weakCents += cents;
+    }
+  }
+  return {
+    totalLines, weakLines,
+    totalAmount: totalCents / 100,
+    weakAmount: weakCents / 100,
+    weakPercent: totalCents > 0 ? Math.round(weakCents / totalCents * 1000) / 10 : 0,
+  };
+}
+
+/** A resolver miss supplies no evidence about the existing price. In particular
+ * it must not turn an AI proposal (0.20) into an anonymous fallback (0.05).
+ * Keep real and user-edited evidence too. Only an unlabelled/deterministic
+ * fallback can be labelled with the resolver's absolute fallback. */
+export function evidenceAfterResolverMiss(item: BudgetPriceEvidence, checkedAt: string): BudgetPriceEvidence {
+  if (item.price_source_type && item.price_source_type !== "estimated") return item;
+  return estimatedPriceEvidence(checkedAt);
+}
+
 /** Deterministic safety fallback: no model and no verified price source. */
 export function estimatedPriceEvidence(checkedAt: string): PersistedPriceEvidence {
   return { price_source_type: "estimated", price_confidence: 0.05, price_checked_at: checkedAt };

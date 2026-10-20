@@ -1,0 +1,67 @@
+{
+  "types": {
+    "command": [
+      "node",
+      "node_modules/typescript/bin/tsc",
+      "--noEmit",
+      "--incremental",
+      "false"
+    ],
+    "exitCode": 0
+  },
+  "lint": {
+    "command": [
+      "node",
+      "node_modules/eslint/bin/eslint.js",
+      "lib/budget-price-provenance.ts",
+      "lib/budget-engine.ts",
+      "components/budgets/PriceProvenanceSummary.tsx",
+      "app/dashboard/budgets/[id]/page.tsx",
+      "app/dashboard/budgets/generate/_components/BudgetGenerateProvider.tsx",
+      "app/dashboard/budgets/generate/_components/LiveSummaryPanel.tsx",
+      "__tests__/budget-price-provenance.test.mjs",
+      "__tests__/budget-price-summary.test.mjs",
+      "__tests__/budget-ai-provenance.e2e.test.mjs",
+      "__tests__/budget-realism.test.mjs",
+      "__tests__/budget-wizard-full-page.browser.integration.test.mjs",
+      "scripts/test-budget-wizard-provenance-local.mjs"
+    ],
+    "exitCode": 1
+  },
+  "regressions": {
+    "command": [
+      "node",
+      "--import",
+      "tsx",
+      "--test",
+      "--test-reporter=tap",
+      "__tests__/budget-price-provenance.test.mjs",
+      "__tests__/budget-price-summary.test.mjs",
+      "__tests__/budget-recalculation.test.mjs",
+      "__tests__/budget-realism.test.mjs",
+      "__tests__/budget-ai-pdf-completion.test.mjs",
+      "__tests__/budget-generate-writer-flow.test.mjs",
+      "__tests__/p1-review.test.mjs"
+    ],
+    "exitCode": 0
+  },
+  "lintMainDetail": {
+    "exitCode": 1,
+    "ref": "origin/main 15a3370"
+  },
+  "realE2E": {
+    "baseline": 0,
+    "noAiMissGuard": 1,
+    "restored": 0
+  },
+  "fastE2E": {
+    "exitCode": 0
+  },
+  "base": "15a3370b833a480e1936ed75a5f8b92d0e712c9e",
+  "runtime": {
+    "node": "25.8.2",
+    "postgresql": "17.11",
+    "postgrest": "16.4",
+    "chrome": "151.0.7922.47"
+  }
+}

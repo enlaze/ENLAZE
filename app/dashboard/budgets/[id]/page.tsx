@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { useSector } from "@/lib/sector-context";
 import AcceptanceTimeline from "@/components/AcceptanceTimeline";
+import { PriceProvenanceSummary } from "@/components/budgets/PriceProvenanceSummary";
 import { printPDF } from "@/lib/pdf-generator";
 import { AI_ESTIMATE_LABEL, type BudgetPriceEvidence } from "@/lib/budget-price-provenance";
 import { logActivity } from "@/lib/activity-log";
@@ -500,6 +501,7 @@ export default function BudgetDetailPage() {
       </div>
 
       {/* Partidas Table */}
+      <PriceProvenanceSummary lines={items} />
       <Card className="mb-6" padding={false}>
         <div className="border-b border-navy-100 px-6 py-4 dark:border-zinc-800">
           <h3 className="text-base font-semibold text-navy-900 dark:text-white">
