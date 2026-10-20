@@ -106,7 +106,7 @@ async function openWizard(budgetId, expectedTitle = "Base E2E", { step = null, r
     Object.defineProperty(document, "cookie", {
       get() {
         const value = cookie.get.call(document);
-        window.__sessionTrace.push({ operation: "read", present: value.includes("sb-127-auth-token="), at: Date.now() });
+        window.__sessionTrace.push({ operation: "read", names: value.split(";").map(item => item.trim().split("=")[0]), at: Date.now() });
         return value;
       },
       set(value) {
@@ -160,10 +160,11 @@ async function openWizard(budgetId, expectedTitle = "Base E2E", { step = null, r
   } catch (error) {
     const actualTitle = await page.$eval('input[placeholder="Ej: Reforma baño completo"]', (node) => node.value);
     const visibleText = await page.evaluate(() => document.body?.innerText?.slice(0, 900) ?? "");
-    const sessionTrace = await page.evaluate(() => window.__sessionTrace.slice(-25));
+    const sessionTrace = await page.evaluate(() => [...window.__sessionTrace.slice(0, 12), ...window.__sessionTrace.filter(item => item.operation === "write"), ...window.__sessionTrace.slice(-3)]);
+    const cookieMetadata = (await page.cookies()).map(({ name, path, httpOnly, secure, expires, value }) => ({ name, path, httpOnly, secure, expires, length: value.length }));
     throw Error(`Wizard hydration failed. expected=${expectedTitle} actual=${JSON.stringify(actualTitle)} ` +
       `URL=${page.url()} text=${JSON.stringify(visibleText)} requests=${JSON.stringify(requests.slice(-30))} ` +
-      `sessionTrace=${JSON.stringify(sessionTrace)} pageErrors=${JSON.stringify(pageErrors)} networkErrors=${JSON.stringify(networkErrors.slice(-10))}`, { cause: error });
+      `sessionTrace=${JSON.stringify(sessionTrace)} cookieMetadata=${JSON.stringify(cookieMetadata)} pageErrors=${JSON.stringify(pageErrors)} networkErrors=${JSON.stringify(networkErrors.slice(-10))}`, { cause: error });
   }
   assert.deepEqual(pageErrors, [], "page must not throw during hydration");
   return { page, pageErrors };
