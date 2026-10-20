@@ -69,6 +69,8 @@ jobs:
       E2_AUTHENTICATOR_PASSWORD: e2_disposable_authenticator_only
       E2_JWT_SECRET: e2_synthetic_disposable_jwt_secret_not_for_production
       E2_REST_URL: http://127.0.0.1:53002
+      # Keep the browser runtime reproducible alongside PG17/PostgREST.
+      PUPPETEER_CHROME_VERSION: "151.0.7922.47"
       # Locally the lifecycle skips its supabase-js transport when there is no
       # PostgREST. Here PostgREST always runs, so a skip would be a silent gap.
       REQUIRE_REST_LIFECYCLE: "1"
@@ -99,7 +101,7 @@ jobs:
             __tests__/budget-timeline.test.mjs \
             __tests__/replace-budget-items-migration.test.mjs
       - name: Install Chrome for isolated React browser test
-        run: ./node_modules/.bin/puppeteer browsers install chrome
+        run: ./node_modules/.bin/puppeteer browsers install "chrome@$PUPPETEER_CHROME_VERSION"
       - name: React hydration and autosave debounce on loopback only
         run: npm run test:budget-provider-autosave-browser
       - name: Manual budget form refuses to save from a stale tab

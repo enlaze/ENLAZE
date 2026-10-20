@@ -28,6 +28,7 @@ const reports = join(root,'informes/evidencias/budget-wizard-provenance');
 await mkdir(reports,{recursive:true});
 let started=false, rest, mutantDir;
 const env = {...childEnv,
+  PUPPETEER_CHROME_VERSION: process.env.PUPPETEER_CHROME_VERSION ?? "151.0.7922.47",
   RUN_REVISION_RPCS_INTEGRATION_TESTS:'1', REVISION_RPCS_DB_ACK:'DISPOSABLE_ONLY',
   REVISION_RPCS_CLUSTER_ACK:'DISPOSABLE_CLUSTER',
   TEST_DATABASE_URL:`postgres://postgres:e2_disposable_database_only@127.0.0.1:55435/${DATABASE}`,
@@ -44,7 +45,9 @@ async function run(cwd, name) {
   const timer=setTimeout(stopGroup,240000);
   const code=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',resolve);});
   clearTimeout(timer);
-  stopGroup();
+  // The E2E owns and closes Next in finally. Never signal a process group
+  // after its leader has exited: that identifier can already be reused.
+  if (code === null) stopGroup();
   await writeFile(join(reports,`${name}.log`),output);
   return {code,output};
 }

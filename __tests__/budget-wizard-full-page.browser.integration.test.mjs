@@ -10,7 +10,6 @@ import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { Client } from "pg";
 import puppeteer from "puppeteer";
-import { build } from "esbuild";
 import { assertNoProductionEnvironment } from "./lib/disposable-target-guard.mjs";
 import { config, guard, setup } from "./lib/budget-revision-rpcs-bench.mjs";
 
@@ -40,7 +39,7 @@ await guard(db);
 
 const part = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
 function token(role, sub) {
-  const value = `${part({ alg: "HS256", typ: "JWT" })}.${part({ role, sub, aud: role, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 3600 })}`;
+  const value = `${part({ alg: "HS256", typ: "JWT" })}.${part({ role, sub, exp: Math.floor(Date.now() / 1000) + 3600 })}`;
   return `${value}.${createHmac("sha256", env.E2_JWT_SECRET).update(value).digest("base64url")}`;
 }
 const accessToken = token("authenticated", owner);
@@ -61,19 +60,13 @@ let modelEnabled = false;
 const user = {
   id: owner, aud: "authenticated", role: "authenticated", email: "wizard-e2e@example.invalid",
   app_metadata: { provider: "email", providers: ["email"] }, user_metadata: {},
-  created_at: "2026-01-01T00:00:00Z", email_confirmed_at: "2026-01-01T00:00:00Z", confirmed_at: "2026-01-01T00:00:00Z",
+  created_at: "2026-01-01T00:00:00Z", confirmed_at: "2026-01-01T00:00:00Z",
 };
-// Auth is an external-service fixture. Let the actual browser SDK encode and
-// persist its own session rather than manufacturing Supabase cookie contents.
-const authBootstrap = await build({
-  stdin: { contents: `
-    import { createBrowserClient } from "@supabase/ssr";
-    const client = createBrowserClient(${JSON.stringify(gatewayOrigin)}, ${JSON.stringify(anonToken)});
-    client.auth.setSession({ access_token: ${JSON.stringify(accessToken)}, refresh_token: "disposable-refresh-only" })
-      .then(({ error }) => { window.fixtureAuth = error ? error.message : "ready"; });
-  `, resolveDir: fileURLToPath(root), sourcefile: "wizard-auth-fixture.js" },
-  bundle: true, write: false, platform: "browser", format: "iife",
-});
+const session = {
+  access_token: accessToken, refresh_token: "disposable-refresh-never-used",
+  token_type: "bearer", expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600,
+  user,
+};
 
 let gateway;
 let next;
@@ -133,9 +126,13 @@ async function openWizard(budgetId, expectedTitle = "Base E2E", { step = null, r
     if ([appOrigin, gatewayOrigin, "data:"].includes(origin)) request.continue();
     else request.abort();
   });
-  const authCookie = (await browser.defaultBrowserContext().cookies())
-    .find(cookie => cookie.name === "sb-127-auth-token");
-  assert.ok(authCookie, "the shared synthetic auth session must exist before navigation");
+  await page.setCookie({
+    name: "sb-127-auth-token",
+    value: `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}`,
+    url: appOrigin,
+    path: "/",
+    httpOnly: false,
+  });
   const stepQuery = step === null ? "" : `&step=${step}`;
   const response = await page.goto(`${appOrigin}/dashboard/budgets/generate?budgetId=${budgetId}${stepQuery}`, {
     waitUntil: "domcontentloaded", timeout: 90000,
@@ -179,11 +176,6 @@ try {
   gateway = createServer(async (request, response) => {
     const url = new URL(request.url, gatewayOrigin);
     if (request.method === "OPTIONS") { reply(response, 200, {}); return; }
-    if (url.pathname === "/fixture/auth-bootstrap") {
-      response.writeHead(200, { "content-type": "text/html" });
-      response.end(`<!doctype html><html><body><script>${authBootstrap.outputFiles[0].text}</script></body></html>`);
-      return;
-    }
     if (url.pathname === "/auth/v1/user") {
       requests.push({ method: request.method, path: url.pathname,
         status: request.headers.authorization === `Bearer ${accessToken}` ? 200 : 401,
@@ -290,14 +282,6 @@ try {
     "--no-sandbox", "--disable-setuid-sandbox", "--disable-background-networking",
     "--disable-extensions", "--disable-sync", "--no-first-run",
   ] });
-  const authPage = await browser.newPage();
-  pages.push(authPage);
-  await authPage.setRequestInterception(true);
-  authPage.on("request", request => [gatewayOrigin, "data:"].includes(new URL(request.url()).origin) ? request.continue() : request.abort());
-  await authPage.goto(`${gatewayOrigin}/fixture/auth-bootstrap`, { waitUntil: "domcontentloaded" });
-  await authPage.waitForFunction(() => Boolean(window.fixtureAuth));
-  assert.equal(await authPage.evaluate(() => window.fixtureAuth), "ready", "real browser SDK session bootstrap");
-  await authPage.close();
   const writesBeforeOpen = writeCalls().length;
   const first = await openWizard(budgetId);
   await new Promise((resolve) => setTimeout(resolve, 1800));
