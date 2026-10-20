@@ -75,6 +75,15 @@ test("billing grace / real PostgreSQL 17 + real server access", { timeout: 12000
           select instant from billing_bench.clock $$;`);
     const pre = (await db.query(precheck)).rows[0];
     assert.equal(pre.veredicto, "OK", JSON.stringify(pre));
+    // Production's known baseline omits an inline comment. Both bodies have
+    // identical logic; changing that logic must still abort the deployment.
+    const baseDef = (await db.query("select pg_get_functiondef('billing_internal.access_level(uuid)'::regprocedure) as definition")).rows[0].definition;
+    await db.query(baseDef.replace("   -- prueba caducada, impago, cancelado o sin fila", ""));
+    assert.equal((await db.query(precheck)).rows[0].veredicto, "OK", "known production body without inline comment");
+    await db.query(baseDef.replace("s.status = 'trialing'", "s.status = 'past_due'"));
+    assert.match((await db.query(precheck)).rows[0].veredicto, /^ABORTAR/, "changed access logic must be refused");
+    await assert.rejects(db.query(migration), /BILLING_GRACE precheck incompatible/);
+    await db.query(baseDef);
     beforeCount = Number(pre.subscriptions_precheck);
     auditedSql = audit.replace("-1::bigint as subscriptions_precheck", `${beforeCount}::bigint as subscriptions_precheck`);
     assert.match((await db.query(auditedSql)).rows[0].veredicto, /^ABORTAR/, "audit must refuse unapplied schema");

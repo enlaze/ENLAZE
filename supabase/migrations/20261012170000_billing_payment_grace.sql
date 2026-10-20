@@ -5,11 +5,12 @@
 -- El webhook envía la fecha candidata; el trigger conserva la primera bajo
 -- el bloqueo de fila. La recuperación activa y la baja explícita la limpian.
 
+-- Dos cuerpos base conocidos: solo difieren en un comentario tras read_only.
 do $guard$
 begin
   if to_regclass('public.subscriptions') is null or not (exists (select 1 from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace
     where n.nspname='billing_internal' and p.proname='access_level' and p.proargtypes='2950'::oidvector
-      and md5(p.prosrc)='a73facb21af70ce1ad9ba56e0c175a5c' and p.prosecdef and p.provolatile='s'
+      and md5(p.prosrc) in ('a73facb21af70ce1ad9ba56e0c175a5c','b7e6d58a7ee948cde947fd2a712e91a5') and p.prosecdef and p.provolatile='s'
       and p.proconfig=array['search_path=""']::text[]
       and not has_function_privilege('anon',p.oid,'execute')
       and not has_function_privilege('authenticated',p.oid,'execute')))

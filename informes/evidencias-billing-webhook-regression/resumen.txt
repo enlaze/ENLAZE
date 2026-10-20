@@ -1,0 +1,11 @@
+baseline: exit=0; all integration assertions pass
+duplicate-short-circuit: exit=1; not ok 1 - 1 duplicate: new once, duplicate later, no second database write | not ok 1 - billing webhook / real PostgreSQL 17 store
+store-processed-check: exit=1; not ok 1 - 1 duplicate: new once, duplicate later, no second database write | not ok 4 - 2 processed during read: reclamation cannot overwrite a completed event | not ok 1 - billing webhook / real PostgreSQL 17 store
+no-reclamation: exit=1; not ok 2 - 2 stale: abandoned unprocessed row is reclaimed and refreshed | not ok 5 - 3 concurrent: two stale readers, exactly one new claim and one SQL update | not ok 1 - billing webhook / real PostgreSQL 17 store
+no-age-predicate: exit=1; not ok 2 - 2 stale: abandoned unprocessed row is reclaimed and refreshed | not ok 3 - 2 recent: in_progress, 409 delivery, database untouched | not ok 5 - 3 concurrent: two stale readers, exactly one new claim and one SQL update | not ok 1 - billing webhook / real PostgreSQL 17 store
+no-unprocessed-predicate: exit=1; not ok 4 - 2 processed during read: reclamation cannot overwrite a completed event | not ok 1 - billing webhook / real PostgreSQL 17 store
+in-progress-short-circuit: exit=1; not ok 3 - 2 recent: in_progress, 409 delivery, database untouched | not ok 1 - billing webhook / real PostgreSQL 17 store
+no-mark-processed: exit=1; not ok 1 - 1 duplicate: new once, duplicate later, no second database write | not ok 6 - 4 deleted: canceled subscription, retained plan, read-only access | not ok 7 - 4 payment_failed: immediate past_due and read-only, no cancellation or plan downgrade | not ok 1 - billing webhook / real PostgreSQL 17 store
+ignore-deletion: exit=1; not ok 6 - 4 deleted: canceled subscription, retained plan, read-only access | not ok 1 - billing webhook / real PostgreSQL 17 store
+ignore-payment-failure: exit=1; not ok 1 - 1 duplicate: new once, duplicate later, no second database write | not ok 7 - 4 payment_failed: immediate past_due and read-only, no cancellation or plan downgrade | not ok 1 - billing webhook / real PostgreSQL 17 store
+MUTATIONS: 9/9 killed by their behavioral assertions; original source unchanged
