@@ -184,12 +184,15 @@ export default function BudgetDetailPage() {
     if (!budget) return;
     setUpdating(true);
 
-    // Build timestamp fields based on new status
+    // Las mismas fechas que escribe change_budget_status: la de aceptación y la
+    // de rechazo se excluyen, nunca quedan las dos.
     const now = new Date().toISOString();
-    const timestampUpdates: Record<string, string | null> = {};
-    if (newStatus === "enviado" && !budget.sent_at) timestampUpdates.sent_at = now;
-    if (newStatus === "aceptado" && !budget.accepted_at) timestampUpdates.accepted_at = now;
-    if (newStatus === "rechazado" && !budget.rejected_at) timestampUpdates.rejected_at = now;
+    const timestampUpdates: Record<string, string | null> = {
+      accepted_at: newStatus === "aceptado" ? now : null,
+      rejected_at: newStatus === "rechazado" ? now : null,
+      accepted_by_name: null,
+    };
+    if (newStatus === "enviado") timestampUpdates.sent_at = now;
 
     try {
       const result = await changeBudgetStatus(
@@ -428,9 +431,11 @@ export default function BudgetDetailPage() {
             { label: "Creado", date: budget.created_at, status: "positive" },
             { label: "Enviado", date: budget.sent_at, status: "positive" },
             { label: "Visualizado", date: budget.viewed_at, status: "neutral" },
-            budget.rejected_at
-              ? { label: "Rechazado", date: budget.rejected_at, status: "negative", detail: budget.accepted_by_name ? `por ${budget.accepted_by_name}` : undefined }
-              : { label: "Aceptado", date: budget.accepted_at, status: "positive", detail: budget.accepted_by_name ? `por ${budget.accepted_by_name}` : undefined },
+            // Manda el estado: presupuestos antiguos guardan a la vez accepted_at y
+            // rejected_at, y la fecha sola contradecía al estado (b11).
+            budget.status === "rechazado"
+              ? { label: "Rechazado", date: budget.rejected_at, status: "negative" }
+              : { label: "Aceptado", date: budget.status === "aceptado" ? budget.accepted_at : null, status: "positive", detail: budget.status === "aceptado" && budget.accepted_by_name ? `por ${budget.accepted_by_name}` : undefined },
           ]}
         />
       </Card>

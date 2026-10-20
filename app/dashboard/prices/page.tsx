@@ -105,6 +105,14 @@ export default function PricesPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [lastSyncDate, setLastSyncDate] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"catalogo" | "alertas" | "comparar" | "informe" | "anadir" | "importar">("catalogo");
+
+  // El resumen del día enlaza con ?tab=alertas para abrir los avisos de precio.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("tab") === "alertas") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setActiveTab("alertas");
+    }
+  }, []);
   const [typeFilter, setTypeFilter] = useState<string>("todos");
   const [historyModal, setHistoryModal] = useState<{ id: string; name: string } | null>(null);
 

@@ -1,0 +1,4 @@
+PASS G3 GENERATED: 5 budget_items preserve source, confidence and timestamp from real resolver API
+PASS G3 BASKET: 8 materials preserve resolver evidence in wizard_state without duplicate budget_items
+PASS G3 USER_EDITED: actual price input -> real save_budget -> user_edited / 0.95 / edit timestamp
+PASS: wizard hydrates without writing, autosaves, rejects a stale tab, finalizes through PostgREST and keeps a legacy budget items

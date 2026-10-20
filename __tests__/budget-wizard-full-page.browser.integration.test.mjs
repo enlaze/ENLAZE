@@ -1,12 +1,16 @@
 // The real Next page, browser auth, PostgREST and PostgreSQL all run on loopback.
 // This is intentionally separate from the provider-only browser regression.
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { prepareWizardProvenance, seedWizardPriceSources, provenanceScope, provenanceClient } from "./support/budget-wizard-provenance.mjs";
 import { createHmac } from "node:crypto";
 import { existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { Client } from "pg";
 import puppeteer from "puppeteer";
+import { assertNoProductionEnvironment } from "./lib/disposable-target-guard.mjs";
 import { config, guard, setup } from "./lib/budget-revision-rpcs-bench.mjs";
 
 const root = new URL("../", import.meta.url);
@@ -15,10 +19,14 @@ const gatewayOrigin = "http://127.0.0.1:53003";
 const appOrigin = "http://127.0.0.1:53004";
 const owner = "11111111-1111-4111-8111-111111111111";
 const env = process.env;
+const resolverSources = new Set([...await readFile(new URL("lib/price-resolver-v2.ts", root), "utf8")
+  .then(text => text.matchAll(/source_type:\s*"([^"]+)"/g))].map(match => match[1]));
+assert.ok(resolverSources.size >= 11, "read the actual resolver levels");
 
 // Refuse even to launch Next if this is not the same marked disposable cluster
 // used by the SQL/HTTP integration suite. A checkout with env files could
 // silently override synthetic public variables, so reject it too.
+assertNoProductionEnvironment(env);
 assert.equal(env.RUN_REVISION_RPCS_INTEGRATION_TESTS, "1");
 assert.equal(env.E2_REST_URL, restOrigin);
 assert.ok(typeof env.E2_JWT_SECRET === "string" && env.E2_JWT_SECRET.length >= 32);
@@ -105,12 +113,9 @@ async function openWizard(budgetId, expectedTitle = "Base E2E", { step = null, r
     if ([appOrigin, gatewayOrigin, "data:"].includes(origin)) request.continue();
     else request.abort();
   });
-  await page.setCookie({
-    name: "sb-127-auth-token",
-    value: `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}`,
-    url: appOrigin,
-    httpOnly: false,
-  });
+  const authCookie = (await browser.defaultBrowserContext().cookies())
+    .find(cookie => cookie.name === "sb-127-auth-token");
+  assert.ok(authCookie, "the shared synthetic auth session must exist before navigation");
   const stepQuery = step === null ? "" : `&step=${step}`;
   const response = await page.goto(`${appOrigin}/dashboard/budgets/generate?budgetId=${budgetId}${stepQuery}`, {
     waitUntil: "domcontentloaded", timeout: 90000,
@@ -146,20 +151,25 @@ async function openWizard(budgetId, expectedTitle = "Base E2E", { step = null, r
 
 try {
   await setup(db);
+  await prepareWizardProvenance(db);
   await db.query("insert into auth.users values($1)", [owner]);
+  await seedWizardPriceSources(db, owner);
   await db.query("notify pgrst, 'reload schema'");
 
   gateway = createServer(async (request, response) => {
     const url = new URL(request.url, gatewayOrigin);
     if (request.method === "OPTIONS") { reply(response, 200, {}); return; }
     if (url.pathname === "/auth/v1/user") {
-      requests.push({ method: request.method, path: url.pathname });
+      requests.push({ method: request.method, path: url.pathname,
+        status: request.headers.authorization === `Bearer ${accessToken}` ? 200 : 401,
+        client: request.headers["x-client-info"] });
       if (request.headers.authorization !== `Bearer ${accessToken}`) {
         reply(response, 401, { error: "invalid synthetic session" }); return;
       }
       reply(response, 200, user); return;
     }
     if (!url.pathname.startsWith("/rest/v1/")) {
+      requests.push({ method: request.method, path: url.pathname, status: 404 });
       reply(response, 404, { error: "gateway route denied" }); return;
     }
     // All database traffic is forwarded to the already-guarded local PostgREST.
@@ -178,13 +188,17 @@ try {
         headers: Object.fromEntries(Object.entries(request.headers).filter(([name]) =>
           !["host", "connection", "content-length", "origin", "referer"].includes(name))),
         body: chunks.length ? Buffer.concat(chunks) : undefined,
+        redirect: "error",
         signal: AbortSignal.timeout(15000),
       });
       const headers = Object.fromEntries([...upstream.headers].filter(([name]) =>
         !["content-length", "content-encoding", "transfer-encoding", "connection"].includes(name)));
       const body = Buffer.from(await upstream.arrayBuffer());
       requests.push({ method: request.method, path: target.pathname, status: upstream.status,
-        error: upstream.ok ? undefined : body.toString().slice(0, 300) });
+        authRole: request.headers.authorization === `Bearer ${accessToken}` ? "authenticated"
+          : request.headers.authorization === `Bearer ${anonToken}` ? "anon" : "other",
+        error: upstream.ok ? undefined : body.toString().slice(0, 300),
+        payload: WRITE_RPCS.has(target.pathname) && chunks.length ? JSON.parse(Buffer.concat(chunks)) : undefined });
       response.writeHead(upstream.status, { ...headers, "access-control-allow-origin": appOrigin });
       response.end(body);
     } catch (error) {
@@ -212,6 +226,10 @@ try {
       unit: "ud", category: "otros", unit_price: 1000, subtotal_cost: 1000,
       unit_price_client: 1300, subtotal_client: 1300, status: "incluida" }],
   })]);
+  const canRead = await fetch(`${restOrigin}/budgets?id=eq.${budgetId}&select=id`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  assert.equal(canRead.status, 200, `fixture authenticated read: ${await canRead.text()}`);
   const snapshot = async () => (await db.query("select title, lock_version from public.budgets where id=$1", [budgetId])).rows[0];
   const baseline = await snapshot();
   assert.equal(baseline.lock_version, 1);
@@ -222,6 +240,9 @@ try {
     env: {
       PATH: env.PATH, HOME: env.HOME, NODE_ENV: "development", NEXT_TELEMETRY_DISABLED: "1",
       NEXT_PUBLIC_SUPABASE_URL: gatewayOrigin, NEXT_PUBLIC_SUPABASE_ANON_KEY: anonToken,
+      SUPABASE_SERVICE_ROLE_KEY: token("service_role"),
+      NODE_OPTIONS: `--require=${fileURLToPath(new URL("__tests__/support/budget-wizard-network.cjs", root))}`,
+      NEXT_FONT_GOOGLE_MOCKED_RESPONSES: fileURLToPath(new URL("__tests__/support/budget-wizard-fonts.cjs", root)),
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -232,6 +253,16 @@ try {
     "--no-sandbox", "--disable-setuid-sandbox", "--disable-background-networking",
     "--disable-extensions", "--disable-sync", "--no-first-run",
   ] });
+  // Bootstrap the synthetic session through the browser's own cookie API.
+  // All wizard tabs then share it; no per-page cookie reset or auth headers.
+  const authPage = await browser.newPage();
+  await authPage.setRequestInterception(true);
+  authPage.on("request", request => new URL(request.url()).origin === appOrigin ? request.continue() : request.abort());
+  await authPage.goto(appOrigin, { waitUntil: "domcontentloaded" });
+  await authPage.evaluate(value => {
+    document.cookie = `sb-127-auth-token=${value}; Path=/; Max-Age=3600; SameSite=Lax`;
+  }, `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}`);
+  await authPage.close();
   const writesBeforeOpen = writeCalls().length;
   const first = await openWizard(budgetId);
   await new Promise((resolve) => setTimeout(resolve, 1800));
@@ -337,6 +368,124 @@ try {
     "Antiguo E2E revisado");
   assert.deepEqual(legacyTab.pageErrors, []);
   assert.deepEqual(legacyEdit.pageErrors, []);
+
+  // ---- G3: resolver -> real API -> wizard state -> payload -> real RPC ----
+  // Seed an EMPTY draft header, never price evidence or wizard partidas.
+  const generatedTitle = "Procedencia E2E";
+  const empty = await fetch(`${restOrigin}/rpc/create_budget_with_items`, {
+    method: "POST", headers: { "content-type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ p_budget_data: {
+      title: generatedTitle, budget_number: "WIZARD-E2E-PROVENANCE", client_id: provenanceClient,
+      wizard_state: { title: generatedTitle, clientId: provenanceClient, sector: "construccion",
+        description: "Pintura de salón", sectorData: provenanceScope },
+    }, p_items: [] }),
+  });
+  assert.equal(empty.status, 200, await empty.clone().text());
+  const { budget_id: generatedId } = await empty.json();
+  const generatedRows = async () => (await db.query(`select concept, unit_price_cost,
+    price_source_type, price_confidence, price_checked_at from public.budget_items
+    where budget_id=$1 order by sort_order`, [generatedId])).rows;
+  assert.deepEqual(await generatedRows(), [], "no provenance-bearing lines may be seeded");
+  const generated = await openWizard(generatedId, generatedTitle);
+  const apiResponses = [];
+  generated.page.on("response", async response => {
+    const path = new URL(response.url()).pathname;
+    if (["/api/prices/resolve", "/api/agent/budget-analysis"].includes(path)) {
+      apiResponses.push({ path, status: response.status(), body: await response.json() });
+    }
+  });
+  const clickButton = async text => generated.page.evaluate(text => {
+    const button = [...document.querySelectorAll("button")].find(node => node.textContent?.trim() === text);
+    if (!button || button.disabled) throw Error(`Button unavailable: ${text}`);
+    button.click();
+  }, text);
+  await clickButton("Siguiente paso");
+  await waitFor(async () => (await generated.page.$$("tbody tr")).length > 0 &&
+    (await visibleText(generated.page)).includes("Partidas"), "generated wizard lines", 90000);
+  await waitFor(() => apiResponses.some(response => response.path === "/api/prices/resolve"), "real price API response");
+  assert.ok(apiResponses.some(response => response.path === "/api/agent/budget-analysis" && response.status === 200),
+    `real analysis API must succeed: ${JSON.stringify(apiResponses.map(({path,status})=>({path,status})))}`);
+  const priceResponses = apiResponses.filter(response => response.path === "/api/prices/resolve");
+  for (const response of priceResponses) {
+    assert.equal(response.status, 200);
+    assert.equal(response.body.ok, true);
+  }
+  const quotes = priceResponses.flatMap(response => response.body.resolved);
+  assert.ok(quotes.length > 0, "the resolver must have quoted actual wizard lines");
+  const generatedWriteStart = writeCalls().length;
+  await waitFor(async () => !(await generated.page.evaluate(() => [...document.querySelectorAll("button")]
+    .find(node => node.textContent?.trim() === "Guardar borrador")?.disabled)), "save enabled");
+  await clickButton("Guardar borrador");
+  await waitFor(async () => writeCalls().slice(generatedWriteStart).some(call => call.path === "/rpc/save_budget" && call.status === 200 &&
+      call.payload.p_budget_id === generatedId && call.payload.p_items.length > 0)
+    && (await generatedRows()).length > 0, "generated provenance saved through real RPC", 20000);
+  const persisted = await generatedRows();
+  assert.equal(persisted.length, 5, "all five budget lines persist; the material basket is not double-counted");
+  for (const item of persisted) {
+    assert.notEqual(item.price_source_type, null, `G3 TRANSPORT: ${item.concept} source must reach budget_items`);
+    assert.notEqual(item.price_confidence, null, `G3 TRANSPORT: ${item.concept} confidence must reach budget_items`);
+    assert.notEqual(item.price_checked_at, null, `G3 TRANSPORT: ${item.concept} timestamp must reach budget_items`);
+    assert.ok(resolverSources.has(item.price_source_type), `${item.concept}: unknown resolver source ${item.price_source_type}`);
+    const quote = quotes.find(quote => quote.materialName === item.concept);
+    assert.ok(quote, `${item.concept} must correspond to a response from the real resolver API`);
+    assert.equal(item.price_source_type, quote.sourceType);
+    assert.equal(Number(item.price_confidence), Number(quote.confidenceScore.toFixed(2)));
+    assert.equal(item.price_checked_at.toISOString(), new Date(quote.capturedAt).toISOString());
+  }
+  const savedPayload = writeCalls().slice(generatedWriteStart).find(call => call.path === "/rpc/save_budget" && call.status === 200 &&
+    call.payload.p_budget_id === generatedId && call.payload.p_items.length === persisted.length).payload;
+  assert.equal(savedPayload.p_items.length, persisted.length);
+  // Since B11, the eight basket materials live in wizard_state, not budget_items.
+  const basket = (await db.query("select wizard_state->'materials' as materials from public.budgets where id=$1", [generatedId])).rows[0].materials;
+  assert.equal(basket.length, 8, "all basket materials must remain in the saved wizard");
+  for (const material of basket) {
+    const quote = quotes.find(quote => quote.materialName === material.name);
+    assert.ok(quote, `${material.name}: real resolver quote required`);
+    assert.equal(material.price_source_type, quote.sourceType, `G3 TRANSPORT: ${material.name} source must reach wizard_state`);
+    assert.equal(material.price_confidence, quote.confidenceScore);
+    assert.equal(new Date(material.price_checked_at).toISOString(), new Date(quote.capturedAt).toISOString());
+  }
+  console.log(`PASS G3 GENERATED: ${persisted.length} budget_items preserve source, confidence and timestamp from real resolver API`);
+  console.log("PASS G3 BASKET: 8 materials preserve resolver evidence in wizard_state without duplicate budget_items");
+
+  // Edit the cost in the REAL ItemsStep input, then explicitly save again.
+  // No provider hooks, direct SQL edit or handcrafted provenance payload.
+  const manualStart = Date.now();
+  const edited = await generated.page.evaluate(() => {
+    const tr = document.querySelector("tbody tr");
+    const concept = tr?.querySelector('input[type="text"]')?.value;
+    const input = tr?.querySelectorAll('input[type="number"]');
+    const price = input?.[input.length - 1];
+    if (!concept || !price) throw Error("Editable generated price unavailable");
+    return { concept, previous: Number(price.value) };
+  });
+  const newPrice = Math.ceil(edited.previous) + 17;
+  const priceInput = await generated.page.$('tbody tr:first-child td:nth-child(5) input[type="number"]');
+  assert.ok(priceInput, "edit the unit cost, not quantity or displayed client price");
+  // Puppeteer's fill clears the existing number and types into the visible
+  // input, which runs ItemsStep.onChange and the real provider update handler.
+  await generated.page.locator('tbody tr:first-child td:nth-child(5) input[type="number"]').fill(String(newPrice));
+  await priceInput.press("Tab");
+  assert.equal(Number(await priceInput.evaluate(node => node.value)), newPrice, "the real cost input must contain the edited amount");
+  const manualWriteStart = writeCalls().length;
+  await waitFor(async () => !(await generated.page.evaluate(() => [...document.querySelectorAll("button")]
+    .find(node => node.textContent?.trim() === "Guardar borrador")?.disabled)), "manual save enabled");
+  await clickButton("Guardar borrador");
+  await waitFor(async () => writeCalls().slice(manualWriteStart).some(call => call.path === "/rpc/save_budget" && call.status === 200)
+    && (await generatedRows()).some(row => row.concept === edited.concept && Number(row.unit_price_cost) === newPrice),
+    "manually edited price saved", 20000);
+  const afterManual = await generatedRows();
+  const manualRow = afterManual.find(row => row.concept === edited.concept);
+  assert.equal(manualRow.price_source_type, "user_edited", "manual edit must replace resolver provenance");
+  assert.equal(Number(manualRow.price_confidence), 0.95);
+  assert.ok(manualRow.price_checked_at instanceof Date);
+  assert.ok(manualRow.price_checked_at.getTime() >= manualStart && manualRow.price_checked_at.getTime() <= Date.now());
+  for (const original of persisted.filter(row => row.concept !== edited.concept)) {
+    const current = afterManual.find(row => row.concept === original.concept);
+    assert.deepEqual(current, original, "editing one price must preserve other lines and their provenance");
+  }
+  assert.deepEqual(generated.pageErrors, []);
+  console.log("PASS G3 USER_EDITED: actual price input -> real save_budget -> user_edited / 0.95 / edit timestamp");
 
   assert.deepEqual(first.pageErrors, []);
   assert.deepEqual(second.pageErrors, []);
