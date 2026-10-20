@@ -138,14 +138,16 @@ jobs:
           exit 1
       - name: Guarded schema bootstrap and authenticator
         run: node __tests__/support/prepare-budget-revision-rpcs.mjs
-      - name: PostgREST 12.2.3 on isolated database network
+      # Match the validated local runtime. Since v13, text-column FTS applies
+      # to_tsvector with the requested language instead of the DB default.
+      - name: PostgREST 16.4 on isolated database network
         run: |
           docker run --detach --name enlaze-e2-revision-rest --network enlaze-e2-revision-network \
             --publish 127.0.0.1:53002:3000 \
             --env PGRST_DB_URI=postgres://e2_authenticator:e2_disposable_authenticator_only@enlaze-e2-revision-db:5432/enlaze_revision_rpcs_test \
             --env PGRST_DB_SCHEMAS=public --env PGRST_DB_ANON_ROLE=anon \
             --env PGRST_JWT_SECRET="$E2_JWT_SECRET" \
-            postgrest/postgrest:v12.2.3
+            postgrest/postgrest:v16.4
       - name: Real SQL, rollback, negative controls, HTTP 409 and Supabase client
         run: npm run test:budget-revision-rpcs-integration
       - name: Full Next wizard on disposable PostgreSQL and PostgREST
