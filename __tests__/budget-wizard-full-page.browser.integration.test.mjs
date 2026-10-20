@@ -100,6 +100,21 @@ async function openWizard(budgetId, expectedTitle = "Base E2E", { step = null, r
   await page.setBypassCSP(true);
   const pageErrors = [];
   const networkErrors = [];
+  await page.evaluateOnNewDocument(() => {
+    const cookie = Object.getOwnPropertyDescriptor(Document.prototype, "cookie");
+    window.__sessionTrace = [];
+    Object.defineProperty(document, "cookie", {
+      get() {
+        const value = cookie.get.call(document);
+        window.__sessionTrace.push({ operation: "read", present: value.includes("sb-127-auth-token="), at: Date.now() });
+        return value;
+      },
+      set(value) {
+        window.__sessionTrace.push({ operation: "write", name: value.split("=")[0], removing: /max-age=0/i.test(value), at: Date.now() });
+        cookie.set.call(document, value);
+      },
+    });
+  });
   page.on("pageerror", (error) => pageErrors.push(error.message));
   page.on("console", (message) => {
     if (message.type() === "error") networkErrors.push(message.text().slice(0, 300));
@@ -145,9 +160,10 @@ async function openWizard(budgetId, expectedTitle = "Base E2E", { step = null, r
   } catch (error) {
     const actualTitle = await page.$eval('input[placeholder="Ej: Reforma baño completo"]', (node) => node.value);
     const visibleText = await page.evaluate(() => document.body?.innerText?.slice(0, 900) ?? "");
+    const sessionTrace = await page.evaluate(() => window.__sessionTrace.slice(-25));
     throw Error(`Wizard hydration failed. expected=${expectedTitle} actual=${JSON.stringify(actualTitle)} ` +
       `URL=${page.url()} text=${JSON.stringify(visibleText)} requests=${JSON.stringify(requests.slice(-30))} ` +
-      `pageErrors=${JSON.stringify(pageErrors)} networkErrors=${JSON.stringify(networkErrors.slice(-10))}`, { cause: error });
+      `sessionTrace=${JSON.stringify(sessionTrace)} pageErrors=${JSON.stringify(pageErrors)} networkErrors=${JSON.stringify(networkErrors.slice(-10))}`, { cause: error });
   }
   assert.deepEqual(pageErrors, [], "page must not throw during hydration");
   return { page, pageErrors };
