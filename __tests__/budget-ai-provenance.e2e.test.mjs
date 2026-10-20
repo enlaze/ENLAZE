@@ -253,11 +253,14 @@ test("G3 E2E: IA → asistente → guardado sin NULL, resolutor y edición manua
         assert.equal(resolved.price_checked_at, quoteDate);
         assert.equal(resolved.unit_price_cost, 12.5);
         assert.ok((await page.$eval("body", body => body.innerText)).includes(label));
+        const savedMaterials = globalThis.__g3SavedBudget.wizard_state.materials;
+        assert.ok(savedMaterials.length > 0, "material basket must reach the writer");
+        assert.ok(savedMaterials.every(item => item.price_source_type != null && item.price_confidence != null && item.price_checked_at != null));
         if (scenario === "ai") {
-          assert.ok(rows.some(row => row.price_source_type === "provider_updated"));
+          assert.ok(savedMaterials.some(row => row.price_source_type === "provider_updated"));
           assert.match(generateInternalPDFHTML(budget, state.internalView), /Estimación IA · sin fuente técnica/);
         } else {
-          assert.equal(rows.find(row => row.concept === "Pintura sin coincidencia").price_source_type, "ai_estimate");
+          assert.equal(savedMaterials.find(row => row.name === "Pintura sin coincidencia").price_source_type, "ai_estimate");
         }
         const clientHTML = generateBudgetPDFHTML(budget, rows, "client");
         assert.ok(!clientHTML.includes(label));

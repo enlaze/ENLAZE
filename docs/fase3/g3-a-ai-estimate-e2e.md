@@ -150,3 +150,11 @@ ok 1 - __tests__/budget-wizard-full-page.browser.integration.test.mjs
 - No se modificó el PDF cliente ni se accedió a Supabase producción.
 - No se cambiaron comparador, clasificación, BC3, banco técnico ni n8n.
 - No se abrió PR. La rama se publica para revisión.
+
+## Integración con main · 20 de octubre
+
+Main guarda la cesta de materiales en `wizard_state.materials`; los materiales no deben duplicarse en `budget_items`. El E2E real combina el resolutor (cinco partidas y ocho materiales), la edición manual y siete precios del modelo.
+
+Mutación de la ruta: retiradas temporalmente las tres asignaciones, falla `NULL en partidas NUEVAS de budget_items` con los siete conceptos `Pintura pared G3 0..6`. Restauradas, pasa con siete `ai_estimate`, confianza 0.20 y fecha actual. Las salidas completas están en `informes/evidencias/g3-a-ai-estimate/real-ai-{mutant,restored}.tap`. Las ocho pruebas rápidas también pasan y verifican el PDF interno y la invariancia del cliente.
+
+TypeScript pasa. El lint detecta un error ya presente en main en `app/dashboard/budgets/[id]/page.tsx` (loadBudget antes de su declaración) y advertencias previas; la comparación contra main está guardada en las evidencias locales de la integración. No se ejecutó build local ni su prebuild de Stripe. Las autorizaciones posteriores de fusión y despliegue sustituyen la restricción inicial de no abrir PR ni aplicar migraciones; el avance y los gates se documentan en el informe de despliegue.
