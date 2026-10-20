@@ -20,7 +20,7 @@ const JWT_SECRET = "billing_bench_synthetic_jwt_secret_not_for_any_real_service"
 const migration = "supabase/migrations/20260924102515_billing_subscriptions_and_paywall.sql";
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-export async function startBillingBench() {
+export async function startBillingBench({ beforeRest = async () => {} } = {}) {
   assertNoProductionEnvironment(process.env);
   assert.deepEqual(Object.keys(process.env).filter(name => /^(PG|PGRST_)/.test(name)), [],
     "Refusing inherited PostgreSQL/PostgREST connection settings");
@@ -85,6 +85,7 @@ export async function startBillingBench() {
     // Full, unmodified production billing migration, including stripe_events,
     // subscriptions, their constraints/RLS and the real paywall functions.
     await db.query(await readFile(new URL(migration, ROOT), "utf8"));
+    await db.query(await readFile(new URL("supabase/migrations/20260928072843_billing_usage_summary.sql", ROOT), "utf8"));
     await db.query(`insert into public.plan_catalog(plan,trial_days,limits,features)
       values('prueba',5,'{}','{}');
       create schema billing_bench;
@@ -104,6 +105,7 @@ export async function startBillingBench() {
         select jsonb_build_object('database',current_database(),
           'marker',current_setting('enlaze.test_cluster_marker')) $$;`);
 
+    await beforeRest(db);
     const portProbe = createServer();
     await new Promise((resolve, reject) => { portProbe.once("error", reject); portProbe.listen(0, "127.0.0.1", resolve); });
     const restPort = portProbe.address().port;
@@ -151,6 +153,6 @@ export async function startBillingBench() {
       } },
     });
     console.log(`BENCH: ${version.trim()}; ${restVersion}; production billing migration; loopback only`);
-    return { db, dbConfig, admin, close };
+    return { db, dbConfig, admin, origin, jwt, close };
   } catch (error) { await close(); throw error; }
 }

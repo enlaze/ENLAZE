@@ -85,6 +85,23 @@ export function BillingProvider({ children }: { children: ReactNode }) {
     refresh();
   }, [refresh]);
 
+  // Revalidar al vencer y al volver del portal. El permiso sigue calculándose
+  // en SQL: este temporizador solo actualiza el aviso, no cambia ningún estado.
+  useEffect(() => {
+    const onFocus = () => { void refresh(); };
+    window.addEventListener("focus", onFocus);
+    const deadline = status?.status === "past_due" && status.access_level === "full"
+      ? Date.parse(status.past_due_grace_ends_at ?? "") : NaN;
+    const remaining = deadline - Date.now();
+    const timer = Number.isFinite(deadline)
+      ? window.setTimeout(onFocus, remaining > 0 ? Math.min(remaining + 25, 2147483647) : 30000)
+      : undefined;
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [status, refresh]);
+
   // Red de seguridad: cualquier 402 del muro se explica en palabras normales.
   const showBlock = useRef<(body: unknown) => void>(() => {});
   useEffect(() => {

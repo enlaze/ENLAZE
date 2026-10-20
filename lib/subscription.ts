@@ -20,6 +20,9 @@ import {
  * Nivel de acceso:
  *   'trialing' y trial_ends_at sin pasar → full
  *   'active'                             → full
+ *   'past_due' y past_due_grace_ends_at > now() → full
+ *   En el límite exacto (igualdad), o con gracia NULL, → read_only.
+ *   getAccessLevel y requireWriteAccess consultan ese mismo cálculo SQL.
  *   todo lo demás                        → read_only
  */
 

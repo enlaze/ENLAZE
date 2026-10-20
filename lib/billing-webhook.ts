@@ -5,6 +5,7 @@
  */
 import type Stripe from "stripe";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { BILLING_GRACE_DAYS } from "./plans";
 import { planForStripePrice } from "./stripe-prices";
 
 export type SubscriptionStatus = "trialing" | "active" | "past_due" | "canceled";
@@ -14,6 +15,7 @@ export interface SubscriptionPatch {
   status?: SubscriptionStatus;
   billing_interval?: "month" | "year";
   current_period_end?: string | null;
+  past_due_grace_ends_at?: string | null;
   cancel_at_period_end?: boolean;
   stripe_customer_id?: string;
   stripe_subscription_id?: string;
@@ -40,6 +42,8 @@ export interface WebhookDeps {
   stripe: Stripe | null;
   secret: string | undefined;
   store: BillingStore;
+  /** Reloj inyectable para verificar el límite exacto sin esperar días. */
+  now?: () => number;
 }
 
 export interface WebhookResult {
@@ -100,6 +104,7 @@ export function patchFromSubscription(sub: Stripe.Subscription): SubscriptionPat
   patch.plan = mapped.plan;
   patch.billing_interval = mapped.interval;
   patch.status = status;
+  if (status === "active" || status === "canceled") patch.past_due_grace_ends_at = null;
   patch.current_period_end = item?.current_period_end
     ? new Date(item.current_period_end * 1000).toISOString()
     : null;
@@ -142,7 +147,7 @@ async function applyEvent(event: Stripe.Event, deps: WebhookDeps & { stripe: Str
       const sub = event.data.object;
       await store.updateSubscription(
         { subscriptionId: sub.id, customerId: idOf(sub.customer), userId: sub.metadata?.user_id },
-        { status: "canceled", cancel_at_period_end: false, stripe_subscription_id: sub.id },
+        { status: "canceled", cancel_at_period_end: false, stripe_subscription_id: sub.id, past_due_grace_ends_at: null },
       );
       return "applied";
     }
@@ -153,7 +158,12 @@ async function applyEvent(event: Stripe.Event, deps: WebhookDeps & { stripe: Str
       if (!subscriptionId) return "ignored"; // factura suelta, no de suscripción
       await store.updateSubscription(
         { subscriptionId, customerId: idOf(invoice.customer) },
-        { status: "past_due" },
+        {
+          status: "past_due",
+          // La base conserva atómicamente la primera fecha si ya existe. No
+          // leer antes de escribir: dos eventos distintos podrían competir.
+          past_due_grace_ends_at: new Date((deps.now ?? Date.now)() + BILLING_GRACE_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+        },
       );
       return "applied";
     }

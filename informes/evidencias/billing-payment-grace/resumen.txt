@@ -1,0 +1,9 @@
+BASELINE: 11/11 PASS
+KILLED retry-extends-deadline: first failure opens exactly five days; five retries never move the deadline
+KILLED no-opening-grace: first failure opens exactly five days; five retries never move the deadline
+KILLED inclusive-boundary: boundary: full minus 1ms, read_only at equality and plus 1ms
+KILLED early-boundary: boundary: full minus 1ms, read_only at equality and plus 1ms
+KILLED no-recovery-reset: active recovery clears deadline and restores full access
+KILLED deleted-keeps-access: deleted subscription cuts immediately even inside grace
+KILLED null-grants-access: legacy past_due with NULL has no grace and remains read_only
+7/7 mutants killed; application/migration unchanged; clusters destroyed.

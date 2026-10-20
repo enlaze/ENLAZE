@@ -21,7 +21,7 @@ export async function GET() {
   const [{ data: sub, error: subError }, { data: summary, error: sumError }] = await Promise.all([
     admin
       .from("subscriptions")
-      .select("plan, status, billing_interval, trial_ends_at, current_period_end, cancel_at_period_end, stripe_customer_id")
+      .select("plan, status, billing_interval, trial_ends_at, past_due_grace_ends_at, current_period_end, cancel_at_period_end, stripe_customer_id")
       .eq("user_id", user.id)
       .maybeSingle(),
     admin.rpc("billing_usage_summary", { p_user_id: user.id }),
@@ -37,6 +37,7 @@ export async function GET() {
     interval: sub.billing_interval ?? null,
     access_level: summary.access_level,
     trial_ends_at: sub.trial_ends_at,
+    past_due_grace_ends_at: sub.past_due_grace_ends_at,
     current_period_end: sub.current_period_end,
     cancel_at_period_end: !!sub.cancel_at_period_end,
     has_stripe_customer: !!sub.stripe_customer_id,

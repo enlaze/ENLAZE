@@ -51,6 +51,14 @@ export function blockMessage(d: BillingBlockInfo): string {
   return "Tu plan no permite hacer esto ahora mismo.";
 }
 
+/** Fecha y hora de corte: la cuenta aún permite trabajar durante la gracia. */
+export function paymentGraceMessage(deadline: string): string {
+  const date = new Intl.DateTimeFormat("es-ES", {
+    dateStyle: "long", timeStyle: "medium", timeZone: "Europe/Madrid",
+  }).format(new Date(deadline));
+  return `No hemos podido cobrar tu suscripción. Conservas el acceso completo hasta el ${date} (hora de Madrid). Revisa la tarjeta en «Gestionar suscripción» antes de esa fecha para evitar que la cuenta pase a solo lectura.`;
+}
+
 /** Por qué la cuenta está en solo lectura, según el estado de la suscripción. */
 export function readOnlyCause(status: string | null | undefined): string {
   if (status === "canceled") return "Tu suscripción está cancelada y la cuenta ha pasado a solo lectura.";

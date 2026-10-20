@@ -2,6 +2,7 @@
 // Stripe is used only for local signature generation/verification; no Stripe HTTP.
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
 import Stripe from "stripe";
 import { startBillingBench } from "./lib/billing-webhook-bench.mjs";
 
@@ -34,14 +35,16 @@ function event(type, id) {
 }
 
 test("billing webhook / real PostgreSQL 17 store", { timeout: 120000 }, async t => {
-  const bench = await startBillingBench();
+  const bench = await startBillingBench({ beforeRest: async db => {
+    await db.query(await readFile(new URL("../supabase/migrations/20261012170000_billing_payment_grace.sql", import.meta.url), "utf8"));
+  } });
   t.after(bench.close);
   const { db, admin } = bench;
   const store = createSupabaseBillingStore(admin());
   await db.query("insert into auth.users(id) values($1)", [userId]);
   const resetPlan = async () => db.query(`update public.subscriptions set plan='basico',status='active',
     billing_interval='month',stripe_customer_id=$2,stripe_subscription_id=$3,
-    current_period_end='2030-01-01T00:00:00Z',cancel_at_period_end=false where user_id=$1`,
+    current_period_end='2030-01-01T00:00:00Z',cancel_at_period_end=false,past_due_grace_ends_at=null where user_id=$1`,
   [userId, customerId, subscriptionId]);
   const snapshot = async () => (await db.query(`select to_jsonb(s) as subscription,
     billing_internal.access_level(s.user_id) as access,
@@ -73,7 +76,8 @@ test("billing webhook / real PostgreSQL 17 store", { timeout: 120000 }, async t 
     const applied = await snapshot();
     assert.equal(applied.subscription.status, "past_due");
     assert.equal(applied.subscription.plan, "basico");
-    assert.equal(applied.access, "read_only");
+    assert.equal(applied.access, "full");
+    assert.ok(Date.parse(applied.subscription.past_due_grace_ends_at) > Date.now(), "first payment failure opens grace");
     assert.equal(applied.writes, before.writes + 1);
     const processed = await eventRow(id);
     assert.ok(processed.processed_at instanceof Date);
@@ -189,7 +193,7 @@ test("billing webhook / real PostgreSQL 17 store", { timeout: 120000 }, async t 
     assert.equal(response.body.outcome, "applied");
   });
 
-  await t.test("4 payment_failed: immediate past_due and read-only, no cancellation or plan downgrade", async () => {
+  await t.test("4 payment_failed: past_due with grace, no cancellation or plan downgrade", async () => {
     await resetPlan();
     const before = await snapshot();
     assert.equal(before.access, "full");
@@ -197,7 +201,8 @@ test("billing webhook / real PostgreSQL 17 store", { timeout: 120000 }, async t 
     const response = await deliver("invoice.payment_failed", id);
     const after = await snapshot();
     assert.equal(after.subscription.status, "past_due");
-    assert.equal(after.access, "read_only");
+    assert.equal(after.access, "full");
+    assert.ok(Date.parse(after.subscription.past_due_grace_ends_at) > Date.now());
     assert.equal(after.writes, before.writes + 1);
     const stableFields = ["plan", "billing_interval", "current_period_end", "cancel_at_period_end",
       "stripe_subscription_id", "stripe_customer_id"];

@@ -1,0 +1,147 @@
+TAP version 13
+# BENCH: postgres (PostgreSQL) 17.11 (Homebrew); PostgREST 16.4; production billing migration; loopback only
+# Subtest: billing grace / real PostgreSQL 17 + real server access
+    # Subtest: migration gates: no backfill, no permission drift, fail closed
+    ok 1 - migration gates: no backfill, no permission drift, fail closed # SKIP
+      ---
+      duration_ms: 0.356
+      type: 'test'
+      ...
+    # Subtest: first failure opens exactly five days; five retries never move the deadline
+    ok 2 - first failure opens exactly five days; five retries never move the deadline
+      ---
+      duration_ms: 35.733167
+      type: 'test'
+      ...
+    # Subtest: duplicate delivery cannot reapply the failure after recovery
+    ok 3 - duplicate delivery cannot reapply the failure after recovery
+      ---
+      duration_ms: 4.066166
+      type: 'test'
+      ...
+    # Subtest: boundary: full minus 1ms, read_only at equality and plus 1ms
+    ok 4 - boundary: full minus 1ms, read_only at equality and plus 1ms
+      ---
+      duration_ms: 13.83775
+      type: 'test'
+      ...
+    # Subtest: active recovery clears deadline and restores full access
+    not ok 5 - active recovery clears deadline and restores full access
+      ---
+      duration_ms: 4.109833
+      type: 'test'
+      location: '/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-grace-release/__tests__/billing-grace.integration.test.mjs:195:11'
+      failureType: 'testCodeFailure'
+      error: |-
+        recovered payment must leave no stale grace date
+        + actual - expected
+        
+        + '2030-10-17T01:00:00.000Z'
+        - null
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: ~
+      actual: '2030-10-17T01:00:00.000Z'
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-grace-release/__tests__/billing-grace.integration.test.mjs:199:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+        async Test.run (node:internal/test_runner/test:1208:7)
+        async TestContext.<anonymous> (/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-grace-release/__tests__/billing-grace.integration.test.mjs:195:3)
+        async Test.run (node:internal/test_runner/test:1208:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)
+      ...
+    # Subtest: later second failure opens a NEW five-day grace
+    not ok 6 - later second failure opens a NEW five-day grace
+      ---
+      duration_ms: 2.516834
+      type: 'test'
+      location: '/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-grace-release/__tests__/billing-grace.integration.test.mjs:202:11'
+      failureType: 'testCodeFailure'
+      error: |-
+        Expected values to be strictly equal:
+        + actual - expected
+        
+        + '2030-10-17T01:00:00.000Z'
+        - '2030-10-24T01:00:00.000Z'
+                   ^
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: '2030-10-24T01:00:00.000Z'
+      actual: '2030-10-17T01:00:00.000Z'
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-grace-release/__tests__/billing-grace.integration.test.mjs:206:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+        async Test.run (node:internal/test_runner/test:1208:7)
+        async TestContext.<anonymous> (/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-grace-release/__tests__/billing-grace.integration.test.mjs:202:3)
+        async Test.run (node:internal/test_runner/test:1208:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)
+      ...
+    # Subtest: legacy past_due with NULL has no grace and remains read_only
+    ok 7 - legacy past_due with NULL has no grace and remains read_only
+      ---
+      duration_ms: 2.633167
+      type: 'test'
+      ...
+    # Subtest: deleted subscription cuts immediately even inside grace
+    not ok 8 - deleted subscription cuts immediately even inside grace
+      ---
+      duration_ms: 0.373917
+      type: 'test'
+      location: '/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-grace-release/__tests__/billing-grace.integration.test.mjs:214:11'
+      failureType: 'testCodeFailure'
+      error: |-
+        SQL access
+        + actual - expected
+        
+        + 'read_only'
+        - 'full'
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'full'
+      actual: 'read_only'
+      operator: 'strictEqual'
+      stack: |-
+        access (/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-grace-release/__tests__/billing-grace.integration.test.mjs:126:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+        async TestContext.<anonymous> (/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-grace-release/__tests__/billing-grace.integration.test.mjs:216:5)
+        async Test.run (node:internal/test_runner/test:1208:7)
+        async TestContext.<anonymous> (/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-grace-release/__tests__/billing-grace.integration.test.mjs:214:3)
+        async Test.run (node:internal/test_runner/test:1208:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)
+      ...
+    # Subtest: concurrent subscription writes keep one initial deadline
+    ok 9 - concurrent subscription writes keep one initial deadline
+      ---
+      duration_ms: 17.546041
+      type: 'test'
+      ...
+    # Subtest: rollback requires acknowledgement and restores old access and schema
+    ok 10 - rollback requires acknowledgement and restores old access and schema # SKIP
+      ---
+      duration_ms: 0.059333
+      type: 'test'
+      ...
+    1..10
+not ok 1 - billing grace / real PostgreSQL 17 + real server access
+  ---
+  duration_ms: 1061.4135
+  type: 'test'
+  location: '/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-grace-release/__tests__/billing-grace.integration.test.mjs:52:1'
+  failureType: 'subtestsFailed'
+  error: '3 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..1
+# tests 11
+# suites 0
+# pass 5
+# fail 4
+# cancelled 0
+# skipped 2
+# todo 0
+# duration_ms 1277.766833

@@ -3176,3 +3176,86 @@ from (
         and array_to_string(d.defaclacl,' ') ~ 'authenticated=[a-z]*[Dxtm]') as defectos_restantes
 ) as evidencia;
 -- END CHECK_E6_L1_AUDIT
+
+-- BEGIN CHECK_BILLING_GRACE_PRECHECK
+-- Solo lectura, ANTES de aplicar 20261012170000. Esperado: OK.
+-- Guardar subscriptions_precheck para copiarlo en el AUDIT inmediatamente después.
+select case
+  when not esquema_base then 'ABORTAR: access_level base o ACL/config difieren'
+  when not sin_columna or not sin_trigger or not sin_funcion then 'ABORTAR: gracia ya presente o aplicación parcial'
+  when not consumidores or not permisos then 'ABORTAR: consumidores del acceso o permisos incompatibles'
+  else 'OK' end as veredicto, *
+from (select
+  exists (select 1 from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='billing_internal' and p.proname='access_level' and p.proargtypes='2950'::oidvector
+      and md5(p.prosrc) in ('a73facb21af70ce1ad9ba56e0c175a5c','b7e6d58a7ee948cde947fd2a712e91a5') and p.prosecdef and p.provolatile='s'
+      and p.proconfig=array['search_path=""']::text[]
+      and not has_function_privilege('anon',p.oid,'execute')
+      and not has_function_privilege('authenticated',p.oid,'execute')) as esquema_base,
+  not exists (select 1 from pg_catalog.pg_attribute where attrelid=to_regclass('public.subscriptions') and attname='past_due_grace_ends_at' and not attisdropped) as sin_columna,
+  not exists (select 1 from pg_catalog.pg_trigger where tgrelid=to_regclass('public.subscriptions') and tgname='trg_preserve_past_due_grace') as sin_trigger,
+  to_regprocedure('billing_internal.preserve_past_due_grace()') is null as sin_funcion,
+  (exists (select 1 from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='billing_internal' and p.proname='evaluate'
+      and position('billing_internal.access_level(p_user)' in p.prosrc)>0)
+  and exists (select 1 from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='public' and p.proname='billing_usage_summary'
+      and position('billing_internal.access_level(p_user_id)' in p.prosrc)>0)) as consumidores,
+  (exists (select 1 from pg_catalog.pg_class where oid=to_regclass('public.subscriptions') and relrowsecurity)
+  and has_table_privilege('service_role','public.subscriptions','UPDATE')
+  and not has_table_privilege('authenticated','public.subscriptions','UPDATE')
+  and not has_table_privilege('anon','public.subscriptions','UPDATE')) as permisos,
+  (select count(*) from public.subscriptions) as subscriptions_precheck) evidencia;
+-- END CHECK_BILLING_GRACE_PRECHECK
+
+-- BEGIN CHECK_BILLING_GRACE_AUDIT
+-- Solo lectura, inmediatamente DESPUÉS de aplicar, antes de desplegar el webhook.
+-- Reemplazar -1 con subscriptions_precheck. Comparar también el snapshot previo;
+-- este gate revisa la estructura y el conteo, no demuestra identidad de cada fila.
+-- Las métricas usan to_jsonb: AUDIT devuelve ABORTAR incluso antes de crear la columna.
+select case
+  when registrada=0 then 'ABORTAR: 20261012170000 no registrada'
+  when subscriptions_precheck<0 then 'ABORTAR: anota subscriptions_precheck'
+  when subscriptions_actual<>subscriptions_precheck then 'ABORTAR: cambió el conteo de suscripciones'
+  when not columna or not acceso or not preservacion or not consumidores or not permisos then 'ABORTAR: esquema, cálculo, preservación o permisos incompatibles'
+  when con_gracia<>0 then 'ABORTAR: hay fechas de gracia antes de desplegar; revisar backfill o escrituras concurrentes'
+  else 'OK' end as veredicto, *
+from (select
+  -1::bigint as subscriptions_precheck, -- <<< ANOTA AQUÍ el valor del PRECHECK
+  (select count(*) from supabase_migrations.schema_migrations where version='20261012170000') as registrada,
+  (select count(*) from public.subscriptions) as subscriptions_actual,
+  (select count(*) from public.subscriptions s where to_jsonb(s)->>'past_due_grace_ends_at' is not null) as con_gracia,
+  exists (select 1 from pg_catalog.pg_attribute a left join pg_catalog.pg_attrdef d
+    on d.adrelid=a.attrelid and d.adnum=a.attnum
+    where a.attrelid=to_regclass('public.subscriptions') and a.attname='past_due_grace_ends_at'
+      and not a.attisdropped and a.atttypid='timestamptz'::regtype and not a.attnotnull
+      and d.oid is null) as columna,
+  exists (select 1 from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='billing_internal' and p.proname='access_level' and p.proargtypes='2950'::oidvector
+      and md5(p.prosrc)='9d554e53f076ba9ee3c541e2f66d2bd6' and p.prosecdef and p.provolatile='s'
+      and p.proconfig=array['search_path=""']::text[]
+      and not has_function_privilege('anon',p.oid,'execute')
+      and not has_function_privilege('authenticated',p.oid,'execute')) as acceso,
+  exists (select 1 from pg_catalog.pg_trigger t join pg_catalog.pg_proc p on p.oid=t.tgfoid
+    join pg_catalog.pg_namespace n on n.oid=p.pronamespace
+    where t.tgrelid=to_regclass('public.subscriptions') and t.tgname='trg_preserve_past_due_grace'
+      and not t.tgisinternal and t.tgenabled='O' and t.tgtype=19 and t.tgqual is null
+      and array(select unnest(t.tgattr))=array[
+        (select attnum from pg_catalog.pg_attribute where attrelid=t.tgrelid and attname='status'),
+        (select attnum from pg_catalog.pg_attribute where attrelid=t.tgrelid and attname='past_due_grace_ends_at')]
+      and n.nspname='billing_internal' and p.proname='preserve_past_due_grace' and p.pronargs=0
+      and md5(p.prosrc)='738bf0f99a9a48ff7d4ef4eebb760989' and not p.prosecdef and p.provolatile='v'
+      and p.proconfig=array['search_path=""']::text[]
+      and not has_function_privilege('anon',p.oid,'execute')
+      and not has_function_privilege('authenticated',p.oid,'execute')) as preservacion,
+  (exists (select 1 from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='billing_internal' and p.proname='evaluate'
+      and position('billing_internal.access_level(p_user)' in p.prosrc)>0)
+  and exists (select 1 from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='public' and p.proname='billing_usage_summary'
+      and position('billing_internal.access_level(p_user_id)' in p.prosrc)>0)) as consumidores,
+  (exists (select 1 from pg_catalog.pg_class where oid=to_regclass('public.subscriptions') and relrowsecurity)
+  and has_table_privilege('service_role','public.subscriptions','UPDATE')
+  and not has_table_privilege('authenticated','public.subscriptions','UPDATE')
+  and not has_table_privilege('anon','public.subscriptions','UPDATE')) as permisos) evidencia;
+-- END CHECK_BILLING_GRACE_AUDIT
