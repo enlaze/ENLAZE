@@ -100,6 +100,12 @@ async function openWizard(budgetId, expectedTitle = "Base E2E", { step = null, r
   await page.setBypassCSP(true);
   const pageErrors = [];
   const networkErrors = [];
+  const cookieResponses = [];
+  page.on("response", response => {
+    const header = response.headers()["set-cookie"];
+    if (header) cookieResponses.push({ path: new URL(response.url()).pathname,
+      cookies: header.split("\n").map(value => value.replace(/^([^=]+)=[^;]*/, "$1=<redacted>")) });
+  });
   await page.evaluateOnNewDocument(() => {
     const cookie = Object.getOwnPropertyDescriptor(Document.prototype, "cookie");
     window.__sessionTrace = [];
@@ -134,6 +140,7 @@ async function openWizard(budgetId, expectedTitle = "Base E2E", { step = null, r
     url: appOrigin,
     path: "/",
     httpOnly: false,
+    expires: session.expires_at,
   });
   const stepQuery = step === null ? "" : `&step=${step}`;
   const response = await page.goto(`${appOrigin}/dashboard/budgets/generate?budgetId=${budgetId}${stepQuery}`, {
@@ -164,7 +171,7 @@ async function openWizard(budgetId, expectedTitle = "Base E2E", { step = null, r
     const cookieMetadata = (await page.cookies()).map(({ name, path, httpOnly, secure, expires, value }) => ({ name, path, httpOnly, secure, expires, length: value.length }));
     throw Error(`Wizard hydration failed. expected=${expectedTitle} actual=${JSON.stringify(actualTitle)} ` +
       `URL=${page.url()} text=${JSON.stringify(visibleText)} requests=${JSON.stringify(requests.slice(-30))} ` +
-      `sessionTrace=${JSON.stringify(sessionTrace)} cookieMetadata=${JSON.stringify(cookieMetadata)} pageErrors=${JSON.stringify(pageErrors)} networkErrors=${JSON.stringify(networkErrors.slice(-10))}`, { cause: error });
+      `sessionTrace=${JSON.stringify(sessionTrace)} cookieMetadata=${JSON.stringify(cookieMetadata)} cookieResponses=${JSON.stringify(cookieResponses)} pageErrors=${JSON.stringify(pageErrors)} networkErrors=${JSON.stringify(networkErrors.slice(-10))}`, { cause: error });
   }
   assert.deepEqual(pageErrors, [], "page must not throw during hydration");
   return { page, pageErrors };
