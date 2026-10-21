@@ -21,12 +21,15 @@ import {
   type TechnicalPriceRow,
   type EnlazePriceRow,
   matchManualPrice,
+  resolveInvoicePrice,
 } from "@/lib/price-resolver-v2";
 import { buildUniqueCatalogTokenGroups } from "@/lib/price-catalog-search";
 import { canonicalProviderName, providerIdentitySlug } from "@/lib/provider-identity";
 import { isProductSpecificSourceUrl } from "@/lib/commercial-product-match";
 import { hasVerifiedCatalogEvidence } from "@/lib/price-traceability";
 import { preferTraceableCommercialAlternative } from "@/lib/price-resolution-selection";
+
+import { loadReceivedInvoicePrices } from "@/lib/received-invoice-prices";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -220,6 +223,7 @@ export async function POST(request: Request) {
     // current schema/RLS policies. Do not trust profiles.company_id here: the
     // tracker client may use service role and would otherwise turn a mutable
     // profile value into cross-tenant read access.
+    const invoicePrices = await loadReceivedInvoicePrices(supabase, user.id);
     const companyScopeId = user.id;
     const visibleProviderFilter =
       `company_id.is.null,company_id.eq.${companyScopeId}`;
@@ -525,6 +529,7 @@ export async function POST(request: Request) {
           is_manual_override: Boolean(p.is_manual_override),
         })),
         historical_prices: [],
+        invoice_prices: invoicePrices,
         technical_prices: (pbTechnicalRows || []).map((r): TechnicalPriceRow => ({
           name: String(r.name || ""),
           item_code: String(r.item_code || ""),
@@ -600,6 +605,7 @@ export async function POST(request: Request) {
           sourceUrl: selectedUrl,
           sourceType: r.source_type as ResolvedPrice["sourceType"],
           manualPriceItemId: r.source_type === "manual_locked" ? r.source_id || undefined : undefined,
+          invoiceLineId: r.source_type === "received_invoice" ? r.source_id || undefined : undefined,
           confidenceScore: selectedConfidence,
           capturedAt: trackerMetadata?.checkedAt || selectedEvidence?.observedAt || r.checked_at || new Date().toISOString(),
           providerId: providerIdentitySlug(selectedSupplier, selectedUrl),
@@ -795,9 +801,21 @@ export async function POST(request: Request) {
         continue;
       }
 
+      const invoice = resolveInvoicePrice({ concept_name: mat.materialName, category: mat.category,
+        unit: mat.unit, quantity: mat.quantity }, invoicePrices);
+      if (invoice) {
+        resolved.push({ ...buildManualResolvedPrice(mat, { name: invoice.product_name,
+          unit: mat.unit, unit_price: invoice.unit_price, supplier_name: invoice.provider_name,
+          source_type: "received_invoice", is_manual_override: false }),
+          sourceType: "received_invoice", invoiceLineId: invoice.source_id,
+          confidenceScore: invoice.confidence_score, capturedAt: invoice.checked_at,
+          alternatives: [], manualPriceNotice: manualMatch.unitMismatchNotice });
+        continue;
+      }
+
       // Check cache first (valid, non-expired entry with real source)
       const cached = cacheMap.get(cacheKey);
-      if (cached && cached.source_type !== "estimated") {
+      if (cached && cached.source_type !== "estimated" && cached.source_type !== "received_invoice") {
         // Reconstruct ResolvedPrice from cached row
         resolved.push({
           materialName: mat.materialName,
@@ -879,7 +897,7 @@ export async function POST(request: Request) {
       .filter(r => r.selectedPrice > 0) // Don't cache zero-price results
       // Manual prices are read fresh every time; caching them would keep an
       // old value alive for 48h after the user changes or unlocks it.
-      .filter(r => r.sourceType !== "manual_locked")
+      .filter(r => r.sourceType !== "manual_locked" && r.sourceType !== "received_invoice")
       .map(r => buildCacheRow(r, user.id, location || ""));
 
     if (rowsToUpsert.length > 0) {

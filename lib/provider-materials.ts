@@ -94,7 +94,7 @@ export function applyProviderToAIMaterials(
 
   return baseAIMaterials.map(baseMat => {
     // A price the user fixed by hand is never replaced by a provider's price.
-    if (baseMat.sourceType === "manual_locked") {
+    if (baseMat.sourceType === "manual_locked" || baseMat.sourceType === "received_invoice") {
       return {
         ...baseMat,
         missing_in_selected_provider: undefined,

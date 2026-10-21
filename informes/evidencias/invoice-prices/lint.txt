@@ -1,0 +1,13 @@
+
+/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-own-prices/app/dashboard/budgets/generate/_components/BudgetGenerateProvider.tsx
+    16:3   warning  'buildScopeQuantities' is defined but never used                                                                                                @typescript-eslint/no-unused-vars
+   213:7   warning  'getDetailedConstructionFallback' is assigned a value but never used                                                                            @typescript-eslint/no-unused-vars
+   267:7   warning  'CONSTRUCTION_FALLBACK_MATERIALS' is assigned a value but never used                                                                            @typescript-eslint/no-unused-vars
+   290:7   warning  'FALLBACK_PROVIDERS' is assigned a value but never used                                                                                         @typescript-eslint/no-unused-vars
+  1098:6   warning  React Hook useEffect has missing dependencies: 'state.description' and 'state.serviceType'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  2048:71  warning  'idx' is defined but never used                                                                                                                 @typescript-eslint/no-unused-vars
+
+/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-own-prices/lib/price-resolver.ts
+  325:9  warning  'normalizedUnit' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+✖ 7 problems (0 errors, 7 warnings)

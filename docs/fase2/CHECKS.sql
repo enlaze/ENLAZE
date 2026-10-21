@@ -3263,3 +3263,7 @@ from (select
 -- G3 precios propios · 20261021090000
 -- CHECK_G3_OWN_PRECHECK y CHECK_G3_OWN_AUDIT: bloques ejecutables en docs/fase3/G3-OWN-PRICES-CHECKS.sql.
 -- Una sola definición; consultar esos bloques y su orden de ejecución manual.
+
+-- Precios privados de facturas: definicion unica de CHECK_INVOICE_PRICES_PRECHECK
+-- y CHECK_INVOICE_PRICES_AUDIT en docs/fase3/INVOICE-PRICES-CHECKS.sql.
+-- Deshacer: ROLLBACK_INVOICE_PRICES en docs/fase3/INVOICE-PRICES-ROLLBACK.sql.

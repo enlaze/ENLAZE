@@ -1,0 +1,203 @@
+TAP version 13
+# Subtest: real PG17/PostgREST14.4: private invoice prices, gates, tampering and rollback
+    # Subtest: read-only gates and partial application fail closed
+    ok 1 - read-only gates and partial application fail closed
+      ---
+      duration_ms: 3.42225
+      type: 'test'
+      ...
+# ABORTAR: objetos presentes; revisar aplicacion parcial
+    # Subtest: PRECHECK refuses a partial wrong-type table
+    ok 2 - PRECHECK refuses a partial wrong-type table
+      ---
+      duration_ms: 1.808208
+      type: 'test'
+      ...
+    # Subtest: partial empty rollback is safe
+    ok 3 - partial empty rollback is safe
+      ---
+      duration_ms: 1.465292
+      type: 'test'
+      ...
+    # Subtest: AUDIT placeholders abort; exact counts and real metadata pass
+    ok 4 - AUDIT placeholders abort; exact counts and real metadata pass
+      ---
+      duration_ms: 3.211333
+      type: 'test'
+      ...
+# ABORTAR: privilegios incompatibles
+    # Subtest: AUDIT rejects missing SELECT
+    ok 5 - AUDIT rejects missing SELECT
+      ---
+      duration_ms: 1.275667
+      type: 'test'
+      ...
+# ABORTAR: privilegios incompatibles
+    # Subtest: AUDIT rejects write privilege
+    ok 6 - AUDIT rejects write privilege
+      ---
+      duration_ms: 1.14675
+      type: 'test'
+      ...
+# ABORTAR: privilegios incompatibles
+    # Subtest: AUDIT rejects column write privilege
+    ok 7 - AUDIT rejects column write privilege
+      ---
+      duration_ms: 1.0885
+      type: 'test'
+      ...
+# ABORTAR: privilegios incompatibles
+    # Subtest: AUDIT rejects anonymous leak
+    ok 8 - AUDIT rejects anonymous leak
+      ---
+      duration_ms: 1.302958
+      type: 'test'
+      ...
+# ABORTAR: tabla ausente o RLS desactivado
+    # Subtest: AUDIT rejects RLS disabled
+    ok 9 - AUDIT rejects RLS disabled
+      ---
+      duration_ms: 1.593
+      type: 'test'
+      ...
+# ABORTAR: politicas de aislamiento incompatibles
+    # Subtest: AUDIT rejects permissive policy
+    ok 10 - AUDIT rejects permissive policy
+      ---
+      duration_ms: 1.2465
+      type: 'test'
+      ...
+# ABORTAR: disparador ausente, desactivado o mal enlazado
+    # Subtest: AUDIT rejects trigger disabled
+    ok 11 - AUDIT rejects trigger disabled
+      ---
+      duration_ms: 1.203458
+      type: 'test'
+      ...
+# ABORTAR: funciones, search_path o ACL incompatibles
+    # Subtest: AUDIT rejects function search_path
+    ok 12 - AUDIT rejects function search_path
+      ---
+      duration_ms: 1.24325
+      type: 'test'
+      ...
+# ABORTAR: funciones, search_path o ACL incompatibles
+    # Subtest: AUDIT rejects function security
+    ok 13 - AUDIT rejects function security
+      ---
+      duration_ms: 1.023292
+      type: 'test'
+      ...
+# ABORTAR: funciones, search_path o ACL incompatibles
+    # Subtest: AUDIT rejects public execute
+    ok 14 - AUDIT rejects public execute
+      ---
+      duration_ms: 1.061417
+      type: 'test'
+      ...
+# ABORTAR: migracion no registrada exactamente una vez
+    # Subtest: AUDIT rejects registry absent
+    ok 15 - AUDIT rejects registry absent
+      ---
+      duration_ms: 1.105958
+      type: 'test'
+      ...
+    # Subtest: empty rollback leaves existing invoices/bank/budget writer untouched
+    ok 16 - empty rollback leaves existing invoices/bank/budget writer untouched
+      ---
+      duration_ms: 1.644041
+      type: 'test'
+      ...
+    # Subtest: confirm OCR lines: amounts, unknown unit, credit and stable retry identities
+    ok 17 - confirm OCR lines: amounts, unknown unit, credit and stable retry identities
+      ---
+      duration_ms: 5.713292
+      type: 'test'
+      ...
+    # Subtest: new level supplies actual net cost after manual, before catalogs/custom order
+    ok 18 - new level supplies actual net cost after manual, before catalogs/custom order
+      ---
+      duration_ms: 0.388042
+      type: 'test'
+      ...
+    # Subtest: A cannot read, write, load or use B, including forged owner argument
+    ok 19 - A cannot read, write, load or use B, including forged owner argument
+      ---
+      duration_ms: 5.853166
+      type: 'test'
+      ...
+    # Subtest: age confidence follows historical curve; future dates are not evidence
+    ok 20 - age confidence follows historical curve; future dates are not evidence
+      ---
+      duration_ms: 0.233333
+      type: 'test'
+      ...
+    # Subtest: actual budget saves count once; lookups, copies and mismatched evidence do not
+    ok 21 - actual budget saves count once; lookups, copies and mismatched evidence do not
+      ---
+      duration_ms: 19.455
+      type: 'test'
+      ...
+    # Subtest: audit and rollback refuse data after release
+    ok 22 - audit and rollback refuse data after release
+      ---
+      duration_ms: 2.155792
+      type: 'test'
+      ...
+    # Subtest: deleted/rejected invoices stop supplying prices without erasing usage history
+    ok 23 - deleted/rejected invoices stop supplying prices without erasing usage history
+      ---
+      duration_ms: 3.452542
+      type: 'test'
+      ...
+    # Subtest: keyset loading crosses 1000 rows without losing the final private price
+    ok 24 - keyset loading crosses 1000 rows without losing the final private price
+      ---
+      duration_ms: 22.169792
+      type: 'test'
+      ...
+    # Subtest: net division is rounded in PostgreSQL, including half cents
+    ok 25 - net division is rounded in PostgreSQL, including half cents
+      ---
+      duration_ms: 19.555916
+      type: 'test'
+      ...
+    # Subtest: usage unit validation agrees with b1 aliases on both sides
+    ok 26 - usage unit validation agrees with b1 aliases on both sides
+      ---
+      duration_ms: 74.149458
+      type: 'test'
+      ...
+    # Subtest: transaction rollback does not leave phantom uses
+    ok 27 - transaction rollback does not leave phantom uses
+      ---
+      duration_ms: 11.44725
+      type: 'test'
+      ...
+    # Subtest: account lock and expired subscription reject line writes
+    ok 28 - account lock and expired subscription reject line writes
+      ---
+      duration_ms: 2.055375
+      type: 'test'
+      ...
+    # Subtest: engine adapter preserves invoiced amount and restores exact provenance
+    ok 29 - engine adapter preserves invoiced amount and restores exact provenance
+      ---
+      duration_ms: 0.639
+      type: 'test'
+      ...
+    1..29
+ok 1 - real PG17/PostgREST14.4: private invoice prices, gates, tampering and rollback
+  ---
+  duration_ms: 391.116584
+  type: 'test'
+  ...
+1..1
+# tests 30
+# suites 0
+# pass 30
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 558.543792

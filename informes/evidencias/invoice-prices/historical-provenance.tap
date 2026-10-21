@@ -1,0 +1,59 @@
+TAP version 13
+# Subtest: G3 lote 1a: procedencia de precios en budget_items
+    # Subtest: precheck registra las filas reales y la migración no controla transacciones
+    ok 1 - precheck registra las filas reales y la migración no controla transacciones
+      ---
+      duration_ms: 2.542083
+      type: 'test'
+      ...
+    # Subtest: las tres columnas tienen exactamente los tipos y son anulables
+    ok 2 - las tres columnas tienen exactamente los tipos y son anulables
+      ---
+      duration_ms: 0.563125
+      type: 'test'
+      ...
+    # Subtest: el CHECK admite NULL, 0 y 1 y rechaza 1.5
+    ok 3 - el CHECK admite NULL, 0 y 1 y rechaza 1.5
+      ---
+      duration_ms: 1.843917
+      type: 'test'
+      ...
+    # Subtest: las filas antiguas siguen intactas y con procedencia NULL
+    ok 4 - las filas antiguas siguen intactas y con procedencia NULL
+      ---
+      duration_ms: 0.579125
+      type: 'test'
+      ...
+    # Subtest: el comentario histórico conserva su vocabulario y el actual cubre el resolutor
+    ok 5 - el comentario histórico conserva su vocabulario y el actual cubre el resolutor
+      ---
+      duration_ms: 2.523792
+      type: 'test'
+      ...
+    # Subtest: la migración puede repetirse sin alterar las partidas
+    ok 6 - la migración puede repetirse sin alterar las partidas
+      ---
+      duration_ms: 0.465209
+      type: 'test'
+      ...
+    # Subtest: la auditoría obliga a pegar y comparar el número de filas
+    ok 7 - la auditoría obliga a pegar y comparar el número de filas
+      ---
+      duration_ms: 2.785875
+      type: 'test'
+      ...
+    1..7
+ok 1 - G3 lote 1a: procedencia de precios en budget_items
+  ---
+  duration_ms: 52.79375
+  type: 'test'
+  ...
+1..1
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 130.490125
