@@ -1,13 +1,25 @@
-begin;
--- Review only. Refuse to discard instrumentation already collected.
+-- BEGIN ROLLBACK_G3_OWN
+-- Compensa 20261021090000_user_supplied_prices. SOLO ejecución manual por Álvaro.
+-- Revertir primero la aplicación a una versión que no escriba las columnas nuevas.
+-- Ejecutar el bloque entero en una transacción del cliente, sin BEGIN/COMMIT aquí.
+-- ORDEN OBLIGATORIO para respetar dependencias:
+--   1. Los dos disparadores.
+--   2. Las dos funciones de disparador (y la RPC auxiliar; restaurar el escritor).
+--   3. La tabla user_price_collection_events.
+--   4. Las dos columnas.
+-- DESTRUCTIVO en cuanto haya eventos recogidos: perdería historial y referencias.
+-- El guard lo BLOQUEA si hay eventos; exportar y revisar antes de plantear deshacer.
+-- No elimina precios ni partidas. No usa CASCADE ni modifica schema_migrations.
 do $guard$
 begin
   if exists(select 1 from public.user_price_collection_events) then
     raise exception 'Export and review own-price instrumentation before rollback';
   end if;
 end $guard$;
+-- 1. Disparadores: ninguna función se suelta mientras un disparador la usa.
 drop trigger record_own_price_reuse on public.budget_items;
 drop trigger record_collected_price on public.price_items;
+-- 2. Funciones y restauración literal del escritor anterior.
 drop function budget_internal.record_own_price_reuse();
 drop function budget_internal.record_collected_price();
 drop function public.get_user_price_collection_stats(timestamptz);
@@ -62,10 +74,13 @@ begin
   get diagnostics v_count = row_count;
   return v_count;
 end $fn$;
+-- 3. Tabla de eventos.
+drop table public.user_price_collection_events;
+-- 4. Columnas.
 alter table public.budget_items drop column price_item_id;
 alter table public.price_items drop column collection_budget_id;
-drop table public.user_price_collection_events;
 comment on column public.budget_items.price_source_type is
   'G3. Procedencia del precio guardado: nivel elegido por el resolutor, ai_estimate si lo propone la IA sin fuente tecnica (confianza 0.20), o user_edited si la persona cambia el importe. Valores esperados: manual_locked, private_tariff, negotiated, historical_approved, preferred_supplier, provider_updated, private_bc3, technical_bank, enlaze_base, market_estimate, estimated, user_edited, ai_estimate. NULL en una partida antigua = anterior a G3; no significa que careciera de fuente. NULL en una partida nueva = fallo.';
 
-commit;
+notify pgrst, 'reload schema';
+-- END ROLLBACK_G3_OWN

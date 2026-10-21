@@ -1606,3 +1606,7 @@ drop function billing_internal.preserve_past_due_grace();
 alter table public.subscriptions drop column past_due_grace_ends_at;
 notify pgrst, 'reload schema';
 -- END ROLLBACK_BILLING_GRACE
+
+-- G3 precios propios · 20261021090000
+-- ROLLBACK_G3_OWN: bloques ejecutables en docs/fase3/G3-OWN-PRICES-ROLLBACK.sql.
+-- Una sola definición; consultar esos bloques y su orden de ejecución manual.

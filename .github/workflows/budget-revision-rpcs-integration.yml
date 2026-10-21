@@ -33,6 +33,9 @@ on:
       - "__tests__/support/bootstrap-budget-schema.sql"
       - "__tests__/support/budget-wizard-*"
       - "scripts/test-budget-wizard-provenance-local.mjs"
+      - "__tests__/g3-own-price-gates.integration.test.mjs"
+      - "docs/fase3/G3-OWN-PRICES-CHECKS.sql"
+      - "docs/fase3/G3-OWN-PRICES-ROLLBACK.sql"
       - "supabase/migrations/*user_supplied_prices.sql"
       - "lib/manual-price-writer.ts"
       - "lib/budget-financials.ts"
@@ -149,7 +152,7 @@ jobs:
         run: node __tests__/support/prepare-budget-revision-rpcs.mjs
       # Match the validated local runtime. Since v13, text-column FTS applies
       # to_tsvector with the requested language instead of the DB default.
-      - name: PostgREST 16.4 on isolated database network
+      - name: PostgREST 14.4 on isolated database network
         run: |
           docker run --detach --name enlaze-e2-revision-rest --network enlaze-e2-revision-network \
             --publish 127.0.0.1:53002:3000 \
@@ -159,6 +162,8 @@ jobs:
             postgrest/postgrest:v14.4
       - name: Real SQL, rollback, negative controls, HTTP 409 and Supabase client
         run: npm run test:budget-revision-rpcs-integration
+      - name: G3 own price gates and rollback with deliberate catalog drift
+        run: node --import tsx --test __tests__/g3-own-price-gates.integration.test.mjs
       - name: Full Next wizard on disposable PostgreSQL and PostgREST
         run: npm run test:budget-wizard-full-page-browser
       - name: G3 price provenance SQL and economic equivalence on disposable PostgreSQL

@@ -1,0 +1,323 @@
+TAP version 13
+# Subtest: G3 own operator artifacts have one source, explicit destructive order and no hidden transaction control
+ok 1 - G3 own operator artifacts have one source, explicit destructive order and no hidden transaction control
+  ---
+  duration_ms: 3.437792
+  type: 'test'
+  ...
+# Subtest: G3 own gates / real PostgreSQL 17: fail closed under deliberate drift and undo without losing price rows
+    # Subtest: PRECHECK is read only and captures both nonzero counts
+    ok 1 - PRECHECK is read only and captures both nonzero counts
+      ---
+      duration_ms: 0.84825
+      type: 'test'
+      ...
+# ABORTAR: 20261021090000 ya esta registrada
+    # Subtest: PRECHECK ABORTAR: registered already
+    ok 2 - PRECHECK ABORTAR: registered already
+      ---
+      duration_ms: 1.0725
+      type: 'test'
+      ...
+# ABORTAR: alguna columna nueva ya existe con otro tipo
+    # Subtest: PRECHECK ABORTAR: wrong price_items column type
+    ok 3 - PRECHECK ABORTAR: wrong price_items column type
+      ---
+      duration_ms: 0.962291
+      type: 'test'
+      ...
+# ABORTAR: alguna columna nueva ya existe con otro tipo
+    # Subtest: PRECHECK ABORTAR: wrong budget_items column type
+    ok 4 - PRECHECK ABORTAR: wrong budget_items column type
+      ---
+      duration_ms: 0.922667
+      type: 'test'
+      ...
+# ABORTAR: columnas nuevas ya presentes; revisar aplicacion parcial
+    # Subtest: PRECHECK ABORTAR: partial UUID column
+    ok 5 - PRECHECK ABORTAR: partial UUID column
+      ---
+      duration_ms: 0.784084
+      type: 'test'
+      ...
+# ABORTAR: objetos de recogida ya presentes; revisar aplicacion parcial
+    # Subtest: PRECHECK ABORTAR: partial events table
+    ok 6 - PRECHECK ABORTAR: partial events table
+      ---
+      duration_ms: 1.1275
+      type: 'test'
+      ...
+# ABORTAR: 20261021090000 no esta registrada exactamente una vez
+# ABORTAR: columnas nuevas ausentes o incompatibles
+    # Subtest: AUDIT returns ABORTAR before the migration, including when only the registry row exists
+    ok 7 - AUDIT returns ABORTAR before the migration, including when only the registry row exists
+      ---
+      duration_ms: 1.375
+      type: 'test'
+      ...
+# ABORTAR: 20261021090000 ya esta registrada
+    # Subtest: AUDIT OK with the operator counts; no data change or migration-created event
+    ok 8 - AUDIT OK with the operator counts; no data change or migration-created event
+      ---
+      duration_ms: 2.521792
+      type: 'test'
+      ...
+# ABORTAR: pega price_items_precheck del PRECHECK
+    # Subtest: AUDIT ABORTAR: both placeholders left at -1
+    ok 9 - AUDIT ABORTAR: both placeholders left at -1
+      ---
+      duration_ms: 0.604541
+      type: 'test'
+      ...
+# ABORTAR: pega price_items_precheck del PRECHECK
+    # Subtest: AUDIT ABORTAR: price_items placeholder missing
+    ok 10 - AUDIT ABORTAR: price_items placeholder missing
+      ---
+      duration_ms: 0.482916
+      type: 'test'
+      ...
+# ABORTAR: pega budget_items_precheck del PRECHECK
+    # Subtest: AUDIT ABORTAR: budget_items placeholder missing
+    ok 11 - AUDIT ABORTAR: budget_items placeholder missing
+      ---
+      duration_ms: 0.4325
+      type: 'test'
+      ...
+# ABORTAR: cambio el numero de filas de price_items
+    # Subtest: AUDIT ABORTAR: incorrect price_items count
+    ok 12 - AUDIT ABORTAR: incorrect price_items count
+      ---
+      duration_ms: 0.555292
+      type: 'test'
+      ...
+# ABORTAR: cambio el numero de filas de budget_items
+    # Subtest: AUDIT ABORTAR: incorrect budget_items count
+    ok 13 - AUDIT ABORTAR: incorrect budget_items count
+      ---
+      duration_ms: 0.536833
+      type: 'test'
+      ...
+# ABORTAR: 20261021090000 no esta registrada exactamente una vez
+    # Subtest: AUDIT ABORTAR: missing registry row
+    ok 14 - AUDIT ABORTAR: missing registry row
+      ---
+      duration_ms: 1.555417
+      type: 'test'
+      ...
+# ABORTAR: 20261021090000 no esta registrada exactamente una vez
+    # Subtest: AUDIT ABORTAR: duplicate registry row
+    ok 15 - AUDIT ABORTAR: duplicate registry row
+      ---
+      duration_ms: 1.700625
+      type: 'test'
+      ...
+# ABORTAR: cambio el numero de filas de price_items
+    # Subtest: AUDIT ABORTAR: price_items row added
+    ok 16 - AUDIT ABORTAR: price_items row added
+      ---
+      duration_ms: 1.407375
+      type: 'test'
+      ...
+# ABORTAR: cambio el numero de filas de price_items
+    # Subtest: AUDIT ABORTAR: price_items row removed
+    ok 17 - AUDIT ABORTAR: price_items row removed
+      ---
+      duration_ms: 1.4365
+      type: 'test'
+      ...
+# ABORTAR: cambio el numero de filas de budget_items
+    # Subtest: AUDIT ABORTAR: budget_items row removed
+    ok 18 - AUDIT ABORTAR: budget_items row removed
+      ---
+      duration_ms: 1.471083
+      type: 'test'
+      ...
+# ABORTAR: falta user_price_collection_events o RLS desactivado
+    # Subtest: AUDIT ABORTAR: events table missing
+    ok 19 - AUDIT ABORTAR: events table missing
+      ---
+      duration_ms: 1.601625
+      type: 'test'
+      ...
+# ABORTAR: falta user_price_collection_events o RLS desactivado
+    # Subtest: AUDIT ABORTAR: RLS disabled
+    ok 20 - AUDIT ABORTAR: RLS disabled
+      ---
+      duration_ms: 1.40125
+      type: 'test'
+      ...
+# ABORTAR: privilegios de user_price_collection_events incompatibles
+    # Subtest: AUDIT ABORTAR: SELECT grant removed
+    ok 21 - AUDIT ABORTAR: SELECT grant removed
+      ---
+      duration_ms: 1.488208
+      type: 'test'
+      ...
+# ABORTAR: privilegios de user_price_collection_events incompatibles
+    # Subtest: AUDIT ABORTAR: INSERT grant added
+    ok 22 - AUDIT ABORTAR: INSERT grant added
+      ---
+      duration_ms: 1.43225
+      type: 'test'
+      ...
+# ABORTAR: privilegios de user_price_collection_events incompatibles
+    # Subtest: AUDIT ABORTAR: UPDATE grant added
+    ok 23 - AUDIT ABORTAR: UPDATE grant added
+      ---
+      duration_ms: 1.55225
+      type: 'test'
+      ...
+# ABORTAR: privilegios de user_price_collection_events incompatibles
+    # Subtest: AUDIT ABORTAR: DELETE grant added
+    ok 24 - AUDIT ABORTAR: DELETE grant added
+      ---
+      duration_ms: 1.342542
+      type: 'test'
+      ...
+# ABORTAR: privilegios de user_price_collection_events incompatibles
+    # Subtest: AUDIT ABORTAR: column INSERT grant added
+    ok 25 - AUDIT ABORTAR: column INSERT grant added
+      ---
+      duration_ms: 1.424209
+      type: 'test'
+      ...
+# ABORTAR: privilegios de user_price_collection_events incompatibles
+    # Subtest: AUDIT ABORTAR: column UPDATE grant added
+    ok 26 - AUDIT ABORTAR: column UPDATE grant added
+      ---
+      duration_ms: 1.464583
+      type: 'test'
+      ...
+# ABORTAR: privilegios de user_price_collection_events incompatibles
+    # Subtest: AUDIT ABORTAR: anon SELECT leaked
+    ok 27 - AUDIT ABORTAR: anon SELECT leaked
+      ---
+      duration_ms: 1.382125
+      type: 'test'
+      ...
+# ABORTAR: disparadores ausentes, desactivados o enlazados incorrectamente
+    # Subtest: AUDIT ABORTAR: price trigger disabled
+    ok 28 - AUDIT ABORTAR: price trigger disabled
+      ---
+      duration_ms: 1.302583
+      type: 'test'
+      ...
+# ABORTAR: disparadores ausentes, desactivados o enlazados incorrectamente
+    # Subtest: AUDIT ABORTAR: budget trigger disabled
+    ok 29 - AUDIT ABORTAR: budget trigger disabled
+      ---
+      duration_ms: 1.402708
+      type: 'test'
+      ...
+# ABORTAR: disparadores ausentes, desactivados o enlazados incorrectamente
+    # Subtest: AUDIT ABORTAR: budget trigger absent
+    ok 30 - AUDIT ABORTAR: budget trigger absent
+      ---
+      duration_ms: 1.446791
+      type: 'test'
+      ...
+# ABORTAR: disparadores ausentes, desactivados o enlazados incorrectamente
+    # Subtest: AUDIT ABORTAR: trigger bound to wrong function
+    ok 31 - AUDIT ABORTAR: trigger bound to wrong function
+      ---
+      duration_ms: 1.509
+      type: 'test'
+      ...
+# ABORTAR: funciones ausentes, security definer, search_path o ACL incompatibles
+    # Subtest: AUDIT ABORTAR: collected function missing
+    ok 32 - AUDIT ABORTAR: collected function missing
+      ---
+      duration_ms: 1.451666
+      type: 'test'
+      ...
+# ABORTAR: funciones ausentes, security definer, search_path o ACL incompatibles
+    # Subtest: AUDIT ABORTAR: reuse function missing
+    ok 33 - AUDIT ABORTAR: reuse function missing
+      ---
+      duration_ms: 1.462083
+      type: 'test'
+      ...
+# ABORTAR: funciones ausentes, security definer, search_path o ACL incompatibles
+    # Subtest: AUDIT ABORTAR: collected security definer lost
+    ok 34 - AUDIT ABORTAR: collected security definer lost
+      ---
+      duration_ms: 1.29625
+      type: 'test'
+      ...
+# ABORTAR: funciones ausentes, security definer, search_path o ACL incompatibles
+    # Subtest: AUDIT ABORTAR: reuse security definer lost
+    ok 35 - AUDIT ABORTAR: reuse security definer lost
+      ---
+      duration_ms: 1.325208
+      type: 'test'
+      ...
+# ABORTAR: funciones ausentes, security definer, search_path o ACL incompatibles
+    # Subtest: AUDIT ABORTAR: collected search_path changed
+    ok 36 - AUDIT ABORTAR: collected search_path changed
+      ---
+      duration_ms: 1.3615
+      type: 'test'
+      ...
+# ABORTAR: funciones ausentes, security definer, search_path o ACL incompatibles
+    # Subtest: AUDIT ABORTAR: reuse search_path changed
+    ok 37 - AUDIT ABORTAR: reuse search_path changed
+      ---
+      duration_ms: 1.32675
+      type: 'test'
+      ...
+# ABORTAR: funciones ausentes, security definer, search_path o ACL incompatibles
+    # Subtest: AUDIT ABORTAR: private function exposed
+    ok 38 - AUDIT ABORTAR: private function exposed
+      ---
+      duration_ms: 1.43425
+      type: 'test'
+      ...
+# ABORTAR: columnas nuevas ausentes o incompatibles
+    # Subtest: AUDIT ABORTAR: new column type changed
+    ok 39 - AUDIT ABORTAR: new column type changed
+      ---
+      duration_ms: 2.814666
+      type: 'test'
+      ...
+# ABORTAR: columnas nuevas ausentes o incompatibles
+    # Subtest: AUDIT ABORTAR: new column default added
+    ok 40 - AUDIT ABORTAR: new column default added
+      ---
+      duration_ms: 1.425708
+      type: 'test'
+      ...
+# ABORTAR: hay eventos; hubo escrituras durante la aplicacion, investigar antes de continuar
+    # Subtest: AUDIT ABORTAR: unexpected event recorded
+    ok 41 - AUDIT ABORTAR: unexpected event recorded
+      ---
+      duration_ms: 2.300875
+      type: 'test'
+      ...
+# ABORTAR: ejecutar como operador que pueda contar todos los eventos, sin filtro RLS
+    # Subtest: AUDIT refuses a role whose RLS filter would hide other users events
+    ok 42 - AUDIT refuses a role whose RLS filter would hide other users events
+      ---
+      duration_ms: 1.270167
+      type: 'test'
+      ...
+    # Subtest: ROLLBACK refuses existing events before dropping anything and restores the prior writer/rows when empty
+    ok 43 - ROLLBACK refuses existing events before dropping anything and restores the prior writer/rows when empty
+      ---
+      duration_ms: 4.636792
+      type: 'test'
+      ...
+    1..43
+ok 2 - G3 own gates / real PostgreSQL 17: fail closed under deliberate drift and undo without losing price rows
+  ---
+  duration_ms: 116.725667
+  type: 'test'
+  ...
+1..2
+# tests 45
+# suites 0
+# pass 45
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 239.158166

@@ -1,0 +1,2 @@
+npx tsc --noEmit: PASS, exit 0, no diagnostics
+npx eslint scripts/test-budget-wizard-provenance-local.mjs __tests__/g3-own-price-gates.integration.test.mjs: PASS, exit 0, no diagnostics

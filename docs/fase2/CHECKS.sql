@@ -3259,3 +3259,7 @@ from (select
   and not has_table_privilege('authenticated','public.subscriptions','UPDATE')
   and not has_table_privilege('anon','public.subscriptions','UPDATE')) as permisos) evidencia;
 -- END CHECK_BILLING_GRACE_AUDIT
+
+-- G3 precios propios · 20261021090000
+-- CHECK_G3_OWN_PRECHECK y CHECK_G3_OWN_AUDIT: bloques ejecutables en docs/fase3/G3-OWN-PRICES-CHECKS.sql.
+-- Una sola definición; consultar esos bloques y su orden de ejecución manual.

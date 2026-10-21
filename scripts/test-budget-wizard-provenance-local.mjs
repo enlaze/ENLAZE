@@ -27,7 +27,8 @@ const data = join(directory,'data');
 const aiMissMutation = process.argv.includes('--ai-miss-mutation');
 const ownPriceMutation = process.argv.includes('--own-price-mutation');
 const ownPriceBenchmark = process.argv.includes('--own-price-benchmark');
-const reports = join(root, (ownPriceMutation || ownPriceBenchmark) ? 'informes/evidencias/g3-own-prices' : aiMissMutation ? 'informes/evidencias/g3-phase2' : 'informes/evidencias/budget-wizard-provenance');
+const ownPriceGates = process.argv.includes('--own-price-gates');
+const reports = join(root, ownPriceGates ? 'informes/evidencias/g3-own-prices-gates' : (ownPriceMutation || ownPriceBenchmark) ? 'informes/evidencias/g3-own-prices' : aiMissMutation ? 'informes/evidencias/g3-phase2' : 'informes/evidencias/budget-wizard-provenance');
 await mkdir(reports,{recursive:true});
 let started=false, rest, mutantDir;
 const env = {...childEnv,
@@ -80,9 +81,18 @@ try {
   }
   assert.ok(ready,restLog);
   const restVersion = (await exec(restBin, ['--version'], {env:childEnv})).stdout.trim();
-  if (ownPriceMutation || ownPriceBenchmark) assert.match(restVersion, /PostgREST 14\.4/);
+  if (ownPriceMutation || ownPriceBenchmark || ownPriceGates) assert.match(restVersion, /PostgREST 14\.4/);
   console.log(`BENCH ${version}; ${restVersion}; existing full-page E2E; guarded Next sockets and browser requests`);
-  if (ownPriceBenchmark) {
+  if (ownPriceGates) {
+    const result = await exec(globalThis.process.execPath, ['--import', 'tsx', '--test', '--test-reporter=tap', '__tests__/g3-own-price-gates.integration.test.mjs'],
+      { cwd: root, env, maxBuffer: 1024 * 1024 });
+    await writeFile(join(reports, 'gates-and-rollback.tap'), result.stdout + result.stderr);
+    console.log(result.stdout);
+    if (process.argv.includes('--with-wizard')) {
+      const wizard = await run(root, 'wizard-regression');
+      assert.equal(wizard.code, 0, wizard.output.slice(-5000));
+    }
+  } else if (ownPriceBenchmark) {
     const result = await exec(globalThis.process.execPath, ['--import', 'tsx', 'scripts/benchmark-own-price-save.mjs'],
       { cwd: root, env, maxBuffer: 1024 * 1024 });
     console.log(result.stdout);
