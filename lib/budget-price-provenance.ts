@@ -2,6 +2,8 @@
 const USER_EDITED_CONFIDENCE = 0.95;
 export const AI_ESTIMATE_CONFIDENCE = 0.20;
 export const AI_ESTIMATE_LABEL = "Estimación IA · sin fuente técnica";
+export const USER_SUPPLIED_CONFIDENCE = 0.95;
+export const USER_SUPPLIED_LABEL = "Tu precio · guardado en Precios";
 
 // One definition for provenance reporting. This is NOT an adoption policy:
 // market_estimate can improve an AI price while still lacking a verifiable source.
@@ -62,6 +64,7 @@ export function generatedPriceBaseline<T extends BudgetPriceEvidence>(item: T, p
     resolved_source_type: item.price_source_type,
     resolved_confidence: item.price_confidence,
     resolved_checked_at: item.price_checked_at,
+    ...(item.price_item_id ? { resolved_price_item_id: item.price_item_id } : {}),
   };
 }
 
@@ -69,17 +72,20 @@ export interface BudgetPriceEvidence {
   price_source_type?: string | null;
   price_confidence?: number | null;
   price_checked_at?: string | null;
+  price_item_id?: string | null;
   /** The adopted or generated price, before a person edits the line. */
   resolved_unit_price?: number | null;
   resolved_source_type?: string | null;
   resolved_confidence?: number | null;
   resolved_checked_at?: string | null;
+  resolved_price_item_id?: string | null;
 }
 
 export interface PersistedPriceEvidence {
   price_source_type: string | null;
   price_confidence: number | null;
   price_checked_at: string | null;
+  price_item_id?: string | null;
 }
 
 export function resolvedPriceEvidence(
@@ -87,6 +93,7 @@ export function resolvedPriceEvidence(
   sourceType: string,
   confidence: number,
   checkedAt: string,
+  priceItemId?: string,
 ): BudgetPriceEvidence {
   return {
     price_source_type: sourceType,
@@ -96,6 +103,7 @@ export function resolvedPriceEvidence(
     resolved_source_type: sourceType,
     resolved_confidence: confidence,
     resolved_checked_at: checkedAt,
+    ...(priceItemId ? { price_item_id: priceItemId, resolved_price_item_id: priceItemId } : {}),
   };
 }
 
@@ -111,6 +119,7 @@ export function evidenceAfterPriceEdit<T extends BudgetPriceEvidence>(
       price_source_type: item.resolved_source_type ?? null,
       price_confidence: item.resolved_confidence ?? null,
       price_checked_at: item.resolved_checked_at ?? null,
+      ...(item.resolved_price_item_id ? { price_item_id: item.resolved_price_item_id } : {}),
     };
   }
   return {
@@ -118,6 +127,7 @@ export function evidenceAfterPriceEdit<T extends BudgetPriceEvidence>(
     price_source_type: "user_edited",
     price_confidence: USER_EDITED_CONFIDENCE,
     price_checked_at: editedAt,
+    ...(item.price_item_id ? { price_item_id: null } : {}),
   };
 }
 
@@ -136,11 +146,13 @@ export function evidenceForSave(
       price_checked_at: item.price_source_type === "user_edited"
         ? item.price_checked_at ?? savedAt
         : savedAt,
+      ...(item.price_item_id ? { price_item_id: null } : {}),
     };
   }
   return {
     price_source_type: item.price_source_type ?? null,
     price_confidence: item.price_confidence ?? null,
     price_checked_at: item.price_checked_at ?? null,
+    ...(item.price_item_id ? { price_item_id: item.price_item_id } : {}),
   };
 }

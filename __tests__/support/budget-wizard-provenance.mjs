@@ -32,7 +32,7 @@ export async function prepareWizardProvenance(db) {
     create table public.price_items(id uuid primary key default gen_random_uuid(), user_id uuid,
       name text, unit text, unit_price numeric, supplier_name text, source_type text,
       is_manual_override boolean, is_active boolean, sector text, category text,
-      source_url text, description text);
+      source_url text, description text, subcategory text, confidence_score numeric);
     create table public.n8n_updates(id uuid primary key, status text, created_at timestamptz,
       processed_at timestamptz, data jsonb, sector text, update_type text);
     create table public.technical_price_items(name text, item_code text, unit text,
@@ -48,6 +48,9 @@ export async function prepareWizardProvenance(db) {
       units_per_package numeric, url text, source_url text, checked_at timestamptz);
     alter table public.price_items enable row level security;
     create policy price_items_owner_read on public.price_items for select to authenticated using(user_id=auth.uid());
+    create policy price_items_owner_insert on public.price_items for insert to authenticated with check(user_id=auth.uid());
+    create policy price_items_owner_update on public.price_items for update to authenticated using(user_id=auth.uid()) with check(user_id=auth.uid());
+    grant insert,update on public.price_items to authenticated;
     grant select on public.price_items,public.technical_price_items,public.sector_data,
       public.pb_providers,public.pb_products,public.clients,public.projects to authenticated;
     grant service_role to e2_authenticator;

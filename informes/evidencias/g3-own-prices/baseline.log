@@ -1,0 +1,28 @@
+TAP version 13
+# PASS G3 SUMMARY RESOLVED: 0 de 5 líneas; 0% del importe
+# PASS G3 GENERATED: 5 budget_items preserve source, confidence and timestamp from real resolver API
+# PASS G3 BASKET: 8 materials preserve resolver evidence in wizard_state without duplicate budget_items
+# PASS G3 USER_EDITED: actual price input -> real save_budget -> user_edited / 0.95 / edit timestamp
+# PASS G3 SUMMARY BEFORE SAVE: 7 de 8 líneas sin fuente verificable — 81,3 % del importe
+# PASS G3 SUMMARY SAVED DETAIL: 7 de 8 líneas sin fuente verificable — 81,3 % del importe
+# PASS A BIS: real resolver misses preserve 7 ai_estimate / 0.20; matched AI line adopts technical_bank / 0.78
+# PASS G3 PostgreSQL 17: 8 líneas nuevas en budget_items, 0 NULL; 7 ai_estimate con confianza 0.20 y fecha actual
+# PASS G3 OWN WIZARD: detail edit survives hydration; inline assistant collection -> user_supplied / 0.95; summary drops again; saved=2 reused=1
+# PASS G3 OWN COLLECTION: inline detail -> user_supplied / 0.95; price_items manual override 37.5 EUR/m2; summary 57,8%
+# PASS G3 OWN REUSE: second real generated budget -> manual_locked; wrong unit rejected; counters saved=1 reused=1; queries/autosave do not inflate; RLS enforced
+# PASS: wizard hydrates without writing, autosaves, rejects a stale tab, finalizes through PostgREST and keeps a legacy budget items
+# Subtest: __tests__/budget-wizard-full-page.browser.integration.test.mjs
+ok 1 - __tests__/budget-wizard-full-page.browser.integration.test.mjs
+  ---
+  duration_ms: 61074.189542
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 61080.087834

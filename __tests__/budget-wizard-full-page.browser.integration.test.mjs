@@ -170,6 +170,7 @@ async function openWizard(budgetId, expectedTitle = "Base E2E", { step = null, r
 try {
   await setup(db);
   await prepareWizardProvenance(db);
+  await db.query(await readFile(new URL("supabase/migrations/20261021090000_user_supplied_prices.sql", root), "utf8"));
   await db.query("insert into auth.users values($1)", [owner]);
   await seedWizardPriceSources(db, owner);
   await db.query("notify pgrst, 'reload schema'");
@@ -610,6 +611,137 @@ try {
   console.log(`PASS G3 SUMMARY SAVED DETAIL: ${expectedSummary}`);
   console.log("PASS A BIS: real resolver misses preserve 7 ai_estimate / 0.20; matched AI line adopts technical_bank / 0.78");
   console.log(`PASS G3 PostgreSQL 17: ${lines.length} líneas nuevas en budget_items, 0 NULL; 7 ai_estimate con confianza 0.20 y fecha actual`);
+
+  // ---- G3 phase 4: actual inline collection -> bank -> a later generated budget ----
+  const ownConcept = "Pintura pared G3 0";
+  const ownPrice = 37.5;
+  const ownInput = 'tbody tr:first-child input[aria-label="Tu precio por m2"]';
+  await ai.page.waitForSelector(ownInput);
+  await ai.page.locator(ownInput).fill(String(ownPrice));
+  await ai.page.evaluate(() => [...document.querySelectorAll("tbody tr:first-child button")]
+    .find(button => button.textContent?.trim() === "Guardar mi precio")?.click());
+  try {
+    await waitFor(async () => (await db.query("select unit_price_cost from public.budget_items where budget_id=$1 and concept=$2",
+      [aiId, ownConcept])).rows.some(row => Number(row.unit_price_cost) === ownPrice), "own price saved in first budget", 20000);
+  } catch (error) {
+    throw Error(`Own price collection failed: ${JSON.stringify(requests.slice(-25))}; UI=${await visibleText(ai.page)}; errors=${JSON.stringify(ai.pageErrors)}`, { cause: error });
+  }
+  const collected = (await db.query("select * from public.budget_items where budget_id=$1 and concept=$2", [aiId, ownConcept])).rows[0];
+  assert.equal(collected.price_source_type, "user_supplied");
+  assert.equal(Number(collected.price_confidence), 0.95);
+  await waitFor(async () => (await ai.page.$eval('[data-testid="price-provenance-summary"]', node => node.innerText)).includes("6 de 8"),
+    "saved detail summary drops after own price");
+  const correctedTotal = (await db.query("select subtotal from public.budget_items where budget_id=$1", [aiId])).rows.reduce((sum, row) => sum + Number(row.subtotal), 0);
+  const correctedWeak = lines.filter(row => row.concept !== ownConcept && row.price_source_type === "ai_estimate").reduce((sum, row) => sum + Number(row.subtotal), 0);
+  const correctedPercent = (Math.round(correctedWeak / correctedTotal * 1000) / 10).toLocaleString("es-ES");
+  assert.ok((await ai.page.$eval('[data-testid="price-provenance-summary"]', node => node.innerText))
+    .includes(`6 de 8 líneas sin fuente verificable — ${correctedPercent} % del importe`));
+  // Queries alone, including a rejected unit, must not count as a reuse.
+  async function quoteOwn(unit) {
+    return ai.page.evaluate(async (name, unit) => {
+      const response = await fetch("/api/prices/resolve", { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ materials: [{ materialName: name, unit, quantity: 40, category: "mano_obra", qualityTier: "media" }], sector: "construccion", includeCommercialCatalog: false }) });
+      if (!response.ok) throw Error(await response.text());
+      return response.json();
+    }, ownConcept, unit);
+  }
+  const wrongUnit = await quoteOwn("ud");
+  assert.notEqual(wrongUnit.resolved.find(row => row.materialName === ownConcept)?.sourceType, "manual_locked", "same name in another unit must not adopt own price");
+  await quoteOwn("m2");
+  const stats = async () => {
+    const response = await fetch(`${restOrigin}/rpc/get_user_price_collection_stats`, { method: "POST",
+      headers: { "content-type": "application/json", Authorization: `Bearer ${accessToken}` }, body: "{}" });
+    assert.equal(response.status, 200, await response.clone().text());
+    return response.json();
+  };
+  assert.equal((await stats()).reused, 0, "resolver lookups are not persisted reuses");
+  const laterSeed = await fetch(`${restOrigin}/rpc/create_budget_with_items`, { method: "POST",
+    headers: { "content-type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ p_budget_data: { title: "Pintura propia posterior", budget_number: "WIZARD-OWN-SECOND" }, p_items: [] }) });
+  assert.equal(laterSeed.status, 200, await laterSeed.clone().text());
+  const { budget_id: laterId } = await laterSeed.json();
+  const wizardState = (await db.query("select wizard_state from public.budgets where id=$1", [aiId])).rows[0].wizard_state;
+  await db.query("update public.budgets set wizard_state=$2 where id=$1", [laterId, JSON.stringify({
+    ...wizardState, title: "Pintura propia posterior", partidas: [], materials: [], currentStep: 1,
+  })]);
+  const later = await openWizard(laterId, "Pintura propia posterior", { step: 1, ready: "Volver a calcular" });
+  await later.page.evaluate(() => [...document.querySelectorAll("button")]
+    .find(button => button.textContent?.includes("Volver a calcular"))?.click());
+  await waitFor(async () => (await visibleText(later.page)).includes("Pintura pared G3 6") &&
+    (await visibleText(later.page)).includes("Volver a calcular"), "second generation completed");
+  await waitFor(async () => (await db.query("select count(*)::int as n from public.budget_items where budget_id=$1", [laterId])).rows[0].n === 8,
+    "second generated budget persisted", 30000);
+  const reused = (await db.query("select * from public.budget_items where budget_id=$1 and concept=$2", [laterId, ownConcept])).rows[0];
+  // First bank assertion intentionally occurs AFTER this persisted adoption:
+  // deleting the bank write must fail on the second budget's missing source.
+  assert.equal(reused.price_source_type, "manual_locked", "G3 OWN REUSE: second budget must resolve collected price, not remain without source");
+  assert.equal(Number(reused.unit_price_cost), ownPrice);
+  assert.equal(Number(reused.price_confidence), 1);
+  const bank = (await db.query("select * from public.price_items where id=$1", [collected.price_item_id])).rows[0];
+  assert.ok(bank);
+  assert.equal(bank.user_id, owner);
+  assert.equal(bank.name, ownConcept);
+  assert.equal(bank.unit, "m2");
+  assert.equal(Number(bank.unit_price), ownPrice);
+  assert.equal(bank.is_manual_override, true);
+  assert.equal(reused.price_item_id, bank.id);
+  assert.deepEqual(await stats(), { saved: 1, reused: 1 });
+  const saveAgain = await fetch(`${restOrigin}/rpc/save_budget`, { method: "POST",
+    headers: { "content-type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ p_budget_id: laterId,
+      p_expected_lock_version: (await db.query("select lock_version from public.budgets where id=$1", [laterId])).rows[0].lock_version,
+      p_budget_data: { title: "Pintura propia posterior" }, p_items: (await db.query("select * from public.budget_items where budget_id=$1 order by sort_order", [laterId])).rows }) });
+  assert.equal(saveAgain.status, 200, await saveAgain.clone().text());
+  assert.deepEqual(await stats(), { saved: 1, reused: 1 }, "autosave must not count the same price/budget twice");
+  // RLS: nobody can manufacture counters or read somebody else's collection.
+  const outsider = token("authenticated", "22222222-2222-4222-8222-222222222222");
+  const outsiderStats = await fetch(`${restOrigin}/rpc/get_user_price_collection_stats`, { method: "POST",
+    headers: { "content-type": "application/json", Authorization: `Bearer ${outsider}` }, body: "{}" });
+  assert.deepEqual(await outsiderStats.json(), { saved: 0, reused: 0 });
+  const forged = await fetch(`${restOrigin}/user_price_collection_events`, { method: "POST",
+    headers: { "content-type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ user_id: owner, price_item_id: bank.id, budget_id: aiId, event_kind: "reused" }) });
+  assert.equal(forged.status, 403, "authenticated users cannot forge instrumentation");
+  // A persisted row is not enough by itself: it must actually adopt this bank
+  // price in a later budget. Exercise all trigger guards through the real RPC.
+  const rejectedSeed = await fetch(`${restOrigin}/rpc/save_budget`, { method: "POST",
+    headers: { "content-type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ p_budget_id: generatedId,
+      p_expected_lock_version: (await db.query("select lock_version from public.budgets where id=$1", [generatedId])).rows[0].lock_version,
+      p_budget_data: { title: generatedTitle },
+      p_items: [
+        { unit: "ud", unit_price_cost: ownPrice, price_source_type: "manual_locked", price_checked_at: new Date().toISOString() },
+        { unit: "m2", unit_price_cost: ownPrice + 1, price_source_type: "manual_locked", price_checked_at: new Date().toISOString() },
+        { unit: "m2", unit_price_cost: ownPrice, price_source_type: "user_edited", price_checked_at: new Date().toISOString() },
+        { unit: "m2", unit_price_cost: ownPrice, price_source_type: "manual_locked", price_checked_at: "2020-01-01T00:00:00Z" },
+      ].map(line => ({ ...line, concept: ownConcept, quantity: 1, unit_price: ownPrice, price_item_id: bank.id })) }) });
+  assert.equal(rejectedSeed.status, 200, await rejectedSeed.clone().text());
+  assert.deepEqual(await stats(), { saved: 1, reused: 1 }, "wrong unit/amount/source and pre-collection evidence are not counted");
+  const ownWizard = await openWizard(aiId, "Pintura G3", { step: 1, ready: "Volver a calcular" });
+  assert.ok((await visibleText(ownWizard.page)).includes("Tu precio · guardado en Precios"), "detail correction survives wizard hydration");
+  const targetConcept = "Pintura pared G3 6";
+  const wizardOwn = 'tbody tr:nth-child(7) input[aria-label="Tu precio por m2"]';
+  await ownWizard.page.locator(wizardOwn).fill("22.5");
+  await waitFor(async () => ownWizard.page.evaluate(() => ![...document.querySelectorAll("tbody tr:nth-child(7) button")]
+    .find(button => button.textContent?.trim() === "Guardar mi precio")?.disabled), "wizard collection enabled");
+  await ownWizard.page.evaluate(() => [...document.querySelectorAll("tbody tr:nth-child(7) button")]
+    .find(button => button.textContent?.trim() === "Guardar mi precio")?.click());
+  await waitFor(async () => (await db.query("select price_source_type,unit_price_cost from public.budget_items where budget_id=$1 and concept=$2",
+    [aiId, targetConcept])).rows.some(line => line.price_source_type === "user_supplied" && Number(line.unit_price_cost) === 22.5),
+    "wizard inline collection autosaved", 20000);
+  assert.equal(Number((await db.query("select price_confidence from public.budget_items where budget_id=$1 and concept=$2", [aiId, targetConcept])).rows[0].price_confidence), 0.95);
+  assert.deepEqual(await stats(), { saved: 2, reused: 1 });
+  assert.ok((await ownWizard.page.$eval('[data-testid="price-provenance-summary"]', node => node.innerText)).includes("5 de 8"));
+  assert.deepEqual(ownWizard.pageErrors, []);
+  console.log("PASS G3 OWN WIZARD: detail edit survives hydration; inline assistant collection -> user_supplied / 0.95; summary drops again; saved=2 reused=1");
+  const rollback = await readFile(new URL("docs/fase3/G3-OWN-PRICES-ROLLBACK.sql", root), "utf8");
+  await assert.rejects(db.query(rollback), /Export and review own-price instrumentation before rollback/);
+  await db.query("rollback");
+  assert.deepEqual(await stats(), { saved: 2, reused: 1 }, "rollback gate refuses to discard live collection events");
+  assert.deepEqual(later.pageErrors, []);
+  assert.deepEqual(ai.pageErrors, []);
+  console.log(`PASS G3 OWN COLLECTION: inline detail -> user_supplied / 0.95; price_items manual override ${ownPrice} EUR/m2; summary ${correctedPercent}%`);
+  console.log("PASS G3 OWN REUSE: second real generated budget -> manual_locked; wrong unit rejected; counters saved=1 reused=1; queries/autosave do not inflate; RLS enforced");
 
   assert.deepEqual(first.pageErrors, []);
   assert.deepEqual(second.pageErrors, []);

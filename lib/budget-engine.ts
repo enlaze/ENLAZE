@@ -987,7 +987,7 @@ export function applyMaterialBasketToItems(
   marginMultiplier: number,
 ): EnginePartida[] {
   const authoritativeSources = new Set([
-    "user_catalog", "manual_locked", "private_tariff", "negotiated",
+    "user_catalog", "manual_locked", "user_supplied", "private_tariff", "negotiated",
     "historical_approved", "preferred_supplier", "provider_updated",
     "n8n_market", "authorized_supplier", "web_search", "private_bc3",
     "technical_bank",
@@ -1317,7 +1317,7 @@ export function adjustToMarket(
   // ─── Below floor → scale proportionally ──────────────────────────────
   const targetTotal = marketFloor;
   const authoritativeSources = new Set([
-    "user_catalog", "manual_locked", "private_tariff", "negotiated",
+    "user_catalog", "manual_locked", "user_supplied", "private_tariff", "negotiated",
     "historical_approved", "preferred_supplier", "provider_updated",
     "n8n_market", "authorized_supplier", "web_search", "private_bc3",
     "technical_bank", "market_estimate",

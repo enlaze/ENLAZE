@@ -1,6 +1,8 @@
+import { calculateBudgetFinancials } from "@/lib/budget-financials";
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useMemo, useRef } from "react";
 import { normalizeSector } from "@/lib/sector-config";
 import { createClient } from "@/lib/supabase-browser";
+import { saveManualPrice } from "@/lib/manual-price-writer";
 import { useToast } from "@/components/ui/toast";
 import { logActivity } from "@/lib/activity-log";
 import {
@@ -68,6 +70,7 @@ import {
 } from "@/lib/material-procurement";
 import { buildAutosaveSignature } from "@/lib/budget-autosave-signature";
 import {
+  USER_SUPPLIED_CONFIDENCE,
   evidenceAfterPriceEdit,
   evidenceAfterResolverMiss,
   evidenceForSave,
@@ -115,29 +118,7 @@ function defaultValidUntil() {
   return date.toISOString().slice(0, 10);
 }
 
-export function calculateBudgetFinancials(
-  subtotal: number,
-  ivaPercent: number,
-  discountType: "percent" | "amount",
-  discountPercent: number,
-  discountAmount: number,
-) {
-  const safeSubtotal = Math.max(0, Number(subtotal) || 0);
-  const discountValue = discountType === "amount"
-    ? Math.min(safeSubtotal, Math.max(0, Number(discountAmount) || 0))
-    : Math.round(
-        safeSubtotal * (Math.max(0, Math.min(100, Number(discountPercent) || 0)) / 100) * 100,
-      ) / 100;
-  const taxableBase = Math.max(0, safeSubtotal - discountValue);
-  const ivaAmount = taxableBase * (Math.max(0, Number(ivaPercent) || 0) / 100);
-  return {
-    subtotal: safeSubtotal,
-    discountValue,
-    taxableBase,
-    ivaAmount,
-    total: taxableBase + ivaAmount,
-  };
-}
+export { calculateBudgetFinancials } from "@/lib/budget-financials";
 
 /** Aviso normativo devuelto por el análisis (se pinta como título + descripción). */
 export interface RegulatoryNote {
@@ -178,38 +159,7 @@ export interface Partida extends BudgetPriceEvidence {
   estimated_hours?: number;
 }
 
-/**
- * Rebuilds wizard partidas from the budget_items rows of a budget saved before
- * the wizard stored them in wizard_state. The column pair is the inverse of the
- * one revisionItems() writes: unit_price/subtotal hold the client price and
- * unit_price_cost/subtotal_cost the cost.
- */
-export function partidasFromBudgetItems(rows: readonly Record<string, unknown>[]): Partida[] {
-  const number = (value: unknown) => {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  };
-  const text = (value: unknown, fallback = "") =>
-    typeof value === "string" && value.trim() ? value : fallback;
-  return rows.map((row, index) => ({
-    id: text(row.id, `budget-item-${index}`),
-    concept: text(row.concept),
-    description: text(row.description),
-    quantity: number(row.quantity),
-    unit: text(row.unit, "ud"),
-    category: text(row.category, "otros"),
-    chapter: text(row.chapter, text(row.category, "otros")),
-    unit_price: number(row.unit_price_cost),
-    subtotal_cost: number(row.subtotal_cost),
-    unit_price_client: number(row.unit_price),
-    subtotal_client: number(row.subtotal),
-    // budget_items only ever receives the non-optional lines.
-    status: "incluida" as const,
-    price_source_type: text(row.price_source_type) || null,
-    price_confidence: row.price_confidence == null ? null : number(row.price_confidence),
-    price_checked_at: text(row.price_checked_at) || null,
-  }));
-}
+export { partidasFromBudgetItems } from "@/lib/budget-item-hydration";
 
 export interface ProviderOption {
   id: string;
@@ -432,7 +382,7 @@ async function verifyMaterialsAgainstTracker(
         sourceName: material.isRealData ? material.sourceName : "Oferta local pendiente",
       };
     }
-    if (material.price_source_type === "user_edited") return material;
+    if (["user_edited", "user_supplied"].includes(material.price_source_type || "")) return material;
     const resolved = resolvedByMaterialId.get(material.id);
     // Adoption of the resolved price is separate from the isRealData label:
     // manual_locked, technical_bank, private_bc3 and URL-less private_tariff
@@ -466,7 +416,7 @@ async function verifyMaterialsAgainstTracker(
       unit_price: resolved.selectedPrice,
       subtotal: resolved.selectedPrice * material.quantity,
       ...resolvedPriceEvidence(
-        resolved.selectedPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt,
+        resolved.selectedPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt, resolved.manualPriceItemId,
       ),
       provider_id: providerId || "rastreador-enlaze",
       isRealData: isTraceableCommercialPrice(resolved),
@@ -764,6 +714,7 @@ interface BudgetContextProps {
   goToStep: (step: number) => void;
   addPartida: (partida: Partial<Partida>) => void;
   updatePartida: (id: string, updates: Partial<Partida>) => void;
+  supplyOwnPrice: (id: string, price: number) => Promise<void>;
   removePartida: (id: string) => void;
   setSelectedProvider: (id: string) => void;
   updateMaterial: (id: string, updates: Partial<Material>) => void;
@@ -1204,6 +1155,11 @@ export function BudgetGenerateProvider({
       const newPartidas = prev.partidas.map(p => {
         if (p.id !== id) return p;
         const updated = { ...p, ...updates };
+        if ((updates.concept !== undefined && updates.concept !== p.concept) ||
+            (updates.unit !== undefined && updates.unit !== p.unit)) {
+          updated.price_item_id = null;
+          updated.resolved_price_item_id = null;
+        }
         if (updates.unit_price !== undefined && updates.unit_price !== p.unit_price) {
           Object.assign(updated, evidenceAfterPriceEdit(updated, updates.unit_price, new Date().toISOString()));
           updated.unit_price = updates.unit_price;
@@ -1216,6 +1172,30 @@ export function BudgetGenerateProvider({
       });
       return { ...prev, partidas: newPartidas };
     });
+  };
+
+  const supplyOwnPrice = async (id: string, price: number) => {
+    const item = state.partidas.find(candidate => candidate.id === id);
+    if (!item) throw new Error("La partida ya no está disponible.");
+    const budgetId = state.draftId || await saveDraft(true);
+    if (!budgetId) throw new Error("Guarda primero este borrador para recoger tu precio.");
+    const client = createClient();
+    const { data: { user }, error } = await client.auth.getUser();
+    if (error || !user) throw new Error("La sesión ha caducado.");
+    const saved = await saveManualPrice(client, {
+      userId: user.id, sector: state.sector, collectionBudgetId: budgetId,
+      values: { name: item.concept, description: item.description, category: item.category,
+        subcategory: "", unit: item.unit, unit_price: Math.round(price * 100) / 100 },
+    });
+    const unitPrice = Number(saved.unit_price);
+    setState(previous => ({ ...previous, partidas: previous.partidas.map(current => {
+      if (current.id !== id || current.concept !== item.concept || current.unit !== item.unit) return current;
+      const multiplier = marginMultiplier(previous.marginPercent);
+      return { ...current, ...resolvedPriceEvidence(unitPrice, "user_supplied", USER_SUPPLIED_CONFIDENCE,
+        new Date().toISOString(), saved.id), unit_price: unitPrice,
+        subtotal_cost: unitPrice * current.quantity, unit_price_client: unitPrice * multiplier,
+        subtotal_client: unitPrice * multiplier * current.quantity, price_source: "user_supplied" };
+    }) }));
   };
 
   const removePartida = (id: string) => {
@@ -2286,7 +2266,7 @@ export function BudgetGenerateProvider({
                 sourceName: material.isRealData ? material.sourceName : "Oferta local pendiente",
               };
             }
-            if (material.price_source_type === "user_edited") return material;
+            if (["user_edited", "user_supplied"].includes(material.price_source_type || "")) return material;
             const resolved = resolvedByMaterialId.get(material.id);
             // Adoption of the resolved price is separate from the
             // isRealData label — see the equivalent gate above.
@@ -2316,7 +2296,7 @@ export function BudgetGenerateProvider({
               unit_price: resolved.selectedPrice,
               subtotal: resolved.selectedPrice * material.quantity,
               ...resolvedPriceEvidence(
-                resolved.selectedPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt,
+                resolved.selectedPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt, resolved.manualPriceItemId,
               ),
               provider_id: providerId || "rastreador-enlaze",
               isRealData: isTraceableCommercialPrice(resolved),
@@ -2390,7 +2370,7 @@ export function BudgetGenerateProvider({
 
         if (partidasPriceResult.ok) {
           finalPartidas = finalPartidas.map((partida, index) => {
-            if (partida.price_source_type === "user_edited") return partida;
+            if (["user_edited", "user_supplied"].includes(partida.price_source_type || "")) return partida;
             const resolved = partidasPriceResult.resolved[index];
             const isSupplyLine = partida.category === "material";
             const canUseResolved =
@@ -2422,7 +2402,7 @@ export function BudgetGenerateProvider({
               price_checked_at: resolved.capturedAt,
               confidence_score: resolved.confidenceScore,
               ...resolvedPriceEvidence(
-                unitPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt,
+                unitPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt, resolved.manualPriceItemId,
               ),
               unit_price: unitPrice,
               subtotal_cost: unitPrice * partida.quantity,
@@ -2852,7 +2832,7 @@ export function BudgetGenerateProvider({
   return (
     <BudgetContext.Provider value={{
       state, updateState, updateSectorData, nextStep, prevStep, goToStep,
-      addPartida, updatePartida, removePartida,
+      addPartida, updatePartida, removePartida, supplyOwnPrice,
       setSelectedProvider, updateMaterial, setUseSuggestedMaterials, setMarginPercent,
       saveDraft, loadDraft, finalizeBudget, analyzeWithAI
     }}>

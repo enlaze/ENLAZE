@@ -84,6 +84,7 @@ export interface CurrentPriceRow {
 }
 
 export interface ManualPriceRow {
+  id?: string;
   name: string;
   unit: string;
   unit_price: number;
@@ -490,7 +491,7 @@ function tryManualLocked(
     concept_id: null, concept_name: input.concept_name,
     product_id: null, product_name: match.name,
     provider_id: null, provider_name: match.supplier_name || "Manual",
-    source_id: null, unit_price: match.unit_price,
+    source_id: match.id || null, unit_price: match.unit_price,
     effective_price: match.unit_price, effective_cost_breakdown: null,
     source_type: "manual_locked", confidence_score: 1.0,
     selection_reason: "Precio fijado a mano por la empresa", checked_at: now,
