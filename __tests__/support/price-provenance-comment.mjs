@@ -9,9 +9,9 @@ export function assertCurrentPriceComment() {
   const sql = read("supabase/migrations/20261015090000_budget_items_ai_estimate_comment.sql");
   const match = sql.trim().match(/^comment on column public\.budget_items\.price_source_type is\s*'([^']*)';$/i);
   assert.ok(match, "la migración contiene únicamente un COMMENT ON COLUMN");
-  const latest = read("supabase/migrations/20261021090000_user_supplied_prices.sql");
+  const latest = read("supabase/migrations/20261021120000_received_invoice_prices.sql");
   const current = latest.match(/comment on column public\.budget_items\.price_source_type is\s*'([^']*)';/i);
-  assert.ok(current, "la migración de recogida documenta user_supplied");
+  assert.ok(current, "la migración de facturas documenta los tipos actuales");
   const description = current[1];
   const allowed = new Set(description.split("Valores esperados:")[1].split(".")[0]
     .split(",").map(value => value.trim()));

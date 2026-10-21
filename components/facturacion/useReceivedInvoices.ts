@@ -32,6 +32,8 @@ import {
   type FiscalPeriod, type VatFormLine,
 } from "@/lib/received-invoices";
 
+import { invoiceLinesFromOcr, saveReceivedInvoiceLines, type ReceivedInvoiceLineInput } from "@/lib/received-invoice-prices";
+
 type InvoiceClient = { id: string; name: string };
 type InvoiceProject = { id: string; name: string; client_id: string | null };
 
@@ -58,6 +60,7 @@ export const emptyForm = {
   irpf_percent: "0",
   /** Vacío = un tipo único de IVA. Con líneas, manda el desglose. */
   vat_lines: [] as VatFormLine[],
+  ocr_lines: null as ReceivedInvoiceLineInput[] | null,
   payment_method: "transferencia",
   notes: "",
   document_url: "",
@@ -276,6 +279,7 @@ export function useReceivedInvoices(
       project_id: invoice.project_id || "",
       category: invoice.category || "general",
       invoice_number: invoice.invoice_number || "",
+      ocr_lines: null,
       invoice_series: invoice.invoice_series || "",
       supplier_id: invoice.supplier_id || "",
       supplier_name: invoice.supplier_name || "",
@@ -488,6 +492,7 @@ export function useReceivedInvoices(
         ...(showForm ? { client_id: form.client_id, project_id: form.project_id } : {}),
         category: expenseCategoryLabels[String(data.category)] ? String(data.category) : "general",
         invoice_number: String(data.invoice_number || ""),
+        ocr_lines: invoiceLinesFromOcr(data.items),
         supplier_id: matchingSupplier?.id || "",
         supplier_name: matchingSupplier?.name || supplierName,
         supplier_nif: matchingSupplier?.nif || supplierNif,
@@ -610,6 +615,18 @@ export function useReceivedInvoices(
             ? "Reintenta antes de conservar el documento."
             : "Vuelve a intentarlo.",
         });
+        setSaving(false);
+        return;
+      }
+    }
+
+    if (form.ocr_lines !== null) {
+      // Keep the header identity across both line-write and document retries.
+      setPendingInvoiceId(invoiceId);
+      try {
+        await saveReceivedInvoiceLines(supabase, invoiceId, form.ocr_lines);
+      } catch {
+        toast.error("Factura registrada; líneas pendientes", { description: "Reintenta para conservar sus líneas sin crear otra factura." });
         setSaving(false);
         return;
       }

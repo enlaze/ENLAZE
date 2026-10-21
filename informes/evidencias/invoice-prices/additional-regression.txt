@@ -1,0 +1,24 @@
+[budget-analysis] OK: 8 partidas, 1 materials, area=nullm2
+PASS ai: 8 líneas guardadas, 0 NULL
+[budget-analysis] OK: 8 partidas, 1 materials, area=nullm2
+PASS retained-material: 8 líneas guardadas, 0 NULL
+[budget-analysis] usando motor determinista { status: null }
+[budget-analysis] OK: 5 partidas, 8 materials, area=40m2
+PASS deterministic: 5 líneas guardadas, 0 NULL
+PASS offline: 5 líneas guardadas, 0 NULL
+✔ G3 E2E: IA → asistente → guardado sin NULL, resolutor y edición manual (1746.690792ms)
+✔ the shared wizard/detail summary renders the amount percentage and the resolved 0% (12.937667ms)
+✔ collection uses existing bank fields, canonical unit and an idempotent identity (4.243375ms)
+✔ existing manual prices update in place, and Precios uses the same writer (0.134083ms)
+✔ a failed bank write is surfaced, never reported as a collected price (0.863458ms)
+✔ own evidence survives hydration/save, reduces weak amount, and loses bank identity after an unsaved price edit (2.1955ms)
+✔ b1 returns the matched bank identity, rejects wrong units and conflicting measurements (0.799417ms)
+✔ the new revision writer changes only bank identity transport; rollback restores the prior body (0.295625ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1954.455459

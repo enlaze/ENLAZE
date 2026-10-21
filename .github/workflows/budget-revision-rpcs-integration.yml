@@ -34,6 +34,13 @@ on:
       - "__tests__/support/budget-wizard-*"
       - "scripts/test-budget-wizard-provenance-local.mjs"
       - "__tests__/g3-own-price-gates.integration.test.mjs"
+      - "__tests__/received-invoice-prices.integration.test.mjs"
+      - "__tests__/support/received-invoice-prices.mjs"
+      - "supabase/migrations/*received_invoice_prices.sql"
+      - "docs/fase3/INVOICE-PRICES*"
+      - "lib/received-invoice-prices.ts"
+      - "components/facturacion/useReceivedInvoices.ts"
+      - "app/api/invoices/ocr/route.ts"
       - "docs/fase3/G3-OWN-PRICES-CHECKS.sql"
       - "docs/fase3/G3-OWN-PRICES-ROLLBACK.sql"
       - "supabase/migrations/*user_supplied_prices.sql"
@@ -164,6 +171,8 @@ jobs:
         run: npm run test:budget-revision-rpcs-integration
       - name: G3 own price gates and rollback with deliberate catalog drift
         run: node --import tsx --test __tests__/g3-own-price-gates.integration.test.mjs
+      - name: Private invoice price RLS, counters, gates and rollback
+        run: node --import tsx --test __tests__/received-invoice-prices.integration.test.mjs
       - name: Full Next wizard on disposable PostgreSQL and PostgREST
         run: npm run test:budget-wizard-full-page-browser
       - name: G3 price provenance SQL and economic equivalence on disposable PostgreSQL

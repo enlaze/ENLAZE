@@ -28,7 +28,8 @@ const aiMissMutation = process.argv.includes('--ai-miss-mutation');
 const ownPriceMutation = process.argv.includes('--own-price-mutation');
 const ownPriceBenchmark = process.argv.includes('--own-price-benchmark');
 const ownPriceGates = process.argv.includes('--own-price-gates');
-const reports = join(root, ownPriceGates ? 'informes/evidencias/g3-own-prices-gates' : (ownPriceMutation || ownPriceBenchmark) ? 'informes/evidencias/g3-own-prices' : aiMissMutation ? 'informes/evidencias/g3-phase2' : 'informes/evidencias/budget-wizard-provenance');
+const invoicePrices = process.argv.includes('--invoice-prices');
+const reports = join(root, invoicePrices ? 'informes/evidencias/invoice-prices' : ownPriceGates ? 'informes/evidencias/g3-own-prices-gates' : (ownPriceMutation || ownPriceBenchmark) ? 'informes/evidencias/g3-own-prices' : aiMissMutation ? 'informes/evidencias/g3-phase2' : 'informes/evidencias/budget-wizard-provenance');
 await mkdir(reports,{recursive:true});
 let started=false, rest, mutantDir;
 const env = {...childEnv,
@@ -81,9 +82,33 @@ try {
   }
   assert.ok(ready,restLog);
   const restVersion = (await exec(restBin, ['--version'], {env:childEnv})).stdout.trim();
-  if (ownPriceMutation || ownPriceBenchmark || ownPriceGates) assert.match(restVersion, /PostgREST 14\.4/);
+  if (invoicePrices || ownPriceMutation || ownPriceBenchmark || ownPriceGates) assert.match(restVersion, /PostgREST 14\.4/);
   console.log(`BENCH ${version}; ${restVersion}; existing full-page E2E; guarded Next sockets and browser requests`);
-  if (ownPriceGates) {
+  if (invoicePrices) {
+    const result = await exec(globalThis.process.execPath, ['--import','tsx','--test','--test-reporter=tap','__tests__/received-invoice-prices.integration.test.mjs'],
+      {cwd:root,env,maxBuffer:1024*1024}).catch(async error => { await writeFile(join(reports,'integration-and-gates.tap'),error.stdout+error.stderr); console.log(error.stdout); throw error; });
+    await writeFile(join(reports,'integration-and-gates.tap'),result.stdout+result.stderr);
+    console.log(result.stdout);
+    if (process.argv.includes('--with-wizard')) {
+      const baseline = await run(root,'baseline'); assert.equal(baseline.code,0,baseline.output.slice(-5000));
+      mutantDir=await mkdtemp('/private/tmp/enlaze-invoice-prices-mutant-');
+      await cp(root,mutantDir,{recursive:true,filter:path=>!['.git','node_modules','.next','.test-out','informes'].includes(path.split('/').at(-1))});
+      await symlink(await realpath(join(root,'node_modules')),join(mutantDir,'node_modules'));
+      const source='lib/received-invoice-prices.ts';
+      const original=await readFile(join(root,source),'utf8');
+      const anchor='  const { error } = await db.rpc("save_received_invoice_lines", { p_invoice_id: invoiceId, p_lines: lines });';
+      assert.equal(original.split(anchor).length,2,'unique line persistence mutation');
+      await writeFile(join(mutantDir,source),original.replace(anchor,'  const error = null; // MUTANT: no invoice-line write'));
+      const mutant=await run(mutantDir,'no-invoice-line-write');
+      assert.equal(mutant.code,1,mutant.output.slice(-5000));
+      assert.match(mutant.output,/INVOICE REUSE: persisted budget must use its private invoice price/);
+      assert.match(mutant.output,/expected: 'received_invoice'/);
+      await writeFile(join(mutantDir,source),original);
+      const restored=await run(mutantDir,'restored');assert.equal(restored.code,0,restored.output.slice(-5000));
+      assert.equal(await readFile(join(root,source),'utf8'),original,'checkout unchanged by mutation');
+      console.log('KILLED invoice-line-write mutant: later real budget lost received_invoice; restored E2E PASS.');
+    }
+  } else if (ownPriceGates) {
     const result = await exec(globalThis.process.execPath, ['--import', 'tsx', '--test', '--test-reporter=tap', '__tests__/g3-own-price-gates.integration.test.mjs'],
       { cwd: root, env, maxBuffer: 1024 * 1024 });
     await writeFile(join(reports, 'gates-and-rollback.tap'), result.stdout + result.stderr);
@@ -113,7 +138,7 @@ try {
       let changed=original;
       for(const item of items){
         const anchor=item==='p' ? `      ...evidenceForSave(p, p.unit_price),\n`
-          : `              ...resolvedPriceEvidence(\n                resolved.selectedPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt, resolved.manualPriceItemId,\n              ),\n`;
+          : `              ...resolvedPriceEvidence(\n                resolved.selectedPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt, resolved.manualPriceItemId || resolved.invoiceLineId,\n              ),\n`;
         assert.equal(changed.split(anchor).length,2,`unique mutation anchor ${item}`);
         changed=changed.replace(anchor,'');
       }

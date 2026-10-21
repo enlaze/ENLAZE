@@ -1,21 +1,22 @@
 /**
  * price-resolver-v2.ts
  *
- * Resolves material/partida prices through an 11-level priority cascade
+ * Resolves material/partida prices through a 12-level priority cascade
  * using the Price Bank V2 tables (pb_*).
  *
  * Priority order:
  *   1.  manual_locked       — Precio manual bloqueado por la empresa
- *   2.  private_tariff      — Tarifa privada importada
- *   3.  negotiated          — Precio negociado
- *   4.  historical_approved — Historico reciente aprobado
- *   5.  preferred_supplier  — Proveedor preferido
- *   6.  provider_updated    — Precio actualizado de proveedor
- *   7.  private_bc3         — BC3 privado
- *   8.  technical_bank      — Banco tecnico global
- *   9.  enlaze_base         — Banco general de Enlaze
- *   10. market_estimate     — Estimacion de mercado
- *   11. ai_estimate         — IA como ultimo recurso
+ *   2.  received_invoice    — Factura privada del mismo usuario
+ *   3.  private_tariff      — Tarifa privada importada
+ *   4.  negotiated          — Precio negociado
+ *   5.  historical_approved — Historico reciente aprobado
+ *   6.  preferred_supplier  — Proveedor preferido
+ *   7.  provider_updated    — Precio actualizado de proveedor
+ *   8.  private_bc3         — BC3 privado
+ *   9.  technical_bank      — Banco tecnico global
+ *   10. enlaze_base        — Banco general de Enlaze
+ *   11. market_estimate     — Estimacion de mercado
+ *   12. ai_estimate         — IA como ultimo recurso
  *
  * Architecture:
  *   - resolveForConcept(): resolves one concept using pre-fetched data
@@ -48,6 +49,7 @@ export interface PriceResolutionContext {
 export interface PrefetchedPriceData {
   current_prices: CurrentPriceRow[];
   manual_prices: ManualPriceRow[];
+  invoice_prices?: InvoicePriceRow[];
   historical_prices: HistoricalPriceRow[];
   technical_prices: TechnicalPriceRow[];
   enlaze_prices: EnlazePriceRow[];
@@ -94,6 +96,15 @@ export interface ManualPriceRow {
   is_manual_override: boolean;
 }
 
+export interface InvoicePriceRow {
+  id: string;
+  name: string;
+  unit: string;
+  unit_price: number;
+  supplier_name: string;
+  invoice_date: string;
+}
+
 export interface HistoricalPriceRow {
   concept_name: string;
   unit: string;
@@ -133,7 +144,7 @@ export interface ResolveConceptInput {
 }
 
 /**
- * Resolve price for a single concept through the 11-level cascade.
+ * Resolve price for a single concept through the 12-level cascade.
  * PURE function: no DB access, no side effects.
  */
 export function resolveForConcept(
@@ -165,6 +176,11 @@ export function resolveForConcept(
   }
   const manual_price_notice = manualMatch.unitMismatchNotice;
   if (manual_price_notice) warnings.push(manual_price_notice);
+
+  // Owner-private invoice evidence always follows the user's explicit decision,
+  // before catalogs, including a caller-supplied priority order.
+  const invoice = resolveInvoicePrice(input, data.invoice_prices || [], now, warnings);
+  if (invoice) return { ...invoice, alternatives, warnings, manual_price_notice };
 
   // Try each level in priority order
   for (const level of priority) {
@@ -199,6 +215,7 @@ function tryLevel(
   warnings: string[]
 ): Omit<PriceResolutionResult, "alternatives" | "warnings"> | null {
   switch (level) {
+    case "received_invoice":  return null; // already applied after manual_locked
     case "manual_locked":     return null; // already applied before the cascade
     case "private_tariff":    return tryPrivateTariff(input, context, data, now);
     case "negotiated":        return tryNegotiated(input, context, data, now);
@@ -548,6 +565,34 @@ function tryNegotiated(
 
 // ─── Level 4: Historical approved ────────────────────────────────────────
 
+/** Same age curve as historical_approved. Invalid/future dates are not evidence. */
+export function historicalPriceConfidence(days: number): number {
+  return days < 30 ? 0.88 : days < 60 ? 0.78 : 0.65;
+}
+
+export function resolveInvoicePrice(input: ResolveConceptInput, rows: InvoicePriceRow[],
+  now = new Date().toISOString(), warnings: string[] = []) {
+  const eligible = rows.filter(row => row.unit && Number.isFinite(row.unit_price) && row.unit_price > 0 &&
+    Number.isFinite(Date.parse(row.invoice_date)) && Date.parse(row.invoice_date) <= Date.parse(now))
+    .sort((a,b) => b.invoice_date.localeCompare(a.invoice_date) || a.id.localeCompare(b.id));
+  // b1's existing Dice 0.85 + measure + unit matcher, no second matcher.
+  const matched = matchManualPrice(input.concept_name, input.unit, eligible.map(row => ({
+    ...row, is_manual_override: true, source_type: "received_invoice",
+  }))).price;
+  const row = matched && eligible.find(candidate => candidate.id === matched.id);
+  if (!row) return null;
+  const days = Math.floor((Date.parse(now) - Date.parse(row.invoice_date)) / 86400000);
+  if (days > 90) warnings.push(`Precio de factura de "${row.name}" tiene ${days} días. Puede estar desactualizado.`);
+  return {
+    concept_id: null, concept_name: input.concept_name, product_id: null,
+    product_name: row.name, provider_id: null, provider_name: row.supplier_name,
+    source_id: row.id, unit_price: Math.round(row.unit_price * 100) / 100, effective_price: Math.round(row.unit_price * 100) / 100,
+    effective_cost_breakdown: null, source_type: "received_invoice" as const,
+    confidence_score: historicalPriceConfidence(days), selection_reason: `Tu factura (${days} días)`,
+    checked_at: row.invoice_date,
+  };
+}
+
 function tryHistorical(
   input: ResolveConceptInput, data: PrefetchedPriceData,
   now: string, warnings: string[]
@@ -569,7 +614,7 @@ function tryHistorical(
     source_id: null, unit_price: match.unit_price,
     effective_price: match.unit_price, effective_cost_breakdown: null,
     source_type: "historical_approved",
-    confidence_score: daysSince < 30 ? 0.88 : daysSince < 60 ? 0.78 : 0.65,
+    confidence_score: historicalPriceConfidence(daysSince),
     selection_reason: `Historico aprobado (${daysSince} dias)`,
     checked_at: match.budget_date,
   };

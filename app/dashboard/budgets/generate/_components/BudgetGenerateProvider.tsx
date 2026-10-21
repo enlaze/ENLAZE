@@ -1,3 +1,4 @@
+import { invoiceEvidenceForEngine, invoiceEvidenceFromEngine } from "@/lib/received-invoice-prices";
 import { calculateBudgetFinancials } from "@/lib/budget-financials";
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useMemo, useRef } from "react";
 import { normalizeSector } from "@/lib/sector-config";
@@ -81,7 +82,7 @@ import {
 } from "@/lib/budget-price-provenance";
 
 const AUTHORITATIVE_NON_COMMERCIAL_SOURCES = new Set([
-  "user_catalog", "manual_locked", "private_tariff", "negotiated",
+  "user_catalog", "manual_locked", "received_invoice", "private_tariff", "negotiated",
   "historical_approved", "private_bc3", "technical_bank", "enlaze_base", "market_estimate",
 ]);
 
@@ -416,10 +417,10 @@ async function verifyMaterialsAgainstTracker(
       unit_price: resolved.selectedPrice,
       subtotal: resolved.selectedPrice * material.quantity,
       ...resolvedPriceEvidence(
-        resolved.selectedPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt, resolved.manualPriceItemId,
+        resolved.selectedPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt, resolved.manualPriceItemId || resolved.invoiceLineId,
       ),
       provider_id: providerId || "rastreador-enlaze",
-      isRealData: isTraceableCommercialPrice(resolved),
+      isRealData: isTraceableCommercialPrice(resolved) || resolved.sourceType === "received_invoice",
       sourceType: resolved.sourceType,
       sourceName: resolved.selectedSupplier || "Rastreador ENLAZE",
       matchedProductName: resolved.selectedProductName,
@@ -515,7 +516,7 @@ function integrateMaterialBasket(
   const multiplier = marginMultiplier(marginPercent);
   return applyMaterialBasketToItems(
     partidas.map((partida) => ({
-      ...partida,
+      ...invoiceEvidenceForEngine(partida),
       chapter: partida.chapter || "otros",
       status: partida.status || "incluida",
     })),
@@ -535,7 +536,7 @@ function integrateMaterialBasket(
       sourceType: material.sourceType || "estimated",
     })),
     multiplier,
-  );
+  ).map(invoiceEvidenceFromEngine);
 }
 
 /**
@@ -2296,10 +2297,10 @@ export function BudgetGenerateProvider({
               unit_price: resolved.selectedPrice,
               subtotal: resolved.selectedPrice * material.quantity,
               ...resolvedPriceEvidence(
-                resolved.selectedPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt, resolved.manualPriceItemId,
+                resolved.selectedPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt, resolved.manualPriceItemId || resolved.invoiceLineId,
               ),
               provider_id: providerId || "rastreador-enlaze",
-              isRealData: isTraceableCommercialPrice(resolved),
+              isRealData: isTraceableCommercialPrice(resolved) || resolved.sourceType === "received_invoice",
               sourceType: resolved.sourceType,
               sourceName: resolved.selectedSupplier || "Rastreador ENLAZE",
               sourceUrl: resolved.sourceUrl || undefined,
@@ -2394,7 +2395,7 @@ export function BudgetGenerateProvider({
               ...partida,
               base_unit_price: unitPrice,
               geographic_factor: 1,
-              geographic_profile: "Precio del banco técnico o tarifa vinculada",
+              geographic_profile: resolved.sourceType === "received_invoice" ? "Precio neto de tu factura" : "Precio del banco técnico o tarifa vinculada",
               price_source: String(resolved.sourceType),
               manual_price_notice,
               price_source_detail:
@@ -2402,7 +2403,7 @@ export function BudgetGenerateProvider({
               price_checked_at: resolved.capturedAt,
               confidence_score: resolved.confidenceScore,
               ...resolvedPriceEvidence(
-                unitPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt, resolved.manualPriceItemId,
+                unitPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt, resolved.manualPriceItemId || resolved.invoiceLineId,
               ),
               unit_price: unitPrice,
               subtotal_cost: unitPrice * partida.quantity,
@@ -2434,7 +2435,7 @@ export function BudgetGenerateProvider({
       }));
       finalPartidas = applyMaterialBasketToItems(
         finalPartidas.map((partida) => ({
-          ...partida,
+          ...invoiceEvidenceForEngine(partida),
           chapter: partida.chapter || "otros",
           status: partida.status || "incluida",
         })),
@@ -2448,7 +2449,7 @@ export function BudgetGenerateProvider({
       const finalMarketAdjustment = adjustToMarket(
         engineScope,
         finalPartidas.map((partida) => ({
-          ...partida,
+          ...invoiceEvidenceForEngine(partida),
           chapter: partida.chapter || "otros",
           status: partida.status || "incluida",
         })),
@@ -2458,7 +2459,7 @@ export function BudgetGenerateProvider({
         true,
       );
 
-      finalPartidas = finalMarketAdjustment.items.map((partida) => ({ ...partida }));
+      finalPartidas = finalMarketAdjustment.items.map(invoiceEvidenceFromEngine);
       finalMaterials = finalMarketAdjustment.materials.map((material) => {
         const previous = finalMaterials.find((candidate) => candidate.id === material.id);
         return {

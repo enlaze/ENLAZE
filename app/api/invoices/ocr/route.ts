@@ -153,6 +153,7 @@ export async function POST(request: Request) {
               type: "text",
               text: `Analiza esta factura y extrae los siguientes datos en formato JSON estricto. Si no encuentras algún dato, pon cadena vacía "".
 
+En cada línea, subtotal es el importe neto después de descuentos y sin IVA; unit_price también es sin IVA. No inventes unidades ni cantidades ausentes: usa null.
 Responde SOLO con el JSON, sin texto adicional:
 
 {
@@ -174,6 +175,7 @@ Responde SOLO con el JSON, sin texto adicional:
     {
       "description": "descripción del concepto",
       "quantity": 1,
+      "unit": "unidad de medida explícita en la factura, o null si no figura",
       "unit_price": 0.00,
       "iva_percentage": 21,
       "subtotal": 0.00
@@ -250,7 +252,7 @@ Responde SOLO con el JSON, sin texto adicional:
     logAiRun(supabase, {
       run_type: "ocr_invoice",
       model: OCR_MODEL,
-      prompt_version: "v1.0",
+      prompt_version: "v1.1-invoice-lines",
       input_hash: await hashText(file.name + file.size),
       output_hash: await hashText(responseText),
       tokens_in: message.usage?.input_tokens,

@@ -1,3 +1,4 @@
+import { prepareReceivedInvoices, applyInvoicePriceMigration } from "./support/received-invoice-prices.mjs";
 // The real Next page, browser auth, PostgREST and PostgreSQL all run on loopback.
 // This is intentionally separate from the provider-only browser regression.
 import assert from "node:assert/strict";
@@ -172,6 +173,9 @@ try {
   await prepareWizardProvenance(db);
   await db.query(await readFile(new URL("supabase/migrations/20261021090000_user_supplied_prices.sql", root), "utf8"));
   await db.query("insert into auth.users values($1)", [owner]);
+  await db.query("update public.subscriptions set plan='profesional',status='active',current_period_end=now()+interval '1 month'");
+  await prepareReceivedInvoices(db);
+  await applyInvoicePriceMigration(db);
   await seedWizardPriceSources(db, owner);
   await db.query("notify pgrst, 'reload schema'");
 
@@ -742,6 +746,88 @@ try {
   assert.deepEqual(ai.pageErrors, []);
   console.log(`PASS G3 OWN COLLECTION: inline detail -> user_supplied / 0.95; price_items manual override ${ownPrice} EUR/m2; summary ${correctedPercent}%`);
   console.log("PASS G3 OWN REUSE: second real generated budget -> manual_locked; wrong unit rejected; counters saved=1 reused=1; queries/autosave do not inflate; RLS enforced");
+
+  // ---- Invoice upload/review -> actual private line RPC -> second wizard ----
+  // Only external OCR/storage are fixtures; React, Next resolver, PostgREST,
+  // owner RLS and budget_items persistence run unchanged.
+  const invoiceConcept = "Pintura pared G3 5";
+  const invoiceUnitPrice = 18.75;
+  const invoicePage = await browser.newPage(); pages.push(invoicePage);
+  await invoicePage.setBypassCSP(true);
+  await invoicePage.setCookie({ name:"sb-127-auth-token",
+    value:`base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}`,url:appOrigin,path:"/",httpOnly:false });
+  await invoicePage.setRequestInterception(true);
+  let invoiceUploads=0, promotions=0;
+  invoicePage.on("request", request => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/invoices/ocr" && request.method() === "POST") {
+      invoiceUploads++;
+      request.respond({status:200,contentType:"application/json",body:JSON.stringify({success:true,
+        image_url:`storage://received-invoice-documents/${owner}/drafts/invoice-price-e2e.jpg`,
+        ocr_data:{invoice_number:"INVOICE-PRICE-E2E",supplier_name:"Almacén del usuario",invoice_date:new Date().toISOString().slice(0,10),
+          base_amount:37.5,iva_percentage:21,total_amount:45.38,items:[{description:invoiceConcept,quantity:2,
+            unit:"m2",unit_price:20,subtotal:37.5}]}})});
+    } else if (url.pathname === "/api/invoices/ocr" && request.method() === "PATCH") {
+      promotions++; request.respond({status:200,contentType:"application/json",body:'{"success":true}'});
+    } else if ([appOrigin,gatewayOrigin,"data:"].includes(url.origin)) request.continue();
+    else request.abort();
+  });
+  await invoicePage.goto(`${appOrigin}/dashboard/facturacion?tab=escanear`,{waitUntil:"domcontentloaded",timeout:90000});
+  await invoicePage.waitForSelector('input[type="file"]',{timeout:60000});
+  await invoicePage.evaluate(()=>{
+    const field=document.querySelector('input[type="file"]');
+    const transfer=new DataTransfer(); transfer.items.add(new File(['synthetic external OCR fixture'],'invoice.jpg',{type:'image/jpeg'}));
+    field.files=transfer.files; field.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  await waitFor(async()=> (await visibleText(invoicePage)).includes("INVOICE-PRICE-E2E"),"OCR review form",30000);
+  // Extraction alone never creates the fiscal row or its prices.
+  assert.equal((await db.query("select count(*)::int n from public.received_invoices where invoice_number='INVOICE-PRICE-E2E'")).rows[0].n,0);
+  await invoicePage.evaluate(()=>[...document.querySelectorAll('button[type="submit"]')]
+    .find(button=>button.textContent?.includes('Registrar factura'))?.click());
+  await waitFor(async()=>promotions===1,"reviewed invoice confirmation",30000);
+  assert.equal(invoiceUploads,1);
+  const invoiceId=(await db.query("select id from public.received_invoices where invoice_number='INVOICE-PRICE-E2E'")).rows[0].id;
+  const invoiceRows=(await db.query("select id,description,unit,effective_unit_price from public.received_invoice_lines where invoice_id=$1",[invoiceId])).rows;
+  const invoiceSeed=await fetch(`${restOrigin}/rpc/create_budget_with_items`,{method:"POST",
+    headers:{"content-type":"application/json",Authorization:`Bearer ${accessToken}`},
+    body:JSON.stringify({p_budget_data:{title:"Presupuesto posterior a factura",budget_number:"WIZARD-INVOICE-SECOND"},p_items:[]})});
+  assert.equal(invoiceSeed.status,200,await invoiceSeed.clone().text());
+  const invoiceBudgetId=(await invoiceSeed.json()).budget_id;
+  await db.query("update public.budgets set wizard_state=$2 where id=$1",[invoiceBudgetId,JSON.stringify({
+    ...wizardState,title:"Presupuesto posterior a factura",partidas:[],materials:[],currentStep:1})]);
+  const invoiceWizard=await openWizard(invoiceBudgetId,"Presupuesto posterior a factura",{step:1,ready:"Volver a calcular"});
+  await invoiceWizard.page.evaluate(()=>[...document.querySelectorAll('button')]
+    .find(button=>button.textContent?.includes('Volver a calcular'))?.click());
+  await waitFor(async()=> (await db.query("select count(*)::int n from public.budget_items where budget_id=$1",[invoiceBudgetId])).rows[0].n===8,
+    "invoice-backed second budget persisted",30000);
+  const invoiceAdopted=(await db.query("select price_source_type,price_confidence,unit_price_cost,price_item_id from public.budget_items where budget_id=$1 and concept=$2",
+    [invoiceBudgetId,invoiceConcept])).rows[0];
+  console.log(`INVOICE EVIDENCE: lines=${invoiceRows.length}; persisted source=${invoiceAdopted.price_source_type}`);
+  assert.equal(invoiceAdopted.price_source_type,"received_invoice","INVOICE REUSE: persisted budget must use its private invoice price");
+  assert.equal(invoiceRows.length,1,"reviewed upload must retain exactly one line");
+  assert.equal(invoiceRows[0].unit,"m2");assert.equal(Number(invoiceRows[0].effective_unit_price),invoiceUnitPrice);
+  assert.equal(Number(invoiceAdopted.unit_price_cost),invoiceUnitPrice,"calibration must preserve the invoiced net amount");
+  assert.equal(invoiceAdopted.price_item_id,invoiceRows[0].id);
+  assert.equal(Number(invoiceAdopted.price_confidence),.88);
+  const invoiceStats=await fetch(`${restOrigin}/rpc/get_invoice_price_stats`,{method:"POST",
+    headers:{"content-type":"application/json",Authorization:`Bearer ${accessToken}`},body:"{}"});
+  assert.equal(invoiceStats.status,200);assert.deepEqual(await invoiceStats.json(),{prices:1,reused:1});
+  // No shared catalog enables the real V1 fallback. It must use the same
+  // private source ahead of caches/catalogs and still respect manual_locked.
+  await db.query("update public.pb_products set is_active=false");
+  try {
+    const v1=await invoiceWizard.page.evaluate(async names=>{
+      const result=await fetch('/api/prices/resolve',{method:'POST',headers:{'content-type':'application/json'},
+        body:JSON.stringify({materials:names.map(materialName=>({materialName,category:'material',unit:'m2',quantity:1,qualityTier:'media',location:'Madrid'})),location:'Madrid'})});
+      return {status:result.status,body:await result.json()};
+    },[invoiceConcept,ownConcept]);
+    assert.equal(v1.status,200,JSON.stringify(v1.body));
+    assert.equal(v1.body.resolved[0].sourceType,'received_invoice');
+    assert.equal(v1.body.resolved[0].selectedPrice,invoiceUnitPrice);
+    assert.equal(v1.body.resolved[1].sourceType,'manual_locked');
+  } finally { await db.query("update public.pb_products set is_active=true"); }
+  assert.deepEqual(invoiceWizard.pageErrors,[]);
+  console.log("PASS INVOICE REUSE: uploaded image -> OCR review -> received_invoice_lines -> real Next resolver -> second generated budget_items received_invoice / 0.88 / 18.75; prices=1 reused=1");
 
   assert.deepEqual(first.pageErrors, []);
   assert.deepEqual(second.pageErrors, []);

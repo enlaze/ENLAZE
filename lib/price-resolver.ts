@@ -18,6 +18,7 @@
 export type QualityTier = "basica" | "media" | "alta";
 export type PriceSourceType =
   | "manual_locked"
+  | "received_invoice"
   | "user_catalog"
   | "technical_bank"
   | "enlaze_base"
@@ -80,6 +81,7 @@ export interface ResolvedPrice {
   confidenceScore: number;
   capturedAt: string;
   manualPriceItemId?: string;
+  invoiceLineId?: string;
   providerId?: string;
   isAvailable?: boolean;
   deliveryDays?: number;
