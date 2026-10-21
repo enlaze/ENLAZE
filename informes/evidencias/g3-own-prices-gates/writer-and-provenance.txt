@@ -1,0 +1,25 @@
+✔ resolver misses preserve AI and user/real evidence, including confidence and timestamp (1.068875ms)
+✔ one weak-source definition includes NULL and market estimates, independently of confidence (0.110333ms)
+✔ provenance summary weighs sale amounts, not line counts, and excludes optional lines (0.278334ms)
+✔ fully resolved and empty/zero budgets have a finite 0% summary (0.073708ms)
+✔ a resolved line carries the exact source, confidence and date into its save payload (0.719084ms)
+✔ editing the resolver price replaces its claim with user_edited, not the old source (0.106417ms)
+✔ old payloads still carry nullable price evidence (0.048167ms)
+✔ current emitted price sources are a subset of the pending COMMENT only migration (0.7655ms)
+✔ AI evidence survives save and manual edits, including reloaded lines (0.100667ms)
+✔ generation baseline never relabels or resets resolver/user evidence (0.112541ms)
+✔ AI provenance appears in internal PDFs and leaves both client renderers unchanged (11.071042ms)
+✔ collection uses existing bank fields, canonical unit and an idempotent identity (4.44125ms)
+✔ existing manual prices update in place, and Precios uses the same writer (0.142041ms)
+✔ a failed bank write is surfaced, never reported as a collected price (0.884791ms)
+✔ own evidence survives hydration/save, reduces weak amount, and loses bank identity after an unsaved price edit (0.813167ms)
+✔ b1 returns the matched bank identity, rejects wrong units and conflicting measurements (0.722083ms)
+✔ the new revision writer changes only bank identity transport; rollback restores the prior body (0.429ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 166.09775
