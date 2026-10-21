@@ -1,6 +1,6 @@
 # G3 fase 4 — precios propios
 
-Rama `codex/g3-own-prices`, creada desde `origin/main` (`51c725d7e26285f0b58b34966f08aee9502ac59c`). Pendiente de revisión, sin PR, despliegue ni acceso a producción.
+Rama `codex/g3-own-prices`, creada desde `origin/main` (`51c725d7e26285f0b58b34966f08aee9502ac59c`). Revisada y aprobada por Álvaro; integración autorizada por [PR #58](https://github.com/enlaze/ENLAZE/pull/58). Migración y despliegue pendientes por separado, sin acceso a producción en esta entrega.
 
 ## Comportamiento
 
@@ -61,6 +61,10 @@ La línea de log con saved=1/reused=1 corresponde al punto de control del segund
 
 ## Límites de esta entrega
 
-La migración solo se ejecutó en los bancos locales desechables del E2E, que se destruyeron; queda pendiente de revisión y aplicación en un entorno autorizado. Se incluyen CHECKS y rollback; el rollback rechaza descartar eventos existentes. No se ha ejecutado `npm run build`: no se comprobó la compilación de producción ni su prebuild que consulta Stripe. Tipos, lint y Next en desarrollo sí se ejecutaron.
+La migración solo se ejecutó en los bancos locales desechables del E2E, que se destruyeron; queda pendiente de aplicación separada con sus gates en un entorno autorizado. Se incluyen CHECKS y rollback; el rollback rechaza descartar eventos existentes. No se ha ejecutado `npm run build`: no se comprobó la compilación de producción ni su prebuild que consulta Stripe. Tipos, lint y Next en desarrollo sí se ejecutaron.
 
-No se han cambiado los renderizadores de PDF cliente, comparador, clasificación, BC3, banco técnico, n8n ni datos de producción. No se usó Supabase Preview/Auth ni credenciales de pruebas alojadas. Sin PR.
+No se han cambiado los renderizadores de PDF cliente, comparador, clasificación, BC3, banco técnico, n8n ni datos de producción. No se usó Supabase Preview/Auth ni credenciales de pruebas alojadas. PR #58 autorizado para fusión; la migración sigue pendiente.
+
+## Rendimiento y tiempo del push
+
+Guardado real de 59 líneas en PostgreSQL 17 / PostgREST 14.4: el disparador añade +0,934 ms a la mediana en el escenario de 59 primeras reutilizaciones (+0,728 ms al repetirlas). Sin reutilizaciones: +0,020 ms. Véanse [método, estadísticas y estado del push](SAVE-59-LINES.md). El push de producción aún no se ha ejecutado; su tiempo se registrará en el despliegue separado con gates.

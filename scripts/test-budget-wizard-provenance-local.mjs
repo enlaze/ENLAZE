@@ -26,7 +26,8 @@ const directory = await mkdtemp('/private/tmp/enlaze-wizard-provenance-');
 const data = join(directory,'data');
 const aiMissMutation = process.argv.includes('--ai-miss-mutation');
 const ownPriceMutation = process.argv.includes('--own-price-mutation');
-const reports = join(root, ownPriceMutation ? 'informes/evidencias/g3-own-prices' : aiMissMutation ? 'informes/evidencias/g3-phase2' : 'informes/evidencias/budget-wizard-provenance');
+const ownPriceBenchmark = process.argv.includes('--own-price-benchmark');
+const reports = join(root, (ownPriceMutation || ownPriceBenchmark) ? 'informes/evidencias/g3-own-prices' : aiMissMutation ? 'informes/evidencias/g3-phase2' : 'informes/evidencias/budget-wizard-provenance');
 await mkdir(reports,{recursive:true});
 let started=false, rest, mutantDir;
 const env = {...childEnv,
@@ -79,8 +80,13 @@ try {
   }
   assert.ok(ready,restLog);
   const restVersion = (await exec(restBin, ['--version'], {env:childEnv})).stdout.trim();
-  if (ownPriceMutation) assert.match(restVersion, /PostgREST 14\.4/);
+  if (ownPriceMutation || ownPriceBenchmark) assert.match(restVersion, /PostgREST 14\.4/);
   console.log(`BENCH ${version}; ${restVersion}; existing full-page E2E; guarded Next sockets and browser requests`);
+  if (ownPriceBenchmark) {
+    const result = await exec(globalThis.process.execPath, ['--import', 'tsx', 'scripts/benchmark-own-price-save.mjs'],
+      { cwd: root, env, maxBuffer: 1024 * 1024 });
+    console.log(result.stdout);
+  } else {
   const baseline=await run(root,'baseline');
   assert.equal(baseline.code,0,baseline.output.slice(-5000));
   const providerPath = ownPriceMutation ? 'lib/manual-price-writer.ts' : aiMissMutation ? 'lib/budget-price-provenance.ts'
@@ -139,6 +145,7 @@ try {
   }
   await writeFile(join(reports,'resumen.txt'),summary.join('\n')+'\n');
   console.log(summary.join('\n'));
+  }
 }finally{
   if(rest && rest.exitCode===null){const exited=new Promise(resolve=>rest.once('exit',resolve));rest.kill('SIGTERM');await exited;}
   if(started)await exec(join(pgBin,'pg_ctl'),['-D',data,'-m','immediate','-w','stop'],{env:childEnv});

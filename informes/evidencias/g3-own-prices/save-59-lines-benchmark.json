@@ -1,0 +1,161 @@
+{
+  "measured_at": "2026-10-21T11:06:26.625Z",
+  "version": "PostgreSQL 17.11 (Homebrew) on aarch64-apple-darwin25.6.0, compiled by Apple clang version 21.0.0 (clang-2100.1.1.101), 64-bit",
+  "durability": [
+    {
+      "name": "fsync",
+      "setting": "on"
+    },
+    {
+      "name": "full_page_writes",
+      "setting": "on"
+    },
+    {
+      "name": "synchronous_commit",
+      "setting": "on"
+    }
+  ],
+  "machine": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "node": "v25.8.2"
+  },
+  "target": "owned disposable localhost cluster; real committed PostgREST 14.4 save_budget RPC",
+  "local_migration_apply_ms": 2.396,
+  "production_migration_push": "NOT EXECUTED; pending separate gated deployment",
+  "rows_per_save": 59,
+  "blocks": 20,
+  "samples_per_mode_per_scenario": 200,
+  "warmups_per_mode_per_block": 3,
+  "measurement": "wall clock fetch + real save_budget + commit + response JSON; trigger-only A/B on identical migrated schema; alternating AB/BA blocks; no concurrent client load; default PostgreSQL durability",
+  "limits": "local warmed single-user bench, not production latency or lock-wait forecast; first-use ledger cleanup excluded from timings",
+  "results": [
+    {
+      "scenario": "59 sin reutilizacion (salida inmediata)",
+      "matched": 0,
+      "off": {
+        "n": 200,
+        "mean_ms": 1.523,
+        "median_ms": 1.356,
+        "p95_ms": 2.02,
+        "min_ms": 1.238,
+        "max_ms": 8.86
+      },
+      "on": {
+        "n": 200,
+        "mean_ms": 1.544,
+        "median_ms": 1.376,
+        "p95_ms": 1.654,
+        "min_ms": 1.265,
+        "max_ms": 28.882
+      },
+      "delta_medians_ms": 0.02,
+      "delta_means_ms": 0.021,
+      "paired_block_delta": {
+        "n": 20,
+        "mean_ms": 0.021,
+        "median_ms": 0.028,
+        "p95_ms": 0.102,
+        "min_ms": -0.091,
+        "max_ms": 0.185
+      }
+    },
+    {
+      "scenario": "21 propias y 38 sin fuente (primer uso)",
+      "matched": 21,
+      "off": {
+        "n": 200,
+        "mean_ms": 1.331,
+        "median_ms": 1.3,
+        "p95_ms": 1.4,
+        "min_ms": 1.214,
+        "max_ms": 5.326
+      },
+      "on": {
+        "n": 200,
+        "mean_ms": 1.676,
+        "median_ms": 1.664,
+        "p95_ms": 1.762,
+        "min_ms": 1.584,
+        "max_ms": 2.266
+      },
+      "delta_medians_ms": 0.364,
+      "delta_means_ms": 0.345,
+      "paired_block_delta": {
+        "n": 20,
+        "mean_ms": 0.345,
+        "median_ms": 0.359,
+        "p95_ms": 0.411,
+        "min_ms": -0.065,
+        "max_ms": 0.455
+      }
+    },
+    {
+      "scenario": "59 propias (primer uso)",
+      "matched": 59,
+      "off": {
+        "n": 200,
+        "mean_ms": 1.4,
+        "median_ms": 1.321,
+        "p95_ms": 1.445,
+        "min_ms": 1.227,
+        "max_ms": 10.515
+      },
+      "on": {
+        "n": 200,
+        "mean_ms": 2.26,
+        "median_ms": 2.255,
+        "p95_ms": 2.356,
+        "min_ms": 2.145,
+        "max_ms": 2.952
+      },
+      "delta_medians_ms": 0.934,
+      "delta_means_ms": 0.86,
+      "paired_block_delta": {
+        "n": 20,
+        "mean_ms": 0.859,
+        "median_ms": 0.915,
+        "p95_ms": 0.994,
+        "min_ms": 0.01,
+        "max_ms": 0.995
+      }
+    },
+    {
+      "scenario": "59 propias (autoguardado, eventos ya existentes)",
+      "matched": 59,
+      "off": {
+        "n": 200,
+        "mean_ms": 1.377,
+        "median_ms": 1.322,
+        "p95_ms": 1.409,
+        "min_ms": 1.234,
+        "max_ms": 11.485
+      },
+      "on": {
+        "n": 200,
+        "mean_ms": 2.069,
+        "median_ms": 2.05,
+        "p95_ms": 2.155,
+        "min_ms": 1.928,
+        "max_ms": 3.436
+      },
+      "delta_medians_ms": 0.728,
+      "delta_means_ms": 0.692,
+      "paired_block_delta": {
+        "n": 20,
+        "mean_ms": 0.692,
+        "median_ms": 0.727,
+        "p95_ms": 0.838,
+        "min_ms": -0.281,
+        "max_ms": 0.94
+      }
+    }
+  ],
+  "raw_samples": "save-59-lines-samples.csv",
+  "migration_data_gate": {
+    "budgets": 2,
+    "lines": 59,
+    "lines_hash": "e360088c2bfcb9112d770f3f78583321"
+  }
+}
