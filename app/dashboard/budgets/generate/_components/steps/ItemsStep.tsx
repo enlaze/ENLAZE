@@ -4,10 +4,11 @@ import React from "react";
 import { RefreshCw, Construction, Database } from "lucide-react";
 import { useBudgetGenerate, type Partida } from "../BudgetGenerateProvider";
 import { Card } from "@/components/ui/card";
-import { AI_ESTIMATE_LABEL } from "@/lib/budget-price-provenance";
+import { OwnPriceInput } from "@/components/budgets/OwnPriceInput";
+import { AI_ESTIMATE_LABEL, USER_SUPPLIED_LABEL, isEstimateSourceType } from "@/lib/budget-price-provenance";
 
 export function ItemsStep() {
-  const { state, addPartida, updatePartida, removePartida, analyzeWithAI } = useBudgetGenerate();
+  const { state, addPartida, updatePartida, removePartida, analyzeWithAI, supplyOwnPrice } = useBudgetGenerate();
   const { partidas } = state;
   const materialCoverage = state.priceVerification.total > 0
     ? Math.round((state.priceVerification.verified / state.priceVerification.total) * 100)
@@ -141,6 +142,9 @@ export function ItemsStep() {
                         className="w-full text-xs text-navy-500 dark:text-zinc-400 bg-transparent border-none p-0 focus:ring-0 mt-1"
                         placeholder="Descripción detallada..."
                       />
+                      {isEstimateSourceType(p.price_source_type) && <OwnPriceInput unit={p.unit}
+                        onSave={price => supplyOwnPrice(p.id, price)} disabled={state.hasRevisionConflict || state.isAnalyzing || state.isFinalizing} />}
+                      {p.price_source_type === "user_supplied" && <p className="mt-1 text-xs text-green-700">{USER_SUPPLIED_LABEL}</p>}
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <input
                           type="text"
@@ -190,7 +194,7 @@ export function ItemsStep() {
                             {p.manual_price_notice}
                           </span>
                         )}
-                        {p.price_source && !["ai_estimate", "user_edited"].includes(p.price_source_type || "") && !["base_nacional", "geographic_adjustment", "manual_locked"].includes(p.price_source) && (
+                        {p.price_source && !["ai_estimate", "user_edited", "user_supplied"].includes(p.price_source_type || "") && !["base_nacional", "geographic_adjustment", "manual_locked"].includes(p.price_source) && (
                           <span
                             className="text-[10px] font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 rounded px-2 py-1"
                             title={p.price_source_detail || "Precio contrastado"}

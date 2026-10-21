@@ -33,6 +33,13 @@ on:
       - "__tests__/support/bootstrap-budget-schema.sql"
       - "__tests__/support/budget-wizard-*"
       - "scripts/test-budget-wizard-provenance-local.mjs"
+      - "supabase/migrations/*user_supplied_prices.sql"
+      - "lib/manual-price-writer.ts"
+      - "lib/budget-financials.ts"
+      - "lib/budget-item-hydration.ts"
+      - "components/budgets/OwnPrice*.tsx"
+      - "__tests__/manual-price-writer.test.mjs"
+      - "app/dashboard/prices/page.tsx"
       - "lib/budget-price-provenance.ts"
       - "components/budgets/PriceProvenanceSummary.tsx"
       - "__tests__/budget-price-provenance.test.mjs"
@@ -94,6 +101,8 @@ jobs:
           node --import tsx --test \
             __tests__/budget-price-provenance.test.mjs \
             __tests__/budget-price-summary.test.mjs \
+            __tests__/manual-price-override.test.mjs \
+            __tests__/manual-price-writer.test.mjs \
             __tests__/budget-ai-pdf-completion.test.mjs \
             __tests__/budget-duplicate-writer-safety.test.mjs \
             __tests__/budget-finalization.test.mjs \
@@ -147,7 +156,7 @@ jobs:
             --env PGRST_DB_URI=postgres://e2_authenticator:e2_disposable_authenticator_only@enlaze-e2-revision-db:5432/enlaze_revision_rpcs_test \
             --env PGRST_DB_SCHEMAS=public --env PGRST_DB_ANON_ROLE=anon \
             --env PGRST_JWT_SECRET="$E2_JWT_SECRET" \
-            postgrest/postgrest:v16.4
+            postgrest/postgrest:v14.4
       - name: Real SQL, rollback, negative controls, HTTP 409 and Supabase client
         run: npm run test:budget-revision-rpcs-integration
       - name: Full Next wizard on disposable PostgreSQL and PostgREST

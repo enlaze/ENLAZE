@@ -16,7 +16,7 @@ import { buildClientView, buildInternalView } from "../lib/budget-engine.ts";
 import { generateClientPDFHTML, generateInternalPDFHTML, generateBudgetPDFHTML } from "../lib/pdf-generator.ts";
 
 test("resolver misses preserve AI and user/real evidence, including confidence and timestamp", () => {
-  for (const source of ["ai_estimate", "technical_bank", "user_edited"]) {
+  for (const source of ["ai_estimate", "technical_bank", "user_edited", "user_supplied"]) {
     const original = resolvedPriceEvidence(12, source, source === "ai_estimate" ? 0.20 : 0.95, "2026-10-08T10:00:00Z");
     assert.deepEqual(evidenceAfterResolverMiss(original, "2026-10-20T10:00:00Z"), original);
   }
@@ -26,7 +26,7 @@ test("resolver misses preserve AI and user/real evidence, including confidence a
 test("one weak-source definition includes NULL and market estimates, independently of confidence", () => {
   for (const source of ["estimated", "market_estimate", "ai_estimate", null, undefined])
     assert.equal(isEstimateSourceType(source), true);
-  for (const source of ["technical_bank", "provider_updated", "preferred_supplier", "user_edited", "private_tariff"])
+  for (const source of ["technical_bank", "provider_updated", "preferred_supplier", "user_edited", "user_supplied", "private_tariff"])
     assert.equal(isEstimateSourceType(source), false);
 });
 
@@ -108,7 +108,7 @@ test("AI evidence survives save and manual edits, including reloaded lines", () 
 });
 
 test("generation baseline never relabels or resets resolver/user evidence", () => {
-  for (const source of ["technical_bank", "provider_updated", "manual_locked", "user_edited"]) {
+  for (const source of ["technical_bank", "provider_updated", "manual_locked", "user_edited", "user_supplied"]) {
     const original = resolvedPriceEvidence(12, source, 0.82, "2026-10-08T10:00:00Z");
     assert.deepEqual(generatedPriceBaseline(original, 12), original);
   }
@@ -142,6 +142,11 @@ test("AI provenance appears in internal PDFs and leaves both client renderers un
   assert.equal(generateBudgetPDFHTML(budget, [{ ...flatItem, ...evidence }], "client"),
     generateBudgetPDFHTML(budget, [flatItem], "client"));
   assert.equal(generateClientPDFHTML(budget, buildClientView(scope, [{ ...item, ...evidence }], 21)),
+    generateClientPDFHTML(budget, buildClientView(scope, [item], 21)));
+  const ownEvidence = resolvedPriceEvidence(10, "user_supplied", 0.95, evidence.price_checked_at, "bank-id");
+  assert.equal(generateBudgetPDFHTML(budget, [{ ...flatItem, ...ownEvidence }], "client"),
+    generateBudgetPDFHTML(budget, [flatItem], "client"));
+  assert.equal(generateClientPDFHTML(budget, buildClientView(scope, [{ ...item, ...ownEvidence }], 21)),
     generateClientPDFHTML(budget, buildClientView(scope, [item], 21)));
   assert.doesNotMatch(generateInternalPDFHTML(budget, buildInternalView(scope, [item], [], 21)), /Estimación IA/,
     "legacy NULL is not relabeled as AI");

@@ -79,6 +79,7 @@ export interface ResolvedPrice {
   sourceType: PriceSourceType;
   confidenceScore: number;
   capturedAt: string;
+  manualPriceItemId?: string;
   providerId?: string;
   isAvailable?: boolean;
   deliveryDays?: number;

@@ -6,8 +6,14 @@ import { createClient } from "@/lib/supabase-browser";
 import { useSector } from "@/lib/sector-context";
 import AcceptanceTimeline from "@/components/AcceptanceTimeline";
 import { PriceProvenanceSummary } from "@/components/budgets/PriceProvenanceSummary";
+import { normalizeSector } from "@/lib/sector-config";
+import { OwnPriceInput } from "@/components/budgets/OwnPriceInput";
+import { saveManualPrice } from "@/lib/manual-price-writer";
+import { calculateBudgetFinancials } from "@/lib/budget-financials";
+import { partidasFromBudgetItems } from "@/lib/budget-item-hydration";
+import { DEFAULT_MARGIN_PERCENT, marginMultiplier } from "@/lib/margins";
 import { printPDF } from "@/lib/pdf-generator";
-import { AI_ESTIMATE_LABEL, type BudgetPriceEvidence } from "@/lib/budget-price-provenance";
+import { AI_ESTIMATE_LABEL, USER_SUPPLIED_LABEL, USER_SUPPLIED_CONFIDENCE, isEstimateSourceType, type BudgetPriceEvidence } from "@/lib/budget-price-provenance";
 import { logActivity } from "@/lib/activity-log";
 import { notify } from "@/lib/notifications";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -23,6 +29,7 @@ import {
   changeBudgetStatus,
   duplicateBudgetRevision,
   isBudgetRevisionConflict,
+  saveBudgetRevision,
 } from "@/lib/budget-revision-writer";
 
 interface BudgetItem extends BudgetPriceEvidence {
@@ -33,6 +40,8 @@ interface BudgetItem extends BudgetPriceEvidence {
   unit: string;
   category: string;
   unit_price: number;
+  unit_price_cost: number;
+  subtotal_cost: number;
   subtotal: number;
 }
 
@@ -128,7 +137,7 @@ export default function BudgetDetailPage() {
   const params = useParams();
   const router = useRouter();
   const supabase = createClient();
-  const { serviceTypes, budgetCategories } = useSector();
+  const { serviceTypes, budgetCategories, sectorKey } = useSector();
   const confirm = useConfirm();
   const toast = useToast();
   const [budget, setBudget] = useState<Budget | null>(null);
@@ -180,6 +189,47 @@ export default function BudgetDetailPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function supplyOwnPrice(item: BudgetItem, price: number) {
+    if (!budget || updating) return;
+    setUpdating(true);
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user) throw new Error("La sesión ha caducado.");
+      const saved = await saveManualPrice(supabase, {
+        userId: user.id, sector: normalizeSector(String(budget.wizard_state?.sector || sectorKey)), collectionBudgetId: budget.id,
+        values: { name: item.concept, description: item.description, category: item.category,
+          subcategory: "", unit: item.unit, unit_price: Math.round(price * 100) / 100 },
+      });
+      const cost = Number(saved.unit_price);
+      const multiplier = item.unit_price_cost > 0 ? item.unit_price / item.unit_price_cost
+        : marginMultiplier(Number(budget.wizard_state?.marginPercent ?? DEFAULT_MARGIN_PERCENT));
+      const changed = items.map(line => line.id !== item.id ? line : {
+        ...line, unit_price_cost: cost, subtotal_cost: cost * line.quantity,
+        unit_price: cost * multiplier, subtotal: cost * multiplier * line.quantity,
+        price_source_type: "user_supplied", price_confidence: USER_SUPPLIED_CONFIDENCE,
+        price_checked_at: new Date().toISOString(), price_item_id: saved.id,
+      });
+      const financials = calculateBudgetFinancials(changed.reduce((sum, line) => sum + line.subtotal, 0),
+        budget.iva_percent, budget.discount_type === "amount" ? "amount" : "percent",
+        budget.discount_percent || 0, budget.discount_amount || 0);
+      const optional = Array.isArray(budget.wizard_state?.partidas)
+        ? budget.wizard_state.partidas.filter(line => line?.status === "opcional") : [];
+      await saveBudgetRevision(supabase, budget.id, budget.lock_version, {
+        title: budget.title, subtotal: financials.subtotal, iva_amount: financials.ivaAmount, total: financials.total,
+        wizard_state: { ...budget.wizard_state,
+          partidas: [...partidasFromBudgetItems(changed.map(line => ({ ...line }))), ...optional] },
+      }, changed.map(line => ({ ...line })));
+      await loadBudget();
+      toast.success("Tu precio se ha guardado en Precios y en el presupuesto.");
+    } catch (error) {
+      if (isBudgetRevisionConflict(error)) {
+        await loadBudget();
+        throw new Error("Otro cambio llegó antes. Tu precio está en Precios; revisa la partida y vuelve a guardarlo.");
+      }
+      throw error;
+    } finally { setUpdating(false); }
   }
 
   async function updateStatus(newStatus: string) {
@@ -531,6 +581,12 @@ export default function BudgetDetailPage() {
                     <p className="text-sm font-medium text-navy-900 dark:text-white">{item.concept}</p>
                     {item.description && (
                       <p className="mt-0.5 text-xs text-navy-500 dark:text-zinc-500">{item.description}</p>
+                    )}
+                    {isEstimateSourceType(item.price_source_type) && (
+                      <OwnPriceInput unit={item.unit} disabled={updating} onSave={price => supplyOwnPrice(item, price)} />
+                    )}
+                    {item.price_source_type === "user_supplied" && (
+                      <p className="mt-1 text-xs font-medium text-green-700 dark:text-green-300">{USER_SUPPLIED_LABEL}</p>
                     )}
                     {item.price_source_type === "ai_estimate" && (
                       <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">{AI_ESTIMATE_LABEL}</p>

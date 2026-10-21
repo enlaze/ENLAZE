@@ -9,7 +9,10 @@ export function assertCurrentPriceComment() {
   const sql = read("supabase/migrations/20261015090000_budget_items_ai_estimate_comment.sql");
   const match = sql.trim().match(/^comment on column public\.budget_items\.price_source_type is\s*'([^']*)';$/i);
   assert.ok(match, "la migración contiene únicamente un COMMENT ON COLUMN");
-  const description = match[1];
+  const latest = read("supabase/migrations/20261021090000_user_supplied_prices.sql");
+  const current = latest.match(/comment on column public\.budget_items\.price_source_type is\s*'([^']*)';/i);
+  assert.ok(current, "la migración de recogida documenta user_supplied");
+  const description = current[1];
   const allowed = new Set(description.split("Valores esperados:")[1].split(".")[0]
     .split(",").map(value => value.trim()));
   const resolver = read("lib/price-resolver-v2.ts");
@@ -18,6 +21,7 @@ export function assertCurrentPriceComment() {
   for (const name of ["lib/budget-price-provenance.ts", "app/api/agent/budget-analysis/route.ts"]) {
     for (const match of read(name).matchAll(/\bprice_source_type\s*[:=]\s*"([^"]+)"/g)) emitted.add(match[1]);
   }
+  emitted.add("user_supplied");
   assert.ok(emitted.has("ai_estimate") && emitted.has("user_edited"));
   for (const source of emitted) assert.ok(allowed.has(source), `${source} falta del comentario`);
   assert.match(description, /NULL en una partida antigua = anterior a G3/);

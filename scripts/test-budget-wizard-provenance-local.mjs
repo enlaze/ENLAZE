@@ -25,7 +25,8 @@ assert.match(version, /PostgreSQL\) 17\./);
 const directory = await mkdtemp('/private/tmp/enlaze-wizard-provenance-');
 const data = join(directory,'data');
 const aiMissMutation = process.argv.includes('--ai-miss-mutation');
-const reports = join(root, aiMissMutation ? 'informes/evidencias/g3-phase2' : 'informes/evidencias/budget-wizard-provenance');
+const ownPriceMutation = process.argv.includes('--own-price-mutation');
+const reports = join(root, ownPriceMutation ? 'informes/evidencias/g3-own-prices' : aiMissMutation ? 'informes/evidencias/g3-phase2' : 'informes/evidencias/budget-wizard-provenance');
 await mkdir(reports,{recursive:true});
 let started=false, rest, mutantDir;
 const env = {...childEnv,
@@ -77,10 +78,12 @@ try {
     await new Promise(resolve=>setTimeout(resolve,100));
   }
   assert.ok(ready,restLog);
-  console.log(`BENCH ${version}; local PostgREST; existing full-page E2E; guarded Next sockets and browser requests`);
+  const restVersion = (await exec(restBin, ['--version'], {env:childEnv})).stdout.trim();
+  if (ownPriceMutation) assert.match(restVersion, /PostgREST 14\.4/);
+  console.log(`BENCH ${version}; ${restVersion}; existing full-page E2E; guarded Next sockets and browser requests`);
   const baseline=await run(root,'baseline');
   assert.equal(baseline.code,0,baseline.output.slice(-5000));
-  const providerPath = aiMissMutation ? 'lib/budget-price-provenance.ts'
+  const providerPath = ownPriceMutation ? 'lib/manual-price-writer.ts' : aiMissMutation ? 'lib/budget-price-provenance.ts'
     : 'app/dashboard/budgets/generate/_components/BudgetGenerateProvider.tsx';
   const original=await readFile(join(root,providerPath),'utf8');
   const summary=['BASELINE PASS: generated provenance + real manual edit + existing wizard regressions'];
@@ -88,15 +91,20 @@ try {
     mutantDir=await mkdtemp('/private/tmp/enlaze-wizard-provenance-mutant-');
     await cp(root,mutantDir,{recursive:true,filter:path=>!['.git','node_modules','.next','.test-out','informes'].includes(path.split('/').at(-1))});
     await symlink(await realpath(join(root,'node_modules')),join(mutantDir,'node_modules'));
-    const mutations = aiMissMutation ? [['no-ai-miss-guard',[]]]
+    const mutations = ownPriceMutation ? [['no-price-items-write',[]]] : aiMissMutation ? [['no-ai-miss-guard',[]]]
       : [['no-provenance-transport',['p','m']],['no-partida-provenance',['p']],['no-material-provenance',['m']]];
     for(const [name,items] of mutations){
       let changed=original;
       for(const item of items){
         const anchor=item==='p' ? `      ...evidenceForSave(p, p.unit_price),\n`
-          : `              ...resolvedPriceEvidence(\n                resolved.selectedPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt,\n              ),\n`;
+          : `              ...resolvedPriceEvidence(\n                resolved.selectedPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt, resolved.manualPriceItemId,\n              ),\n`;
         assert.equal(changed.split(anchor).length,2,`unique mutation anchor ${item}`);
         changed=changed.replace(anchor,'');
+      }
+      if (ownPriceMutation) {
+        const anchor = '  const result = await query.select("id,name,unit,unit_price").single();';
+        assert.equal(changed.split(anchor).length, 2, 'unique bank write');
+        changed = changed.replace(anchor, '  const result = { data: { ...row, id: payload.id }, error: null };');
       }
       if (aiMissMutation) {
         const anchor = '  if (item.price_source_type && item.price_source_type !== \"estimated\") return item;\n';
@@ -107,7 +115,11 @@ try {
       const result=await run(mutantDir,name);
       assert.equal(result.code,1,`${name} must fail an assertion, not boot/crash`);
       assert.match(result.output,/AssertionError/);
-      if (aiMissMutation) {
+      if (ownPriceMutation) {
+        assert.match(result.output, /G3 OWN REUSE: second budget must resolve collected price, not remain without source/);
+        assert.match(result.output, /actual: 'ai_estimate'/);
+        assert.match(result.output, /expected: 'manual_locked'/);
+      } else if (aiMissMutation) {
         assert.match(result.output, /A BIS: .* must stay ai_estimate after resolver miss, not estimated/);
         assert.match(result.output, /actual: 'estimated'/);
         assert.match(result.output, /expected: 'ai_estimate'/);
@@ -118,11 +130,11 @@ try {
       console.log(summary.at(-1));
     }
     assert.equal(await readFile(join(root,providerPath),'utf8'),original,'checked-out provider unchanged');
-    if (aiMissMutation) {
+    if (aiMissMutation || ownPriceMutation) {
       await writeFile(join(mutantDir,providerPath), original);
       const restored = await run(mutantDir, 'restored');
       assert.equal(restored.code, 0, restored.output.slice(-5000));
-      summary.push('1/1 AI miss mutant killed: estimated persisted instead of ai_estimate; restored E2E PASS.');
+      summary.push(ownPriceMutation ? '1/1 bank-write mutant killed: second budget persisted ai_estimate instead of manual_locked; restored real E2E PASS.' : '1/1 AI miss mutant killed: estimated persisted instead of ai_estimate; restored E2E PASS.');
     } else summary.push('3/3 mutants killed; provider unchanged; disposable services removed on exit.');
   }
   await writeFile(join(reports,'resumen.txt'),summary.join('\n')+'\n');

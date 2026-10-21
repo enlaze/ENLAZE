@@ -190,6 +190,9 @@ test("price provenance alone does not change the autosave signature", () => {
   assert.notEqual(buildAutosaveSignature({ ...editable,
     partidas: [{ ...editable.partidas[0], unit_price: 13 }],
   }), baseline, "a real price edit must still start autosave");
+  assert.notEqual(buildAutosaveSignature({ ...editable,
+    partidas: [{ ...editable.partidas[0], price_item_id: "new-own-price", price_source_type: "user_supplied" }],
+  }), baseline, "collecting the same amount must still save the new bank identity and user_supplied evidence");
 });
 
 test("every BudgetState field is deliberately classified", () => {

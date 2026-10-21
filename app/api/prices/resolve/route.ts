@@ -147,6 +147,7 @@ function buildManualResolvedPrice(
     selectedSupplier: supplier,
     sourceUrl: "",
     sourceType: "manual_locked",
+    manualPriceItemId: manual.id,
     confidenceScore: 1,
     capturedAt: new Date().toISOString(),
     alternatives: [{
@@ -330,7 +331,7 @@ export async function POST(request: Request) {
         // Those prices win over every other source (level 1, no exceptions).
         supabase
           .from("price_items")
-          .select("name, unit_price, unit, supplier_name, source_type, is_manual_override")
+          .select("id, name, unit_price, unit, supplier_name, source_type, is_manual_override")
           .eq("user_id", user.id)
           .eq("is_active", true)
           .eq("is_manual_override", true),
@@ -515,6 +516,7 @@ export async function POST(request: Request) {
       const v2Data: PrefetchedPriceData = {
         current_prices: Array.from(currentRowsByProduct.values()),
         manual_prices: (pbManualRows || []).map((p): ManualPriceRow => ({
+          id: p.id ? String(p.id) : undefined,
           name: String(p.name || ""),
           unit: String(p.unit || "ud"),
           unit_price: Number(p.unit_price) || 0,
@@ -597,6 +599,7 @@ export async function POST(request: Request) {
           selectedSupplier,
           sourceUrl: selectedUrl,
           sourceType: r.source_type as ResolvedPrice["sourceType"],
+          manualPriceItemId: r.source_type === "manual_locked" ? r.source_id || undefined : undefined,
           confidenceScore: selectedConfidence,
           capturedAt: trackerMetadata?.checkedAt || selectedEvidence?.observedAt || r.checked_at || new Date().toISOString(),
           providerId: providerIdentitySlug(selectedSupplier, selectedUrl),
@@ -681,7 +684,7 @@ export async function POST(request: Request) {
     // ── Step 1: Fetch user's price_items (level 1 — user_catalog) ──
     const { data: userPriceItems } = await supabase
       .from("price_items")
-      .select("name, unit_price, unit, supplier_name, source_type, is_manual_override")
+      .select("id, name, unit_price, unit, supplier_name, source_type, is_manual_override")
       .eq("user_id", user.id)
       .eq("is_active", true);
 
@@ -690,6 +693,7 @@ export async function POST(request: Request) {
     const manualPrices: ManualPriceRow[] = (userPriceItems || [])
       .filter(p => p.is_manual_override)
       .map(p => ({
+        id: p.id ? String(p.id) : undefined,
         name: String(p.name || ""),
         unit: String(p.unit || "ud"),
         unit_price: Number(p.unit_price) || 0,
@@ -698,7 +702,9 @@ export async function POST(request: Request) {
         is_manual_override: true,
       }));
 
-    const userPrices = (userPriceItems || []).map(p => ({
+    // Locked rows already passed b1's name/measurement/unit gate. A rejected
+    // lock must never enter V1 again through its looser catalog matcher.
+    const userPrices = (userPriceItems || []).filter(p => !p.is_manual_override).map(p => ({
       name: p.name,
       unit_price: Number(p.unit_price) || 0,
       unit: p.unit || "ud",
