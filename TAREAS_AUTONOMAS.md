@@ -32,6 +32,7 @@ Cada sesión: **"Coge el siguiente bloque de TAREAS_AUTONOMAS.md y trabájalo en
 - **En curso:** `auto/b13-landing` (preview para el miércoles 22; **no fusionar**, la revisa Daniil).
 - Ramas `auto/*` sin fusionar: 3 (b9, b12, b13) → regla 3: no se empieza otro bloque.
 - Pruebas unitarias en `main` (17-10): 636 pasan, 0 fallan, 2 `todo`.
+- **23-10 (con permiso de Daniil):** `auto/b16-detalles` (ingresos del mes = cobrado; títulos de capítulo con tildes) y `auto/b18-formato-importes` (importes «2.819,30 €» en toda la app, `lib/money.ts`) fusionadas en `main`. Nuevo en la cola: **b17-cron-programados** (antes de lanzar).
 
 ---
 
@@ -119,6 +120,17 @@ Fuera las promesas de Verifactu, el hash y el semáforo fiscal de todo lo que ve
 - Prohibido: Verifactu, «certificado», «firmado», «cumple», cualquier norma, «varios usuarios». Sin emojis, sin fotos de personas ni stock; capturas reales de la app con una cuenta de demo de datos inventados.
 - Reutilizar `components/landing`. Oscura, colores de Enlaze, de tú.
 - Preview de Vercel el miércoles 22 con capturas móvil/escritorio, claro/oscuro. **No fusionar.** En el informe, los pasos para conectar `enlaze.es` (DNS en Hostinger) y lo que cambia después; eso lo hace Daniil.
+
+### b17-cron-programados — Que los mensajes programados salgan solos en producción
+
+- Detectado el 2026-10-23: en producción **nada dispara** `/api/cron/dispatch-scheduled`. No hay `vercel.json` con `crons`, `CRON_SECRET` no existe en Vercel (la ruta responde 503 a cualquiera) y ningún workflow de GitHub ni de n8n la llama. Un WhatsApp o email programado desde la app se queda en «Activo» para siempre.
+- **Antes de lanzar** hay que dejarlo funcionando:
+    - Elegir el disparador (cron de Vercel en `vercel.json`, que manda `Authorization: Bearer $CRON_SECRET`, u otro) y comprobar en la documentación de `node_modules/next/dist/docs/` y de Vercel la frecuencia mínima del plan contratado.
+    - Generar `CRON_SECRET` y darlo de alta en Vercel (production) y en `.env.local`. **Las variables de Vercel las da de alta Daniil**; Code deja los pasos exactos en el informe.
+    - Ojo con b12 (proxy): `/api/cron/dispatch-scheduled` ya está en su lista de rutas con Bearer. Si b12 no está fusionada, comprobar que el proxy de `main` no corta la llamada del cron.
+    - Probar en la preview con una cuenta interna, un canal conectado y destinatarios propios (nunca clientes reales): que sale, que queda en el historial y que un canal desconectado acaba en `failed` con su `last_error`.
+- **Hasta que esto esté en producción y probado, la landing no puede decir que Enlaze envía los mensajes solo** (ni WhatsApp, ni email, ni recordatorios de cobro). Hoy la landing de b13 lo cumple («Hoy el envío lo das tú»), pero `components/landing/SolucionSection.tsx` y `BeforeAfterSection.tsx` (sin usar) aún hablan de envíos automáticos: no reutilizarlos sin cambiar ese texto.
+- Pruebas: la ruta rechaza sin secreto o con secreto falso, y el disparador configurado apunta a la ruta y al método correctos.
 
 ---
 

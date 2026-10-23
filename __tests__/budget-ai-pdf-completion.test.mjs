@@ -47,7 +47,7 @@ test("el PDF interno identifica las notas privadas e incluye las condiciones", (
   assert.match(html, /Notas internas - No enviar al cliente/);
   assert.match(html, /NOTA INTERNA CONFIDENCIAL/);
   assert.match(html, /CONDICIONES COMERCIALES DEL CLIENTE/);
-  assert.match(html, /700\.00/);
+  assert.match(html, /700,00/); // formato español (lib/money.ts)
 });
 
 test("el generador IA guarda la ficha del cliente, condiciones y notas", async () => {

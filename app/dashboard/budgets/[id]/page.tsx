@@ -1,5 +1,6 @@
 "use client";
 
+import { formatEur } from "@/lib/money";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
@@ -601,10 +602,10 @@ export default function BudgetDetailPage() {
                     {item.quantity} {unitLabels[item.unit] || item.unit}
                   </td>
                   <td className="px-5 py-3 text-right text-sm text-navy-700 dark:text-zinc-200 tabular-nums">
-                    {item.unit_price.toFixed(2)} €
+                    {formatEur(item.unit_price)}
                   </td>
                   <td className="px-5 py-3 text-right text-sm font-semibold text-navy-900 dark:text-white tabular-nums">
-                    {item.subtotal.toFixed(2)} €
+                    {formatEur(item.subtotal)}
                   </td>
                 </tr>
               ))}
@@ -619,7 +620,7 @@ export default function BudgetDetailPage() {
           <div className="mb-2 flex justify-between text-sm">
             <span className="text-navy-500 dark:text-zinc-400">Subtotal</span>
             <span className="text-navy-900 dark:text-white tabular-nums">
-              {budget.subtotal.toFixed(2)} €
+              {formatEur(budget.subtotal)}
             </span>
           </div>
           {!!budget.discount_amount && budget.discount_amount > 0 && (
@@ -628,20 +629,20 @@ export default function BudgetDetailPage() {
                 Descuento{budget.discount_type !== "amount" ? ` (${budget.discount_percent}%)` : ""}
               </span>
               <span className="text-red-600 dark:text-red-400 tabular-nums">
-                -{budget.discount_amount.toFixed(2)} €
+                -{formatEur(budget.discount_amount)}
               </span>
             </div>
           )}
           <div className="mb-3 flex justify-between text-sm">
             <span className="text-navy-500 dark:text-zinc-400">IVA ({budget.iva_percent}%)</span>
             <span className="text-navy-900 dark:text-white tabular-nums">
-              {budget.iva_amount.toFixed(2)} €
+              {formatEur(budget.iva_amount)}
             </span>
           </div>
           <div className="flex justify-between border-t border-navy-100 pt-3 text-lg font-bold dark:border-zinc-800">
             <span className="text-navy-900 dark:text-white">TOTAL</span>
             <span className="text-brand-green tabular-nums">
-              {budget.total.toFixed(2)} €
+              {formatEur(budget.total)}
             </span>
           </div>
         </Card>

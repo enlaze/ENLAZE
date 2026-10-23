@@ -1,5 +1,6 @@
 "use client";
 
+import { formatEur } from "@/lib/money";
 import { useCallback, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/toast";
@@ -556,7 +557,7 @@ export default function ImportPricesPage() {
                       <td className="max-w-[200px] truncate px-4 py-2 font-medium text-navy-900 dark:text-white">{row.name || "—"}</td>
                       <td className="px-4 py-2 text-navy-600 dark:text-zinc-400">{row.unit}</td>
                       <td className="px-4 py-2 text-right font-mono text-navy-900 dark:text-white">
-                        {row.unit_price > 0 ? row.unit_price.toFixed(2) + " €" : "—"}
+                        {row.unit_price > 0 ? formatEur(row.unit_price) : "—"}
                       </td>
                       <td className="px-4 py-2 text-navy-600 dark:text-zinc-400">{row.brand || "—"}</td>
                       <td className="px-4 py-2 text-navy-600 dark:text-zinc-400">{row.sku || "—"}</td>

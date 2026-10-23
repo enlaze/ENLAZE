@@ -1,3 +1,4 @@
+import { formatEur } from "@/lib/money";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { notify } from "@/lib/notifications";
 import { logActivity } from "@/lib/activity-log";
@@ -150,8 +151,8 @@ export async function registerPayment(
 
     notify(supabase, {
       type: "payment_received",
-      title: `Cobro de €${params.amount.toLocaleString("es-ES")} registrado`,
-      body: `Factura ${invoice.invoice_number} — ${newPaymentStatus === "paid" ? "Pagada completamente" : `Parcial: €${newTotalPaid.toLocaleString("es-ES")} / €${invoiceTotal.toLocaleString("es-ES")}`}`,
+      title: `Cobro de ${formatEur(params.amount)} registrado`,
+      body: `Factura ${invoice.invoice_number} — ${newPaymentStatus === "paid" ? "Pagada completamente" : `Parcial: ${formatEur(newTotalPaid)} / ${formatEur(invoiceTotal)}`}`,
       severity: "success",
       entity_type: "issued_invoice",
       entity_id: params.invoice_id,
@@ -239,7 +240,7 @@ export async function checkOverdueInvoices(supabase: SupabaseClient) {
     notify(supabase, {
       type: "invoice_overdue",
       title: `${overdue.length} factura${overdue.length !== 1 ? "s" : ""} vencida${overdue.length !== 1 ? "s" : ""}`,
-      body: `Importe pendiente total: €${totalOverdue.toLocaleString("es-ES")}`,
+      body: `Importe pendiente total: ${formatEur(totalOverdue)}`,
       severity: "error",
       entity_type: "issued_invoice",
       action_url: "/dashboard/payments",

@@ -1,3 +1,4 @@
+import { formatEur } from "@/lib/money";
 /**
  * Email template for Budget Accepted event
  * Sent to user when client accepts a budget
@@ -44,7 +45,7 @@ export function getHtml(data: {
             <p style="color: #0a1929; font-size: 18px; font-weight: 600; margin: 0 0 16px 0;">${data.clientName}</p>
             ${data.budgetAmount ? `
               <p style="color: #8899a8; font-size: 12px; margin: 0 0 8px 0; text-transform: uppercase; font-weight: 600;">Importe</p>
-              <p style="color: #00c896; font-size: 24px; font-weight: 700; margin: 0;">€${data.budgetAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              <p style="color: #00c896; font-size: 24px; font-weight: 700; margin: 0;">${formatEur(data.budgetAmount)}</p>
             ` : ''}
           </div>
 

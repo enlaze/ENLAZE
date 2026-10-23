@@ -15,6 +15,7 @@
  * registrar la que ya ha llegado.
  */
 
+import { formatEur } from "@/lib/money";
 import { FactCard } from "./ui";
 import {
   expenseCategoryLabels,
@@ -28,7 +29,7 @@ import { paymentMethodLabels } from "@/lib/suppliers";
 import type { ReceivedInvoicesState } from "./useReceivedInvoices";
 
 const fmtMoney = (n: number) =>
-  new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(n || 0);
+  formatEur(n);
 
 export default function ReceivedInvoiceForm({
   state,

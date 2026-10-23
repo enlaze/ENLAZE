@@ -1,5 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 "use client";
+import { formatEur } from "@/lib/money";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import Link from "next/link";
@@ -189,7 +190,7 @@ export default function BudgetsPage() {
       exportValue: (b) => Number(b.total || 0),
       render: (b) => (
         <span className="font-medium text-navy-900 dark:text-white tabular-nums">
-          {Number(b.total).toLocaleString("es-ES", { style: "currency", currency: "EUR" })}
+          {formatEur(b.total)}
         </span>
       ),
     },
@@ -276,12 +277,12 @@ export default function BudgetsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
         <StatCard
           label="Aceptados"
-          value={totalAccepted.toLocaleString("es-ES", { style: "currency", currency: "EUR" })}
+          value={formatEur(totalAccepted)}
           accent="green"
         />
         <StatCard
           label="Pendientes"
-          value={totalPending.toLocaleString("es-ES", { style: "currency", currency: "EUR" })}
+          value={formatEur(totalPending)}
           accent="yellow"
         />
       </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { formatEur } from "@/lib/money";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import PageHeader from "@/components/ui/page-header";
@@ -48,10 +49,7 @@ const entityMeta: Record<
 
 function formatAmount(value: number | null) {
   if (value == null) return null;
-  return Number(value).toLocaleString("es-ES", {
-    style: "currency",
-    currency: "EUR",
-  });
+  return formatEur(value);
 }
 
 function TrashIcon() {

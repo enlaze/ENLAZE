@@ -1,5 +1,6 @@
 "use client";
 
+import { formatEur } from "@/lib/money";
 import React, { useState, useCallback, useMemo } from "react";
 import { Store, Package, ChevronDown, ExternalLink, ShieldCheck, Clock3, AlertTriangle } from "lucide-react";
 import {
@@ -336,7 +337,7 @@ export function ProvidersStep() {
                     <div className="mt-auto flex items-end justify-between border-t border-navy-100 pt-3 dark:border-zinc-800">
                       <div>
                         <div className="text-[10px] uppercase tracking-wider text-navy-400">Subtotal verificado cubierto</div>
-                        <div className="font-bold text-navy-900 dark:text-white">{provider.partialBasketTotal.toFixed(2)} €</div>
+                        <div className="font-bold text-navy-900 dark:text-white">{formatEur(provider.partialBasketTotal)}</div>
                       </div>
                       {provider.coveragePercent < 100 && (
                         <span className="max-w-28 text-right text-[10px] leading-4 text-amber-600 dark:text-amber-400">No representa la cesta completa</span>
@@ -431,7 +432,7 @@ export function ProvidersStep() {
                       {provider.isRealData ? "Cesta con precio verificado" : "Base técnica de trabajo"}
                     </div>
                     {provider.estimatedPrice > 0 ? (
-                      <span className="text-sm font-bold text-navy-900 dark:text-white">{provider.estimatedPrice.toFixed(2)} €</span>
+                      <span className="text-sm font-bold text-navy-900 dark:text-white">{formatEur(provider.estimatedPrice)}</span>
                     ) : (
                       <span className="text-xs font-medium text-navy-500 dark:text-zinc-400 italic">Dinámica</span>
                     )}
@@ -620,7 +621,7 @@ export function ProvidersStep() {
                                           <p className="mt-1 line-clamp-2 text-[11px] text-navy-600 dark:text-zinc-400">{offer.title}</p>
                                         </div>
                                         <div className="shrink-0 text-right">
-                                          <div className="text-sm font-black text-navy-900 dark:text-white">{offer.displayPrice.toFixed(2)} €</div>
+                                          <div className="text-sm font-black text-navy-900 dark:text-white">{formatEur(offer.displayPrice)}</div>
                                           <div className="text-[9px] text-navy-400">/{offer.unit}</div>
                                         </div>
                                       </div>

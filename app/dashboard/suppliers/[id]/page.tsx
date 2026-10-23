@@ -1,6 +1,7 @@
  
 "use client";
 
+import { formatEur } from "@/lib/money";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -56,7 +57,7 @@ export default function SupplierDetailPage() {
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fmtMoney = (n: number) =>
-    new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(n || 0);
+    formatEur(n);
   const fmtDate = (d: string | null) =>
     d ? new Date(d).toLocaleDateString("es-ES") : "—";
 

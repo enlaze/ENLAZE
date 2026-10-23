@@ -1,5 +1,6 @@
 "use client";
 
+import { formatEur } from "@/lib/money";
 import React from "react";
 import { RefreshCw, Construction, Database } from "lucide-react";
 import { useBudgetGenerate, type Partida } from "../BudgetGenerateProvider";
@@ -252,10 +253,10 @@ export function ItemsStep() {
                     </td>
                     <td className="p-4 text-right">
                       <span className="font-bold text-navy-900 dark:text-white block">
-                        {p.subtotal_cost.toFixed(2)} €
+                        {formatEur(p.subtotal_cost)}
                       </span>
                       <span className="text-[10px] text-navy-400 dark:text-zinc-500 block uppercase tracking-wider mt-0.5">
-                        PVP: {p.subtotal_client.toFixed(2)} €
+                        PVP: {formatEur(p.subtotal_client)}
                       </span>
                     </td>
                     <td className="p-4 text-center">

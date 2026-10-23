@@ -7,6 +7,7 @@
  * el mismo patrón y se mantiene deliberadamente en paralelo.
  */
 
+import { formatEur } from "@/lib/money";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export interface Client {
@@ -156,10 +157,7 @@ export async function getClientInvoiceTotals(
 /* ─── Formato ──────────────────────────────────────────────────────────── */
 
 export function eur(n: number): string {
-  return Number(n || 0).toLocaleString("es-ES", {
-    style: "currency",
-    currency: "EUR",
-  });
+  return formatEur(n);
 }
 
 export function fmtDate(d: string | null | undefined): string {

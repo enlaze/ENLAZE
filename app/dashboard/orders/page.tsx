@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
+import { formatEur } from "@/lib/money";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -46,7 +47,7 @@ const statusConfig: Record<string, { label: string; variant: "gray" | "blue" | "
   cancelled: { label: "Cancelado", variant: "red" },
 };
 
-function eur(n: number) { return Number(n || 0).toLocaleString("es-ES", { style: "currency", currency: "EUR" }); }
+function eur(n: number) { return formatEur(n); }
 function fmtDate(d: string | null) { return d ? new Date(d).toLocaleDateString("es-ES") : "—"; }
 
 export default function OrdersPage() {

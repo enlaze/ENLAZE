@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
+import { formatEur } from "@/lib/money";
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -52,7 +53,7 @@ const unitOptions = ["ud", "m", "m²", "m³", "kg", "l", "h", "ml", "global"];
 
 /* ═══════════════ Helpers ═══════════════ */
 
-function eur(n: number) { return Number(n || 0).toLocaleString("es-ES", { style: "currency", currency: "EUR" }); }
+function eur(n: number) { return formatEur(n); }
 function fmtDate(d: string | null) { return d ? new Date(d).toLocaleDateString("es-ES") : "—"; }
 
 /* ═══════════════ Page ═══════════════ */
