@@ -132,6 +132,13 @@ Fuera las promesas de Verifactu, el hash y el semáforo fiscal de todo lo que ve
 - **Hasta que esto esté en producción y probado, la landing no puede decir que Enlaze envía los mensajes solo** (ni WhatsApp, ni email, ni recordatorios de cobro). Hoy la landing de b13 lo cumple («Hoy el envío lo das tú»), pero `components/landing/SolucionSection.tsx` y `BeforeAfterSection.tsx` (sin usar) aún hablan de envíos automáticos: no reutilizarlos sin cambiar ese texto.
 - Pruebas: la ruta rechaza sin secreto o con secreto falso, y el disparador configurado apunta a la ruta y al método correctos.
 
+### b20-tu-precio-en-enviados — «Tu precio» en presupuestos ya enviados, de verdad
+
+- Contexto (2026-10-23): la ficha ofrecía «Tu precio» en presupuestos enviados o con respuesta, pero `budget_internal.save_core` solo admite borrador/pendiente («Use the contractual revision flow for this budget»). Fallaba siempre **después** de guardar el precio en Precios, así que quedaba el precio en el banco y la partida sin cambiar (pasó en la cuenta demo: 17 `price_items` del baño). Parche de b19: el campo se oculta fuera de borrador/pendiente y `supplyOwnPrice` corta antes de tocar Precios (`lib/budget-editable.ts`).
+- Lo que falta: que el usuario pueda poner su precio en un presupuesto enviado sin romper lo que ya vio el cliente. Decidir con Daniil (en el informe, con opciones): crear una revisión nueva del presupuesto por el flujo contractual y dejar la enviada intacta, o guardar solo en Precios y marcar la partida como «tu precio para la próxima vez» sin tocar el importe enviado.
+- Mirar también el asistente (`ItemsStep.tsx`, «Abrir en Presupuesto inteligente»): comprobar si ofrece «Tu precio» sobre un presupuesto enviado y qué pasa al guardar.
+- Pruebas: con un presupuesto enviado no se escribe nada en `price_items` si el guardado del presupuesto va a fallar, y el camino elegido deja la versión enviada igual.
+
 ---
 
 ## Esperando decisión de Daniil (no los coge Code)
