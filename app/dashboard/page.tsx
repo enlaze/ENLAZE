@@ -15,6 +15,7 @@ import {
   AgentTabsPanel,
 } from "@/components/dashboard/AgentExperience";
 import { FeatureGate } from "@/components/billing/PlanNotices";
+import { collectedInMonth, invoicedInMonth } from "@/lib/dashboard-income";
 
 /* ─────────────────────────────────────────────────────────────────────
  *  Icons — Lucide-style (stroke 1.75, 24×24, rounded)
@@ -176,7 +177,7 @@ export default function DashboardHome() {
         const [clientsRes, budgetsRes, invoicesRes, activityRes, legalRes, aiRunsRes, incidentsRes, receivedInvRes] = await Promise.all([
           supabase.from("clients").select("id, status, created_at"),
           supabase.from("budgets").select("id, status, total, created_at"),
-          supabase.from("issued_invoices").select("id, status, total, invoice_date, payment_status"),
+          supabase.from("issued_invoices").select("id, status, total, issue_date, invoice_date, payment_status, payment_date"),
           supabase.from("activity_log").select("id, action, entity_type, created_at, metadata").eq("user_id", user.id).order("created_at", { ascending: false }).limit(8),
           supabase.from("legal_acceptances").select("id").eq("user_id", user.id),
           supabase.from("ai_runs").select("id, human_reviewed").eq("user_id", user.id),
@@ -199,10 +200,9 @@ export default function DashboardHome() {
       const sentThisMonth = allB.filter(b => b.status !== "draft" && inMonth(b.created_at, thisM, thisY)).length;
       const sentLastMonth = allB.filter(b => b.status !== "draft" && inMonth(b.created_at, prevM.getMonth(), prevM.getFullYear())).length;
 
-      const acceptedThisMonth = allB.filter(b => b.status === "accepted" && inMonth(b.created_at, thisM, thisY));
-      const acceptedLastMonth = allB.filter(b => b.status === "accepted" && inMonth(b.created_at, prevM.getMonth(), prevM.getFullYear()));
-      const incomeThisMonth = acceptedThisMonth.reduce((s, b) => s + (b.total || 0), 0);
-      const incomeLastMonth = acceptedLastMonth.reduce((s, b) => s + (b.total || 0), 0);
+      // Ingresos = lo cobrado de facturas emitidas, con la regla de Facturación.
+      const incomeThisMonth = collectedInMonth(allInv, { month: thisM, year: thisY });
+      const incomeLastMonth = collectedInMonth(allInv, { month: prevM.getMonth(), year: prevM.getFullYear() });
 
       const totalSent = allB.filter(b => b.status !== "draft").length;
       const totalAccepted = allB.filter(b => b.status === "accepted").length;
@@ -236,14 +236,8 @@ export default function DashboardHome() {
 
       /* ── Monthly Revenue (last 6 months) ────────────────── */
       const revenue: MonthlyRevenue[] = months.map(m => {
-        const monthIncome = allB
-          .filter(b => b.status === "accepted" && inMonth(b.created_at, m.month, m.year))
-          .reduce((s, b) => s + (b.total || 0), 0);
-        const monthInvoiced = allInv
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .filter((inv: any) => inv.invoice_date && inMonth(inv.invoice_date, m.month, m.year))
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .reduce((s: number, inv: any) => s + Number(inv.total || 0), 0);
+        const monthIncome = collectedInMonth(allInv, m);
+        const monthInvoiced = invoicedInMonth(allInv, m);
         return { month: `${m.year}-${m.month}`, label: m.label, income: monthIncome, invoiced: monthInvoiced };
       });
       setMonthlyRevenue(revenue);
@@ -425,7 +419,7 @@ export default function DashboardHome() {
           <div className="flex items-center justify-between border-b border-navy-100 dark:border-zinc-800 px-6 py-4">
             <h2 className="text-[14px] font-semibold text-navy-900 dark:text-white">Evolución de ingresos</h2>
             <div className="flex items-center gap-4 text-[11px]">
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-brand-green" /> Aceptados</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-brand-green" /> Cobrado</span>
               <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-info" /> Facturado</span>
             </div>
           </div>

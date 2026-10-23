@@ -97,12 +97,12 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
 
 const fallbackServiceLabels: Record<string, string> = {
   reforma: "Reforma integral",
-  fontaneria: "Fontaneria",
+  fontaneria: "Fontanería",
   electricidad: "Electricidad",
-  climatizacion: "Climatizacion",
+  climatizacion: "Climatización",
   multiservicios: "Multiservicios",
   general: "General",
-  construccion: "Construccion",
+  construccion: "Construcción",
 };
 
 const fallbackCategoryLabels: Record<string, string> = {
@@ -330,7 +330,7 @@ export function generateClientPDFHTML(
   if (clientView.climaSpec) {
     climaNote = `
       <div style="background:#f0fdfa;border-left:4px solid #14b8a6;padding:10px 16px;border-radius:0 8px 8px 0;margin-bottom:16px;font-size:12px;color:#0f766e;">
-        <strong>Climatizacion:</strong> ${clientView.climaSpec.label} &mdash;
+        <strong>Climatización:</strong> ${clientView.climaSpec.label} &mdash;
         ${clientView.climaSpec.assumptions[1] || ""}
       </div>`;
   }
