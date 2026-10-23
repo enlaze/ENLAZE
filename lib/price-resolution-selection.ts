@@ -8,6 +8,7 @@ import { isTraceableCommercialPrice } from "./price-traceability";
 const USER_CONTROLLED_SOURCES = new Set([
   "user_catalog",
   "manual_locked",
+  "received_invoice",
   "private_tariff",
   "negotiated",
   "historical_approved",

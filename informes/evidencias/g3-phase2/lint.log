@@ -1,0 +1,44 @@
+
+/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-phase2/app/dashboard/budgets/[id]/page.tsx
+  140:5   error    Error: Cannot access variable before it is declared
+
+`loadBudget` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-phase2/app/dashboard/budgets/[id]/page.tsx:140:5
+  138 |
+  139 |   useEffect(() => {
+> 140 |     loadBudget();
+      |     ^^^^^^^^^^ `loadBudget` accessed before it is declared
+  141 |   }, []);
+  142 |
+  143 |   async function loadBudget() {
+
+/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-phase2/app/dashboard/budgets/[id]/page.tsx:143:3
+  141 |   }, []);
+  142 |
+> 143 |   async function loadBudget() {
+      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 144 |     try {
+      | ^^^^^^^^^
+> 145 |       const { data: b, error: bErr } = await supabase
+      …
+      | ^^^^^^^^^
+> 182 |     }
+      | ^^^^^^^^^
+> 183 |   }
+      | ^^^^ `loadBudget` is declared here
+  184 |
+  185 |   async function updateStatus(newStatus: string) {
+  186 |     if (!budget) return;  react-hooks/immutability
+  141:6   warning  React Hook useEffect has a missing dependency: 'loadBudget'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            react-hooks/exhaustive-deps
+  271:14  warning  'error' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+
+/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-phase2/app/dashboard/budgets/generate/_components/BudgetGenerateProvider.tsx
+    13:3   warning  'buildScopeQuantities' is defined but never used                                                                                                @typescript-eslint/no-unused-vars
+   262:7   warning  'getDetailedConstructionFallback' is assigned a value but never used                                                                            @typescript-eslint/no-unused-vars
+   316:7   warning  'CONSTRUCTION_FALLBACK_MATERIALS' is assigned a value but never used                                                                            @typescript-eslint/no-unused-vars
+   339:7   warning  'FALLBACK_PROVIDERS' is assigned a value but never used                                                                                         @typescript-eslint/no-unused-vars
+  1146:6   warning  React Hook useEffect has missing dependencies: 'state.description' and 'state.serviceType'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  2067:71  warning  'idx' is defined but never used                                                                                                                 @typescript-eslint/no-unused-vars
+
+✖ 9 problems (1 error, 8 warnings)

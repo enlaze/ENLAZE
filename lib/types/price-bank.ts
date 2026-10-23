@@ -244,6 +244,7 @@ export interface PBSyncRunDetail {
 
 export type ResolutionPriorityLevel =
   | "manual_locked"
+  | "received_invoice"
   | "private_tariff"
   | "negotiated"
   | "historical_approved"
@@ -257,6 +258,7 @@ export type ResolutionPriorityLevel =
 
 export const DEFAULT_PRIORITY_ORDER: ResolutionPriorityLevel[] = [
   "manual_locked",
+  "received_invoice",
   "private_tariff",
   "negotiated",
   "historical_approved",

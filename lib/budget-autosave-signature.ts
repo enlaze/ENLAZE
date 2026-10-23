@@ -46,6 +46,8 @@ type BudgetAutosaveSource = Record<BudgetAutosaveEditableKey, unknown>;
 
 // A later lookup may refresh evidence without changing the line or its price.
 // Evidence is persisted with the next real edit, never a reason to autosave.
+// price_item_id deliberately remains editable: collecting an own price must
+// save the line even when the entered amount equals the previous estimate.
 const PRICE_EVIDENCE_KEYS = new Set([
   "price_source_type", "price_confidence", "price_checked_at",
   "resolved_unit_price", "resolved_source_type", "resolved_confidence", "resolved_checked_at",

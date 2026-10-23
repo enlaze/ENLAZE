@@ -1,0 +1,143 @@
+
+/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-own-prices/app/dashboard/budgets/[id]/page.tsx
+  149:5   error    Error: Cannot access variable before it is declared
+
+`loadBudget` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-own-prices/app/dashboard/budgets/[id]/page.tsx:149:5
+  147 |
+  148 |   useEffect(() => {
+> 149 |     loadBudget();
+      |     ^^^^^^^^^^ `loadBudget` accessed before it is declared
+  150 |   }, []);
+  151 |
+  152 |   async function loadBudget() {
+
+/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-own-prices/app/dashboard/budgets/[id]/page.tsx:152:3
+  150 |   }, []);
+  151 |
+> 152 |   async function loadBudget() {
+      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 153 |     try {
+      | ^^^^^^^^^
+> 154 |       const { data: b, error: bErr } = await supabase
+      …
+      | ^^^^^^^^^
+> 191 |     }
+      | ^^^^^^^^^
+> 192 |   }
+      | ^^^^ `loadBudget` is declared here
+  193 |
+  194 |   async function supplyOwnPrice(item: BudgetItem, price: number) {
+  195 |     if (!budget || updating) return;  react-hooks/immutability
+  150:6   warning  React Hook useEffect has a missing dependency: 'loadBudget'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                react-hooks/exhaustive-deps
+  321:14  warning  'error' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            @typescript-eslint/no-unused-vars
+
+/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-own-prices/app/dashboard/budgets/generate/_components/BudgetGenerateProvider.tsx
+    15:3   warning  'buildScopeQuantities' is defined but never used                                                                                                @typescript-eslint/no-unused-vars
+   212:7   warning  'getDetailedConstructionFallback' is assigned a value but never used                                                                            @typescript-eslint/no-unused-vars
+   266:7   warning  'CONSTRUCTION_FALLBACK_MATERIALS' is assigned a value but never used                                                                            @typescript-eslint/no-unused-vars
+   289:7   warning  'FALLBACK_PROVIDERS' is assigned a value but never used                                                                                         @typescript-eslint/no-unused-vars
+  1097:6   warning  React Hook useEffect has missing dependencies: 'state.description' and 'state.serviceType'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  2047:71  warning  'idx' is defined but never used                                                                                                                 @typescript-eslint/no-unused-vars
+
+/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-own-prices/app/dashboard/prices/page.tsx
+    11:32  warning  'getSectorAliases' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           @typescript-eslint/no-unused-vars
+    87:82  warning  'defaultPrices' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-unused-vars
+   139:44  error    Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. This value was memoized in source but not in compilation output.
+
+/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-own-prices/app/dashboard/prices/page.tsx:139:44
+  137 |   }
+  138 |
+> 139 |   const catLabel: Record<string, string> = useMemo(
+      |                                            ^^^^^^^^
+> 140 |     () => Object.fromEntries(categories.map((c) => [c.value, c.label])),
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 141 |     [categories]
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 142 |   );
+      | ^^^^ Could not preserve existing memoization
+  143 |
+  144 |   /* ─── Form state ─────────────────────────────────────────────────── */
+  145 |   const [name, setName] = useState("");                                                                                                                                                                                                                                                                                                                      react-hooks/preserve-manual-memoization
+   141:6   error    Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. This dependency may be mutated later, which could cause the value to change unexpectedly.
+
+/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-own-prices/app/dashboard/prices/page.tsx:141:6
+  139 |   const catLabel: Record<string, string> = useMemo(
+  140 |     () => Object.fromEntries(categories.map((c) => [c.value, c.label])),
+> 141 |     [categories]
+      |      ^^^^^^^^^^ This dependency may be modified later
+  142 |   );
+  143 |
+  144 |   /* ─── Form state ─────────────────────────────────────────────────── */                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       react-hooks/preserve-manual-memoization
+   324:14  warning  'err' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+   331:5   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-own-prices/app/dashboard/prices/page.tsx:331:5
+  329 |   useEffect(() => {
+  330 |     if (!userId) return;
+> 331 |     loadItems();
+      |     ^^^^^^^^^ Avoid calling setState() directly within an effect
+  332 |     loadLastSync();
+  333 |     resumeActiveN8nSync();
+  334 |     // eslint-disable-next-line react-hooks/exhaustive-deps                                                                                                                                                                                                react-hooks/set-state-in-effect
+   333:5   error    Error: Cannot access variable before it is declared
+
+`resumeActiveN8nSync` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-own-prices/app/dashboard/prices/page.tsx:333:5
+  331 |     loadItems();
+  332 |     loadLastSync();
+> 333 |     resumeActiveN8nSync();
+      |     ^^^^^^^^^^^^^^^^^^^ `resumeActiveN8nSync` accessed before it is declared
+  334 |     // eslint-disable-next-line react-hooks/exhaustive-deps
+  335 |   }, [userId, sectorConfig.sector]);
+  336 |
+
+/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-own-prices/app/dashboard/prices/page.tsx:583:3
+  581 |   }
+  582 |
+> 583 |   async function resumeActiveN8nSync() {
+      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 584 |     const generation = ++syncPollGeneration.current;
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 585 |
+      …
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 642 |     }
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 643 |   }
+      | ^^^^ `resumeActiveN8nSync` is declared here
+  644 |
+  645 |   async function syncFromMarket() {
+  646 |     if (!userId) {  react-hooks/immutability
+  1109:17  error    Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. This dependency may be mutated later, which could cause the value to change unexpectedly.
+
+/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-own-prices/app/dashboard/prices/page.tsx:1109:17
+  1107 |
+  1108 |     return f;
+> 1109 |   }, [isRetail, categories, items]);
+       |                 ^^^^^^^^^^ This dependency may be modified later
+  1110 |
+  1111 |   const syncProgressPercent = Math.min(
+  1112 |     100,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             react-hooks/preserve-manual-memoization
+  1297:31  warning  'pid' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+  1297:36  warning  'pname' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @typescript-eslint/no-unused-vars
+  1297:43  warning  'provider' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-unused-vars
+
+/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-own-prices/lib/price-resolver.ts
+  323:9  warning  'normalizedUnit' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+✖ 21 problems (6 errors, 15 warnings)

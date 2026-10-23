@@ -32,7 +32,7 @@
     "test:budget-items-writer": "node --import tsx --test __tests__/budget-items-writer.test.mjs __tests__/budget-generate-writer-flow.test.mjs",
     "test:budget-revision-writer": "node --import tsx --test __tests__/budget-revision-writer.test.mjs",
     "test:budget-provider-autosave-browser": "node __tests__/budget-provider-autosave.browser.test.mjs",
-    "test:budget-wizard-full-page-browser": "node __tests__/budget-wizard-full-page.browser.integration.test.mjs",
+    "test:budget-wizard-full-page-browser": "node --import tsx __tests__/budget-wizard-full-page.browser.integration.test.mjs",
     "test:budget-finalization": "node --import tsx --test __tests__/budget-finalization.test.mjs",
     "test:scheduled": "node --import tsx --test __tests__/scheduled-messages.test.mjs",
     "test:budget-pdf-completion": "node --import tsx --test __tests__/budget-ai-pdf-completion.test.mjs",
@@ -55,12 +55,18 @@
     "migraciones:check": "node --env-file-if-exists=.env.local --import tsx scripts/migraciones-check.mts",
     "test:migraciones-check": "node --import tsx --test __tests__/migraciones-check.test.mjs",
     "test:billing": "node --import tsx --test __tests__/billing-plans.test.mjs __tests__/billing-webhook.test.mjs",
+    "test:billing-store": "node --import tsx --test __tests__/billing-webhook-store.integration.test.mjs",
+    "test:billing-store-mutations": "node scripts/test-billing-webhook-mutations.mjs",
     "test:billing-integration": "node --env-file-if-exists=.env.local --import tsx --test --test-concurrency=1 __tests__/billing.integration.test.mjs",
     "test:price-bank-rls": "node --env-file-if-exists=.env.local --test --test-concurrency=1 __tests__/price-bank-rls.integration.test.mjs",
     "test:p1-races": "node --env-file-if-exists=.env.local --test --test-concurrency=1 __tests__/p1-races.integration.test.mjs",
+    "test:billing-grace": "node --conditions=react-server --import tsx --test __tests__/billing-grace.integration.test.mjs",
+    "test:billing-grace-mutations": "node scripts/test-billing-grace-mutations.mjs",
+    "test:billing-grace-notice": "node --import tsx --test __tests__/billing-grace-notice.test.mjs",
     "test:service-clients": "node --test __tests__/service-clients-import.test.mjs",
     "test:service-client-mutations": "node scripts/test-service-client-mutations.mjs",
-    "test:build-without-service-keys": "node --import tsx scripts/test-build-without-service-keys.mts"
+    "test:build-without-service-keys": "node --import tsx scripts/test-build-without-service-keys.mts",
+    "test:budget-wizard-provenance-local": "node scripts/test-budget-wizard-provenance-local.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",

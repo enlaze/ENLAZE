@@ -13,6 +13,7 @@ import type {
   ClimaSystemSpec,
 } from "./budget-engine";
 import { CHAPTER_LABELS } from "./budget-engine";
+import { AI_ESTIMATE_CONFIDENCE, AI_ESTIMATE_LABEL, type BudgetPriceEvidence } from "./budget-price-provenance";
 
 // ─── Shared Types (legacy) ──────────────────────────────────────────────────
 
@@ -72,7 +73,7 @@ export interface PDFBudget {
   payment_schedule?: Array<{ percent?: number; concept?: string; moment?: string }> | null;
 }
 
-export interface PDFBudgetItem {
+export interface PDFBudgetItem extends BudgetPriceEvidence {
   concept: string;
   description?: string | null;
   category: string;
@@ -438,7 +439,7 @@ export function generateInternalPDFHTML(
 
     const itemRows = (ch.items || []).map((item) => `
       <tr style="border-bottom:1px solid #f1f5f9;">
-        <td style="padding:4px 6px;font-size:10px;"><strong>${item.concept}</strong>${item.description ? `<br/><span style="color:#64748b;">${item.description}</span>` : ""}</td>
+        <td style="padding:4px 6px;font-size:10px;"><strong>${item.concept}</strong>${item.description ? `<br/><span style="color:#64748b;">${item.description}</span>` : ""}${item.priceSourceType === "ai_estimate" ? `<br/><span style="color:#92400e;">${AI_ESTIMATE_LABEL} · ${Math.round((item.priceConfidence ?? AI_ESTIMATE_CONFIDENCE) * 100)}%</span>` : ""}</td>
         <td style="padding:4px 6px;font-size:10px;text-align:center;">${item.quantity} ${unitLabels[item.unit] || item.unit}</td>
         <td style="padding:4px 6px;font-size:10px;text-align:right;">${fmt(item.baseUnitPrice)} &euro;</td>
         <td style="padding:4px 6px;font-size:10px;text-align:center;">x${item.geographicFactor.toFixed(2)}</td>
@@ -482,7 +483,7 @@ export function generateInternalPDFHTML(
             <td style="padding:4px 6px;font-size:11px;text-align:right;">${fmt(m.unitPrice)} &euro;</td>
             <td style="padding:4px 6px;font-size:11px;text-align:right;">${fmt(m.subtotal)} &euro;</td>
             <td style="padding:4px 6px;font-size:11px;text-align:center;">${m.qualityTier}</td>
-            <td style="padding:4px 6px;font-size:11px;">${srcIcon} ${m.supplier}</td>
+            <td style="padding:4px 6px;font-size:11px;">${m.sourceType === "ai_estimate" ? AI_ESTIMATE_LABEL : `${srcIcon} ${m.supplier}`}</td>
             <td style="padding:4px 6px;font-size:11px;text-align:center;">
               <div class="confidence-bar" style="width:${Math.round(m.confidenceScore * 40)}px;background:${confBarColor};"></div>
               ${Math.round(m.confidenceScore * 100)}%
@@ -898,7 +899,7 @@ export function generateBudgetPDFHTML(
     return `
       <tr style="border-bottom:1px solid #e5e7eb;">
         <td style="padding:8px 6px;font-size:13px;">${i + 1}</td>
-        <td style="padding:8px 6px;font-size:13px;"><strong>${item.concept}</strong>${item.description ? `<br/><span style="color:#6b7280;font-size:12px;">${item.description}</span>` : ""}</td>
+        <td style="padding:8px 6px;font-size:13px;"><strong>${item.concept}</strong>${item.description ? `<br/><span style="color:#6b7280;font-size:12px;">${item.description}</span>` : ""}${item.price_source_type === "ai_estimate" ? `<br/><span style="color:#92400e;font-size:11px;">${AI_ESTIMATE_LABEL}</span>` : ""}</td>
         <td style="padding:8px 6px;font-size:13px;text-align:center;">${(categoryLabelsMap && categoryLabelsMap[item.category]) || fallbackCategoryLabels[item.category] || item.category}</td>
         <td style="padding:8px 6px;font-size:13px;text-align:center;">${item.quantity} ${unitLabels[item.unit] || item.unit}</td>
         ${mode === "internal" ? internalColumns : ""}

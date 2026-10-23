@@ -1,0 +1,36 @@
+
+/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-phase2/app/dashboard/budgets/[id]/page.tsx
+  139:5   error    Error: Cannot access variable before it is declared
+
+`loadBudget` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-phase2/app/dashboard/budgets/[id]/page.tsx:139:5
+  137 |
+  138 |   useEffect(() => {
+> 139 |     loadBudget();
+      |     ^^^^^^^^^^ `loadBudget` accessed before it is declared
+  140 |   }, []);
+  141 |
+  142 |   async function loadBudget() {
+
+/Users/alvaromirallesgrande/.codex/.chatgpt-projects/g-p-69de2eaeed248191ab741c6a4d91510c/enlaze-g3-phase2/app/dashboard/budgets/[id]/page.tsx:142:3
+  140 |   }, []);
+  141 |
+> 142 |   async function loadBudget() {
+      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 143 |     try {
+      | ^^^^^^^^^
+> 144 |       const { data: b, error: bErr } = await supabase
+      …
+      | ^^^^^^^^^
+> 181 |     }
+      | ^^^^^^^^^
+> 182 |   }
+      | ^^^^ `loadBudget` is declared here
+  183 |
+  184 |   async function updateStatus(newStatus: string) {
+  185 |     if (!budget) return;  react-hooks/immutability
+  140:6   warning  React Hook useEffect has a missing dependency: 'loadBudget'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            react-hooks/exhaustive-deps
+  270:14  warning  'error' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+
+✖ 3 problems (1 error, 2 warnings)

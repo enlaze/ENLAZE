@@ -2,12 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { detectarControlTransaccion } from "./lib/sql-toplevel.mjs";
+import { assertCurrentPriceComment } from "./support/price-provenance-comment.mjs";
 
 const root = new URL("../", import.meta.url);
 const file = (path) => readFileSync(new URL(path, root), "utf8");
 const migration = file("supabase/migrations/20261008120000_budget_items_price_provenance.sql");
 const checks = file("docs/fase2/CHECKS.sql");
-const resolver = file("lib/price-resolver-v2.ts");
 const expectedUrl = "postgres://postgres:g3_disposable_database_only@127.0.0.1:55436/enlaze_g3_price_provenance_test";
 
 function block(name) {
@@ -101,9 +101,10 @@ test("G3 lote 1a: procedencia de precios en budget_items", { timeout: 120000 }, 
     }
   });
 
-  await t.test("todos los source_type literales del resolutor constan en el comentario", async () => {
-    const emitted = new Set([...resolver.matchAll(/source_type:\s*"([^"]+)"/g)].map((match) => match[1]));
-    assert.ok(emitted.size >= 11, "la prueba debe leer la escalera del resolutor");
+  await t.test("el comentario histórico conserva su vocabulario y el actual cubre el resolutor", async () => {
+    // Also check current application emitters against the pending comment,
+    // without applying that migration to this historical-schema test.
+    assertCurrentPriceComment();
     const result = await db.query(`select col_description('public.budget_items'::regclass,
       (select attnum from pg_attribute where attrelid='public.budget_items'::regclass
         and attname='price_source_type')) as description`);
@@ -111,7 +112,11 @@ test("G3 lote 1a: procedencia de precios en budget_items", { timeout: 120000 }, 
     assert.ok(description?.includes("Valores esperados:"), "debe haber una lista documentada");
     const allowed = new Set(description.split("Valores esperados:")[1].split(".")[0]
       .split(",").map((value) => value.trim()));
-    for (const source of emitted) assert.ok(allowed.has(source), `${source} falta del comentario`);
+    // This fixture deliberately applies the October 8 migration only. Do not
+    // rewrite a deployed migration or require future levels in its old comment.
+    assert.deepEqual(allowed,new Set(["manual_locked","private_tariff","negotiated",
+      "historical_approved","preferred_supplier","provider_updated","private_bc3",
+      "technical_bank","enlaze_base","market_estimate","estimated"]));
   });
 
   if (process.env.G3_TEST_SKIP_MIGRATION !== "1") {

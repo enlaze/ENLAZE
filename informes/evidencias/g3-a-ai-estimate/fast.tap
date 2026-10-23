@@ -1,0 +1,24 @@
+[budget-analysis] OK: 7 partidas, 1 materials, area=nullm2
+PASS ai: 7 líneas guardadas, 0 NULL
+[budget-analysis] OK: 7 partidas, 1 materials, area=nullm2
+PASS retained-material: 7 líneas guardadas, 0 NULL
+[budget-analysis] usando motor determinista { status: null }
+[budget-analysis] OK: 5 partidas, 8 materials, area=40m2
+PASS deterministic: 5 líneas guardadas, 0 NULL
+PASS offline: 5 líneas guardadas, 0 NULL
+✔ G3 E2E: IA → asistente → guardado sin NULL, resolutor y edición manual (2240.645667ms)
+✔ a resolved line carries the exact source, confidence and date into its save payload (1.98525ms)
+✔ editing the resolver price replaces its claim with user_edited, not the old source (0.08875ms)
+✔ old payloads still carry nullable price evidence (0.051166ms)
+✔ current emitted price sources are a subset of the pending COMMENT only migration (1.427333ms)
+✔ AI evidence survives save and manual edits, including reloaded lines (0.145583ms)
+✔ generation baseline never relabels or resets resolver/user evidence (0.081042ms)
+✔ AI provenance appears in internal PDFs and leaves both client renderers unchanged (11.040625ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2467.383542

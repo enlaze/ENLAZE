@@ -1,12 +1,17 @@
+import { prepareReceivedInvoices, applyInvoicePriceMigration } from "./support/received-invoice-prices.mjs";
 // The real Next page, browser auth, PostgREST and PostgreSQL all run on loopback.
 // This is intentionally separate from the provider-only browser regression.
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { prepareWizardProvenance, seedWizardPriceSources, provenanceScope, provenanceClient } from "./support/budget-wizard-provenance.mjs";
 import { createHmac } from "node:crypto";
 import { existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { Client } from "pg";
 import puppeteer from "puppeteer";
+import { assertNoProductionEnvironment } from "./lib/disposable-target-guard.mjs";
 import { config, guard, setup } from "./lib/budget-revision-rpcs-bench.mjs";
 
 const root = new URL("../", import.meta.url);
@@ -15,10 +20,14 @@ const gatewayOrigin = "http://127.0.0.1:53003";
 const appOrigin = "http://127.0.0.1:53004";
 const owner = "11111111-1111-4111-8111-111111111111";
 const env = process.env;
+const resolverSources = new Set([...await readFile(new URL("lib/price-resolver-v2.ts", root), "utf8")
+  .then(text => text.matchAll(/source_type:\s*"([^"]+)"/g))].map(match => match[1]));
+assert.ok(resolverSources.size >= 11, "read the actual resolver levels");
 
 // Refuse even to launch Next if this is not the same marked disposable cluster
 // used by the SQL/HTTP integration suite. A checkout with env files could
 // silently override synthetic public variables, so reject it too.
+assertNoProductionEnvironment(env);
 assert.equal(env.RUN_REVISION_RPCS_INTEGRATION_TESTS, "1");
 assert.equal(env.E2_REST_URL, restOrigin);
 assert.ok(typeof env.E2_JWT_SECRET === "string" && env.E2_JWT_SECRET.length >= 32);
@@ -36,6 +45,20 @@ function token(role, sub) {
 }
 const accessToken = token("authenticated", owner);
 const anonToken = token("anon");
+// Only the external model is deterministic; application routes and budget
+// writers run unchanged against real PostgREST/PostgreSQL.
+const proposal = {
+  summary: "Pintura de 40 m2", confidence_score: 90,
+  suggested_items: [...Array.from({ length: 7 }, (_, i) => ({
+    concept: `Pintura pared G3 ${i}`, description: "Preparación y acabado",
+    quantity: 40, unit: "m2", unit_cost: 9 + i,
+    category: "mano_obra", chapter: "pintura", estimated_hours: 4,
+  })), { concept: "Sellado técnico soporte G3", description: "Fuente técnica disponible",
+    quantity: 40, unit: "m2", unit_cost: 12, category: "mano_obra", chapter: "pintura" }],
+  suggested_materials: [],
+};
+let modelCalls = 0;
+let modelEnabled = false;
 const user = {
   id: owner, aud: "authenticated", role: "authenticated", email: "wizard-e2e@example.invalid",
   app_metadata: { provider: "email", providers: ["email"] }, user_metadata: {},
@@ -109,6 +132,7 @@ async function openWizard(budgetId, expectedTitle = "Base E2E", { step = null, r
     name: "sb-127-auth-token",
     value: `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}`,
     url: appOrigin,
+    path: "/",
     httpOnly: false,
   });
   const stepQuery = step === null ? "" : `&step=${step}`;
@@ -146,20 +170,40 @@ async function openWizard(budgetId, expectedTitle = "Base E2E", { step = null, r
 
 try {
   await setup(db);
+  await prepareWizardProvenance(db);
+  await db.query(await readFile(new URL("supabase/migrations/20261021090000_user_supplied_prices.sql", root), "utf8"));
   await db.query("insert into auth.users values($1)", [owner]);
+  await db.query("update public.subscriptions set plan='profesional',status='active',current_period_end=now()+interval '1 month'");
+  await prepareReceivedInvoices(db);
+  await applyInvoicePriceMigration(db);
+  await seedWizardPriceSources(db, owner);
   await db.query("notify pgrst, 'reload schema'");
 
   gateway = createServer(async (request, response) => {
     const url = new URL(request.url, gatewayOrigin);
     if (request.method === "OPTIONS") { reply(response, 200, {}); return; }
     if (url.pathname === "/auth/v1/user") {
-      requests.push({ method: request.method, path: url.pathname });
+      requests.push({ method: request.method, path: url.pathname,
+        status: request.headers.authorization === `Bearer ${accessToken}` ? 200 : 401,
+        client: request.headers["x-client-info"] });
       if (request.headers.authorization !== `Bearer ${accessToken}`) {
         reply(response, 401, { error: "invalid synthetic session" }); return;
       }
       reply(response, 200, user); return;
     }
+    if (url.pathname === "/v1/messages" && request.method === "POST") {
+      const chunks = [];
+      for await (const chunk of request) chunks.push(chunk);
+      const input = JSON.parse(Buffer.concat(chunks).toString());
+      assert.equal(input.model, "claude-sonnet-4-6");
+      if (modelEnabled) modelCalls++;
+      reply(response, 200, { id: "msg_disposable_g3", type: "message", role: "assistant",
+        model: input.model, content: [{ type: "text", text: modelEnabled ? JSON.stringify(proposal) : "Model disabled for resolver fixture" }],
+        stop_reason: "end_turn", stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } });
+      return;
+    }
     if (!url.pathname.startsWith("/rest/v1/")) {
+      requests.push({ method: request.method, path: url.pathname, status: 404 });
       reply(response, 404, { error: "gateway route denied" }); return;
     }
     // All database traffic is forwarded to the already-guarded local PostgREST.
@@ -178,13 +222,17 @@ try {
         headers: Object.fromEntries(Object.entries(request.headers).filter(([name]) =>
           !["host", "connection", "content-length", "origin", "referer"].includes(name))),
         body: chunks.length ? Buffer.concat(chunks) : undefined,
+        redirect: "error",
         signal: AbortSignal.timeout(15000),
       });
       const headers = Object.fromEntries([...upstream.headers].filter(([name]) =>
         !["content-length", "content-encoding", "transfer-encoding", "connection"].includes(name)));
       const body = Buffer.from(await upstream.arrayBuffer());
       requests.push({ method: request.method, path: target.pathname, status: upstream.status,
-        error: upstream.ok ? undefined : body.toString().slice(0, 300) });
+        authRole: request.headers.authorization === `Bearer ${accessToken}` ? "authenticated"
+          : request.headers.authorization === `Bearer ${anonToken}` ? "anon" : "other",
+        error: upstream.ok ? undefined : body.toString().slice(0, 300),
+        payload: WRITE_RPCS.has(target.pathname) && chunks.length ? JSON.parse(Buffer.concat(chunks)) : undefined });
       response.writeHead(upstream.status, { ...headers, "access-control-allow-origin": appOrigin });
       response.end(body);
     } catch (error) {
@@ -212,6 +260,10 @@ try {
       unit: "ud", category: "otros", unit_price: 1000, subtotal_cost: 1000,
       unit_price_client: 1300, subtotal_client: 1300, status: "incluida" }],
   })]);
+  const canRead = await fetch(`${restOrigin}/budgets?id=eq.${budgetId}&select=id`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  assert.equal(canRead.status, 200, `fixture authenticated read: ${await canRead.text()}`);
   const snapshot = async () => (await db.query("select title, lock_version from public.budgets where id=$1", [budgetId])).rows[0];
   const baseline = await snapshot();
   assert.equal(baseline.lock_version, 1);
@@ -222,6 +274,10 @@ try {
     env: {
       PATH: env.PATH, HOME: env.HOME, NODE_ENV: "development", NEXT_TELEMETRY_DISABLED: "1",
       NEXT_PUBLIC_SUPABASE_URL: gatewayOrigin, NEXT_PUBLIC_SUPABASE_ANON_KEY: anonToken,
+      SUPABASE_SERVICE_ROLE_KEY: token("service_role"),
+      ANTHROPIC_API_KEY: "synthetic-disposable-model-only", ANTHROPIC_BASE_URL: gatewayOrigin,
+      NODE_OPTIONS: `--require=${fileURLToPath(new URL("__tests__/support/budget-wizard-network.cjs", root))}`,
+      NEXT_FONT_GOOGLE_MOCKED_RESPONSES: fileURLToPath(new URL("__tests__/support/budget-wizard-fonts.cjs", root)),
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -337,6 +393,441 @@ try {
     "Antiguo E2E revisado");
   assert.deepEqual(legacyTab.pageErrors, []);
   assert.deepEqual(legacyEdit.pageErrors, []);
+
+  // ---- G3: resolver -> real API -> wizard state -> payload -> real RPC ----
+  // Seed an EMPTY draft header, never price evidence or wizard partidas.
+  const generatedTitle = "Procedencia E2E";
+  const empty = await fetch(`${restOrigin}/rpc/create_budget_with_items`, {
+    method: "POST", headers: { "content-type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ p_budget_data: {
+      title: generatedTitle, budget_number: "WIZARD-E2E-PROVENANCE", client_id: provenanceClient,
+      wizard_state: { title: generatedTitle, clientId: provenanceClient, sector: "construccion",
+        description: "Pintura de salón", sectorData: provenanceScope },
+    }, p_items: [] }),
+  });
+  assert.equal(empty.status, 200, await empty.clone().text());
+  const { budget_id: generatedId } = await empty.json();
+  const generatedRows = async () => (await db.query(`select concept, unit_price_cost,
+    price_source_type, price_confidence, price_checked_at from public.budget_items
+    where budget_id=$1 order by sort_order`, [generatedId])).rows;
+  assert.deepEqual(await generatedRows(), [], "no provenance-bearing lines may be seeded");
+  const generated = await openWizard(generatedId, generatedTitle);
+  const apiResponses = [];
+  generated.page.on("response", async response => {
+    const path = new URL(response.url()).pathname;
+    if (["/api/prices/resolve", "/api/agent/budget-analysis"].includes(path)) {
+      apiResponses.push({ path, status: response.status(), body: await response.json() });
+    }
+  });
+  const clickButton = async text => generated.page.evaluate(text => {
+    const button = [...document.querySelectorAll("button")].find(node => node.textContent?.trim() === text);
+    if (!button || button.disabled) throw Error(`Button unavailable: ${text}`);
+    button.click();
+  }, text);
+  await clickButton("Siguiente paso");
+  await waitFor(async () => (await generated.page.$$("tbody tr")).length > 0 &&
+    (await visibleText(generated.page)).includes("Partidas"), "generated wizard lines", 90000);
+  await waitFor(() => apiResponses.some(response => response.path === "/api/prices/resolve"), "real price API response");
+  assert.ok(apiResponses.some(response => response.path === "/api/agent/budget-analysis" && response.status === 200),
+    `real analysis API must succeed: ${JSON.stringify(apiResponses.map(({path,status})=>({path,status})))}`);
+  const priceResponses = apiResponses.filter(response => response.path === "/api/prices/resolve");
+  for (const response of priceResponses) {
+    assert.equal(response.status, 200);
+    assert.equal(response.body.ok, true);
+  }
+  const quotes = priceResponses.flatMap(response => response.body.resolved);
+  assert.ok(quotes.length > 0, "the resolver must have quoted actual wizard lines");
+  const generatedWriteStart = writeCalls().length;
+  await waitFor(async () => !(await generated.page.evaluate(() => [...document.querySelectorAll("button")]
+    .find(node => node.textContent?.trim() === "Guardar borrador")?.disabled)), "save enabled");
+  await clickButton("Guardar borrador");
+  await waitFor(async () => writeCalls().slice(generatedWriteStart).some(call => call.path === "/rpc/save_budget" && call.status === 200 &&
+      call.payload.p_budget_id === generatedId && call.payload.p_items.length > 0)
+    && (await generatedRows()).length > 0, "generated provenance saved through real RPC", 20000);
+  const persisted = await generatedRows();
+  assert.equal(persisted.length, 5, "all five budget lines persist; the material basket is not double-counted");
+  for (const item of persisted) {
+    assert.notEqual(item.price_source_type, null, `G3 TRANSPORT: ${item.concept} source must reach budget_items`);
+    assert.notEqual(item.price_confidence, null, `G3 TRANSPORT: ${item.concept} confidence must reach budget_items`);
+    assert.notEqual(item.price_checked_at, null, `G3 TRANSPORT: ${item.concept} timestamp must reach budget_items`);
+    assert.ok(resolverSources.has(item.price_source_type), `${item.concept}: unknown resolver source ${item.price_source_type}`);
+    const quote = quotes.find(quote => quote.materialName === item.concept);
+    assert.ok(quote, `${item.concept} must correspond to a response from the real resolver API`);
+    assert.equal(item.price_source_type, quote.sourceType);
+    assert.equal(Number(item.price_confidence), Number(quote.confidenceScore.toFixed(2)));
+    assert.equal(item.price_checked_at.toISOString(), new Date(quote.capturedAt).toISOString());
+  }
+  const savedPayload = writeCalls().slice(generatedWriteStart).find(call => call.path === "/rpc/save_budget" && call.status === 200 &&
+    call.payload.p_budget_id === generatedId && call.payload.p_items.length === persisted.length).payload;
+  assert.equal(savedPayload.p_items.length, persisted.length);
+  // Since B11, the eight basket materials live in wizard_state, not budget_items.
+  const basket = (await db.query("select wizard_state->'materials' as materials from public.budgets where id=$1", [generatedId])).rows[0].materials;
+  assert.equal(basket.length, 8, "all basket materials must remain in the saved wizard");
+  for (const material of basket) {
+    const quote = quotes.find(quote => quote.materialName === material.name);
+    assert.ok(quote, `${material.name}: real resolver quote required`);
+    assert.equal(material.price_source_type, quote.sourceType, `G3 TRANSPORT: ${material.name} source must reach wizard_state`);
+    assert.equal(material.price_confidence, quote.confidenceScore);
+    assert.equal(new Date(material.price_checked_at).toISOString(), new Date(quote.capturedAt).toISOString());
+  }
+  assert.match(await generated.page.$eval('[data-testid="price-provenance-summary"]', node => node.innerText),
+    /0 de 5 líneas sin fuente verificable — 0 % del importe/);
+  console.log("PASS G3 SUMMARY RESOLVED: 0 de 5 líneas; 0% del importe");
+  console.log(`PASS G3 GENERATED: ${persisted.length} budget_items preserve source, confidence and timestamp from real resolver API`);
+  console.log("PASS G3 BASKET: 8 materials preserve resolver evidence in wizard_state without duplicate budget_items");
+
+  // Edit the cost in the REAL ItemsStep input, then explicitly save again.
+  // No provider hooks, direct SQL edit or handcrafted provenance payload.
+  const manualStart = Date.now();
+  const edited = await generated.page.evaluate(() => {
+    const tr = document.querySelector("tbody tr");
+    const concept = tr?.querySelector('input[type="text"]')?.value;
+    const input = tr?.querySelectorAll('input[type="number"]');
+    const price = input?.[input.length - 1];
+    if (!concept || !price) throw Error("Editable generated price unavailable");
+    return { concept, previous: Number(price.value) };
+  });
+  const newPrice = Math.ceil(edited.previous) + 17;
+  const priceInput = await generated.page.$('tbody tr:first-child td:nth-child(5) input[type="number"]');
+  assert.ok(priceInput, "edit the unit cost, not quantity or displayed client price");
+  // Puppeteer's fill clears the existing number and types into the visible
+  // input, which runs ItemsStep.onChange and the real provider update handler.
+  await generated.page.locator('tbody tr:first-child td:nth-child(5) input[type="number"]').fill(String(newPrice));
+  await priceInput.press("Tab");
+  assert.equal(Number(await priceInput.evaluate(node => node.value)), newPrice, "the real cost input must contain the edited amount");
+  const manualWriteStart = writeCalls().length;
+  await waitFor(async () => !(await generated.page.evaluate(() => [...document.querySelectorAll("button")]
+    .find(node => node.textContent?.trim() === "Guardar borrador")?.disabled)), "manual save enabled");
+  await clickButton("Guardar borrador");
+  await waitFor(async () => writeCalls().slice(manualWriteStart).some(call => call.path === "/rpc/save_budget" && call.status === 200)
+    && (await generatedRows()).some(row => row.concept === edited.concept && Number(row.unit_price_cost) === newPrice),
+    "manually edited price saved", 20000);
+  const afterManual = await generatedRows();
+  const manualRow = afterManual.find(row => row.concept === edited.concept);
+  assert.equal(manualRow.price_source_type, "user_edited", "manual edit must replace resolver provenance");
+  assert.equal(Number(manualRow.price_confidence), 0.95);
+  assert.ok(manualRow.price_checked_at instanceof Date);
+  assert.ok(manualRow.price_checked_at.getTime() >= manualStart && manualRow.price_checked_at.getTime() <= Date.now());
+  for (const original of persisted.filter(row => row.concept !== edited.concept)) {
+    const current = afterManual.find(row => row.concept === original.concept);
+    assert.deepEqual(current, original, "editing one price must preserve other lines and their provenance");
+  }
+  assert.deepEqual(generated.pageErrors, []);
+  console.log("PASS G3 USER_EDITED: actual price input -> real save_budget -> user_edited / 0.95 / edit timestamp");
+
+  // ---- G3 A: UI → real analysis route → real RPC → budget_items ----
+  modelEnabled = true;
+  await db.query("delete from public.price_items");
+  await db.query(await readFile(new URL("__tests__/support/budget-wizard-ai-fixtures.sql", root), "utf8"));
+  await db.query(`insert into public.technical_price_items
+    (name,item_code,unit,unit_price,confidence_score,source,region,is_active)
+    values('Sellado técnico soporte G3','E2E-TECH-G3','m2',12.5,0.78,'Banco técnico de prueba','espana',true)`);
+  await db.query("notify pgrst, 'reload schema'");
+  const aiSeed = await fetch(`${restOrigin}/rpc/create_budget_with_items`, {
+    method: "POST",
+    headers: { "content-type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ p_budget_data: { title: "Pintura G3", budget_number: "WIZARD-G3" }, p_items: [] }),
+  });
+  assert.equal(aiSeed.status, 200, await aiSeed.clone().text());
+  const { budget_id: aiId } = await aiSeed.json();
+  await db.query("update public.budgets set wizard_state=$2 where id=$1", [aiId, JSON.stringify({
+    title: "Pintura G3", sector: "construccion", serviceType: "reforma",
+    description: "Pintura de paredes y techos", currentStep: 1,
+    sectorData: { superficie_m2: 40, num_banos: 0, incluye_cocina: false,
+      incluye_ventanas: false, incluye_climatizacion: false, actuaciones: ["pintura"],
+      calidad: "media", ubicacion: "Madrid", estancias: [] },
+  })]);
+  const ai = await openWizard(aiId, "Pintura G3", { step: 1, ready: "Volver a calcular" });
+  const aiResponses = [];
+  ai.page.on("response", async response => {
+    if (new URL(response.url()).pathname === "/api/prices/resolve")
+      aiResponses.push(await response.json());
+  });
+  const startedAt = Date.now();
+  const analysisResponse = ai.page.waitForResponse(response =>
+    new URL(response.url()).pathname === "/api/agent/budget-analysis", { timeout: 90000 });
+  await ai.page.evaluate(() => {
+    const button = [...document.querySelectorAll("button")].find(node => node.textContent?.includes("Volver a calcular"));
+    if (!button || button.disabled) throw Error("Recalculation button unavailable");
+    button.click();
+  });
+  const analysis = await analysisResponse;
+  assert.equal(analysis.status(), 200, await analysis.text());
+  const result = await analysis.json();
+  assert.equal(result.data_sources.using_ai_fallback, false, JSON.stringify(result.data_sources));
+  assert.equal(modelCalls, 1, "the real route must consume the local model response");
+  await waitFor(async () => (await visibleText(ai.page)).includes("Pintura pared G3 6") &&
+    (await visibleText(ai.page)).includes("Volver a calcular"), "completed AI recalculation");
+  // Wait for content, never for provenance: mutation must fail the SQL
+  // assertion with NULL rows, not time out or pass on an empty set.
+  const savedLines = async () => (await db.query(`select concept, category, subtotal, unit_price_cost,
+    price_source_type, price_confidence, price_checked_at
+    from public.budget_items where budget_id=$1 order by sort_order`, [aiId])).rows;
+  await waitFor(async () => (await savedLines()).filter(row => row.concept.startsWith("Pintura pared G3 ")).length === 7,
+    "AI lines persisted by browser autosave", 20000);
+  const lines = await savedLines();
+  assert.equal(lines.length, 8, "all eight model lines must persist; the material basket lives in wizard_state");
+  const missing = lines.filter(row => row.price_source_type === null).map(row => row.concept);
+  assert.deepEqual(missing, [], `NULL en partidas NUEVAS de budget_items: ${missing.join(", ")}`);
+  const aiLines = lines.filter(row => row.concept.startsWith("Pintura pared G3 "));
+  assert.equal(aiLines.length, 7, "all seven model prices must reach PostgreSQL");
+  for (const line of aiLines) {
+    assert.equal(line.price_source_type, "ai_estimate", `A BIS: ${line.concept} must stay ai_estimate after resolver miss, not estimated`);
+    assert.equal(Number(line.price_confidence), 0.20, line.concept);
+    assert.ok(line.price_checked_at instanceof Date && line.price_checked_at.getTime() >= startedAt &&
+      line.price_checked_at.getTime() <= Date.now(), `${line.concept}: current persisted timestamp`);
+  }
+  const technicalLine = lines.find(line => line.concept === "Sellado técnico soporte G3");
+  assert.equal(result.suggested_items.find(line => line.concept === technicalLine.concept).price_source_type,
+    "ai_estimate", "the model initially proposed the technically resolved line too");
+  assert.equal(technicalLine.price_source_type, "technical_bank");
+  assert.equal(Number(technicalLine.price_confidence), 0.78);
+  assert.equal(Number(technicalLine.unit_price_cost), 12.5);
+  const aiQuotes = aiResponses.flatMap(response => response.resolved || []);
+  for (const line of aiLines) {
+    const miss = aiQuotes.find(quote => quote.materialName === line.concept);
+    assert.ok(miss, `${line.concept}: the real resolver must have run`);
+    assert.equal(miss.sourceType, "estimated", "exercise the absolute no-source fallback");
+    assert.equal(miss.selectedPrice, 0);
+  }
+  const total = lines.reduce((sum, line) => sum + Number(line.subtotal), 0);
+  const weak = aiLines.reduce((sum, line) => sum + Number(line.subtotal), 0);
+  const percentage = (Math.round(weak / total * 1000) / 10).toLocaleString("es-ES");
+  const expectedSummary = `7 de 8 líneas sin fuente verificable — ${percentage} % del importe`;
+  assert.ok((await ai.page.$eval('[data-testid="price-provenance-summary"]', node => node.innerText)).includes(expectedSummary));
+  console.log(`PASS G3 SUMMARY BEFORE SAVE: ${expectedSummary}`);
+  // No explicit save was needed for the summary. Now save and read the detail
+  // page, which loads its own budget_items through real PostgREST.
+  const writeStart = writeCalls().length;
+  await ai.page.evaluate(() => [...document.querySelectorAll("button")]
+    .find(node => node.textContent?.trim() === "Guardar borrador")?.click());
+  await waitFor(async () => writeCalls().slice(writeStart).some(call => call.path === "/rpc/save_budget" &&
+    call.status === 200 && call.payload.p_budget_id === aiId), "AI explicit save");
+  assert.ok((await visibleText(ai.page)).includes("Estimación IA · sin fuente técnica"));
+  assert.deepEqual(ai.pageErrors, []);
+  const detailResponse = await ai.page.goto(`${appOrigin}/dashboard/budgets/${aiId}`, {
+    waitUntil: "domcontentloaded", timeout: 90000,
+  });
+  assert.equal(detailResponse.status(), 200);
+  await ai.page.waitForSelector('[data-testid="price-provenance-summary"]', { timeout: 30000 });
+  assert.ok((await ai.page.$eval('[data-testid="price-provenance-summary"]', node => node.innerText)).includes(expectedSummary));
+  assert.deepEqual(ai.pageErrors, []);
+  console.log(`PASS G3 SUMMARY SAVED DETAIL: ${expectedSummary}`);
+  console.log("PASS A BIS: real resolver misses preserve 7 ai_estimate / 0.20; matched AI line adopts technical_bank / 0.78");
+  console.log(`PASS G3 PostgreSQL 17: ${lines.length} líneas nuevas en budget_items, 0 NULL; 7 ai_estimate con confianza 0.20 y fecha actual`);
+
+  // ---- G3 phase 4: actual inline collection -> bank -> a later generated budget ----
+  const ownConcept = "Pintura pared G3 0";
+  const ownPrice = 37.5;
+  const ownInput = 'tbody tr:first-child input[aria-label="Tu precio por m2"]';
+  await ai.page.waitForSelector(ownInput);
+  await ai.page.locator(ownInput).fill(String(ownPrice));
+  await ai.page.evaluate(() => [...document.querySelectorAll("tbody tr:first-child button")]
+    .find(button => button.textContent?.trim() === "Guardar mi precio")?.click());
+  try {
+    await waitFor(async () => (await db.query("select unit_price_cost from public.budget_items where budget_id=$1 and concept=$2",
+      [aiId, ownConcept])).rows.some(row => Number(row.unit_price_cost) === ownPrice), "own price saved in first budget", 20000);
+  } catch (error) {
+    throw Error(`Own price collection failed: ${JSON.stringify(requests.slice(-25))}; UI=${await visibleText(ai.page)}; errors=${JSON.stringify(ai.pageErrors)}`, { cause: error });
+  }
+  const collected = (await db.query("select * from public.budget_items where budget_id=$1 and concept=$2", [aiId, ownConcept])).rows[0];
+  assert.equal(collected.price_source_type, "user_supplied");
+  assert.equal(Number(collected.price_confidence), 0.95);
+  await waitFor(async () => (await ai.page.$eval('[data-testid="price-provenance-summary"]', node => node.innerText)).includes("6 de 8"),
+    "saved detail summary drops after own price");
+  const correctedTotal = (await db.query("select subtotal from public.budget_items where budget_id=$1", [aiId])).rows.reduce((sum, row) => sum + Number(row.subtotal), 0);
+  const correctedWeak = lines.filter(row => row.concept !== ownConcept && row.price_source_type === "ai_estimate").reduce((sum, row) => sum + Number(row.subtotal), 0);
+  const correctedPercent = (Math.round(correctedWeak / correctedTotal * 1000) / 10).toLocaleString("es-ES");
+  assert.ok((await ai.page.$eval('[data-testid="price-provenance-summary"]', node => node.innerText))
+    .includes(`6 de 8 líneas sin fuente verificable — ${correctedPercent} % del importe`));
+  // Queries alone, including a rejected unit, must not count as a reuse.
+  async function quoteOwn(unit) {
+    return ai.page.evaluate(async (name, unit) => {
+      const response = await fetch("/api/prices/resolve", { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ materials: [{ materialName: name, unit, quantity: 40, category: "mano_obra", qualityTier: "media" }], sector: "construccion", includeCommercialCatalog: false }) });
+      if (!response.ok) throw Error(await response.text());
+      return response.json();
+    }, ownConcept, unit);
+  }
+  const wrongUnit = await quoteOwn("ud");
+  assert.notEqual(wrongUnit.resolved.find(row => row.materialName === ownConcept)?.sourceType, "manual_locked", "same name in another unit must not adopt own price");
+  await quoteOwn("m2");
+  const stats = async () => {
+    const response = await fetch(`${restOrigin}/rpc/get_user_price_collection_stats`, { method: "POST",
+      headers: { "content-type": "application/json", Authorization: `Bearer ${accessToken}` }, body: "{}" });
+    assert.equal(response.status, 200, await response.clone().text());
+    return response.json();
+  };
+  assert.equal((await stats()).reused, 0, "resolver lookups are not persisted reuses");
+  const laterSeed = await fetch(`${restOrigin}/rpc/create_budget_with_items`, { method: "POST",
+    headers: { "content-type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ p_budget_data: { title: "Pintura propia posterior", budget_number: "WIZARD-OWN-SECOND" }, p_items: [] }) });
+  assert.equal(laterSeed.status, 200, await laterSeed.clone().text());
+  const { budget_id: laterId } = await laterSeed.json();
+  const wizardState = (await db.query("select wizard_state from public.budgets where id=$1", [aiId])).rows[0].wizard_state;
+  await db.query("update public.budgets set wizard_state=$2 where id=$1", [laterId, JSON.stringify({
+    ...wizardState, title: "Pintura propia posterior", partidas: [], materials: [], currentStep: 1,
+  })]);
+  const later = await openWizard(laterId, "Pintura propia posterior", { step: 1, ready: "Volver a calcular" });
+  await later.page.evaluate(() => [...document.querySelectorAll("button")]
+    .find(button => button.textContent?.includes("Volver a calcular"))?.click());
+  await waitFor(async () => (await visibleText(later.page)).includes("Pintura pared G3 6") &&
+    (await visibleText(later.page)).includes("Volver a calcular"), "second generation completed");
+  await waitFor(async () => (await db.query("select count(*)::int as n from public.budget_items where budget_id=$1", [laterId])).rows[0].n === 8,
+    "second generated budget persisted", 30000);
+  const reused = (await db.query("select * from public.budget_items where budget_id=$1 and concept=$2", [laterId, ownConcept])).rows[0];
+  // First bank assertion intentionally occurs AFTER this persisted adoption:
+  // deleting the bank write must fail on the second budget's missing source.
+  assert.equal(reused.price_source_type, "manual_locked", "G3 OWN REUSE: second budget must resolve collected price, not remain without source");
+  assert.equal(Number(reused.unit_price_cost), ownPrice);
+  assert.equal(Number(reused.price_confidence), 1);
+  const bank = (await db.query("select * from public.price_items where id=$1", [collected.price_item_id])).rows[0];
+  assert.ok(bank);
+  assert.equal(bank.user_id, owner);
+  assert.equal(bank.name, ownConcept);
+  assert.equal(bank.unit, "m2");
+  assert.equal(Number(bank.unit_price), ownPrice);
+  assert.equal(bank.is_manual_override, true);
+  assert.equal(reused.price_item_id, bank.id);
+  assert.deepEqual(await stats(), { saved: 1, reused: 1 });
+  const saveAgain = await fetch(`${restOrigin}/rpc/save_budget`, { method: "POST",
+    headers: { "content-type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ p_budget_id: laterId,
+      p_expected_lock_version: (await db.query("select lock_version from public.budgets where id=$1", [laterId])).rows[0].lock_version,
+      p_budget_data: { title: "Pintura propia posterior" }, p_items: (await db.query("select * from public.budget_items where budget_id=$1 order by sort_order", [laterId])).rows }) });
+  assert.equal(saveAgain.status, 200, await saveAgain.clone().text());
+  assert.deepEqual(await stats(), { saved: 1, reused: 1 }, "autosave must not count the same price/budget twice");
+  // RLS: nobody can manufacture counters or read somebody else's collection.
+  const outsider = token("authenticated", "22222222-2222-4222-8222-222222222222");
+  const outsiderStats = await fetch(`${restOrigin}/rpc/get_user_price_collection_stats`, { method: "POST",
+    headers: { "content-type": "application/json", Authorization: `Bearer ${outsider}` }, body: "{}" });
+  assert.deepEqual(await outsiderStats.json(), { saved: 0, reused: 0 });
+  const forged = await fetch(`${restOrigin}/user_price_collection_events`, { method: "POST",
+    headers: { "content-type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ user_id: owner, price_item_id: bank.id, budget_id: aiId, event_kind: "reused" }) });
+  assert.equal(forged.status, 403, "authenticated users cannot forge instrumentation");
+  // A persisted row is not enough by itself: it must actually adopt this bank
+  // price in a later budget. Exercise all trigger guards through the real RPC.
+  const rejectedSeed = await fetch(`${restOrigin}/rpc/save_budget`, { method: "POST",
+    headers: { "content-type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ p_budget_id: generatedId,
+      p_expected_lock_version: (await db.query("select lock_version from public.budgets where id=$1", [generatedId])).rows[0].lock_version,
+      p_budget_data: { title: generatedTitle },
+      p_items: [
+        { unit: "ud", unit_price_cost: ownPrice, price_source_type: "manual_locked", price_checked_at: new Date().toISOString() },
+        { unit: "m2", unit_price_cost: ownPrice + 1, price_source_type: "manual_locked", price_checked_at: new Date().toISOString() },
+        { unit: "m2", unit_price_cost: ownPrice, price_source_type: "user_edited", price_checked_at: new Date().toISOString() },
+        { unit: "m2", unit_price_cost: ownPrice, price_source_type: "manual_locked", price_checked_at: "2020-01-01T00:00:00Z" },
+      ].map(line => ({ ...line, concept: ownConcept, quantity: 1, unit_price: ownPrice, price_item_id: bank.id })) }) });
+  assert.equal(rejectedSeed.status, 200, await rejectedSeed.clone().text());
+  assert.deepEqual(await stats(), { saved: 1, reused: 1 }, "wrong unit/amount/source and pre-collection evidence are not counted");
+  const ownWizard = await openWizard(aiId, "Pintura G3", { step: 1, ready: "Volver a calcular" });
+  assert.ok((await visibleText(ownWizard.page)).includes("Tu precio · guardado en Precios"), "detail correction survives wizard hydration");
+  const targetConcept = "Pintura pared G3 6";
+  const wizardOwn = 'tbody tr:nth-child(7) input[aria-label="Tu precio por m2"]';
+  await ownWizard.page.locator(wizardOwn).fill("22.5");
+  await waitFor(async () => ownWizard.page.evaluate(() => ![...document.querySelectorAll("tbody tr:nth-child(7) button")]
+    .find(button => button.textContent?.trim() === "Guardar mi precio")?.disabled), "wizard collection enabled");
+  await ownWizard.page.evaluate(() => [...document.querySelectorAll("tbody tr:nth-child(7) button")]
+    .find(button => button.textContent?.trim() === "Guardar mi precio")?.click());
+  await waitFor(async () => (await db.query("select price_source_type,unit_price_cost from public.budget_items where budget_id=$1 and concept=$2",
+    [aiId, targetConcept])).rows.some(line => line.price_source_type === "user_supplied" && Number(line.unit_price_cost) === 22.5),
+    "wizard inline collection autosaved", 20000);
+  assert.equal(Number((await db.query("select price_confidence from public.budget_items where budget_id=$1 and concept=$2", [aiId, targetConcept])).rows[0].price_confidence), 0.95);
+  assert.deepEqual(await stats(), { saved: 2, reused: 1 });
+  assert.ok((await ownWizard.page.$eval('[data-testid="price-provenance-summary"]', node => node.innerText)).includes("5 de 8"));
+  assert.deepEqual(ownWizard.pageErrors, []);
+  console.log("PASS G3 OWN WIZARD: detail edit survives hydration; inline assistant collection -> user_supplied / 0.95; summary drops again; saved=2 reused=1");
+  const rollback = await readFile(new URL("docs/fase3/G3-OWN-PRICES-ROLLBACK.sql", root), "utf8");
+  await assert.rejects(db.query(rollback), /Export and review own-price instrumentation before rollback/);
+  await db.query("rollback");
+  assert.deepEqual(await stats(), { saved: 2, reused: 1 }, "rollback gate refuses to discard live collection events");
+  assert.deepEqual(later.pageErrors, []);
+  assert.deepEqual(ai.pageErrors, []);
+  console.log(`PASS G3 OWN COLLECTION: inline detail -> user_supplied / 0.95; price_items manual override ${ownPrice} EUR/m2; summary ${correctedPercent}%`);
+  console.log("PASS G3 OWN REUSE: second real generated budget -> manual_locked; wrong unit rejected; counters saved=1 reused=1; queries/autosave do not inflate; RLS enforced");
+
+  // ---- Invoice upload/review -> actual private line RPC -> second wizard ----
+  // Only external OCR/storage are fixtures; React, Next resolver, PostgREST,
+  // owner RLS and budget_items persistence run unchanged.
+  const invoiceConcept = "Pintura pared G3 5";
+  const invoiceUnitPrice = 18.75;
+  const invoicePage = await browser.newPage(); pages.push(invoicePage);
+  await invoicePage.setBypassCSP(true);
+  await invoicePage.setCookie({ name:"sb-127-auth-token",
+    value:`base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}`,url:appOrigin,path:"/",httpOnly:false });
+  await invoicePage.setRequestInterception(true);
+  let invoiceUploads=0, promotions=0;
+  invoicePage.on("request", request => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/invoices/ocr" && request.method() === "POST") {
+      invoiceUploads++;
+      request.respond({status:200,contentType:"application/json",body:JSON.stringify({success:true,
+        image_url:`storage://received-invoice-documents/${owner}/drafts/invoice-price-e2e.jpg`,
+        ocr_data:{invoice_number:"INVOICE-PRICE-E2E",supplier_name:"Almacén del usuario",invoice_date:new Date().toISOString().slice(0,10),
+          base_amount:37.5,iva_percentage:21,total_amount:45.38,items:[{description:invoiceConcept,quantity:2,
+            unit:"m2",unit_price:20,subtotal:37.5}]}})});
+    } else if (url.pathname === "/api/invoices/ocr" && request.method() === "PATCH") {
+      promotions++; request.respond({status:200,contentType:"application/json",body:'{"success":true}'});
+    } else if ([appOrigin,gatewayOrigin,"data:"].includes(url.origin)) request.continue();
+    else request.abort();
+  });
+  await invoicePage.goto(`${appOrigin}/dashboard/facturacion?tab=escanear`,{waitUntil:"domcontentloaded",timeout:90000});
+  await invoicePage.waitForSelector('input[type="file"]',{timeout:60000});
+  await invoicePage.evaluate(()=>{
+    const field=document.querySelector('input[type="file"]');
+    const transfer=new DataTransfer(); transfer.items.add(new File(['synthetic external OCR fixture'],'invoice.jpg',{type:'image/jpeg'}));
+    field.files=transfer.files; field.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  await waitFor(async()=> (await visibleText(invoicePage)).includes("INVOICE-PRICE-E2E"),"OCR review form",30000);
+  // Extraction alone never creates the fiscal row or its prices.
+  assert.equal((await db.query("select count(*)::int n from public.received_invoices where invoice_number='INVOICE-PRICE-E2E'")).rows[0].n,0);
+  await invoicePage.evaluate(()=>[...document.querySelectorAll('button[type="submit"]')]
+    .find(button=>button.textContent?.includes('Registrar factura'))?.click());
+  await waitFor(async()=>promotions===1,"reviewed invoice confirmation",30000);
+  assert.equal(invoiceUploads,1);
+  const invoiceId=(await db.query("select id from public.received_invoices where invoice_number='INVOICE-PRICE-E2E'")).rows[0].id;
+  const invoiceRows=(await db.query("select id,description,unit,effective_unit_price from public.received_invoice_lines where invoice_id=$1",[invoiceId])).rows;
+  const invoiceSeed=await fetch(`${restOrigin}/rpc/create_budget_with_items`,{method:"POST",
+    headers:{"content-type":"application/json",Authorization:`Bearer ${accessToken}`},
+    body:JSON.stringify({p_budget_data:{title:"Presupuesto posterior a factura",budget_number:"WIZARD-INVOICE-SECOND"},p_items:[]})});
+  assert.equal(invoiceSeed.status,200,await invoiceSeed.clone().text());
+  const invoiceBudgetId=(await invoiceSeed.json()).budget_id;
+  await db.query("update public.budgets set wizard_state=$2 where id=$1",[invoiceBudgetId,JSON.stringify({
+    ...wizardState,title:"Presupuesto posterior a factura",partidas:[],materials:[],currentStep:1})]);
+  const invoiceWizard=await openWizard(invoiceBudgetId,"Presupuesto posterior a factura",{step:1,ready:"Volver a calcular"});
+  await invoiceWizard.page.evaluate(()=>[...document.querySelectorAll('button')]
+    .find(button=>button.textContent?.includes('Volver a calcular'))?.click());
+  await waitFor(async()=> (await db.query("select count(*)::int n from public.budget_items where budget_id=$1",[invoiceBudgetId])).rows[0].n===8,
+    "invoice-backed second budget persisted",30000);
+  const invoiceAdopted=(await db.query("select price_source_type,price_confidence,unit_price_cost,price_item_id from public.budget_items where budget_id=$1 and concept=$2",
+    [invoiceBudgetId,invoiceConcept])).rows[0];
+  console.log(`INVOICE EVIDENCE: lines=${invoiceRows.length}; persisted source=${invoiceAdopted.price_source_type}`);
+  assert.equal(invoiceAdopted.price_source_type,"received_invoice","INVOICE REUSE: persisted budget must use its private invoice price");
+  assert.equal(invoiceRows.length,1,"reviewed upload must retain exactly one line");
+  assert.equal(invoiceRows[0].unit,"m2");assert.equal(Number(invoiceRows[0].effective_unit_price),invoiceUnitPrice);
+  assert.equal(Number(invoiceAdopted.unit_price_cost),invoiceUnitPrice,"calibration must preserve the invoiced net amount");
+  assert.equal(invoiceAdopted.price_item_id,invoiceRows[0].id);
+  assert.equal(Number(invoiceAdopted.price_confidence),.88);
+  const invoiceStats=await fetch(`${restOrigin}/rpc/get_invoice_price_stats`,{method:"POST",
+    headers:{"content-type":"application/json",Authorization:`Bearer ${accessToken}`},body:"{}"});
+  assert.equal(invoiceStats.status,200);assert.deepEqual(await invoiceStats.json(),{prices:1,reused:1});
+  // No shared catalog enables the real V1 fallback. It must use the same
+  // private source ahead of caches/catalogs and still respect manual_locked.
+  await db.query("update public.pb_products set is_active=false");
+  try {
+    const v1=await invoiceWizard.page.evaluate(async names=>{
+      const result=await fetch('/api/prices/resolve',{method:'POST',headers:{'content-type':'application/json'},
+        body:JSON.stringify({materials:names.map(materialName=>({materialName,category:'material',unit:'m2',quantity:1,qualityTier:'media',location:'Madrid'})),location:'Madrid'})});
+      return {status:result.status,body:await result.json()};
+    },[invoiceConcept,ownConcept]);
+    assert.equal(v1.status,200,JSON.stringify(v1.body));
+    assert.equal(v1.body.resolved[0].sourceType,'received_invoice');
+    assert.equal(v1.body.resolved[0].selectedPrice,invoiceUnitPrice);
+    assert.equal(v1.body.resolved[1].sourceType,'manual_locked');
+  } finally { await db.query("update public.pb_products set is_active=true"); }
+  assert.deepEqual(invoiceWizard.pageErrors,[]);
+  console.log("PASS INVOICE REUSE: uploaded image -> OCR review -> received_invoice_lines -> real Next resolver -> second generated budget_items received_invoice / 0.88 / 18.75; prices=1 reused=1");
 
   assert.deepEqual(first.pageErrors, []);
   assert.deepEqual(second.pageErrors, []);

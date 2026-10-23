@@ -188,6 +188,15 @@ test("resolved material basket replaces the provisional component instead of bei
   assert.equal(updated.subtotal_cost, 115);
   assert.equal(updated.subtotal_client, 138);
   assert.equal(updated.cost_breakdown.material_cost, 35);
+  const [marketBasket] = applyMaterialBasketToItems(items, materials.map(material => ({
+    ...material, isRealData: false, sourceType: "market_estimate",
+  })), 1.2);
+  assert.equal(marketBasket.cost_breakdown.source, "mixed_material_basket",
+    "adopting a market price must not promote its evidence to verified");
+  const [marketLine] = applyMaterialBasketToItems(items.map(item => ({
+    ...item, price_source: "market_estimate",
+  })), materials, 1.2);
+  assert.equal(marketLine.unit_price, 10, "a basket must not overwrite an adopted market price");
 });
 
 test("market calibration preserves authoritative prices", () => {
@@ -200,9 +209,11 @@ test("market calibration preserves authoritative prices", () => {
     unit_price_client: 1198.8,
     subtotal_client: 1198.8,
   };
-  const result = adjustToMarket(fullScope, [authoritative, ...estimated.slice(1)], [], "reforma", 1.2, true);
-  assert.equal(result.items[0].unit_price, 999);
-  assert.equal(result.items[0].price_source, "technical_bank");
+  for (const source of ["technical_bank", "market_estimate"]) {
+    const result = adjustToMarket(fullScope, [{ ...authoritative, price_source: source }, ...estimated.slice(1)], [], "reforma", 1.2, true);
+    assert.equal(result.items[0].unit_price, 999);
+    assert.equal(result.items[0].price_source, source);
+  }
 });
 
 for (const action of ["fontaneria", "iluminacion", "pintura"]) {

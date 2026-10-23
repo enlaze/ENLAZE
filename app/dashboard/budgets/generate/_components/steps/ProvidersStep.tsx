@@ -9,6 +9,7 @@ import {
   type Material,
 } from "../BudgetGenerateProvider";
 import { Card } from "@/components/ui/card";
+import { AI_ESTIMATE_LABEL, evidenceForSave } from "@/lib/budget-price-provenance";
 import type { PDFBudget } from "@/lib/pdf-generator";
 import {
   buildProviderBasketCoverage,
@@ -100,7 +101,7 @@ function buildLegacyPDFItems(state: BudgetState, mode: "client" | "internal") {
       unit: p.unit,
       unit_price: p.unit_price_client,
       subtotal: p.subtotal_client,
-      ...(mode === "internal" ? { subtotal_cost: p.subtotal_cost } : {}),
+      ...(mode === "internal" ? { subtotal_cost: p.subtotal_cost, ...evidenceForSave(p, p.unit_price) } : {}),
     }));
 }
 
@@ -158,6 +159,12 @@ export function ProvidersStep() {
 
   /** Badge props for source/provider status. Provider match/missing flags take priority when present. */
   const getBadgeProps = (sourceType?: string, isRealData?: boolean, material?: Material) => {
+    if (material?.price_source_type === "user_edited") {
+      return { label: "Precio editado por ti", className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800" };
+    }
+    if (material?.price_source_type === "ai_estimate") {
+      return { label: AI_ESTIMATE_LABEL, className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800" };
+    }
     if (isServiceMaterial(material || {})) {
       return material?.isRealData
         ? { label: "OFERTA", className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800" }

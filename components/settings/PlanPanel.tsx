@@ -17,8 +17,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useBilling } from "@/components/billing/BillingProvider";
 import { useToast } from "@/components/ui/toast";
 import { CARD, GhostButton, PanelHeader, PrimaryButton, Spinner } from "@/components/settings/ui";
-import { readOnlyCause, readOnlyNextStep } from "@/lib/billing-messages";
-import { daysLeftText, formatLongDate, isInTrial, trialDaysLeft, type BillingStatus, type UsageLine } from "@/lib/billing-status";
+import { paymentGraceMessage, readOnlyCause, readOnlyNextStep } from "@/lib/billing-messages";
+import { daysLeftText, formatLongDate, isInPaymentGrace, isInTrial, trialDaysLeft, type BillingStatus, type UsageLine } from "@/lib/billing-status";
 import {
   FEATURE_LABELS,
   LIMITED_RESOURCES,
@@ -191,6 +191,7 @@ export default function PlanPanel() {
               desbloqueado. Cuando termine, la cuenta pasa a solo lectura: no se borra nada.
             </>
           )}
+          {isInPaymentGrace(status) && paymentGraceMessage(status.past_due_grace_ends_at!)}
           {status.access_level === "read_only" && (
             <>
               {readOnlyCause(status.status)} Puedes ver y exportar tus datos. {readOnlyNextStep(status.status)}

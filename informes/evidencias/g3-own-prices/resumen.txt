@@ -1,0 +1,3 @@
+BASELINE PASS: generated provenance + real manual edit + existing wizard regressions
+KILLED no-price-items-write: real persisted prices lost provenance
+1/1 bank-write mutant killed: second budget persisted ai_estimate instead of manual_locked; restored real E2E PASS.

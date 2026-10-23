@@ -1,0 +1,17 @@
+{
+  "baseline_errors": {
+    "react-hooks/immutability": 2,
+    "react-hooks/preserve-manual-memoization": 3,
+    "react-hooks/set-state-in-effect": 1
+  },
+  "final_errors": {
+    "react-hooks/immutability": 2,
+    "react-hooks/preserve-manual-memoization": 3,
+    "react-hooks/set-state-in-effect": 1
+  },
+  "new_errors": 0,
+  "baseline_files": [
+    "origin/main:app/dashboard/prices/page.tsx",
+    "origin/main:app/dashboard/budgets/[id]/page.tsx"
+  ]
+}

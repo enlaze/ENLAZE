@@ -8,6 +8,7 @@ import { getSectorConfig } from "@/lib/agent-prompts";
 import { normalizeSector } from "@/lib/sector-config";
 import { inferBudgetActions, normalizeBathroomCount, resolveProjectContext, type BudgetScope } from "@/lib/budget-engine";
 import { buildDeterministicBudgetAnalysis } from "@/lib/budget-analysis-fallback";
+import { AI_ESTIMATE_CONFIDENCE } from "@/lib/budget-price-provenance";
 import { hashText, logAiRun } from "@/lib/ai-logger";
 import {
   canUseExternalAi,
@@ -615,6 +616,17 @@ Para construccion necesito MINIMO 20 partidas y 15 materiales. Los precios de pr
     if (!result.calendar_phases) result.calendar_phases = [];
     if (!result.missing_questions) result.missing_questions = [];
     if (!result.regulatory_notes) result.regulatory_notes = [];
+
+    // The model proposes prices; source names or evidence in its JSON are not
+    // verified provenance. The resolver can replace this evidence on adoption.
+    if (!aiFallbackReason) {
+      const checkedAt = new Date().toISOString();
+      for (const item of [...result.suggested_items, ...result.suggested_materials]) {
+        item.price_source_type = "ai_estimate";
+        item.price_confidence = AI_ESTIMATE_CONFIDENCE;
+        item.price_checked_at = checkedAt;
+      }
+    }
 
     // Post-processing: ensure detected_scope
     if (!result.detected_scope) {

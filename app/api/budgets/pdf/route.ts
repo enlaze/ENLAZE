@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { generateBudgetPDFHTML } from "@/lib/pdf-generator";
+import { evidenceForSave } from "@/lib/budget-price-provenance";
 
 interface FiscalSettings {
   nif?: string | null;
@@ -172,6 +173,7 @@ export async function POST(request: Request) {
         company_email: company.email,
       },
       (items || []).map((item) => ({
+        ...(mode === "internal" ? evidenceForSave(item) : {}),
         concept: item.concept,
         description: item.description,
         category: item.category,

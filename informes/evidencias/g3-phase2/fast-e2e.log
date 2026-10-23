@@ -1,0 +1,24 @@
+TAP version 13
+# [budget-analysis] OK: 8 partidas, 1 materials, area=nullm2
+# PASS ai: 8 líneas guardadas, 0 NULL
+# [budget-analysis] OK: 8 partidas, 1 materials, area=nullm2
+# PASS retained-material: 8 líneas guardadas, 0 NULL
+# [budget-analysis] usando motor determinista { status: null }
+# [budget-analysis] OK: 5 partidas, 8 materials, area=40m2
+# PASS deterministic: 5 líneas guardadas, 0 NULL
+# PASS offline: 5 líneas guardadas, 0 NULL
+# Subtest: G3 E2E: IA → asistente → guardado sin NULL, resolutor y edición manual
+ok 1 - G3 E2E: IA → asistente → guardado sin NULL, resolutor y edición manual
+  ---
+  duration_ms: 1728.645708
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1939.64325

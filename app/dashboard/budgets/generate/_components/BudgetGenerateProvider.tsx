@@ -1,6 +1,9 @@
+import { invoiceEvidenceForEngine, invoiceEvidenceFromEngine } from "@/lib/received-invoice-prices";
+import { calculateBudgetFinancials } from "@/lib/budget-financials";
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useMemo, useRef } from "react";
 import { normalizeSector } from "@/lib/sector-config";
 import { createClient } from "@/lib/supabase-browser";
+import { saveManualPrice } from "@/lib/manual-price-writer";
 import { useToast } from "@/components/ui/toast";
 import { logActivity } from "@/lib/activity-log";
 import {
@@ -68,29 +71,23 @@ import {
 } from "@/lib/material-procurement";
 import { buildAutosaveSignature } from "@/lib/budget-autosave-signature";
 import {
+  USER_SUPPLIED_CONFIDENCE,
   evidenceAfterPriceEdit,
+  evidenceAfterResolverMiss,
   evidenceForSave,
+  estimatedPriceEvidence,
+  generatedPriceBaseline,
   resolvedPriceEvidence,
   type BudgetPriceEvidence,
 } from "@/lib/budget-price-provenance";
 
-// The v2 price resolver (/api/prices/resolve, resolver_used: "v2") can
-// return several low-confidence "estimate" source types — market_estimate,
-// ai_estimate — in addition to v1's plain "estimated" literal. None of
-// them is an independently verified match, so every price-adoption gate in
-// this file must treat all of them the same, not just the one v1 literal.
-const ESTIMATE_SOURCE_TYPES = new Set(["estimated", "market_estimate", "ai_estimate"]);
-function isEstimateSourceType(sourceType: string | null | undefined): boolean {
-  return ESTIMATE_SOURCE_TYPES.has(String(sourceType || ""));
-}
-
 const AUTHORITATIVE_NON_COMMERCIAL_SOURCES = new Set([
-  "user_catalog", "manual_locked", "private_tariff", "negotiated",
-  "historical_approved", "private_bc3", "technical_bank", "enlaze_base",
+  "user_catalog", "manual_locked", "received_invoice", "private_tariff", "negotiated",
+  "historical_approved", "private_bc3", "technical_bank", "enlaze_base", "market_estimate",
 ]);
 
 function canAdoptResolvedPrice(resolved: ResolvedPrice | null | undefined): boolean {
-  if (!resolved || Number(resolved.selectedPrice) <= 0 || isEstimateSourceType(resolved.sourceType)) {
+  if (!resolved || Number(resolved.selectedPrice) <= 0 || resolved.sourceType === "estimated") {
     return false;
   }
   if (AUTHORITATIVE_NON_COMMERCIAL_SOURCES.has(String(resolved.sourceType))) {
@@ -122,29 +119,7 @@ function defaultValidUntil() {
   return date.toISOString().slice(0, 10);
 }
 
-export function calculateBudgetFinancials(
-  subtotal: number,
-  ivaPercent: number,
-  discountType: "percent" | "amount",
-  discountPercent: number,
-  discountAmount: number,
-) {
-  const safeSubtotal = Math.max(0, Number(subtotal) || 0);
-  const discountValue = discountType === "amount"
-    ? Math.min(safeSubtotal, Math.max(0, Number(discountAmount) || 0))
-    : Math.round(
-        safeSubtotal * (Math.max(0, Math.min(100, Number(discountPercent) || 0)) / 100) * 100,
-      ) / 100;
-  const taxableBase = Math.max(0, safeSubtotal - discountValue);
-  const ivaAmount = taxableBase * (Math.max(0, Number(ivaPercent) || 0) / 100);
-  return {
-    subtotal: safeSubtotal,
-    discountValue,
-    taxableBase,
-    ivaAmount,
-    total: taxableBase + ivaAmount,
-  };
-}
+export { calculateBudgetFinancials } from "@/lib/budget-financials";
 
 /** Aviso normativo devuelto por el análisis (se pinta como título + descripción). */
 export interface RegulatoryNote {
@@ -185,38 +160,7 @@ export interface Partida extends BudgetPriceEvidence {
   estimated_hours?: number;
 }
 
-/**
- * Rebuilds wizard partidas from the budget_items rows of a budget saved before
- * the wizard stored them in wizard_state. The column pair is the inverse of the
- * one revisionItems() writes: unit_price/subtotal hold the client price and
- * unit_price_cost/subtotal_cost the cost.
- */
-export function partidasFromBudgetItems(rows: readonly Record<string, unknown>[]): Partida[] {
-  const number = (value: unknown) => {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  };
-  const text = (value: unknown, fallback = "") =>
-    typeof value === "string" && value.trim() ? value : fallback;
-  return rows.map((row, index) => ({
-    id: text(row.id, `budget-item-${index}`),
-    concept: text(row.concept),
-    description: text(row.description),
-    quantity: number(row.quantity),
-    unit: text(row.unit, "ud"),
-    category: text(row.category, "otros"),
-    chapter: text(row.chapter, text(row.category, "otros")),
-    unit_price: number(row.unit_price_cost),
-    subtotal_cost: number(row.subtotal_cost),
-    unit_price_client: number(row.unit_price),
-    subtotal_client: number(row.subtotal),
-    // budget_items only ever receives the non-optional lines.
-    status: "incluida" as const,
-    price_source_type: text(row.price_source_type) || null,
-    price_confidence: row.price_confidence == null ? null : number(row.price_confidence),
-    price_checked_at: text(row.price_checked_at) || null,
-  }));
-}
+export { partidasFromBudgetItems } from "@/lib/budget-item-hydration";
 
 export interface ProviderOption {
   id: string;
@@ -439,6 +383,7 @@ async function verifyMaterialsAgainstTracker(
         sourceName: material.isRealData ? material.sourceName : "Oferta local pendiente",
       };
     }
+    if (["user_edited", "user_supplied"].includes(material.price_source_type || "")) return material;
     const resolved = resolvedByMaterialId.get(material.id);
     // Adoption of the resolved price is separate from the isRealData label:
     // manual_locked, technical_bank, private_bc3 and URL-less private_tariff
@@ -449,13 +394,15 @@ async function verifyMaterialsAgainstTracker(
     if (!resolved || !hasUsablePrice) {
       return {
         ...material,
+        ...(resolved?.sourceType === "estimated"
+          ? evidenceAfterResolverMiss(material, resolved.capturedAt) : {}),
         isRealData: false,
-        sourceType: "estimated",
+        sourceType: material.price_source_type || material.sourceType || "estimated",
         sourceName: "Estimación pendiente de coincidencia exacta",
         matchedProductName: resolved?.selectedProductName,
-        sourceUrl: resolved?.sourceUrl || undefined,
-        priceCheckedAt: resolved?.capturedAt || undefined,
-        confidenceScore: resolved?.confidenceScore ?? material.confidenceScore ?? 0.2,
+        sourceUrl: material.sourceUrl,
+        priceCheckedAt: material.price_checked_at ?? material.priceCheckedAt,
+        confidenceScore: material.price_confidence ?? material.confidenceScore ?? 0.05,
         isAvailable: resolved?.isAvailable,
         deliveryDays: resolved?.deliveryDays,
         priceAlternatives: resolved?.alternatives || [],
@@ -470,10 +417,10 @@ async function verifyMaterialsAgainstTracker(
       unit_price: resolved.selectedPrice,
       subtotal: resolved.selectedPrice * material.quantity,
       ...resolvedPriceEvidence(
-        resolved.selectedPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt,
+        resolved.selectedPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt, resolved.manualPriceItemId || resolved.invoiceLineId,
       ),
       provider_id: providerId || "rastreador-enlaze",
-      isRealData: isTraceableCommercialPrice(resolved),
+      isRealData: isTraceableCommercialPrice(resolved) || resolved.sourceType === "received_invoice",
       sourceType: resolved.sourceType,
       sourceName: resolved.selectedSupplier || "Rastreador ENLAZE",
       matchedProductName: resolved.selectedProductName,
@@ -569,7 +516,7 @@ function integrateMaterialBasket(
   const multiplier = marginMultiplier(marginPercent);
   return applyMaterialBasketToItems(
     partidas.map((partida) => ({
-      ...partida,
+      ...invoiceEvidenceForEngine(partida),
       chapter: partida.chapter || "otros",
       status: partida.status || "incluida",
     })),
@@ -589,7 +536,7 @@ function integrateMaterialBasket(
       sourceType: material.sourceType || "estimated",
     })),
     multiplier,
-  );
+  ).map(invoiceEvidenceFromEngine);
 }
 
 /**
@@ -768,6 +715,7 @@ interface BudgetContextProps {
   goToStep: (step: number) => void;
   addPartida: (partida: Partial<Partida>) => void;
   updatePartida: (id: string, updates: Partial<Partida>) => void;
+  supplyOwnPrice: (id: string, price: number) => Promise<void>;
   removePartida: (id: string) => void;
   setSelectedProvider: (id: string) => void;
   updateMaterial: (id: string, updates: Partial<Material>) => void;
@@ -1087,6 +1035,7 @@ export function BudgetGenerateProvider({
     }));
     const engineMaterials = buildScopeMaterials(scope);
     const materials: EngineMaterial[] = state.materials.map((material, index) => ({
+      ...evidenceForSave(material, material.unit_price),
       id: material.id,
       name: material.name,
       specification: material.specification || material.name,
@@ -1207,6 +1156,11 @@ export function BudgetGenerateProvider({
       const newPartidas = prev.partidas.map(p => {
         if (p.id !== id) return p;
         const updated = { ...p, ...updates };
+        if ((updates.concept !== undefined && updates.concept !== p.concept) ||
+            (updates.unit !== undefined && updates.unit !== p.unit)) {
+          updated.price_item_id = null;
+          updated.resolved_price_item_id = null;
+        }
         if (updates.unit_price !== undefined && updates.unit_price !== p.unit_price) {
           Object.assign(updated, evidenceAfterPriceEdit(updated, updates.unit_price, new Date().toISOString()));
           updated.unit_price = updates.unit_price;
@@ -1219,6 +1173,30 @@ export function BudgetGenerateProvider({
       });
       return { ...prev, partidas: newPartidas };
     });
+  };
+
+  const supplyOwnPrice = async (id: string, price: number) => {
+    const item = state.partidas.find(candidate => candidate.id === id);
+    if (!item) throw new Error("La partida ya no está disponible.");
+    const budgetId = state.draftId || await saveDraft(true);
+    if (!budgetId) throw new Error("Guarda primero este borrador para recoger tu precio.");
+    const client = createClient();
+    const { data: { user }, error } = await client.auth.getUser();
+    if (error || !user) throw new Error("La sesión ha caducado.");
+    const saved = await saveManualPrice(client, {
+      userId: user.id, sector: state.sector, collectionBudgetId: budgetId,
+      values: { name: item.concept, description: item.description, category: item.category,
+        subcategory: "", unit: item.unit, unit_price: Math.round(price * 100) / 100 },
+    });
+    const unitPrice = Number(saved.unit_price);
+    setState(previous => ({ ...previous, partidas: previous.partidas.map(current => {
+      if (current.id !== id || current.concept !== item.concept || current.unit !== item.unit) return current;
+      const multiplier = marginMultiplier(previous.marginPercent);
+      return { ...current, ...resolvedPriceEvidence(unitPrice, "user_supplied", USER_SUPPLIED_CONFIDENCE,
+        new Date().toISOString(), saved.id), unit_price: unitPrice,
+        subtotal_cost: unitPrice * current.quantity, unit_price_client: unitPrice * multiplier,
+        subtotal_client: unitPrice * multiplier * current.quantity, price_source: "user_supplied" };
+    }) }));
   };
 
   const removePartida = (id: string) => {
@@ -1998,6 +1976,8 @@ export function BudgetGenerateProvider({
       }
       const multiplier = marginMultiplier(state.marginPercent);
 
+      const generatedAt = new Date().toISOString();
+
       // Map suggested_items to Partidas
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- elementos de `data`
       const newPartidas: Partida[] = (data.suggested_items || []).map((item: any, idx: number) => {
@@ -2005,6 +1985,7 @@ export function BudgetGenerateProvider({
         const qty = item.quantity || 1;
         return {
           id: `ai-p-${idx}`,
+          ...evidenceForSave(item),
           concept: item.concept || item.title || "Partida",
           description: item.description || "",
           quantity: qty,
@@ -2046,6 +2027,7 @@ export function BudgetGenerateProvider({
 
         return {
           id: `ai-m-${idx}`,
+          ...evidenceForSave(item),
           name: item.concept || item.title || "Material",
           quantity: qty,
           unit: item.unit || "ud",
@@ -2133,6 +2115,9 @@ export function BudgetGenerateProvider({
 
         // Convert back to Partida format
         finalPartidas = adjustResult.items.map(ep => ({
+          ...(newPartidas.some(p => p.id === ep.id)
+            ? evidenceForSave(ep)
+            : estimatedPriceEvidence(generatedAt)),
           id: ep.id,
           concept: ep.concept,
           description: ep.description,
@@ -2152,6 +2137,7 @@ export function BudgetGenerateProvider({
 
         // Convert engine materials to Material format
         finalMaterials = adjustResult.materials.map(em => ({
+          ...estimatedPriceEvidence(generatedAt),
           id: em.id,
           name: em.name,
           specification: em.specification,
@@ -2178,6 +2164,7 @@ export function BudgetGenerateProvider({
         const fallbackScope: BudgetScope = engineScope;
         const built = buildDeterministicBudgetItems(fallbackScope, multiplier);
         finalPartidas = built.map(ep => ({
+          ...estimatedPriceEvidence(generatedAt),
           id: ep.id, concept: ep.concept, description: ep.description,
           quantity: ep.quantity, unit: ep.unit, category: ep.category,
           chapter: ep.chapter,
@@ -2187,6 +2174,7 @@ export function BudgetGenerateProvider({
           estimated_hours: ep.estimated_hours,
         }));
         finalMaterials = buildScopeMaterials(fallbackScope).map(em => ({
+          ...estimatedPriceEvidence(generatedAt),
           id: em.id, name: em.name, quantity: em.quantity, unit: em.unit,
           specification: em.specification, procurementKind: em.procurementKind,
           unit_price: em.unit_price, subtotal: em.subtotal, included: em.included,
@@ -2199,6 +2187,7 @@ export function BudgetGenerateProvider({
       if (finalMaterials.length === 0 && state.sector === "construccion") {
         const matScope: BudgetScope = engineScope;
         finalMaterials = buildScopeMaterials(matScope).map(em => ({
+          ...estimatedPriceEvidence(generatedAt),
           id: em.id, name: em.name, quantity: em.quantity, unit: em.unit,
           specification: em.specification, procurementKind: em.procurementKind,
           unit_price: em.unit_price, subtotal: em.subtotal, included: em.included,
@@ -2278,6 +2267,7 @@ export function BudgetGenerateProvider({
                 sourceName: material.isRealData ? material.sourceName : "Oferta local pendiente",
               };
             }
+            if (["user_edited", "user_supplied"].includes(material.price_source_type || "")) return material;
             const resolved = resolvedByMaterialId.get(material.id);
             // Adoption of the resolved price is separate from the
             // isRealData label — see the equivalent gate above.
@@ -2285,13 +2275,15 @@ export function BudgetGenerateProvider({
             if (!resolved || !hasUsablePrice) {
               return {
                 ...material,
+                ...(resolved?.sourceType === "estimated"
+                  ? evidenceAfterResolverMiss(material, resolved.capturedAt) : {}),
                 isRealData: false,
-                sourceType: "estimated",
+                sourceType: material.price_source_type || material.sourceType || "estimated",
                 sourceName: "Estimación pendiente de coincidencia exacta",
                 matchedProductName: resolved?.selectedProductName,
-                sourceUrl: resolved?.sourceUrl || undefined,
-                priceCheckedAt: resolved?.capturedAt || undefined,
-                confidenceScore: resolved?.confidenceScore ?? material.confidenceScore ?? 0.2,
+                sourceUrl: material.sourceUrl,
+                priceCheckedAt: material.price_checked_at ?? material.priceCheckedAt,
+                confidenceScore: material.price_confidence ?? material.confidenceScore ?? 0.05,
                 isAvailable: resolved?.isAvailable,
                 deliveryDays: resolved?.deliveryDays,
                 priceAlternatives: resolved?.alternatives || [],
@@ -2305,10 +2297,10 @@ export function BudgetGenerateProvider({
               unit_price: resolved.selectedPrice,
               subtotal: resolved.selectedPrice * material.quantity,
               ...resolvedPriceEvidence(
-                resolved.selectedPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt,
+                resolved.selectedPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt, resolved.manualPriceItemId || resolved.invoiceLineId,
               ),
               provider_id: providerId || "rastreador-enlaze",
-              isRealData: isTraceableCommercialPrice(resolved),
+              isRealData: isTraceableCommercialPrice(resolved) || resolved.sourceType === "received_invoice",
               sourceType: resolved.sourceType,
               sourceName: resolved.selectedSupplier || "Rastreador ENLAZE",
               sourceUrl: resolved.sourceUrl || undefined,
@@ -2379,12 +2371,13 @@ export function BudgetGenerateProvider({
 
         if (partidasPriceResult.ok) {
           finalPartidas = finalPartidas.map((partida, index) => {
+            if (["user_edited", "user_supplied"].includes(partida.price_source_type || "")) return partida;
             const resolved = partidasPriceResult.resolved[index];
             const isSupplyLine = partida.category === "material";
             const canUseResolved =
               resolved &&
               resolved.selectedPrice > 0 &&
-              !isEstimateSourceType(resolved.sourceType) &&
+              resolved.sourceType !== "estimated" &&
               (
                 AUTHORITATIVE_NON_COMMERCIAL_SOURCES.has(String(resolved.sourceType)) ||
                 (isSupplyLine && isTraceableCommercialPrice(resolved))
@@ -2392,7 +2385,9 @@ export function BudgetGenerateProvider({
 
             const manual_price_notice = resolved?.manualPriceNotice;
             if (!canUseResolved) {
-              return manual_price_notice ? { ...partida, manual_price_notice } : partida;
+              const evidence = resolved?.sourceType === "estimated"
+                ? evidenceAfterResolverMiss(partida, resolved.capturedAt) : {};
+              return { ...partida, ...evidence, ...(manual_price_notice ? { manual_price_notice } : {}) };
             }
             verifiedPartidaCount += 1;
             const unitPrice = Math.round(resolved.selectedPrice * 100) / 100;
@@ -2400,7 +2395,7 @@ export function BudgetGenerateProvider({
               ...partida,
               base_unit_price: unitPrice,
               geographic_factor: 1,
-              geographic_profile: "Precio del banco técnico o tarifa vinculada",
+              geographic_profile: resolved.sourceType === "received_invoice" ? "Precio neto de tu factura" : "Precio del banco técnico o tarifa vinculada",
               price_source: String(resolved.sourceType),
               manual_price_notice,
               price_source_detail:
@@ -2408,7 +2403,7 @@ export function BudgetGenerateProvider({
               price_checked_at: resolved.capturedAt,
               confidence_score: resolved.confidenceScore,
               ...resolvedPriceEvidence(
-                unitPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt,
+                unitPrice, resolved.sourceType, resolved.confidenceScore, resolved.capturedAt, resolved.manualPriceItemId || resolved.invoiceLineId,
               ),
               unit_price: unitPrice,
               subtotal_cost: unitPrice * partida.quantity,
@@ -2440,7 +2435,7 @@ export function BudgetGenerateProvider({
       }));
       finalPartidas = applyMaterialBasketToItems(
         finalPartidas.map((partida) => ({
-          ...partida,
+          ...invoiceEvidenceForEngine(partida),
           chapter: partida.chapter || "otros",
           status: partida.status || "incluida",
         })),
@@ -2454,7 +2449,7 @@ export function BudgetGenerateProvider({
       const finalMarketAdjustment = adjustToMarket(
         engineScope,
         finalPartidas.map((partida) => ({
-          ...partida,
+          ...invoiceEvidenceForEngine(partida),
           chapter: partida.chapter || "otros",
           status: partida.status || "incluida",
         })),
@@ -2464,7 +2459,7 @@ export function BudgetGenerateProvider({
         true,
       );
 
-      finalPartidas = finalMarketAdjustment.items.map((partida) => ({ ...partida }));
+      finalPartidas = finalMarketAdjustment.items.map(invoiceEvidenceFromEngine);
       finalMaterials = finalMarketAdjustment.materials.map((material) => {
         const previous = finalMaterials.find((candidate) => candidate.id === material.id);
         return {
@@ -2474,6 +2469,8 @@ export function BudgetGenerateProvider({
         } as Material;
       });
       isUndervalued = finalMarketAdjustment.isUndervalued;
+      finalPartidas = finalPartidas.map(p => generatedPriceBaseline(p, p.unit_price));
+      finalMaterials = finalMaterials.map(m => generatedPriceBaseline(m, m.unit_price));
       marketAdjustMessage = finalMarketAdjustment.message;
       if (finalMarketAdjustment.message) priceWarnings.push(finalMarketAdjustment.message);
       if (finalMarketAdjustment.adjusted) pricingConfidence = Math.min(pricingConfidence, 75);
@@ -2573,6 +2570,7 @@ export function BudgetGenerateProvider({
           status: (p.status || "incluida") as "incluida" | "estimada" | "opcional",
         }));
         const viewMaterials: EngineMaterial[] = finalMaterials.map(m => ({
+          ...evidenceForSave(m, m.unit_price),
           id: m.id,
           name: m.name,
           specification: m.specification || m.name,
@@ -2835,7 +2833,7 @@ export function BudgetGenerateProvider({
   return (
     <BudgetContext.Provider value={{
       state, updateState, updateSectorData, nextStep, prevStep, goToStep,
-      addPartida, updatePartida, removePartida,
+      addPartida, updatePartida, removePartida, supplyOwnPrice,
       setSelectedProvider, updateMaterial, setUseSuggestedMaterials, setMarginPercent,
       saveDraft, loadDraft, finalizeBudget, analyzeWithAI
     }}>

@@ -1,4 +1,7 @@
 "use client";
+import { saveManualPrice } from "@/lib/manual-price-writer";
+import { OwnPriceCollectionStats } from "@/components/budgets/OwnPriceCollectionStats";
+
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -401,6 +404,7 @@ export default function PricesPage() {
       subcategory,
       unit,
       unit_price: unitPrice,
+      is_manual_override: true,
     };
 
     // Retail fields (always sent — DB ignores nulls for construction)
@@ -421,25 +425,14 @@ export default function PricesPage() {
       });
     }
 
-    if (editingId) {
-      await supabase
-        .from("price_items")
-        .update(base)
-        .eq("id", editingId)
-        .eq("user_id", userId)
-        .eq("sector", sectorConfig.sector);
-    } else {
-      await supabase.from("price_items").insert({
-        ...base,
-        user_id: userId,
-        sector: sectorConfig.sector,
-        source_type: base.source_type ?? "manual",
-        confidence_score: base.confidence_score ?? 1.0,
-      });
+    try {
+      await saveManualPrice(supabase, { userId, sector: sectorConfig.sector, editingId, values: base });
+      resetForm();
+      await loadItems();
+      toast.success(editingId ? "Precio actualizado" : "Precio creado");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se ha podido guardar el precio.");
     }
-    resetForm();
-    loadItems();
-    toast.success(editingId ? "Precio actualizado" : "Precio creado");
   }
 
   async function handleDelete(id: string) {
@@ -1142,6 +1135,7 @@ export default function PricesPage() {
   /* ─── Render ─────────────────────────────────────────────────────── */
   return (
     <div className="max-w-[1400px] mx-auto">
+      {userId && <OwnPriceCollectionStats userId={userId} />}
       <PageHeader
         title={sectorConfig.priceLabel}
         count={kpis.total}

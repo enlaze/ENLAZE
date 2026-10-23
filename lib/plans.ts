@@ -26,6 +26,9 @@ export type BillingInterval = (typeof BILLING_INTERVALS)[number];
 /** Prueba gratuita: sin tarjeta, se registran y entran directos. */
 export const TRIAL_DAYS = 5;
 
+/** Acceso completo desde el primer impago, sin prolongarlo con los reintentos. */
+export const BILLING_GRACE_DAYS = 5;
+
 /** Descuento del pago anual sobre 12 mensualidades. */
 export const ANNUAL_DISCOUNT = 0.2;
 
