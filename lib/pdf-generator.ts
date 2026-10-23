@@ -13,6 +13,7 @@ import type {
   ClimaSystemSpec,
 } from "./budget-engine";
 import { CHAPTER_LABELS } from "./budget-engine";
+import { formatAmount } from "./money";
 import { AI_ESTIMATE_CONFIDENCE, AI_ESTIMATE_LABEL, type BudgetPriceEvidence } from "./budget-price-provenance";
 
 // ─── Shared Types (legacy) ──────────────────────────────────────────────────
@@ -118,7 +119,7 @@ const unitLabels: Record<string, string> = {
   saco: "saco", rollo: "rollo", cubo: "cubo",
 };
 
-const fmt = (n: number) => n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+const fmt = (n: number) => formatAmount(n);
 
 function escapeHTML(value: string): string {
   return value.replace(/[&<>"']/g, (character) => ({
@@ -890,9 +891,9 @@ export function generateBudgetPDFHTML(
       const marginPercent = cost > 0 ? (profit / cost) * 100 : 0;
 
       internalColumns = `
-        <td style="padding:8px 6px;font-size:12px;text-align:right;color:#64748b;">${cost.toFixed(2)} &euro;</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right;color:#64748b;">${formatAmount(cost)} &euro;</td>
         <td style="padding:8px 6px;font-size:12px;text-align:right;color:#059669;">${marginPercent.toFixed(1)}%</td>
-        <td style="padding:8px 6px;font-size:12px;text-align:right;color:#059669;font-weight:600;">+${profit.toFixed(2)} &euro;</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right;color:#059669;font-weight:600;">+${formatAmount(profit)} &euro;</td>
       `;
     }
 
@@ -903,8 +904,8 @@ export function generateBudgetPDFHTML(
         <td style="padding:8px 6px;font-size:13px;text-align:center;">${(categoryLabelsMap && categoryLabelsMap[item.category]) || fallbackCategoryLabels[item.category] || item.category}</td>
         <td style="padding:8px 6px;font-size:13px;text-align:center;">${item.quantity} ${unitLabels[item.unit] || item.unit}</td>
         ${mode === "internal" ? internalColumns : ""}
-        <td style="padding:8px 6px;font-size:13px;text-align:right;">${item.unit_price.toFixed(2)} &euro;</td>
-        <td style="padding:8px 6px;font-size:13px;text-align:right;font-weight:600;">${item.subtotal.toFixed(2)} &euro;</td>
+        <td style="padding:8px 6px;font-size:13px;text-align:right;">${formatAmount(item.unit_price)} &euro;</td>
+        <td style="padding:8px 6px;font-size:13px;text-align:right;font-weight:600;">${formatAmount(item.subtotal)} &euro;</td>
       </tr>`;
   }).join("");
 
@@ -936,11 +937,11 @@ export function generateBudgetPDFHTML(
       <div class="budget-summary-row" style="display:flex;gap:16px;margin-top:20px;border:2px dashed #059669;padding:10px;border-radius:8px;">
         <div class="break-card" style="background:#ecfdf5;flex:1;">
           <div class="break-label" style="color:#059669;">Coste Directo Total</div>
-          <div class="break-value">${totalCost.toFixed(2)} &euro;</div>
+          <div class="break-value">${formatAmount(totalCost)} &euro;</div>
         </div>
         <div class="break-card" style="background:#ecfdf5;flex:1;">
           <div class="break-label" style="color:#059669;">Beneficio Neto</div>
-          <div class="break-value">+${totalProfit.toFixed(2)} &euro;</div>
+          <div class="break-value">+${formatAmount(totalProfit)} &euro;</div>
         </div>
         <div class="break-card" style="background:#ecfdf5;flex:1;">
           <div class="break-label" style="color:#059669;">Margen Global</div>
@@ -986,15 +987,15 @@ export function generateBudgetPDFHTML(
   <div class="budget-summary-row" style="display:flex;gap:16px;margin-bottom:20px;">
     <div class="break-card">
       <div class="break-label">Material</div>
-      <div class="break-value">${materialTotal.toFixed(2)} &euro;</div>
+      <div class="break-value">${formatAmount(materialTotal)} &euro;</div>
     </div>
     <div class="break-card">
       <div class="break-label">Mano de obra</div>
-      <div class="break-value">${laborTotal.toFixed(2)} &euro;</div>
+      <div class="break-value">${formatAmount(laborTotal)} &euro;</div>
     </div>
     <div class="break-card">
       <div class="break-label">Otros</div>
-      <div class="break-value">${otherTotal.toFixed(2)} &euro;</div>
+      <div class="break-value">${formatAmount(otherTotal)} &euro;</div>
     </div>
   </div>
 
@@ -1002,9 +1003,9 @@ export function generateBudgetPDFHTML(
 
   <div style="clear:both;margin-top:20px;">
     <div class="totals-box">
-      <div class="total-row"><span>Subtotal</span><span>${calculatedSubtotal.toFixed(2)} &euro;</span></div>
-      <div class="total-row"><span>IVA (${budget.iva_percent}%)</span><span>${calculatedIva.toFixed(2)} &euro;</span></div>
-      <div class="total-row total-final"><span>TOTAL</span><span>${calculatedTotal.toFixed(2)} &euro;</span></div>
+      <div class="total-row"><span>Subtotal</span><span>${formatAmount(calculatedSubtotal)} &euro;</span></div>
+      <div class="total-row"><span>IVA (${budget.iva_percent}%)</span><span>${formatAmount(calculatedIva)} &euro;</span></div>
+      <div class="total-row total-final"><span>TOTAL</span><span>${formatAmount(calculatedTotal)} &euro;</span></div>
     </div>
   </div>
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { formatEur } from "@/lib/money";
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import Link from "next/link";
@@ -135,23 +136,23 @@ export default function PaymentsPage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <TreasuryCard
               label="Saldo neto"
-              value={`€${treasury.net_balance.toLocaleString("es-ES", { minimumFractionDigits: 2 })}`}
+              value={formatEur(treasury.net_balance)}
               color={treasury.net_balance >= 0 ? "text-emerald-600" : "text-red-600"}
               featured
             />
             <TreasuryCard
               label="Cobros totales"
-              value={`€${treasury.total_income.toLocaleString("es-ES", { minimumFractionDigits: 2 })}`}
+              value={formatEur(treasury.total_income)}
               color="text-emerald-600"
             />
             <TreasuryCard
               label="Pendiente de cobro"
-              value={`€${treasury.outstanding.toLocaleString("es-ES", { minimumFractionDigits: 2 })}`}
+              value={formatEur(treasury.outstanding)}
               color="text-amber-600"
             />
             <TreasuryCard
               label="Vencido"
-              value={`€${treasury.overdue_amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}`}
+              value={formatEur(treasury.overdue_amount)}
               color="text-red-600"
               sub={treasury.overdue_count > 0 ? `${treasury.overdue_count} factura${treasury.overdue_count !== 1 ? "s" : ""}` : undefined}
             />
@@ -202,7 +203,7 @@ export default function PaymentsPage() {
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-semibold text-red-600">
-                          €{(Number(inv.total) - Number(inv.amount_paid || 0)).toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                          {formatEur((Number(inv.total) - Number(inv.amount_paid || 0)))}
                         </p>
                         <p className="text-[11px] text-navy-400 dark:text-zinc-500">
                           Venció {inv.due_date ? new Date(inv.due_date).toLocaleDateString("es-ES", { day: "numeric", month: "short" }) : "—"}
@@ -267,9 +268,9 @@ export default function PaymentsPage() {
                             </Link>
                           </td>
                           <td className="px-4 py-3 text-navy-600 dark:text-zinc-400">{inv.client_name}</td>
-                          <td className="px-4 py-3 text-right font-medium text-navy-900 dark:text-white">€{Number(inv.total).toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                          <td className="px-4 py-3 text-right text-emerald-600">€{Number(inv.amount_paid || 0).toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                          <td className="px-4 py-3 text-right font-medium text-navy-900 dark:text-white">€{pending.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                          <td className="px-4 py-3 text-right font-medium text-navy-900 dark:text-white">{formatEur(Number(inv.total))}</td>
+                          <td className="px-4 py-3 text-right text-emerald-600">{formatEur(Number(inv.amount_paid || 0))}</td>
+                          <td className="px-4 py-3 text-right font-medium text-navy-900 dark:text-white">{formatEur(pending)}</td>
                           <td className={`px-4 py-3 text-xs ${isOverdue ? "text-red-600 font-semibold" : "text-navy-500"}`}>
                             {inv.due_date ? new Date(inv.due_date).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" }) : "—"}
                           </td>
@@ -323,7 +324,7 @@ export default function PaymentsPage() {
                       <td className="px-4 py-3 text-navy-500 dark:text-zinc-500">{paymentMethodLabels[p.payment_method] || p.payment_method}</td>
                       <td className="px-4 py-3 text-navy-400 dark:text-zinc-500 font-mono text-xs">{p.reference || "—"}</td>
                       <td className={`px-4 py-3 text-right font-semibold ${p.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
-                        {p.type === "income" ? "+" : "−"}€{Number(p.amount).toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                        {p.type === "income" ? "+" : "−"}{formatEur(Number(p.amount))}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
@@ -370,7 +371,7 @@ function ProgressBar({
     <div>
       <div className="flex items-center justify-between mb-1">
         <span className="text-xs font-medium text-navy-600 dark:text-zinc-400">{label}</span>
-        <span className="text-xs text-navy-400 dark:text-zinc-500 tabular-nums">€{current.toLocaleString("es-ES", { minimumFractionDigits: 2 })} / €{total.toLocaleString("es-ES", { minimumFractionDigits: 2 })} ({pct}%)</span>
+        <span className="text-xs text-navy-400 dark:text-zinc-500 tabular-nums">{formatEur(current)} / {formatEur(total)} ({pct}%)</span>
       </div>
       <div className="h-2 w-full rounded-full bg-navy-100 dark:bg-zinc-900">
         <div className={`h-2 rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />

@@ -1,5 +1,6 @@
 "use client";
 
+import { formatEur } from "@/lib/money";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { useSector } from "@/lib/sector-context";
@@ -162,7 +163,7 @@ export default function SuppliersPage() {
   const totalSubcontratas = suppliers.filter((s) => s.type === "subcontrata").length;
 
   const fmtMoney = (n: number) =>
-    new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(n || 0);
+    formatEur(n);
 
   const columns: Column<Supplier>[] = [
     {
@@ -227,7 +228,7 @@ export default function SuppliersPage() {
       exportValue: (s) => Number(s.hourly_rate || 0),
       render: (s) => (
         <span className="text-sm text-navy-700 dark:text-zinc-300">
-          {Number(s.hourly_rate || 0) > 0 ? `${Number(s.hourly_rate).toFixed(0)}€` : "—"}
+          {Number(s.hourly_rate || 0) > 0 ? `${formatEur(s.hourly_rate)}/h` : "—"}
         </span>
       ),
     },

@@ -1,3 +1,4 @@
+import { formatEur } from "@/lib/money";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { sanitizeText } from "@/lib/sanitize";
@@ -118,7 +119,7 @@ export async function GET(req: NextRequest) {
         id: b.id,
         type: "budget",
         title: b.title || b.budget_number,
-        subtitle: [b.client_name, b.status, b.total ? `€${Number(b.total).toLocaleString("es-ES")}` : null].filter(Boolean).join(" · "),
+        subtitle: [b.client_name, b.status, b.total ? formatEur(Number(b.total)) : null].filter(Boolean).join(" · "),
         icon: "📋",
         href: `/dashboard/budgets/${b.id}`,
         relevance: (b.budget_number || "").toLowerCase().includes(q.toLowerCase()) ? 10 : 5,
@@ -133,7 +134,7 @@ export async function GET(req: NextRequest) {
         id: inv.id,
         type: "invoice",
         title: inv.invoice_number,
-        subtitle: [inv.client_name, inv.status, inv.total ? `€${Number(inv.total).toLocaleString("es-ES")}` : null].filter(Boolean).join(" · "),
+        subtitle: [inv.client_name, inv.status, inv.total ? formatEur(Number(inv.total)) : null].filter(Boolean).join(" · "),
         icon: "🧾",
         href: `/dashboard/issued-invoices/${inv.id}`,
         relevance: (inv.invoice_number || "").toLowerCase().includes(q.toLowerCase()) ? 10 : 5,
@@ -163,7 +164,7 @@ export async function GET(req: NextRequest) {
         id: pay.id,
         type: "payment",
         title: pay.concept,
-        subtitle: [pay.reference, pay.payment_method, `€${Number(pay.amount).toLocaleString("es-ES")}`, pay.payment_date].filter(Boolean).join(" · "),
+        subtitle: [pay.reference, pay.payment_method, formatEur(Number(pay.amount)), pay.payment_date].filter(Boolean).join(" · "),
         icon: "💵",
         href: `/dashboard/payments`,
         relevance: 3,
@@ -193,7 +194,7 @@ export async function GET(req: NextRequest) {
         id: ri.id,
         type: "received_invoice",
         title: ri.invoice_number,
-        subtitle: [ri.supplier_name, ri.status, ri.total ? `€${Number(ri.total).toLocaleString("es-ES")}` : null].filter(Boolean).join(" · "),
+        subtitle: [ri.supplier_name, ri.status, ri.total ? formatEur(Number(ri.total)) : null].filter(Boolean).join(" · "),
         icon: "🧾",
         href: `/dashboard/suppliers/invoices/${ri.id}`,
         relevance: (ri.invoice_number || "").toLowerCase().includes(q.toLowerCase()) ? 10 : 5,

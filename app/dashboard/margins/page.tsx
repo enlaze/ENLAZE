@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
+import { formatEur } from "@/lib/money";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { useSector } from "@/lib/sector-context";
@@ -26,7 +27,7 @@ interface MarginEntry {
   margin_percent: number;
 }
 
-function eur(n: number) { return Number(n || 0).toLocaleString("es-ES", { style: "currency", currency: "EUR" }); }
+function eur(n: number) { return formatEur(n); }
 
 export default function MarginsPage() {
   const supabase = createClient();

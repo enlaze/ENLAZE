@@ -2,6 +2,7 @@
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
+import { formatEur } from "@/lib/money";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import Link from "next/link";
@@ -33,7 +34,7 @@ interface RecentEvent {
 }
 
 function eur(n: number) {
-  return Number(n || 0).toLocaleString("es-ES", { style: "currency", currency: "EUR" });
+  return formatEur(n);
 }
 
 export default function FiscalCompliancePage() {

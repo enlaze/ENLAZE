@@ -1,5 +1,6 @@
 "use client";
 
+import { formatEur } from "@/lib/money";
 import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { Card } from "@/components/ui/card";
@@ -55,7 +56,7 @@ const emptyItem = {
 };
 
 function eur(n: number) {
-  return Number(n || 0).toLocaleString("es-ES", { style: "currency", currency: "EUR" });
+  return formatEur(n);
 }
 
 /* ─── Component ─── */

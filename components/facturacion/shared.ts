@@ -6,6 +6,7 @@
  * negocio nuevas, solo un sitio común donde vivir.
  */
 
+import { formatEur } from "@/lib/money";
 import type { FactTone } from "./ui";
 
 export interface IssuedInvoice {
@@ -63,7 +64,7 @@ export const receivedStatusTone: Record<string, FactTone> = {
 };
 
 export function eur(n: number) {
-  return Number(n || 0).toLocaleString("es-ES", { style: "currency", currency: "EUR" });
+  return formatEur(n);
 }
 
 export function fmtDate(d: string | null) {

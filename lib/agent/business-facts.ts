@@ -154,7 +154,7 @@ function pct(value: number): string {
 }
 
 function price(value: number): string {
-  return new Intl.NumberFormat("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value) + " €";
+  return new Intl.NumberFormat("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true }).format(value) + " €";
 }
 
 const PRIORITY_RANK: Record<BusinessFactPriority, number> = { alta: 0, media: 1, baja: 2 };
