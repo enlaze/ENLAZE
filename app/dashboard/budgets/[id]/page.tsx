@@ -9,6 +9,7 @@ import AcceptanceTimeline from "@/components/AcceptanceTimeline";
 import { PriceProvenanceSummary } from "@/components/budgets/PriceProvenanceSummary";
 import { normalizeSector } from "@/lib/sector-config";
 import { OwnPriceInput } from "@/components/budgets/OwnPriceInput";
+import { isBudgetEditableAsDraft } from "@/lib/budget-editable";
 import { saveManualPrice } from "@/lib/manual-price-writer";
 import { calculateBudgetFinancials } from "@/lib/budget-financials";
 import { partidasFromBudgetItems } from "@/lib/budget-item-hydration";
@@ -194,6 +195,11 @@ export default function BudgetDetailPage() {
 
   async function supplyOwnPrice(item: BudgetItem, price: number) {
     if (!budget || updating) return;
+    // Antes de tocar Precios: si la base va a rechazar el presupuesto, no se
+    // guarda nada (si no, el precio quedaba en Precios y la partida sin cambiar).
+    if (!isBudgetEditableAsDraft(budget.status)) {
+      throw new Error("Este presupuesto ya se envió o ya tiene respuesta, así que no puede editarse como un borrador.");
+    }
     setUpdating(true);
     try {
       const { data: { user }, error } = await supabase.auth.getUser();
@@ -583,7 +589,8 @@ export default function BudgetDetailPage() {
                     {item.description && (
                       <p className="mt-0.5 text-xs text-navy-500 dark:text-zinc-500">{item.description}</p>
                     )}
-                    {isEstimateSourceType(item.price_source_type) && (
+                    {/* En un presupuesto enviado o con respuesta la base no deja guardar: no se ofrece. */}
+                    {isEstimateSourceType(item.price_source_type) && isBudgetEditableAsDraft(budget.status) && (
                       <OwnPriceInput unit={item.unit} disabled={updating} onSave={price => supplyOwnPrice(item, price)} />
                     )}
                     {item.price_source_type === "user_supplied" && (
