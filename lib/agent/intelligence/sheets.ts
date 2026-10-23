@@ -14,6 +14,8 @@
  * NO LLM here.
  */
 
+import { formatEur } from "@/lib/money";
+
 const LOG = "[agent/intel/sheets]";
 
 const MAX_ROWS = 500;
@@ -429,13 +431,13 @@ function buildAlerts(parsed: ParsedRow[], topProducts: TopProduct[] | null): She
         if (ratio >= 1.5) {
           alerts.push({
             type: "anomaly_high",
-            message: `Hoy llevas ${todayRev.toFixed(0)}€, ${Math.round((ratio - 1) * 100)}% por encima del promedio reciente.`,
+            message: `Hoy llevas ${formatEur(todayRev)}, ${Math.round((ratio - 1) * 100)}% por encima del promedio reciente.`,
             data: { today: todayRev, avg_trailing: Number(avg.toFixed(2)) },
           });
         } else if (ratio <= 0.5) {
           alerts.push({
             type: "anomaly_low",
-            message: `Hoy llevas ${todayRev.toFixed(0)}€, ${Math.round((1 - ratio) * 100)}% por debajo del promedio reciente.`,
+            message: `Hoy llevas ${formatEur(todayRev)}, ${Math.round((1 - ratio) * 100)}% por debajo del promedio reciente.`,
             data: { today: todayRev, avg_trailing: Number(avg.toFixed(2)) },
           });
         }

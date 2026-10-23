@@ -8,6 +8,8 @@
  * sola implementación para la vista previa y para el envío real.
  */
 
+import { formatEur } from "@/lib/money";
+
 /** Lo mínimo que hace falta de un cliente para resolver las variables. */
 export type MessagingVars = {
   name: string;
@@ -21,7 +23,7 @@ export type MessagingVars = {
 export const VAR_TOKENS = ["{nombre}", "{importe}", "{empresa}"];
 
 export const eur = (n: number) =>
-  n.toLocaleString("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+  formatEur(n);
 
 /** El importe que resuelve `{importe}`: lo vencido manda sobre lo pendiente. */
 export const importeOf = (c: MessagingVars) =>

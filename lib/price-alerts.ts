@@ -12,6 +12,7 @@
  *   - stale_warning: price hasn't been checked in > X days
  */
 
+import { formatEur } from "@/lib/money";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PriceChange } from "./price-sync-v2";
 
@@ -78,7 +79,7 @@ export function generateAlertsFromChanges(
     const type: AlertType = change.direction === "up" ? "price_increase" : "price_decrease";
 
     const dirLabel = change.direction === "up" ? "subido" : "bajado";
-    const message = `${change.product_name} (${change.provider_name}): precio ha ${dirLabel} ${absPct.toFixed(1)}% — de ${change.old_price.toFixed(2)}€ a ${change.new_price.toFixed(2)}€`;
+    const message = `${change.product_name} (${change.provider_name}): precio ha ${dirLabel} ${absPct.toFixed(1)}% — de ${formatEur(change.old_price)} a ${formatEur(change.new_price)}`;
 
     alerts.push({
       type,

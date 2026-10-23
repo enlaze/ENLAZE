@@ -14,6 +14,7 @@
  * information first, aesthetics last.
  */
 
+import { formatEur } from "@/lib/money";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
@@ -818,7 +819,7 @@ function SheetsIntelBlock({ data }: { data: any }) {
             {top.map((p, i) => (
               <li key={i}>
                 <span className="font-semibold">{p.name}</span>
-                {" "}— {p.units} u · {p.revenue.toFixed(0)}€ · {p.trend} ({p.vs_previous_pct}%)
+                {" "}— {p.units} u · {formatEur(p.revenue)} · {p.trend} ({p.vs_previous_pct}%)
               </li>
             ))}
           </ul>
@@ -857,7 +858,7 @@ function SalesWindowBlock({ label, w, extra, extraLabel }: { label: string; w: a
     <div>
       <p className="text-[11px] font-semibold text-navy-500 dark:text-zinc-400">{label}</p>
       <p className="text-[13px]">
-        {typeof w.revenue === "number" && <><strong>{w.revenue.toFixed(0)}€</strong> · </>}
+        {typeof w.revenue === "number" && <><strong>{formatEur(w.revenue)}</strong> · </>}
         {typeof w.units === "number" && <>{w.units} u </>}
         {typeof w.transactions === "number" && <> · {w.transactions} tx</>}
       </p>

@@ -2,6 +2,7 @@
 
 /** Facturas recibidas: clasificación, resumen fiscal y exportación del periodo. */
 
+import { formatEur } from "@/lib/money";
 import Link from "next/link";
 import { FormField, Select, SearchInput } from "@/components/ui/form-fields";
 import EmptyState from "@/components/ui/empty-state";
@@ -25,7 +26,7 @@ import {
 import type { ReceivedInvoicesState } from "./useReceivedInvoices";
 
 const fmtMoney = (n: number) =>
-  new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(n || 0);
+  formatEur(n);
 const fmtDate = (d: string | null) => (d ? new Date(d).toLocaleDateString("es-ES") : "—");
 
 const TH = "px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.07em] text-navy-400 dark:text-zinc-500";

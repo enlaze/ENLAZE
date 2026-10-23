@@ -1,5 +1,6 @@
 "use client";
 
+import { formatEur, formatEurCompact } from "@/lib/money";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import Link from "next/link";
@@ -408,7 +409,7 @@ export default function DashboardHome() {
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard icon={<IcoUsers size={20} />} label="Clientes activos" value={String(kpi.activeClients)} trend={kpi.clientsTrend} />
         <KpiCard icon={<IcoFile size={20} />} label="Presupuestos enviados" value={String(kpi.budgetsSent)} trend={kpi.budgetsTrend} sub="Este mes" />
-        <KpiCard icon={<IcoTrending size={20} />} label="Ingresos del mes" value={`€${kpi.incomeThisMonth.toLocaleString("es-ES")}`} trend={kpi.incomeTrend} featured />
+        <KpiCard icon={<IcoTrending size={20} />} label="Ingresos del mes" value={formatEur(kpi.incomeThisMonth)} trend={kpi.incomeTrend} featured />
         <KpiCard icon={<IcoPercent size={20} />} label="Tasa de conversión" value={`${kpi.conversionRate} %`} />
       </div>
 
@@ -460,14 +461,14 @@ export default function DashboardHome() {
           </div>
           <ul className="divide-y divide-navy-50 dark:divide-zinc-800">
             <AlertRow label="Facturas por cobrar" count={kpi.invoicesUnpaid} href="/dashboard/issued-invoices" severity="danger" />
-            <AlertRow label="Importe pendiente" count={0} href="/dashboard/issued-invoices" severity="warning" customValue={`€${kpi.totalOutstanding.toLocaleString("es-ES")}`} />
+            <AlertRow label="Importe pendiente" count={0} href="/dashboard/issued-invoices" severity="warning" customValue={formatEur(kpi.totalOutstanding)} />
             <AlertRow label="Tasa conversión" count={0} href="/dashboard/budgets" severity={kpi.conversionRate >= 50 ? "info" : "warning"} customValue={`${kpi.conversionRate}%`} />
             <AlertRow label="Facturas por pagar" count={kpi.expensesPending} href="/dashboard/suppliers/invoices" severity={kpi.expensesPending > 0 ? "warning" : "info"} />
             {kpi.expensesOverdue > 0 && (
               <AlertRow label="Gastos vencidos" count={kpi.expensesOverdue} href="/dashboard/suppliers/invoices" severity="danger" />
             )}
             {kpi.totalExpensesPending > 0 && (
-              <AlertRow label="Total gastos pdtes." count={0} href="/dashboard/suppliers/invoices" severity="warning" customValue={`€${kpi.totalExpensesPending.toLocaleString("es-ES")}`} />
+              <AlertRow label="Total gastos pdtes." count={0} href="/dashboard/suppliers/invoices" severity="warning" customValue={formatEur(kpi.totalExpensesPending)} />
             )}
           </ul>
         </section>
@@ -590,7 +591,7 @@ function BarChart({ data }: { data: MonthlyRevenue[] }) {
               {d.income > 0 && (
                 <text x={x + barW / 2} y={chartH - h1 - 6} textAnchor="middle"
                   className="fill-navy-600 text-[10px] font-medium">
-                  €{d.income >= 1000 ? `${(d.income / 1000).toFixed(1)}k` : d.income}
+                  {d.income >= 1000 ? formatEurCompact(d.income) : formatEur(d.income)}
                 </text>
               )}
             </g>

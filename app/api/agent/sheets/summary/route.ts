@@ -1,3 +1,4 @@
+import { formatEur } from "@/lib/money";
 import { NextRequest, NextResponse } from "next/server";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { verifyAgentOrBrowserRequest, isErrorResponse } from "../../_lib/auth";
@@ -41,9 +42,9 @@ function summaryLine(intel: SheetsIntel): string {
   parts.push(`${intel.rows_analyzed} filas`);
   parts.push(`detección: ${intel.detection_confidence}`);
   if (intel.sales_summary?.today) {
-    parts.push(`hoy ${intel.sales_summary.today.revenue.toFixed(0)}€`);
+    parts.push(`hoy ${formatEur(intel.sales_summary.today.revenue)}`);
   } else if (intel.sales_summary?.yesterday) {
-    parts.push(`ayer ${intel.sales_summary.yesterday.revenue.toFixed(0)}€`);
+    parts.push(`ayer ${formatEur(intel.sales_summary.yesterday.revenue)}`);
   }
   if (intel.alerts.length > 0) parts.push(`${intel.alerts.length} alerta(s)`);
   return parts.join(" · ");

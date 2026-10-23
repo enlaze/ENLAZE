@@ -1,5 +1,6 @@
 "use client";
 
+import { formatEur } from "@/lib/money";
 import { useEffect, useState, useMemo } from "react";
 import { getAllReceivedInvoices } from "@/lib/suppliers";
 import { toFiscalReceivedInvoice, receivedInvoiceDateRange } from "@/lib/received-invoices";
@@ -42,7 +43,7 @@ interface IssuedInvoice {
 /* ─── Helpers ─── */
 
 function eur(n: number) {
-  return Number(n || 0).toLocaleString("es-ES", { style: "currency", currency: "EUR" });
+  return formatEur(n);
 }
 
 const MONTHS = [

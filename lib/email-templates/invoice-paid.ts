@@ -1,3 +1,4 @@
+import { formatEur } from "@/lib/money";
 /**
  * Email template for Invoice Paid event
  * Sent to user when an invoice is marked as paid
@@ -48,7 +49,7 @@ export function getHtml(data: {
             ` : ''}
             ${data.invoiceAmount ? `
               <p style="color: #8899a8; font-size: 12px; margin: 0 0 8px 0; text-transform: uppercase; font-weight: 600;">Importe pagado</p>
-              <p style="color: #00c896; font-size: 28px; font-weight: 700; margin: 0;">€${data.invoiceAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              <p style="color: #00c896; font-size: 28px; font-weight: 700; margin: 0;">${formatEur(data.invoiceAmount)}</p>
             ` : ''}
           </div>
 

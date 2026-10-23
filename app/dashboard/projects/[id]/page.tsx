@@ -1,5 +1,6 @@
 "use client";
 
+import { formatEur } from "@/lib/money";
 import { getAllReceivedInvoices } from "@/lib/suppliers";
 import { receivedInvoiceCostTotals } from "@/lib/received-invoices";
 import { useEffect, useMemo, useState } from "react";
@@ -249,7 +250,7 @@ const paymentMethods = [
 /* ═══════════════════════════ Helpers ═══════════════════════════ */
 
 function eur(n: number): string {
-  return Number(n || 0).toLocaleString("es-ES", { style: "currency", currency: "EUR" });
+  return formatEur(n);
 }
 function fmtDate(d: string | null): string {
   if (!d) return "—";
@@ -1422,7 +1423,7 @@ export default function ProjectDetailPage() {
                             {s.contact_person && <span>Contacto: {s.contact_person}</span>}
                             {s.phone && <span>{s.phone}</span>}
                             {s.email && <span>{s.email}</span>}
-                            {s.hourly_rate && <span>{Number(s.hourly_rate).toLocaleString("es-ES", { style: "currency", currency: "EUR" })}/h</span>}
+                            {s.hourly_rate && <span>{formatEur(s.hourly_rate)}/h</span>}
                           </div>
                           <div className="flex gap-3 mt-1 text-xs text-navy-500 dark:text-zinc-400">
                             <span className="text-yellow-500 dark:text-yellow-400">{stars}</span>

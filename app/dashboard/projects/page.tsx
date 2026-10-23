@@ -1,6 +1,7 @@
  
 "use client";
 
+import { formatEur } from "@/lib/money";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import Link from "next/link";
@@ -62,7 +63,7 @@ const emptyForm = {
 };
 
 function eur(n: number) {
-  return Number(n || 0).toLocaleString("es-ES", { style: "currency", currency: "EUR" });
+  return formatEur(n);
 }
 
 function fmtDate(d: string | null) {

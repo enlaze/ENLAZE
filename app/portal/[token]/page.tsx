@@ -1,5 +1,6 @@
 "use client";
 
+import { formatEur } from "@/lib/money";
 import { useEffect, useMemo, useState } from "react";
 import { Lock, MapPin, User } from "lucide-react";
 import { useParams } from "next/navigation";
@@ -143,7 +144,7 @@ const paymentMethodLabels: Record<string, string> = {
 /* ═══════════════════════════ Helpers ═══════════════════════════ */
 
 function eur(n: number) {
-  return Number(n || 0).toLocaleString("es-ES", { style: "currency", currency: "EUR" });
+  return formatEur(n);
 }
 function fmtDate(d: string | null) {
   if (!d) return "—";

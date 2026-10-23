@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
+import { formatEur } from "@/lib/money";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Breadcrumbs from "@/components/ui/breadcrumbs";
@@ -50,7 +51,7 @@ const unitOptions = ["ud", "m", "m²", "m³", "kg", "l", "h", "ml", "global"];
 
 /* ═══════════════ Helpers ═══════════════ */
 
-function eur(n: number) { return Number(n || 0).toLocaleString("es-ES", { style: "currency", currency: "EUR" }); }
+function eur(n: number) { return formatEur(n); }
 function fmtDate(d: string | null) { return d ? new Date(d).toLocaleDateString("es-ES") : "—"; }
 
 const inputCls = "w-full bg-white dark:bg-zinc-800 text-navy-900 dark:text-white rounded-lg px-4 py-2 border border-navy-200 dark:border-zinc-700 focus:border-brand-green focus:outline-none text-sm";
@@ -662,7 +663,7 @@ export default function IssuedInvoiceDetailPage() {
             <div className="flex justify-between text-xs mb-1">
               <span className="text-navy-500 dark:text-zinc-400">Cobrado</span>
               <span className="text-navy-700 dark:text-zinc-300 tabular-nums">
-                €{Number(invoice.amount_paid || 0).toLocaleString("es-ES", { minimumFractionDigits: 2 })} / €{Number(invoice.total).toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                {formatEur(Number(invoice.amount_paid || 0))} / {formatEur(Number(invoice.total))}
               </span>
             </div>
             <div className="h-2 w-full rounded-full bg-navy-100 dark:bg-zinc-800">
@@ -736,7 +737,7 @@ export default function IssuedInvoiceDetailPage() {
                     </p>
                   </div>
                   <p className="text-sm font-semibold text-brand-green">
-                    +€{Number(p.amount).toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                    +{formatEur(Number(p.amount))}
                   </p>
                 </div>
               ))}

@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
+import { formatEur } from "@/lib/money";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
@@ -712,7 +713,7 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
                   <div>
                     <label className={labelSmCls}>Subtotal</label>
                     <div className="bg-white text-navy-900 border border-navy-200 rounded-lg px-3 py-2 text-sm font-semibold dark:bg-zinc-900 dark:text-white dark:border-zinc-700">
-                      {p.subtotal.toFixed(2)} €
+                      {formatEur(p.subtotal)}
                     </div>
                   </div>
                 </div>
@@ -937,27 +938,27 @@ export function BudgetForm({ editBudgetId }: { editBudgetId?: string }) {
           <div className="max-w-xs ml-auto space-y-2">
             <div className="flex justify-between text-sm text-navy-600 dark:text-zinc-400">
               <span>Subtotal</span>
-              <span className="text-navy-900 dark:text-white font-medium">{subtotal.toFixed(2)} €</span>
+              <span className="text-navy-900 dark:text-white font-medium">{formatEur(subtotal)}</span>
             </div>
             {discountValue > 0 && (
               <>
                 <div className="flex justify-between text-sm text-red-600 dark:text-red-400">
                   <span>Descuento{discountType === "percent" ? ` (${discountPercent}%)` : ""}</span>
-                  <span className="font-medium">-{discountValue.toFixed(2)} €</span>
+                  <span className="font-medium">-{formatEur(discountValue)}</span>
                 </div>
                 <div className="flex justify-between text-sm text-navy-600 dark:text-zinc-400">
                   <span>Base imponible</span>
-                  <span className="text-navy-900 dark:text-white font-medium">{taxableBase.toFixed(2)} €</span>
+                  <span className="text-navy-900 dark:text-white font-medium">{formatEur(taxableBase)}</span>
                 </div>
               </>
             )}
             <div className="flex justify-between text-sm text-navy-600 dark:text-zinc-400">
               <span>IVA ({ivaPercent}%)</span>
-              <span className="text-navy-900 dark:text-white font-medium">{ivaAmount.toFixed(2)} €</span>
+              <span className="text-navy-900 dark:text-white font-medium">{formatEur(ivaAmount)}</span>
             </div>
             <div className="flex justify-between text-lg font-bold border-t border-navy-200 pt-3 dark:border-zinc-700">
               <span className="text-navy-900 dark:text-white">TOTAL</span>
-              <span className="text-brand-green">{total.toFixed(2)} €</span>
+              <span className="text-brand-green">{formatEur(total)}</span>
             </div>
           </div>
         </Card>
@@ -1063,7 +1064,7 @@ function ConceptAutocomplete({
                   </p>
                 </div>
                 <span className="text-sm font-bold text-brand-green whitespace-nowrap">
-                  {r.price.toFixed(2)} €
+                  {formatEur(r.price)}
                 </span>
               </div>
             </button>

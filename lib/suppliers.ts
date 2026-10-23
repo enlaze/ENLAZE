@@ -1,3 +1,4 @@
+import { formatEur } from "@/lib/money";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { notify } from "@/lib/notifications";
 import { logActivity } from "@/lib/activity-log";
@@ -370,7 +371,7 @@ export async function createReceivedInvoice(supabase: SupabaseClient, invoice: P
       type: "system",
       severity: "info",
       title: "Factura recibida registrada",
-      body: `Factura ${invoice.invoice_number} de ${invoice.supplier_name} por ${Number(invoice.total).toFixed(2)}€`,
+      body: `Factura ${invoice.invoice_number} de ${invoice.supplier_name} por ${formatEur(invoice.total)}`,
       entity_type: "received_invoice",
       entity_id: data.id,
       action_url: `/dashboard/suppliers/invoices/${data.id}`,
@@ -472,7 +473,7 @@ export async function registerSupplierPayment(
       type: "system",
       severity: "success",
       title: "Pago a proveedor registrado",
-      body: `Pago de ${params.amount.toFixed(2)}€ en factura ${inv.invoice_number} de ${inv.supplier_name}`,
+      body: `Pago de ${formatEur(params.amount)} en factura ${inv.invoice_number} de ${inv.supplier_name}`,
       entity_type: "supplier_payment",
       entity_id: params.received_invoice_id,
       action_url: `/dashboard/suppliers/invoices/${params.received_invoice_id}`,
@@ -482,7 +483,7 @@ export async function registerSupplierPayment(
       action: "supplier_payment_registered",
       entity_type: "supplier_payment",
       entity_id: params.received_invoice_id,
-      metadata: { description: `Pago ${params.amount.toFixed(2)}€ a ${inv.supplier_name} (${inv.invoice_number})` },
+      metadata: { description: `Pago ${formatEur(params.amount)} a ${inv.supplier_name} (${inv.invoice_number})` },
     }).catch(() => {});
   }
 
